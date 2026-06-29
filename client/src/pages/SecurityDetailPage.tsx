@@ -13,6 +13,7 @@ import {
   removeFromAtRisk,
 } from '@/lib/atRisk'
 import { FundHeaderMetricsRow } from '@/components/FundHeaderMetricsRow'
+import { DetailPageState } from '@/components/DetailPageState'
 import { StockReturnTable } from '@/components/StockReturnTable'
 import { FundReturnTable } from '@/components/FundReturnTable'
 import { FundComparisonPanel } from '@/components/FundComparisonPanel'
@@ -212,52 +213,20 @@ export function SecurityDetailPage() {
     },
   })
 
-  if (Number.isNaN(id) || !Number.isInteger(id) || id <= 0) {
+  const invalidId = Number.isNaN(id) || !Number.isInteger(id) || id <= 0
+  if (invalidId || isLoading || error || !security) {
     return (
-      <div>
-        <Link to={backLink.to} className="text-sm text-gray-600 hover:text-gray-900">
-          {backLink.label}
-        </Link>
-        <p className="mt-4 text-red-600">Invalid security.</p>
-      </div>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <div>
-        <Link to={backLink.to} className="text-sm text-gray-600 hover:text-gray-900">
-          {backLink.label}
-        </Link>
-        <p className="mt-4 text-gray-500">Loading…</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div>
-        <Link to={backLink.to} className="text-sm text-gray-600 hover:text-gray-900">
-          {backLink.label}
-        </Link>
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="font-medium text-red-800">Failed to load security</p>
-          <p className="mt-1 text-sm text-red-700">
-            {error instanceof Error ? error.message : String(error)}
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!security) {
-    return (
-      <div>
-        <Link to={backLink.to} className="text-sm text-gray-600 hover:text-gray-900">
-          {backLink.label}
-        </Link>
-        <p className="mt-4 text-gray-500">Security not found.</p>
-      </div>
+      <DetailPageState
+        backTo={backLink.to}
+        backLabel={backLink.label}
+        invalid={invalidId}
+        invalidText="Invalid security."
+        loading={isLoading}
+        error={error}
+        notFound={!security}
+        errorTitle="Failed to load security"
+        notFoundText="Security not found."
+      />
     )
   }
 

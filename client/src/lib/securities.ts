@@ -437,7 +437,7 @@ export async function fetchSecurityById(id: number): Promise<SecurityDetail | nu
     if (error.code === 'PGRST116') return null
     throw error
   }
-  return data as SecurityDetail
+  return data as unknown as SecurityDetail
 }
 
 export async function saveSecurityBenchmarks(

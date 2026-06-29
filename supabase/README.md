@@ -34,15 +34,16 @@ migration history. As of 2026-06-29 the remote history holds these 25 migrations
 20260626190637  create_portfolio_allocations
 ```
 
-## `schema.types.ts`
+## Generated types
 
-A TypeScript snapshot of the live schema, generated from the database. Treat it as a
-read-only reference for column names/types. It is **not** yet wired into the Supabase
-client (`createClient` is currently untyped). Regenerate after any schema change via the
-Supabase MCP `generate_typescript_types` tool, or:
+The live schema is mirrored as TypeScript in **`client/src/types/database.types.ts`**,
+which **is wired into the Supabase client** (`client/src/lib/supabase.ts` uses
+`createClient<Database>`), so column/table mismatches are caught at compile time.
+Regenerate after any schema change via the Supabase MCP `generate_typescript_types`
+tool, or:
 
 ```
-supabase gen types typescript --project-id oulahvazpuzfqxudmfef > supabase/schema.types.ts
+supabase gen types typescript --project-id oulahvazpuzfqxudmfef > client/src/types/database.types.ts
 ```
 
 ## `archive/`

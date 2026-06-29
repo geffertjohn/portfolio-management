@@ -18,7 +18,7 @@ export async function updatePortfolioObjective(
 ): Promise<void> {
   const { error } = await supabase
     .from('portfolio')
-    .update({ investment_objective, description })
+    .update({ investment_objective, description } as never)
     .eq('name', portfolioName)
   if (error) throw error
 }

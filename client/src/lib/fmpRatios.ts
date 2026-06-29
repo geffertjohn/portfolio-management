@@ -182,25 +182,91 @@ export interface ScorecardMetrics {
   epsCagr3y: number | null
 }
 
+// --- Pure derivations over already-fetched rows -----------------------------
+//
+// These mirror the standalone exported fetchers above exactly, but operate on
+// rows passed in, so `fetchScorecardMetrics` can fetch each underlying endpoint
+// once and derive all six metrics without re-fetching shared endpoints. Keep
+// each rule in lockstep with its exported counterpart.
+
+/** TTM FCF margin from already-fetched cash-flow-ttm + income-ttm rows. */
+function deriveFcfMarginTtm(
+  cfTtm: Record<string, unknown>[],
+  incTtm: Record<string, unknown>[]
+): number | null {
+  return margin(
+    cfTtm[0] ? num(cfTtm[0].freeCashFlow) : null,
+    incTtm[0] ? num(incTtm[0].revenue) : null
+  )
+}
+
+/** TTM revenue/EPS growth from already-fetched income-statement-ttm rows. */
+function deriveTtmGrowth(rows: Record<string, unknown>[]): TtmGrowth {
+  const cur = rows[0]
+  const prior = rows[4]
+  if (!cur || !prior) return { revenueGrowth: null, epsGrowth: null }
+
+  const growth = (a: number | null, b: number | null): number | null =>
+    a === null || b === null || b <= 0 ? null : a / b - 1
+
+  const curEps = num(cur.epsDiluted) ?? num(cur.epsdiluted)
+  const priorEps = num(prior.epsDiluted) ?? num(prior.epsdiluted)
+
+  return {
+    revenueGrowth: growth(num(cur.revenue), num(prior.revenue)),
+    epsGrowth: growth(curEps, priorEps),
+  }
+}
+
+/** 3Y revenue/EPS CAGR from already-fetched annual income-statement rows. */
+function deriveCagr3y(rows: Record<string, unknown>[]): Cagr3y {
+  if (rows.length < 4) return { revenue: null, eps: null }
+
+  const cagr = (latest: number | null, base: number | null): number | null =>
+    latest === null || base === null || base <= 0 ? null : Math.pow(latest / base, 1 / 3) - 1
+
+  const latest = rows[0]
+  const base = rows[3]
+  return {
+    revenue: cagr(num(latest.revenue), num(base.revenue)),
+    eps: cagr(num(latest.epsDiluted) ?? num(latest.epsdiluted), num(base.epsDiluted) ?? num(base.epsdiluted)),
+  }
+}
+
 /**
  * All six stock Scorecard metrics for a symbol, in one call — the same values
  * the Scorecard cards show, bundled for the Alternatives comparison tables.
- * Each underlying fetch fails independently (Promise.allSettled).
+ *
+ * Each distinct underlying FMP endpoint is fetched at most once and all six
+ * metrics are derived from the shared in-memory rows: `ratios-ttm` (operating
+ * margin), `cash-flow-statement-ttm` + `income-statement-ttm` (FCF margin TTM
+ * and TTM growth), and annual `income-statement` (3Y CAGR). Each fetch fails
+ * independently (Promise.allSettled) so one bad endpoint can't blank the rest.
  */
 export async function fetchScorecardMetrics(symbol: string): Promise<ScorecardMetrics> {
-  const [ratios, fcf, ttm, cagr] = await Promise.allSettled([
+  const key = apiKey()
+  const sym = fmpSymbol(symbol)
+  const [ratios, cfTtm, incTtm, incAnnual] = await Promise.allSettled([
     fetchRatiosTTM(symbol),
-    fetchFcfMargins(symbol, 1),
-    fetchTtmGrowth(symbol),
-    fetchCagr3y(symbol),
+    fetchArray(`${FMP_STABLE}/cash-flow-statement-ttm?symbol=${sym}&apikey=${key}`),
+    fetchArray(`${FMP_STABLE}/income-statement-ttm?symbol=${sym}&apikey=${key}`),
+    fetchArray(`${FMP_STABLE}/income-statement?symbol=${sym}&period=annual&limit=4&apikey=${key}`),
   ])
-  const val = <T,>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null)
+  const val = <T,>(r: PromiseSettledResult<T>, fallback: T): T => (r.status === 'fulfilled' ? r.value : fallback)
+
+  const cfTtmRows = val(cfTtm, [])
+  const incTtmRows = val(incTtm, [])
+  const incAnnualRows = val(incAnnual, [])
+
+  const ttm = deriveTtmGrowth(incTtmRows)
+  const cagr = deriveCagr3y(incAnnualRows)
+
   return {
-    operatingMargin: val(ratios)?.operatingProfitMargin ?? null,
-    fcfMargin: val(fcf)?.ttm ?? null,
-    revGrowthTtm: val(ttm)?.revenueGrowth ?? null,
-    epsGrowthTtm: val(ttm)?.epsGrowth ?? null,
-    revCagr3y: val(cagr)?.revenue ?? null,
-    epsCagr3y: val(cagr)?.eps ?? null,
+    operatingMargin: val(ratios, { operatingProfitMargin: null }).operatingProfitMargin,
+    fcfMargin: deriveFcfMarginTtm(cfTtmRows, incTtmRows),
+    revGrowthTtm: ttm.revenueGrowth,
+    epsGrowthTtm: ttm.epsGrowth,
+    revCagr3y: cagr.revenue,
+    epsCagr3y: cagr.eps,
   }
 }

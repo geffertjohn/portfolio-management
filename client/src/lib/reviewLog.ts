@@ -116,5 +116,6 @@ export async function fetchReviewLog(securityId: string): Promise<ReviewLogEntry
     .eq('security_id', securityId)
     .order('reviewed_at', { ascending: false })
   if (error) throw error
-  return data ?? []
+  // DB stores outcome/recommendation/conviction as text; domain type narrows them
+  return (data ?? []) as ReviewLogEntry[]
 }

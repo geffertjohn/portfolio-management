@@ -22,6 +22,7 @@
  *     annualized_daily_five_year_total_return   → annualized_five_year_total_return
  */
 import * as XLSX from 'xlsx'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -205,7 +206,7 @@ async function replaceTable(
     // insert new ones. Used for tables with manually-managed columns.
     for (let i = 0; i < records.length; i += BATCH) {
       const batch = records.slice(i, i + BATCH)
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient)
         .from(config.tableName)
         .upsert(batch, { onConflict: config.upsertOn })
       if (error) {
@@ -218,7 +219,7 @@ async function replaceTable(
   }
 
   // Default: delete all rows then re-insert (full replacement)
-  const { error: delError } = await supabase
+  const { error: delError } = await (supabase as SupabaseClient)
     .from(config.tableName)
     .delete()
     .not(config.keyCol, 'is', null)
@@ -230,7 +231,7 @@ async function replaceTable(
 
   for (let i = 0; i < records.length; i += BATCH) {
     const batch = records.slice(i, i + BATCH)
-    const { error } = await supabase.from(config.tableName).insert(batch)
+    const { error } = await (supabase as SupabaseClient).from(config.tableName).insert(batch)
     if (error) {
       errors.push(`${config.tableName} batch ${Math.floor(i / BATCH) + 1}: ${error.message}`)
     } else {

@@ -76,7 +76,8 @@ export async function fetchIPSByClient(clientId: number): Promise<IPS | null> {
     .limit(1)
     .maybeSingle()
   if (error) throw error
-  return data ?? null
+  // DB stores risk_tolerance/liquidity_needs as text; domain type narrows them
+  return data as IPS | null
 }
 
 export async function upsertIPS(clientId: number, input: IPSInput): Promise<void> {

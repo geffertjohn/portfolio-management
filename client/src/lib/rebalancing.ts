@@ -48,7 +48,7 @@ export async function logRebalance(
     portfolio_name: portfolioName,
     notes: notes || null,
     positions_snapshot: snapshot,
-  })
+  } as never)
   if (error) throw error
 }
 

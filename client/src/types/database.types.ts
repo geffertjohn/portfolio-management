@@ -1,7 +1,7 @@
-// Generated from the live Supabase schema (project oulahvazpuzfqxudmfef) on 2026-06-29.
-// Canonical reference for the database shape. Regenerate via the Supabase MCP
-// generate_typescript_types tool (or supabase gen types typescript). Not yet
-// wired into the supabase client — see supabase/README.md.
+// Generated from the live Supabase schema (project oulahvazpuzfqxudmfef).
+// Canonical DB shape — wired into the Supabase client (see lib/supabase.ts).
+// Regenerate after any schema change via the Supabase MCP generate_typescript_types
+// tool, or: supabase gen types typescript --project-id oulahvazpuzfqxudmfef > client/src/types/database.types.ts
 
 export type Json =
   | string

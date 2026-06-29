@@ -20,6 +20,7 @@ import { fetchQuote } from '@/lib/fmpMarket'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { consensusColor } from '@/lib/formatters'
+import { RangeBar } from './RangeBar'
 
 interface Props {
   security: SecurityDetail
@@ -37,42 +38,6 @@ function fmtSignedPct(v: number): string {
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 }
 
-/** Horizontal range bar with a pinned marker (matches AnalystCoveragePanel). */
-function RangeBar({
-  pct,
-  low,
-  high,
-  markerLabel,
-}: {
-  pct: number
-  low: string
-  high: string
-  markerLabel: string
-}) {
-  const c = Math.max(0, Math.min(100, pct))
-  return (
-    <div className="w-full">
-      <div className="relative h-6">
-        <div className="absolute bottom-1 -translate-x-1/2" style={{ left: `${c}%` }}>
-          <span className="inline-block whitespace-nowrap rounded bg-indigo-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-            {markerLabel}
-          </span>
-          <div className="mx-auto h-0 w-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-indigo-600" />
-        </div>
-      </div>
-      <div className="relative h-1.5 w-full rounded-full bg-gray-200">
-        <div
-          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500 ring-2 ring-white"
-          style={{ left: `${c}%` }}
-        />
-      </div>
-      <div className="mt-1 flex justify-between text-[11px] text-gray-400">
-        <span>Low: {low}</span>
-        <span>High: {high}</span>
-      </div>
-    </div>
-  )
-}
 
 /** Card shell matching the Scorecard MetricCard dimensions. */
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -167,6 +132,7 @@ export function AnalystSummaryCards({ security }: Props) {
         <div className="flex flex-1 items-center justify-center">
           {has52w ? (
             <RangeBar
+              className="w-full"
               pct={pricePct}
               low={`$${fmtDollar(yearLow!)}`}
               high={`$${fmtDollar(yearHigh!)}`}
