@@ -46,6 +46,7 @@ export const QUERY_KEYS = {
   portfolioReviews: (portfolioName: string) => ['portfolio_reviews', portfolioName] as const,
   portfolioReviewSchedules: ['portfolio_review_schedules'] as const,
   portfolioReviewSchedulesFor: (portfolioName: string) => ['portfolio_review_schedules', portfolioName] as const,
+  holdingReviews: (portfolioName: string) => ['holding_reviews', portfolioName] as const,
   modelPortfolios: ['model_portfolios'] as const,
   modelPortfolioByObjective: (objective: string) => ['model_portfolio_by_objective', objective] as const,
   modelPortfolioById: (id: number) => ['model_portfolio_by_id', id] as const,

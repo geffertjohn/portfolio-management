@@ -152,8 +152,10 @@ export interface MarkPortfolioReviewedOptions {
  * Record a completed cadence review.
  * Upserts the matching `portfolio_review_schedules` row (advancing only that
  * cadence's timer) and appends a frozen record to `portfolio_review_log`.
+ * Returns the new `portfolio_review_log.id` (so callers can attach per-holding
+ * assessments, etc.).
  */
-export async function markPortfolioReviewed(opts: MarkPortfolioReviewedOptions): Promise<void> {
+export async function markPortfolioReviewed(opts: MarkPortfolioReviewedOptions): Promise<number> {
   const { portfolioName, cadence, checklist, notes } = opts
   const now = opts.reviewedAt ?? new Date()
   const nextReviewAt = (opts.nextReviewAt ?? calcNextReview(cadence, now)).toISOString()
@@ -172,14 +174,19 @@ export async function markPortfolioReviewed(opts: MarkPortfolioReviewedOptions):
     )
   if (schedError) throw schedError
 
-  const { error: logError } = await supabase.from('portfolio_review_log').insert({
-    portfolio_name: portfolioName,
-    cadence,
-    reviewed_at:    now.toISOString(),
-    review_date:    opts.reviewDate ? opts.reviewDate.toISOString() : null,
-    next_review_at: nextReviewAt,
-    notes:          notes?.trim() || null,
-    checklist:      checklist as unknown as Json,
-  })
+  const { data: logRow, error: logError } = await supabase
+    .from('portfolio_review_log')
+    .insert({
+      portfolio_name: portfolioName,
+      cadence,
+      reviewed_at:    now.toISOString(),
+      review_date:    opts.reviewDate ? opts.reviewDate.toISOString() : null,
+      next_review_at: nextReviewAt,
+      notes:          notes?.trim() || null,
+      checklist:      checklist as unknown as Json,
+    })
+    .select('id')
+    .single()
   if (logError) throw logError
+  return logRow.id
 }

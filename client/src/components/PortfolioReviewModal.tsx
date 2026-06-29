@@ -11,8 +11,14 @@ import {
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { AttributionMovers } from '@/components/AttributionMovers'
 import { PositionSizingCheck } from '@/components/PositionSizingCheck'
+import { HoldingMonitorGrid } from '@/components/HoldingMonitorGrid'
+import { saveHoldingReviews, type HoldingAssessment } from '@/lib/holdingReviews'
 import type { BandModel } from '@/lib/positionBands'
 import type { PortfolioPosition } from '@/types/position'
+
+const EMPTY_ASSESSMENT: Omit<HoldingAssessment, 'securityId'> = {
+  thesisStatus: null, businessTrend: null, valuation: null, conviction: null, action: null,
+}
 
 interface PortfolioReviewModalProps {
   open: boolean
@@ -39,6 +45,8 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
   const [notes, setNotes] = useState('')
   const [reviewDate, setReviewDate] = useState(toDateInputValue(new Date()))
   const [nextDate, setNextDate] = useState('')
+  // Per-holding monitoring assignments (quarterly full-monitoring), keyed by securityId.
+  const [holdingAssessments, setHoldingAssessments] = useState<Record<string, HoldingAssessment>>({})
 
   // Re-seed from the cadence each time the modal opens (stable on cadence/open only).
   useEffect(() => {
@@ -52,11 +60,22 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
         })),
       )
       setNotes('')
+      setHoldingAssessments({})
       const today = new Date()
       setReviewDate(toDateInputValue(today))
       setNextDate(nextReviewDateFor(cadence, today).slice(0, 10))
     }
   }, [open, cadence])
+
+  const setHoldingField = (
+    securityId: string,
+    field: keyof Omit<HoldingAssessment, 'securityId'>,
+    value: string,
+  ) =>
+    setHoldingAssessments((prev) => {
+      const current = prev[securityId] ?? { securityId, ...EMPTY_ASSESSMENT }
+      return { ...prev, [securityId]: { ...current, [field]: value || null } }
+    })
 
   useEffect(() => {
     const d = dialogRef.current
@@ -65,10 +84,10 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
   }, [open])
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!cadence) throw new Error('No cadence selected')
       const completedAt = new Date(reviewDate + 'T00:00:00')
-      return markPortfolioReviewed({
+      const logId = await markPortfolioReviewed({
         portfolioName: portfolioId,
         cadence,
         checklist: items,
@@ -77,11 +96,17 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
         reviewDate: dueDate ? new Date(dueDate) : null,
         nextReviewAt: nextDate ? new Date(nextDate + 'T00:00:00') : null,
       })
+      // Persist per-holding assessments captured in the full-monitoring grid.
+      const assessments = Object.values(holdingAssessments)
+      if (assessments.length > 0) {
+        await saveHoldingReviews(logId, portfolioId, assessments, completedAt)
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolioReviews(portfolioId) })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolioReviewSchedulesFor(portfolioId) })
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolioReviewSchedules })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.holdingReviews(portfolioId) })
       onClose()
     },
   })
@@ -103,7 +128,7 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
     <dialog
       ref={dialogRef}
       onCancel={handleClose}
-      className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30"
+      className={`w-full ${cadence === 'quarterly' ? 'max-w-4xl' : 'max-w-lg'} rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30`}
     >
       <form
         onSubmit={(e) => { e.preventDefault(); if (canSubmit) mutation.mutate() }}
@@ -135,6 +160,13 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
               </label>
               {it.key === 'performance_attribution' && (
                 <AttributionMovers portfolioId={portfolioId} days={30} />
+              )}
+              {it.key === 'full_monitoring' && (
+                <HoldingMonitorGrid
+                  positions={positions}
+                  assessments={holdingAssessments}
+                  onChange={setHoldingField}
+                />
               )}
               {(it.key === 'position_sizing' || it.key === 'full_monitoring') && (
                 <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} />

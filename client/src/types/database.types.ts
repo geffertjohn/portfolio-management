@@ -723,6 +723,66 @@ export type Database = {
           },
         ]
       }
+      holding_reviews: {
+        Row: {
+          action: string | null
+          business_trend: string | null
+          conviction: string | null
+          created_at: string
+          id: number
+          notes: string | null
+          portfolio_name: string
+          review_log_id: number
+          reviewed_at: string
+          security_id: string
+          thesis_status: string | null
+          valuation: string | null
+        }
+        Insert: {
+          action?: string | null
+          business_trend?: string | null
+          conviction?: string | null
+          created_at?: string
+          id?: number
+          notes?: string | null
+          portfolio_name: string
+          review_log_id: number
+          reviewed_at?: string
+          security_id: string
+          thesis_status?: string | null
+          valuation?: string | null
+        }
+        Update: {
+          action?: string | null
+          business_trend?: string | null
+          conviction?: string | null
+          created_at?: string
+          id?: number
+          notes?: string | null
+          portfolio_name?: string
+          review_log_id?: number
+          reviewed_at?: string
+          security_id?: string
+          thesis_status?: string | null
+          valuation?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_reviews_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "holding_reviews_review_log_id_fkey"
+            columns: ["review_log_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_review_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holdings_change_log: {
         Row: {
           change_type: string
