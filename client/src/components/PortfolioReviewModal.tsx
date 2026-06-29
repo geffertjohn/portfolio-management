@@ -136,7 +136,7 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
               {it.key === 'performance_attribution' && (
                 <AttributionMovers portfolioId={portfolioId} days={30} />
               )}
-              {it.key === 'position_sizing' && (
+              {(it.key === 'position_sizing' || it.key === 'full_monitoring') && (
                 <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} />
               )}
               <input
