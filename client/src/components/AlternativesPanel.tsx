@@ -109,9 +109,9 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
   // alt_1/2/3: a background refetch (TanStack refetchOnWindowFocus fires whenever
   // the user tabs back from looking up a ticker) must NOT overwrite in-progress
   // local edits — doing so wiped unsaved Alt rows.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setAlts([security.alt_1 ?? '', security.alt_2 ?? '', security.alt_3 ?? ''])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [security.id])
 
   const queryClient = useQueryClient()

@@ -19,7 +19,7 @@ export function HomePage() {
   })
 
   const { data: actionItems = [] } = useQuery({
-    queryKey: QUERY_KEYS.actionItems,
+    queryKey: [...QUERY_KEYS.actionItems, 'open'],
     queryFn: () => fetchActionItems({ status: 'open' }),
   })
 

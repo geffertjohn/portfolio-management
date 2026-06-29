@@ -19,6 +19,7 @@ import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { consensusColor } from '@/lib/formatters'
 
 interface Props {
   security: SecurityDetail
@@ -34,16 +35,6 @@ function fmtDollar(v: number): string {
 
 function fmtSignedPct(v: number): string {
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
-}
-
-/** Green when the consensus leans buy, yellow when hold/neutral, red when sell. */
-function consensusColor(label: string | null): string {
-  if (!label) return 'text-gray-400'
-  const l = label.toLowerCase()
-  if (l.includes('buy') || l.includes('overweight') || l.includes('outperform')) return 'text-green-600'
-  if (l.includes('sell') || l.includes('underweight') || l.includes('underperform')) return 'text-red-600'
-  if (l.includes('hold') || l.includes('neutral') || l.includes('market perform') || l.includes('equal')) return 'text-yellow-500'
-  return 'text-gray-700'
 }
 
 /** Horizontal range bar with a pinned marker (matches AnalystCoveragePanel). */

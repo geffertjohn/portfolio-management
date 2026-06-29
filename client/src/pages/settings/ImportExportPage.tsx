@@ -102,7 +102,7 @@ export function ImportExportPage() {
   })
 
   const { data: actionItems = [] } = useQuery({
-    queryKey: QUERY_KEYS.actionItems,
+    queryKey: [...QUERY_KEYS.actionItems, 'all'],
     queryFn: () => fetchActionItems(),
   })
 

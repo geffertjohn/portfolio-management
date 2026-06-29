@@ -235,11 +235,13 @@ export async function bulkUploadPortfoliosFromExcel(
     let portfolioName: string | null = null
 
     if (secId) {
-      const { data } = await supabase.from('portfolio').select('name').eq('security_id', secId).maybeSingle()
+      const { data, error } = await supabase.from('portfolio').select('name').eq('security_id', secId).maybeSingle()
+      if (error) throw error
       if (data?.name) portfolioName = data.name
     }
     if (!portfolioName && secName) {
-      const { data } = await supabase.from('portfolio').select('name').eq('name', secName).maybeSingle()
+      const { data, error } = await supabase.from('portfolio').select('name').eq('name', secName).maybeSingle()
+      if (error) throw error
       if (data?.name) portfolioName = data.name
     }
     if (!portfolioName) {

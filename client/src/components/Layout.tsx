@@ -182,8 +182,9 @@ function TickerSearch() {
       .ilike('security_id', `${q}%`)
       .order('security_id')
       .limit(10)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (cancelled) return
+        if (error) { setResults([]); setOpen(false); return }
         const rows = (data ?? []) as SearchResult[]
         setResults(rows)
         setOpen(rows.length > 0)

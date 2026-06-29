@@ -181,10 +181,11 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
   // ── Step 1: find which security_ids already exist ────────────────────────────
   const existingIds = new Set<string>()
   for (let i = 0; i < allSecurityIds.length; i += BATCH_SIZE) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('securities2')
       .select('security_id')
       .in('security_id', allSecurityIds.slice(i, i + BATCH_SIZE))
+    if (error) throw error
     for (const row of data ?? []) existingIds.add(row.security_id)
   }
 

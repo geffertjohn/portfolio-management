@@ -13,13 +13,14 @@ function hyphenVariants(s: string): string[] {
  * the security's ycharts_benchmark_category value. Matches with or without hyphens.
  */
 async function fetchCategoryBenchmark(category: string): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('category_benchmarks')
     .select('category_benchmark')
     .in('category', hyphenVariants(category))
     .not('category_benchmark', 'is', null)
     .limit(1)
     .maybeSingle()
+  if (error) throw error
   return data?.category_benchmark ?? null
 }
 
@@ -28,13 +29,14 @@ async function fetchCategoryBenchmark(category: string): Promise<string | null> 
  * matches the security's peer_group_name value. Matches with or without hyphens.
  */
 async function fetchPeerGroupBenchmark(peerGroupName: string): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('peer_group_benchmarks')
     .select('peer_group_benchmark')
     .in('peer_group_category', hyphenVariants(peerGroupName))
     .not('peer_group_benchmark', 'is', null)
     .limit(1)
     .maybeSingle()
+  if (error) throw error
   return data?.peer_group_benchmark ?? null
 }
 

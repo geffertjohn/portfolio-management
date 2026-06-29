@@ -80,11 +80,14 @@ export async function fetchIPSByClient(clientId: number): Promise<IPS | null> {
 }
 
 export async function upsertIPS(clientId: number, input: IPSInput): Promise<void> {
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from('investment_policy_statements')
     .select('id')
     .eq('client_id', clientId)
+    .order('effective_date', { ascending: false })
+    .limit(1)
     .maybeSingle()
+  if (existingError) throw existingError
 
   if (existing) {
     const { error } = await supabase

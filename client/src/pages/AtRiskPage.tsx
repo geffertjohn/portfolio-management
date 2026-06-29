@@ -232,7 +232,7 @@ export function AtRiskPage() {
                           key={entry.id}
                           entry={entry}
                           streamable={type !== 'Mutual fund'}
-                          onNavigate={() => navigate(`/security/${sec?.id}`, { state: { tab: 'monitoring' } })}
+                          onNavigate={() => { if (sec?.id != null) navigate(`/security/${sec.id}`, { state: { tab: 'monitoring' } }) }}
                           onPropose={() => sec && setProposeFor({ atRiskId: entry.id, securityId: sec.security_id, symbol: sec.security_id })}
                           onRemove={() => removeMutation.mutate(entry.id)}
                           removePending={removeMutation.isPending}

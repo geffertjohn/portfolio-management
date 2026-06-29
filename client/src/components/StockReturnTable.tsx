@@ -78,11 +78,14 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
   const [bench2Id, setBench2Id] = useState<number | null>(security.preferred_benchmark2_id ?? null)
   const [pickerOpen, setPickerOpen] = useState<1 | 2 | null>(null)
 
-  // Re-sync if the user navigates between securities without unmounting
+  // Re-sync only when navigating to a *different* security (by stable id).
+  // Depending on the editable benchmark fields would let a background refetch
+  // (refetchOnWindowFocus) clobber an in-progress picker edit — see gotcha #9.
   useEffect(() => {
     setBench1Id(security.preferred_benchmark1_id ?? null)
     setBench2Id(security.preferred_benchmark2_id ?? null)
-  }, [security.id, security.preferred_benchmark1_id, security.preferred_benchmark2_id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [security.id])
 
   const { data: allBenchmarks = [] } = useQuery({
     queryKey: QUERY_KEYS.benchmarks,
