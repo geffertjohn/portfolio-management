@@ -429,7 +429,7 @@ Portfolio-level reviews are **separate from per-security reviews** (above) and f
 
 ### Checklists are the documented process
 
-`PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the fixed task list per cadence (monthly: performance attribution · position sizing · valuation changes; quarterly: full monitoring review · update thesis scorecards · update watchlist status; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction). These are hard-coded, not per-portfolio editable — change them here and the modal + history follow.
+`PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the fixed task list per cadence (monthly: performance attribution · position sizing; quarterly: full monitoring review · update thesis scorecards · update watchlist status · check valuation changes; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction · check valuation changes). These are hard-coded, not per-portfolio editable — change them here and the modal + history follow.
 
 ### Monthly review task data aids (in `PortfolioReviewModal`)
 

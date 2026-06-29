@@ -37,17 +37,18 @@ export const PORTFOLIO_REVIEW_TASKS: Record<PortfolioCadence, ReviewTaskDef[]> =
   monthly: [
     { key: 'performance_attribution', label: 'Review performance attribution' },
     { key: 'position_sizing',         label: 'Review position sizing' },
-    { key: 'valuation_changes',       label: 'Check valuation changes' },
   ],
   quarterly: [
     { key: 'full_monitoring',    label: 'Full monitoring review on every holding' },
     { key: 'thesis_scorecards',  label: 'Update thesis scorecards' },
     { key: 'watchlist_status',   label: 'Update watchlist status' },
+    { key: 'valuation_changes',  label: 'Check valuation changes' },
   ],
   annual: [
     { key: 'deep_review',             label: 'Deep review of every holding' },
     { key: 'conviction_rankings',     label: 'Rebuild conviction rankings' },
     { key: 'portfolio_construction',  label: 'Reassess portfolio construction' },
+    { key: 'valuation_changes',       label: 'Check valuation changes' },
   ],
 }
 
