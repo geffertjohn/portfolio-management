@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
+import { useQuery } from '@tanstack/react-query'
+import { searchSecurities, type SecuritySearchResult } from '@/lib/securities'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 const NAV_LINKS = [
   { to: '/', label: 'Home', exact: true },
@@ -155,15 +157,8 @@ const SETTINGS_LINKS = [
   },
 ]
 
-interface SearchResult {
-  id: number
-  security_id: string
-  security_name: string | null
-}
-
 function TickerSearch() {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
   const [open, setOpen] = useState(false)
   const [focused, setFocused] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -171,25 +166,19 @@ function TickerSearch() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Prefix search on security_id — cancel stale requests
+  const trimmed = query.trim()
+
+  // Prefix search on security_id — TanStack handles staleness/cancellation
+  const { data: results = [] } = useQuery({
+    queryKey: QUERY_KEYS.securitySearch(trimmed.toUpperCase()),
+    queryFn: () => searchSecurities(trimmed),
+    enabled: !!trimmed,
+  })
+
+  // Open the dropdown whenever there are results for the current query
   useEffect(() => {
-    const q = query.trim().toUpperCase()
-    if (!q) { setResults([]); setOpen(false); return }
-    let cancelled = false
-    supabase
-      .from('securities2')
-      .select('id, security_id, security_name')
-      .ilike('security_id', `${q}%`)
-      .order('security_id')
-      .limit(10)
-      .then(({ data }) => {
-        if (cancelled) return
-        const rows = (data ?? []) as SearchResult[]
-        setResults(rows)
-        setOpen(rows.length > 0)
-      })
-    return () => { cancelled = true }
-  }, [query])
+    setOpen(results.length > 0)
+  }, [results])
 
   // Close on outside click
   useEffect(() => {
@@ -206,7 +195,7 @@ function TickerSearch() {
   // Close and clear on navigation
   useEffect(() => { setQuery(''); setOpen(false) }, [location.pathname])
 
-  function select(r: SearchResult) {
+  function select(r: SecuritySearchResult) {
     setQuery('')
     setOpen(false)
     navigate(`/security/${r.id}`)

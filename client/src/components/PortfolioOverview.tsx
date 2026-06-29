@@ -1,38 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { ASSET_CLASS_ROWS, type ModelPortfolio } from '@/lib/modelPortfolios'
-import { supabase } from '@/lib/supabase'
+import { fetchBenchmarkByName } from '@/lib/benchmarks'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import type { PortfolioPosition } from '@/types/position'
 import type { Portfolio } from '@/types/portfolio'
 
-interface BenchmarkReturns {
-  security_name: string | null
-  one_month_total_return: number | null
-  three_month_total_return: number | null
-  ytd_total_return: number | null
-  one_year_total_return: number | null
-  annualized_three_year_total_return: number | null
-  annualized_five_year_total_return: number | null
-  annualized_ten_year_total_return: number | null
-  annualized_daily_all_time_total_return: number | null
-}
-
-const BENCHMARK_SELECT = 'security_name, one_month_total_return, three_month_total_return, ytd_total_return, one_year_total_return, annualized_three_year_total_return, annualized_five_year_total_return, annualized_ten_year_total_return, annualized_daily_all_time_total_return'
-
-async function fetchBenchmarkByName(name: string): Promise<BenchmarkReturns | null> {
-  const { data, error } = await supabase
-    .from('model_portfolio_benchmarks')
-    .select(BENCHMARK_SELECT)
-    .eq('security_name', name)
-    .maybeSingle()
-  if (error) throw error
-  return data as BenchmarkReturns | null
-}
-
 interface PortfolioOverviewProps {
-  portfolioId: string
-  positions: PortfolioPosition[]
   portfolio: Portfolio
   overrideModelPortfolio: ModelPortfolio | null | undefined
 }
@@ -65,7 +38,7 @@ function fmtPct(v: number | null) {
   return v != null ? `${v.toFixed(1)}%` : '—'
 }
 
-export function PortfolioOverview({ portfolioId, positions, portfolio, overrideModelPortfolio }: PortfolioOverviewProps) {
+export function PortfolioOverview({ portfolio, overrideModelPortfolio }: PortfolioOverviewProps) {
   const modelPortfolio = overrideModelPortfolio
 
   const effectiveBenchmark = modelPortfolio?.benchmark ?? ''

@@ -1,5 +1,5 @@
 /**
- * Shared primitives used by EquityMonitoringPanel and FixedIncomeMonitoringPanel.
+ * Shared primitives used by FundMonitoringPanel.
  */
 
 import type { ReactNode } from 'react'
@@ -63,7 +63,6 @@ export function MetricCard({
   displayValue,
   rawValue,
   neutral,
-  scale,
   higherIsBetter,
   benchmarkValue,
   benchmark2Value,

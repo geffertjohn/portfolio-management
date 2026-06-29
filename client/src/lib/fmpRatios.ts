@@ -1,16 +1,4 @@
-const FMP_STABLE = 'https://financialmodelingprep.com/stable'
-
-function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  if (!key) throw new Error('VITE_FMP_API_KEY is not configured.')
-  return key
-}
-
-function num(v: unknown): number | null {
-  if (v === null || v === undefined) return null
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : null
-}
+import { FMP_STABLE, apiKey, fmpSymbol, num } from './fmpClient'
 
 export interface RatiosTTM {
   operatingProfitMargin: number | null
@@ -18,7 +6,7 @@ export interface RatiosTTM {
 
 export async function fetchRatiosTTM(symbol: string): Promise<RatiosTTM> {
   const res = await fetch(
-    `${FMP_STABLE}/ratios-ttm?symbol=${symbol}&apikey=${apiKey()}`
+    `${FMP_STABLE}/ratios-ttm?symbol=${fmpSymbol(symbol)}&apikey=${apiKey()}`
   )
   if (!res.ok) throw new Error(`FMP ratios-ttm ${res.status}: ${symbol}`)
   const data = (await res.json()) as unknown[]
@@ -44,7 +32,7 @@ export async function fetchAnnualOperatingMargins(
   limit = 2
 ): Promise<AnnualOperatingMargin[]> {
   const res = await fetch(
-    `${FMP_STABLE}/ratios?symbol=${symbol}&period=annual&limit=${limit}&apikey=${apiKey()}`
+    `${FMP_STABLE}/ratios?symbol=${fmpSymbol(symbol)}&period=annual&limit=${limit}&apikey=${apiKey()}`
   )
   if (!res.ok) throw new Error(`FMP ratios ${res.status}: ${symbol}`)
   const data = (await res.json()) as unknown[]
@@ -92,11 +80,12 @@ export interface FcfMargins {
  */
 export async function fetchFcfMargins(symbol: string, limit = 2): Promise<FcfMargins> {
   const key = apiKey()
+  const sym = fmpSymbol(symbol)
   const [cfTtm, incTtm, cfAnnual, incAnnual] = await Promise.all([
-    fetchArray(`${FMP_STABLE}/cash-flow-statement-ttm?symbol=${symbol}&apikey=${key}`),
-    fetchArray(`${FMP_STABLE}/income-statement-ttm?symbol=${symbol}&apikey=${key}`),
-    fetchArray(`${FMP_STABLE}/cash-flow-statement?symbol=${symbol}&period=annual&limit=${limit}&apikey=${key}`),
-    fetchArray(`${FMP_STABLE}/income-statement?symbol=${symbol}&period=annual&limit=${limit}&apikey=${key}`),
+    fetchArray(`${FMP_STABLE}/cash-flow-statement-ttm?symbol=${sym}&apikey=${key}`),
+    fetchArray(`${FMP_STABLE}/income-statement-ttm?symbol=${sym}&apikey=${key}`),
+    fetchArray(`${FMP_STABLE}/cash-flow-statement?symbol=${sym}&period=annual&limit=${limit}&apikey=${key}`),
+    fetchArray(`${FMP_STABLE}/income-statement?symbol=${sym}&period=annual&limit=${limit}&apikey=${key}`),
   ])
 
   const ttm = margin(
@@ -136,7 +125,7 @@ export interface TtmGrowth {
  */
 export async function fetchTtmGrowth(symbol: string): Promise<TtmGrowth> {
   const rows = await fetchArray(
-    `${FMP_STABLE}/income-statement-ttm?symbol=${symbol}&apikey=${apiKey()}`
+    `${FMP_STABLE}/income-statement-ttm?symbol=${fmpSymbol(symbol)}&apikey=${apiKey()}`
   )
   const cur = rows[0]
   const prior = rows[4]
@@ -169,7 +158,7 @@ export interface Cagr3y {
  */
 export async function fetchCagr3y(symbol: string): Promise<Cagr3y> {
   const rows = await fetchArray(
-    `${FMP_STABLE}/income-statement?symbol=${symbol}&period=annual&limit=4&apikey=${apiKey()}`
+    `${FMP_STABLE}/income-statement?symbol=${fmpSymbol(symbol)}&period=annual&limit=4&apikey=${apiKey()}`
   )
   if (rows.length < 4) return { revenue: null, eps: null }
 

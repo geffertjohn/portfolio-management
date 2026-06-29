@@ -1,11 +1,4 @@
-const FMP_V3     = 'https://financialmodelingprep.com/api/v3'
-const FMP_STABLE = 'https://financialmodelingprep.com/stable'
-
-function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  if (!key) throw new Error('VITE_FMP_API_KEY is not configured. Add it to your .env file.')
-  return key
-}
+import { FMP_STABLE, FMP_V3, apiKey, fmpSymbol } from './fmpClient'
 
 export interface EarningsTranscript {
   symbol: string
@@ -22,7 +15,7 @@ export interface EarningsTranscript {
 export async function fetchLatestTranscript(symbol: string): Promise<EarningsTranscript | null> {
   const sym = symbol.trim().toUpperCase()
   const qs = new URLSearchParams({ limit: '1', apikey: apiKey() })
-  const res = await fetch(`${FMP_V3}/earning_call_transcript/${sym}?${qs}`)
+  const res = await fetch(`${FMP_V3}/earning_call_transcript/${fmpSymbol(sym)}?${qs}`)
   if (!res.ok) throw new Error(`FMP transcript/${sym}: ${res.status} ${res.statusText}`)
   const data = (await res.json()) as EarningsTranscript[]
   return data?.[0] ?? null
@@ -39,7 +32,7 @@ export interface KeyExecutive {
  */
 export async function fetchKeyExecutives(symbol: string): Promise<KeyExecutive[]> {
   const sym = symbol.trim().toUpperCase()
-  const qs = new URLSearchParams({ symbol: sym, apikey: apiKey() })
+  const qs = new URLSearchParams({ symbol: fmpSymbol(sym), apikey: apiKey() })
   const res = await fetch(`${FMP_STABLE}/key-executives?${qs}`)
   if (!res.ok) return []
   const data = (await res.json()) as { name?: string; title?: string }[]

@@ -7,7 +7,10 @@
     "dev:client": "npm run dev --workspace=client",
     "dev:server": "npm run dev --workspace=server",
     "build": "npm run build --workspaces --if-present",
-    "install:all": "npm install"
+    "lint": "npm run lint --workspace=client",
+    "typecheck": "npm run typecheck --workspace=client",
+    "install:all": "npm install",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fmtDecimalPct, stripTotalReturn, EMPTY } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { saveAlternatives } from '@/lib/securities'
-import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, type BenchmarkOption } from './BenchmarkPickerModal'
+import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, type BenchmarkOption } from '@/lib/benchmarks'
 import { fetchScorecardMetrics, type ScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchStockReturns, fetchProfile, type TrailingReturns } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -109,9 +109,9 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
   // alt_1/2/3: a background refetch (TanStack refetchOnWindowFocus fires whenever
   // the user tabs back from looking up a ticker) must NOT overwrite in-progress
   // local edits — doing so wiped unsaved Alt rows.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setAlts([security.alt_1 ?? '', security.alt_2 ?? '', security.alt_3 ?? ''])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [security.id])
 
   const queryClient = useQueryClient()

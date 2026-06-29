@@ -1,32 +1,4 @@
-const FMP_STABLE = 'https://financialmodelingprep.com/stable'
-
-function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  if (!key) throw new Error('VITE_FMP_API_KEY is not configured.')
-  return key
-}
-
-function num(v: unknown): number | null {
-  if (v === null || v === undefined) return null
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-function firstItem(raw: unknown): Record<string, unknown> | null {
-  if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === 'object' && raw[0] !== null) {
-    return raw[0] as Record<string, unknown>
-  }
-  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
-    return raw as Record<string, unknown>
-  }
-  return null
-}
-
-async function fmpGet(url: string): Promise<unknown> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`FMP ${res.status}: ${url}`)
-  return res.json() as Promise<unknown>
-}
+import { FMP_STABLE, apiKey, firstItem, fmpFetch, fmpSymbol, num } from './fmpClient'
 
 export interface PriceTargetData {
   targetConsensus: number | null
@@ -52,13 +24,14 @@ export interface AnalystData {
 
 export async function fetchAnalystData(symbol: string): Promise<AnalystData> {
   const key = apiKey()
+  const sym = fmpSymbol(symbol)
 
   const [ptResult, gradesResult, consensusResult] = await Promise.allSettled([
-    fmpGet(`${FMP_STABLE}/price-target-consensus?symbol=${symbol}&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/price-target-consensus?symbol=${sym}&apikey=${key}`),
     // grades-historical: monthly snapshot of ALL active analyst ratings (most comprehensive)
-    fmpGet(`${FMP_STABLE}/grades-historical?symbol=${symbol}&limit=1&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/grades-historical?symbol=${sym}&limit=1&apikey=${key}`),
     // grades-consensus: still used for the computed consensus label string
-    fmpGet(`${FMP_STABLE}/grades-consensus?symbol=${symbol}&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/grades-consensus?symbol=${sym}&apikey=${key}`),
   ])
 
   let priceTarget: PriceTargetData | null = null

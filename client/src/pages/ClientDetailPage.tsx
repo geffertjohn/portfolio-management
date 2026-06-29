@@ -48,13 +48,12 @@ export function ClientDetailPage() {
   // Action items linked to any of this client's portfolios
   const linkedPortfolioNameList = clientPortfolios.map((cp) => cp.portfolio_name)
   const { data: actionItems = [] } = useQuery({
-    queryKey: QUERY_KEYS.actionItems,
+    queryKey: [...QUERY_KEYS.actionItems, 'all'],
     queryFn: () => fetchActionItems(),
     select: (items) =>
       items.filter(
         (item) =>
-          (item.portfolio_name != null && linkedPortfolioNameList.includes(item.portfolio_name)) ||
-          item.security_id != null
+          item.portfolio_name != null && linkedPortfolioNameList.includes(item.portfolio_name)
       ),
     enabled: clientPortfolios.length > 0,
   })

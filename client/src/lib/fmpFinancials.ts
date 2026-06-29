@@ -1,3 +1,8 @@
+import { FMP_STABLE, FMP_V3, apiKey, fmpFetch, fmpSymbol, num } from './fmpClient'
+
+// Re-exported for components (e.g. FinancialsSection) that import `num` from here.
+export { num }
+
 export interface DailyPrice {
   date: string
   close: number
@@ -39,12 +44,6 @@ export interface MergedQuarter {
 export interface FinancialsData {
   prices: DailyPrice[]
   quarters: MergedQuarter[]
-}
-
-export function num(v: unknown): number | null {
-  if (v === null || v === undefined) return null
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : null
 }
 
 function toDateStr(d: Date): string {
@@ -131,12 +130,6 @@ function extractArray(raw: unknown): unknown[] {
   return []
 }
 
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`)
-  return res.json() as Promise<unknown>
-}
-
 /**
  * Find the nearest price index (oldest→newest sorted) at or after targetDate.
  * Falls back to scanning ±3 days if no price on/after targetDate exists.
@@ -208,24 +201,22 @@ function matchEarnings(earnings: EarningsRow[], periodEnd: string): EarningsRow 
 }
 
 export async function fetchFinancialsData(symbol: string): Promise<FinancialsData> {
-  const key = import.meta.env.VITE_FMP_API_KEY as string
+  const key = apiKey()
+  const sym = fmpSymbol(symbol)
   const today = new Date()
   const from = new Date(today)
   from.setFullYear(from.getFullYear() - 5)
   const fromDate = toDateStr(from)
 
-  const stable = 'https://financialmodelingprep.com/stable'
-  const v3 = 'https://financialmodelingprep.com/api/v3'
-
   const [priceResult, incomeResult, estimatesResult, earningsResult] = await Promise.allSettled([
     // Stable EOD prices — confirmed working
-    fetchJson(`${stable}/historical-price-eod/full?symbol=${symbol}&from=${fromDate}&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/historical-price-eod/full?symbol=${sym}&from=${fromDate}&apikey=${key}`),
     // v3 income statement — returns calendarYear + period fields reliably
-    fetchJson(`${v3}/income-statement/${symbol}?period=quarter&limit=40&apikey=${key}`),
+    fmpFetch(`${FMP_V3}/income-statement/${sym}?period=quarter&limit=40&apikey=${key}`),
     // Stable analyst estimates — includes numAnalystsRevenue / numAnalystsEps
-    fetchJson(`${stable}/analyst-estimates?symbol=${symbol}&period=quarter&limit=40&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/analyst-estimates?symbol=${sym}&period=quarter&limit=40&apikey=${key}`),
     // Stable earnings — plain array with date (announcement) + fiscalDateEnding
-    fetchJson(`${stable}/earnings?symbol=${symbol}&limit=40&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/earnings?symbol=${sym}&limit=40&apikey=${key}`),
   ])
 
   const rawPriceArr    = priceResult.status    === 'fulfilled' ? extractArray(priceResult.value)    : []
@@ -401,14 +392,14 @@ interface AnnualIncomeRow {
 }
 
 export async function fetchAnnualFinancialsData(symbol: string): Promise<MergedQuarter[]> {
-  const key    = import.meta.env.VITE_FMP_API_KEY as string
-  const stable = 'https://financialmodelingprep.com/stable'
+  const key = apiKey()
+  const sym = fmpSymbol(symbol)
 
   const [incomeResult, estimatesResult, earningsResult] = await Promise.allSettled([
     // Use stable endpoint — field names match what we map below
-    fetchJson(`${stable}/income-statement?symbol=${symbol}&period=annual&limit=4&apikey=${key}`),
-    fetchJson(`${stable}/analyst-estimates?symbol=${symbol}&period=annual&limit=10&apikey=${key}`),
-    fetchJson(`${stable}/earnings?symbol=${symbol}&limit=20&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/income-statement?symbol=${sym}&period=annual&limit=4&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/analyst-estimates?symbol=${sym}&period=annual&limit=10&apikey=${key}`),
+    fmpFetch(`${FMP_STABLE}/earnings?symbol=${sym}&limit=20&apikey=${key}`),
   ])
 
   const rawIncome    = incomeResult.status    === 'fulfilled' ? extractArray(incomeResult.value)    : []

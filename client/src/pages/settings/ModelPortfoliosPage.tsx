@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
 import {
   fetchModelPortfolios,
   createModelPortfolio,
@@ -9,8 +8,8 @@ import {
   ASSET_CLASS_ROWS,
 } from '@/lib/modelPortfolios'
 import type { ModelPortfolio, ModelPortfolioInput } from '@/lib/modelPortfolios'
-
-const QUERY_KEY = ['model_portfolios']
+import { fetchModelPortfolioBenchmarkOptions } from '@/lib/benchmarks'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 // target string → number, defaulting 0
 function n(v: string) { return Number(v) || 0 }
@@ -554,23 +553,16 @@ export function ModelPortfoliosPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const { data: models = [], isLoading } = useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: QUERY_KEYS.modelPortfolios,
     queryFn: fetchModelPortfolios,
   })
 
   const { data: benchmarkOptions = [] } = useQuery({
-    queryKey: ['model-portfolio-benchmark-options'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('model_portfolio_benchmarks')
-        .select('security_name')
-        .order('security_name', { ascending: true })
-      if (error) throw error
-      return (data ?? []).map((r) => r.security_name as string).filter(Boolean)
-    },
+    queryKey: QUERY_KEYS.modelPortfolioBenchmarkOptions,
+    queryFn: fetchModelPortfolioBenchmarkOptions,
   })
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.modelPortfolios })
 
   const createMutation = useMutation({
     mutationFn: createModelPortfolio,

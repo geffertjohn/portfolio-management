@@ -68,3 +68,22 @@ export function stripTotalReturn(name: string | null | undefined): string {
   if (!name) return ''
   return name.replace(/\s*\btotal return\b/gi, '').replace(/\s{2,}/g, ' ').trim()
 }
+
+/**
+ * Tailwind text-color class for an analyst consensus / rating label.
+ * Single source of truth so every analyst surface colors the same string
+ * identically (previously two divergent copies disagreed). Handles both
+ * consensus words (Buy/Hold/Sell) and grade words (Overweight/Outperform…).
+ */
+export function consensusColor(label: string | null | undefined): string {
+  if (!label) return 'text-gray-500'
+  const l = label.toLowerCase()
+  if (l.includes('strong buy')) return 'text-green-700'
+  if (l.includes('strong sell')) return 'text-red-700'
+  if (l === 'buy' || l.includes('overweight') || l.includes('outperform') || l.includes('accumulate')) return 'text-green-600'
+  if (l === 'sell' || l.includes('underweight') || l.includes('underperform') || l.includes('reduce')) return 'text-red-600'
+  if (l.includes('hold') || l.includes('neutral') || l.includes('market perform') || l.includes('equal')) return 'text-yellow-600'
+  if (l.includes('buy')) return 'text-green-600'
+  if (l.includes('sell')) return 'text-red-600'
+  return 'text-gray-700'
+}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { fetchBenchmarkAll } from '@/lib/benchmarks'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { Portfolio } from '@/types/portfolio'
 import type { ModelPortfolio } from '@/lib/modelPortfolios'
@@ -12,18 +12,6 @@ type AnyRow = Record<string, unknown>
 interface Props {
   portfolio: Portfolio
   modelPortfolio: ModelPortfolio | null | undefined
-}
-
-// ── Benchmark fetch ───────────────────────────────────────────────────────────
-
-async function fetchBenchmarkAll(name: string): Promise<AnyRow | null> {
-  const { data, error } = await supabase
-    .from('model_portfolio_benchmarks')
-    .select('*')
-    .eq('security_name', name)
-    .maybeSingle()
-  if (error) throw error
-  return data as AnyRow | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

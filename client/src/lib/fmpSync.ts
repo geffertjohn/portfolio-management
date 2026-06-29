@@ -1,13 +1,7 @@
 import { supabase } from '@/lib/supabase'
+import { FMP_STABLE, apiKey, fmpSymbol } from './fmpClient'
 
-const FMP_STABLE = 'https://financialmodelingprep.com/stable'
 const RISK_FREE_RATE = 0.0425
-
-function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  if (!key) throw new Error('VITE_FMP_API_KEY is not configured. Add it to your .env file.')
-  return key
-}
 
 /**
  * Fetch from the FMP stable API.
@@ -336,7 +330,7 @@ export async function syncStockFromFMP(symbol: string): Promise<void> {
   const sym = symbol.trim().toUpperCase()
   // FMP uses hyphens for share-class tickers (BRK.B → BRK-B); the DB row keeps the
   // original `security_id`, so fetch with the mapped symbol but write back to `sym`.
-  const fmpSym = sym.replace(/\./g, '-')
+  const fmpSym = fmpSymbol(sym)
 
   type Row = Record<string, unknown>
 

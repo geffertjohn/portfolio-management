@@ -1,0 +1,27 @@
+#!/bin/sh
+# Pre-commit gate — blocks commits that break the type-check or lint.
+#
+# Activated automatically by `npm install` (the root package.json "prepare"
+# script points core.hooksPath here). To activate manually:
+#   git config core.hooksPath .githooks
+#
+# Rationale: the Vite dev server (esbuild) strips types without checking them,
+# so a change can look fine in the browser yet break `tsc`. This hook is the
+# local mirror of the CI gate (.github/workflows/ci.yml).
+
+# Fast path: only run the (slower) TS checks when client TS/TSX is staged.
+if git diff --cached --name-only --diff-filter=ACM | grep -qE '^client/src/.*\.(ts|tsx)$'; then
+  echo "pre-commit: running client typecheck + lint…"
+
+  if ! npm run --silent --prefix client typecheck; then
+    echo "✖ typecheck failed — commit blocked. Fix the errors above or use 'git commit --no-verify' to bypass."
+    exit 1
+  fi
+
+  if ! npm run --silent --prefix client lint; then
+    echo "✖ lint failed — commit blocked. Fix the errors above or use 'git commit --no-verify' to bypass."
+    exit 1
+  fi
+
+  echo "✓ typecheck + lint passed"
+fi

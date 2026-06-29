@@ -15,7 +15,6 @@ import { ExecuteSwapModal } from '@/components/ExecuteSwapModal'
 
 interface SubstitutionsListProps {
   atRiskId: number
-  incumbentSecurityId: string
   securityStringId: string
 }
 
@@ -33,7 +32,7 @@ function nextStatus(current: SubstitutionStatus): SubstitutionStatus | null {
   return SUBSTITUTION_STATUS_ORDER[idx + 1]
 }
 
-export function SubstitutionsList({ atRiskId, incumbentSecurityId, securityStringId }: SubstitutionsListProps) {
+export function SubstitutionsList({ atRiskId, securityStringId }: SubstitutionsListProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [swapSub, setSwapSub] = useState<Substitution | null>(null)

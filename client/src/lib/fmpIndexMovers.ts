@@ -12,7 +12,7 @@
  * constituents + baselines + live stream, sorted client-side.
  */
 
-const FMP_STABLE = 'https://financialmodelingprep.com/stable'
+import { FMP_STABLE, apiKey, asArray, fmpFetch, num } from './fmpClient'
 
 export type IndexKey = 'sp500' | 'nasdaq' | 'dowjones'
 
@@ -34,32 +34,8 @@ export interface Baseline {
   prevClose: number
 }
 
-function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  if (!key) throw new Error('VITE_FMP_API_KEY is not configured.')
-  return key
-}
-
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`FMP ${res.status}: ${url}`)
-  return res.json() as Promise<unknown>
-}
-
-function asArray(raw: unknown): Record<string, unknown>[] {
-  return Array.isArray(raw)
-    ? raw.filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
-    : []
-}
-
-function num(v: unknown): number | null {
-  if (v === null || v === undefined) return null
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
 export async function fetchIndexConstituents(index: IndexKey): Promise<Constituent[]> {
-  const rows = asArray(await fetchJson(`${FMP_STABLE}/${INDEX_META[index].endpoint}?apikey=${apiKey()}`))
+  const rows = asArray(await fmpFetch(`${FMP_STABLE}/${INDEX_META[index].endpoint}?apikey=${apiKey()}`))
   return rows
     .map((r) => ({
       symbol: typeof r.symbol === 'string' ? r.symbol.toUpperCase() : '',
@@ -84,7 +60,7 @@ export async function fetchBaselines(symbols: string[]): Promise<Record<string, 
   const batches = chunk(symbols, 100)
   const results = await Promise.all(
     batches.map((batch) =>
-      fetchJson(`${FMP_STABLE}/batch-quote-short?symbols=${batch.join(',')}&apikey=${apiKey()}`).then(asArray),
+      fmpFetch(`${FMP_STABLE}/batch-quote-short?symbols=${batch.join(',')}&apikey=${apiKey()}`).then(asArray),
     ),
   )
   for (const rows of results) {

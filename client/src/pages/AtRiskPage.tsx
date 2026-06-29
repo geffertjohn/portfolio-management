@@ -127,7 +127,6 @@ function AtRiskCard({
           </p>
           <SubstitutionsList
             atRiskId={entry.id}
-            incumbentSecurityId={sec.security_id}
             securityStringId={sec.security_id}
           />
         </div>
@@ -233,7 +232,7 @@ export function AtRiskPage() {
                           key={entry.id}
                           entry={entry}
                           streamable={type !== 'Mutual fund'}
-                          onNavigate={() => navigate(`/security/${sec?.id}`, { state: { tab: 'monitoring' } })}
+                          onNavigate={() => { if (sec?.id != null) navigate(`/security/${sec.id}`, { state: { tab: 'monitoring' } }) }}
                           onPropose={() => sec && setProposeFor({ atRiskId: entry.id, securityId: sec.security_id, symbol: sec.security_id })}
                           onRemove={() => removeMutation.mutate(entry.id)}
                           removePending={removeMutation.isPending}

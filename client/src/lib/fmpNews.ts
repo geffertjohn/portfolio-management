@@ -8,23 +8,7 @@
  * results use `/news/stock` and `/news/press-releases` with `symbols=`.
  */
 
-const FMP_STABLE = 'https://financialmodelingprep.com/stable'
-
-function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  if (!key) throw new Error('VITE_FMP_API_KEY is not configured.')
-  return key
-}
-
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`FMP ${res.status}: ${url}`)
-  return res.json() as Promise<unknown>
-}
-
-function str(v: unknown): string | null {
-  return typeof v === 'string' && v.trim() !== '' ? v : null
-}
+import { FMP_STABLE, apiKey, fmpFetch, fmpSymbol, str } from './fmpClient'
 
 export interface NewsItem {
   title: string | null
@@ -49,7 +33,7 @@ function mapItem(r: Record<string, unknown>): NewsItem {
 }
 
 async function fetchNewsFeed(path: string, symbol: string, limit: number): Promise<NewsItem[]> {
-  const raw = await fetchJson(`${FMP_STABLE}/${path}?symbols=${symbol}&limit=${limit}&apikey=${apiKey()}`)
+  const raw = await fmpFetch(`${FMP_STABLE}/${path}?symbols=${fmpSymbol(symbol)}&limit=${limit}&apikey=${apiKey()}`)
   return Array.isArray(raw)
     ? raw.filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object').map(mapItem)
     : []

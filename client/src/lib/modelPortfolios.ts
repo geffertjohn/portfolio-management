@@ -122,7 +122,7 @@ export async function fetchDirectModelPortfolioId(securityId: string): Promise<n
     .eq('security_id', securityId)
     .maybeSingle()
   if (error) throw error
-  return (data as any)?.model_portfolio_id ?? null
+  return (data as { model_portfolio_id: number | null } | null)?.model_portfolio_id ?? null
 }
 
 export async function fetchModelPortfolioByObjective(objective: string): Promise<ModelPortfolio | null> {

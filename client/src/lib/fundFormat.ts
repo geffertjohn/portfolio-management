@@ -1,13 +1,3 @@
-/** Compact USD for AUM (e.g. $2.65B). */
-export function formatAumUsd(value: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    notation: 'compact',
-    maximumFractionDigits: 2,
-  }).format(value)
-}
-
 /**
  * Locale-friendly date from an ISO date or datetime string.
  * Appends T12:00:00 to date-only strings to prevent UTC-offset day shifts.
@@ -23,6 +13,3 @@ export function formatDate(iso: string | null | undefined): string {
     day: 'numeric',
   })
 }
-
-/** @deprecated Use formatDate instead. */
-export const formatInceptionDate = formatDate

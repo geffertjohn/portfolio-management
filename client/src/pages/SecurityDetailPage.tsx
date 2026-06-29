@@ -16,8 +16,7 @@ import { FundHeaderMetricsRow } from '@/components/FundHeaderMetricsRow'
 import { StockReturnTable } from '@/components/StockReturnTable'
 import { FundReturnTable } from '@/components/FundReturnTable'
 import { FundComparisonPanel } from '@/components/FundComparisonPanel'
-import { EquityMonitoringPanel } from '@/components/EquityMonitoringPanel'
-import { FixedIncomeMonitoringPanel } from '@/components/FixedIncomeMonitoringPanel'
+import { FundMonitoringPanel } from '@/components/FundMonitoringPanel'
 import { StockScorecardPanels } from '@/components/StockScorecardPanels'
 import { AnalystCoveragePanel } from '@/components/AnalystCoveragePanel'
 import { AlternativesPanel } from '@/components/AlternativesPanel'
@@ -507,11 +506,9 @@ export function SecurityDetailPage() {
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-gray-900">Monitoring</h2>
           <div className="mt-6 space-y-6">
-            {getBroadAssetClass(security) === 'equity' && (
-              <EquityMonitoringPanel security={security} />
-            )}
-            {getBroadAssetClass(security) === 'fixed income' && (
-              <FixedIncomeMonitoringPanel security={security} />
+            {(getBroadAssetClass(security) === 'equity' ||
+              getBroadAssetClass(security) === 'fixed income') && (
+              <FundMonitoringPanel security={security} />
             )}
           </div>
         </div>

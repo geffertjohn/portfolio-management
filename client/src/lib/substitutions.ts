@@ -44,7 +44,9 @@ export async function fetchSubstitutionsByAtRisk(atRiskId: number): Promise<Subs
     .eq('at_risk_id', atRiskId)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
+  type JoinedSec = { security_id: string | null; security_name: string | null } | null
+  type SubstitutionRow = Substitution & { incumbent: JoinedSec; proposed: JoinedSec }
+  return (data ?? []).map((row: SubstitutionRow): Substitution => ({
     ...row,
     incumbent_symbol: row.incumbent?.security_id ?? null,
     incumbent_name: row.incumbent?.security_name ?? null,

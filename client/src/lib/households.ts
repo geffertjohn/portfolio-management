@@ -33,10 +33,15 @@ export async function fetchHouseholdMembers(householdName: string): Promise<Hous
     .is('deleted_at', null)
     .order('name')
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
+  type MemberRow = {
+    id: number
+    name: string
+    client_portfolios: { portfolio_name: string }[] | null
+  }
+  return (data ?? []).map((row: MemberRow) => ({
     id: row.id,
     name: row.name,
-    portfolioNames: (row.client_portfolios ?? []).map((cp: any) => cp.portfolio_name as string),
+    portfolioNames: (row.client_portfolios ?? []).map((cp) => cp.portfolio_name),
   }))
 }
 
@@ -57,7 +62,7 @@ export async function fetchHouseholdPositions(householdName: string): Promise<{
     .is('deleted_at', null)
   if (clientErr) throw clientErr
 
-  const clientIds = (clients ?? []).map((c: any) => c.id as number)
+  const clientIds = (clients ?? []).map((c: { id: number }) => c.id)
   if (clientIds.length === 0) return { positions: [], portfolioNames: [] }
 
   // 2. All portfolio names linked to those clients
@@ -67,7 +72,7 @@ export async function fetchHouseholdPositions(householdName: string): Promise<{
     .in('client_id', clientIds)
   if (cpErr) throw cpErr
 
-  const portfolioNames = [...new Set((cps ?? []).map((r: any) => r.portfolio_name as string))]
+  const portfolioNames = [...new Set((cps ?? []).map((r: { portfolio_name: string }) => r.portfolio_name))]
   if (portfolioNames.length === 0) return { positions: [], portfolioNames: [] }
 
   // 3. All active positions across those portfolios
@@ -79,9 +84,16 @@ export async function fetchHouseholdPositions(householdName: string): Promise<{
   if (posErr) throw posErr
 
   // 4. Aggregate by security_id
+  type JoinedSec = { security_name: string | null; broad_asset_class: string | null }
+  type PositionRow = {
+    portfolio_name: string
+    security_id: string
+    allocation_pct: number | string
+    securities2: JoinedSec | JoinedSec[] | null
+  }
   const secMap = new Map<string, HouseholdPosition>()
-  for (const row of (rows ?? []) as any[]) {
-    const sid = row.security_id as string
+  for (const row of (rows ?? []) as PositionRow[]) {
+    const sid = row.security_id
     const sec = Array.isArray(row.securities2) ? row.securities2[0] : row.securities2
     if (!secMap.has(sid)) {
       secMap.set(sid, {

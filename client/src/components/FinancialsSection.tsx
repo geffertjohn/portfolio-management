@@ -151,7 +151,7 @@ interface FinancialsTooltipProps {
   metricDef: { label: string; isEps: boolean }
 }
 
-function FinancialsTooltip({ active, payload, metric: _metric, metricDef }: FinancialsTooltipProps) {
+function FinancialsTooltip({ active, payload, metricDef }: FinancialsTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
   const pt = payload[0].payload
   return (

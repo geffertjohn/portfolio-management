@@ -110,7 +110,7 @@ export function CompliancePage() {
   const objectiveGroups = portfolios
     .filter((p) => clientPortfolioNames.has(p.name))
     .reduce<Record<string, string[]>>((acc, p) => {
-      const obj = (p as any).investment_objective ?? 'No Objective'
+      const obj = p.investment_objective ?? 'No Objective'
       ;(acc[obj] ??= []).push(p.name)
       return acc
     }, {})

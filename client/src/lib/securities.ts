@@ -336,14 +336,6 @@ export interface SecurityDetail extends Security {
   next_earnings_release: string | null
 }
 
-export interface FundProfile {
-  issuer?: string | null
-  advisor?: string | null
-  distributor?: string | null
-  website?: string | null
-  inception_date?: string | null
-}
-
 /** UI badge text; derived from `detailed_security_type` / `peer_group_name` when present. */
 export type SecurityDisplayType = 'Mutual fund' | 'ETF' | 'Stock'
 
@@ -425,15 +417,6 @@ export async function updateSecurityThesis(securityId: number, thesis: string): 
     .eq('id', securityId)
 
   if (error) throw error
-}
-
-export function getFundProfile(security: SecurityDetail): FundProfile | null {
-  const issuer = security.fund_company_name ?? security.fund_family
-  const inception = security.inception_date
-  const hasAny =
-    (issuer != null && issuer !== '') || (inception != null && inception !== '')
-  if (!hasAny) return null
-  return { issuer: issuer ?? undefined, inception_date: inception ?? undefined }
 }
 
 export async function fetchSecurities(): Promise<Security[]> {
@@ -591,4 +574,29 @@ export async function createSecurityBySymbol(symbol: string): Promise<void> {
   )
 
   if (error) throw error
+}
+
+/** Minimal row shape for the global ticker-search box. */
+export interface SecuritySearchResult {
+  id: number
+  security_id: string
+  security_name: string | null
+}
+
+/**
+ * Prefix search on `security_id` for the global ticker-search box.
+ * `prefix` is uppercased; returns up to 10 matches ordered by ticker.
+ * Returns an empty list on error (search box degrades silently).
+ */
+export async function searchSecurities(prefix: string): Promise<SecuritySearchResult[]> {
+  const q = prefix.trim().toUpperCase()
+  if (!q) return []
+  const { data, error } = await supabase
+    .from('securities2')
+    .select('id, security_id, security_name')
+    .ilike('security_id', `${q}%`)
+    .order('security_id')
+    .limit(10)
+  if (error) return []
+  return (data ?? []) as SecuritySearchResult[]
 }

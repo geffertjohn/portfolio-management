@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { fetchBenchmarkTable } from '@/lib/benchmarks'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { uploadYchartBenchmarks, type UploadResult } from '@/lib/ychartBenchmarksUpload'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -46,14 +47,6 @@ function fmtNum(v: unknown): string {
   const n = Number(v)
   if (v == null || !Number.isFinite(n)) return '—'
   return n.toFixed(2)
-}
-
-// ── API ───────────────────────────────────────────────────────────────────────
-
-async function fetchTable(table: string): Promise<AnyRow[]> {
-  const { data, error } = await supabase.from(table).select('*').order('id', { ascending: true })
-  if (error) throw error
-  return (data ?? []) as AnyRow[]
 }
 
 // ── Section table ─────────────────────────────────────────────────────────────
@@ -169,23 +162,23 @@ export function BenchmarksPage() {
   const [ychartError, setYchartError] = useState<string | null>(null)
 
   const { data: categoryRows = [], isLoading: catLoading } = useQuery({
-    queryKey: ['category-benchmarks'],
-    queryFn: () => fetchTable('category_benchmarks'),
+    queryKey: QUERY_KEYS.categoryBenchmarksTable,
+    queryFn: () => fetchBenchmarkTable('category_benchmarks'),
   })
 
   const { data: peerGroupRows = [], isLoading: pgLoading } = useQuery({
-    queryKey: ['peer-group-benchmarks'],
-    queryFn: () => fetchTable('peer_group_benchmarks'),
+    queryKey: QUERY_KEYS.peerGroupBenchmarksTable,
+    queryFn: () => fetchBenchmarkTable('peer_group_benchmarks'),
   })
 
   const { data: sectorRows = [], isLoading: sectLoading } = useQuery({
-    queryKey: ['sector-benchmarks'],
-    queryFn: () => fetchTable('sector_benchmarks'),
+    queryKey: QUERY_KEYS.sectorBenchmarksTable,
+    queryFn: () => fetchBenchmarkTable('sector_benchmarks'),
   })
 
   const { data: modelRows = [], isLoading: modelLoading } = useQuery({
-    queryKey: ['model-portfolio-benchmarks'],
-    queryFn: () => fetchTable('model_portfolio_benchmarks'),
+    queryKey: QUERY_KEYS.modelPortfolioBenchmarksTable,
+    queryFn: () => fetchBenchmarkTable('model_portfolio_benchmarks'),
   })
 
   async function handleYchartUpload(file: File) {
@@ -195,10 +188,10 @@ export function BenchmarksPage() {
     try {
       const result = await uploadYchartBenchmarks(file)
       setYchartResult(result)
-      await queryClient.invalidateQueries({ queryKey: ['category-benchmarks'] })
-      await queryClient.invalidateQueries({ queryKey: ['peer-group-benchmarks'] })
-      await queryClient.invalidateQueries({ queryKey: ['sector-benchmarks'] })
-      await queryClient.invalidateQueries({ queryKey: ['model-portfolio-benchmarks'] })
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.categoryBenchmarksTable })
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.peerGroupBenchmarksTable })
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sectorBenchmarksTable })
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.modelPortfolioBenchmarksTable })
     } catch (err) {
       setYchartError(err instanceof Error ? err.message : 'Upload failed')
     } finally {

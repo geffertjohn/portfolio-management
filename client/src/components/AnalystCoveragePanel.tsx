@@ -12,6 +12,7 @@ import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { consensusColor } from '@/lib/formatters'
 
 interface Props {
   security: SecurityDetail
@@ -78,17 +79,6 @@ const GRADES_CONFIG: { key: keyof { strongBuy: number; buy: number; hold: number
   { key: 'sell',        label: 'Sell',        color: 'bg-orange-400' },
   { key: 'strongSell',  label: 'Strong Sell', color: 'bg-red-500'   },
 ]
-
-function consensusColor(label: string | null): string {
-  if (!label) return 'text-gray-500'
-  const l = label.toLowerCase()
-  if (l.includes('strong buy') || l === 'strong buy') return 'text-green-700'
-  if (l === 'buy' || l === 'overweight' || l === 'outperform') return 'text-green-600'
-  if (l === 'hold' || l === 'neutral' || l === 'market perform' || l === 'equal-weight') return 'text-yellow-600'
-  if (l === 'underperform' || l === 'underweight') return 'text-orange-500'
-  if (l.includes('strong sell') || l === 'sell') return 'text-red-600'
-  return 'text-gray-700'
-}
 
 export function AnalystCoveragePanel({ security }: Props) {
   const { data, isLoading } = useQuery({

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { mapSecurityJoin } from './securityJoin'
 
 export type ActionPriority = 'low' | 'medium' | 'high'
 export type ActionStatus = 'open' | 'in_progress' | 'closed'
@@ -34,11 +35,7 @@ export async function fetchActionItems(filters?: { status?: ActionStatus }): Pro
 
   const { data, error } = await q
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
-    ...row,
-    security_symbol: row.securities2?.security_id ?? null,
-    security_name: row.securities2?.security_name ?? null,
-  }))
+  return (data ?? []).map(mapSecurityJoin)
 }
 
 export async function fetchActionItemsBySecurity(securityId: string): Promise<ActionItem[]> {
@@ -50,21 +47,6 @@ export async function fetchActionItemsBySecurity(securityId: string): Promise<Ac
     .order('due_date', { ascending: true, nullsFirst: false })
   if (error) throw error
   return data ?? []
-}
-
-export async function fetchActionItemsByPortfolio(portfolioName: string): Promise<ActionItem[]> {
-  const { data, error } = await supabase
-    .from('action_items')
-    .select('*, securities2(security_id, security_name)')
-    .eq('portfolio_name', portfolioName)
-    .is('deleted_at', null)
-    .order('due_date', { ascending: true, nullsFirst: false })
-  if (error) throw error
-  return (data ?? []).map((row: any) => ({
-    ...row,
-    security_symbol: row.securities2?.security_id ?? null,
-    security_name: row.securities2?.security_name ?? null,
-  }))
 }
 
 export async function createActionItem(item: {
@@ -107,14 +89,6 @@ export async function updateActionItemStatus(
   }).then(({ error: evErr }) => {
     if (evErr) console.warn('Failed to write action_item_event:', evErr.message)
   })
-}
-
-export async function updateActionItem(
-  id: number,
-  updates: Partial<Pick<ActionItem, 'title' | 'description' | 'due_date' | 'priority' | 'status' | 'resolution_notes'>>
-): Promise<void> {
-  const { error } = await supabase.from('action_items').update(updates).eq('id', id)
-  if (error) throw error
 }
 
 /** Soft-delete: sets deleted_at and preserves the row for regulatory retention. */
