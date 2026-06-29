@@ -6,7 +6,7 @@ import { useSecurities } from '@/hooks/useSecurities'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { addNewSecurityFromExcel } from '@/lib/securities2ExcelUpload'
 import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
-import { getSecurityDisplayType, type Security } from '@/lib/securities'
+import { fetchSecurities, getSecurityDisplayType, type Security } from '@/lib/securities'
 
 export function SecuritiesPage() {
   const navigate = useNavigate()
@@ -37,7 +37,7 @@ export function SecuritiesPage() {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.securities })
       const fresh = await queryClient.fetchQuery({
         queryKey: QUERY_KEYS.securities,
-        queryFn: () => import('@/lib/securities').then((m) => m.fetchSecurities()),
+        queryFn: () => fetchSecurities(),
       })
       const match = fresh.find((s) => s.security_id === symbol)
       if (match) {

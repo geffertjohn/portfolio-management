@@ -1,44 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { fetchCategoryBenchmark, fetchPeerGroupBenchmark } from '@/lib/benchmarks'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fmtText } from '@/lib/formatters'
-
-/** Returns both the original value and a hyphen-normalized variant (hyphens → spaces). */
-function hyphenVariants(s: string): string[] {
-  const normalized = s.replace(/-/g, ' ')
-  return normalized === s ? [s] : [s, normalized]
-}
-
-/**
- * Looks up the category_benchmark from category_benchmarks where category matches
- * the security's ycharts_benchmark_category value. Matches with or without hyphens.
- */
-async function fetchCategoryBenchmark(category: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('category_benchmarks')
-    .select('category_benchmark')
-    .in('category', hyphenVariants(category))
-    .not('category_benchmark', 'is', null)
-    .limit(1)
-    .maybeSingle()
-  if (error) throw error
-  return data?.category_benchmark ?? null
-}
-
-/**
- * Looks up the peer_group_benchmark from peer_group_benchmarks where peer_group_category
- * matches the security's peer_group_name value. Matches with or without hyphens.
- */
-async function fetchPeerGroupBenchmark(peerGroupName: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('peer_group_benchmarks')
-    .select('peer_group_benchmark')
-    .in('peer_group_category', hyphenVariants(peerGroupName))
-    .not('peer_group_benchmark', 'is', null)
-    .limit(1)
-    .maybeSingle()
-  if (error) throw error
-  return data?.peer_group_benchmark ?? null
-}
 
 type Props = {
   assetClass: string | null
@@ -50,13 +13,13 @@ type Props = {
 
 export function FundHeaderMetricsRow({ assetClass, category, peerGroupName }: Props) {
   const { data: categoryBenchmark } = useQuery({
-    queryKey: ['cat-benchmark', category],
+    queryKey: QUERY_KEYS.categoryBenchmark(category ?? ''),
     queryFn: () => fetchCategoryBenchmark(category!),
     enabled: !!category,
   })
 
   const { data: peerGroupBenchmark } = useQuery({
-    queryKey: ['pg-benchmark', peerGroupName],
+    queryKey: QUERY_KEYS.peerGroupBenchmark(peerGroupName ?? ''),
     queryFn: () => fetchPeerGroupBenchmark(peerGroupName!),
     enabled: !!peerGroupName,
   })

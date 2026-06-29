@@ -9,94 +9,13 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-
-// category_benchmarks carries full monthly + annual returns and risk ratios
-const CATEGORY_RETURN_COLS = 'one_month_total_return, three_month_total_return, ytd_total_return, annualized_daily_one_year_total_return, annualized_daily_three_year_return, annualized_daily_five_year_total_return, historical_sharpe_1y, historical_sortino_1y, historical_sharpe_3y, historical_sortino_3y, eps_growth_1_yr_generic, sales_growth_1_yr_generic, eps_growth_3_yr_generic, sales_growth_3_yr_generic'
-
-// Sector benchmarks are ETFs — full monthly/annual set + equity growth metrics
-const SECTOR_RETURN_COLS = 'one_month_total_return, three_month_total_return, ytd_total_return, annualized_daily_one_year_total_return, annualized_daily_three_year_return, annualized_daily_five_year_total_return, sales_growth_1_yr_generic, eps_growth_1_yr_generic, sales_growth_3_yr_generic, eps_growth_3_yr_generic, historical_sharpe_1y, historical_sortino_1y'
-
-export interface BenchmarkOption {
-  id: number
-  ticker: string
-  // category_benchmarks fields
-  category_benchmark: string | null
-  category: string | null
-  // sector_benchmarks fields
-  sector_benchmarks: string | null
-  sector: string | null
-  // monthly returns — present in sector_benchmarks; null-filled for category_benchmarks
-  one_month_total_return: number | null
-  three_month_total_return: number | null
-  ytd_total_return: number | null
-  // annual returns — present in both tables
-  annualized_daily_one_year_total_return: number | null
-  annualized_daily_three_year_return: number | null
-  annualized_daily_five_year_total_return: number | null
-  // equity growth — present in both tables
-  sales_growth_1_yr_generic: number | null
-  eps_growth_1_yr_generic: number | null
-  sales_growth_3_yr_generic: number | null
-  eps_growth_3_yr_generic: number | null
-  // 1-year risk — present in sector_benchmarks; null-filled for category_benchmarks
-  historical_sharpe_1y: number | null
-  historical_sortino_1y: number | null
-  // 3-year risk — present in category_benchmarks; absent from sector_benchmarks
-  historical_sharpe_3y: number | null
-  historical_sortino_3y: number | null
-}
-
-function dedupByTicker(rows: BenchmarkOption[]): BenchmarkOption[] {
-  const seen = new Set<string>()
-  return rows.filter((r) => {
-    if (seen.has(r.ticker)) return false
-    seen.add(r.ticker)
-    return true
-  })
-}
-
-export async function fetchBenchmarkOptions(): Promise<BenchmarkOption[]> {
-  // The column in category_benchmarks is `category_ticker`, not `ticker`.
-  // We select it by name and normalise it to `ticker` in the mapping so the
-  // rest of the app can treat both benchmark sources uniformly.
-  const { data, error } = await supabase
-    .from('category_benchmarks')
-    .select(`id, category_ticker, category_benchmark, category, ${CATEGORY_RETURN_COLS}`)
-    .order('category_ticker', { ascending: true })
-    .order('id', { ascending: true })
-  if (error) throw error
-  // Rename category_ticker → ticker to normalise with sector_benchmarks shape
-  const rows = (data ?? []).map((r: Record<string, unknown>) => {
-    const { category_ticker, ...rest } = r
-    return {
-      sector_benchmarks: null,
-      sector: null,
-      ticker: (category_ticker as string) ?? '',
-      ...rest,
-    }
-  }) as BenchmarkOption[]
-  return dedupByTicker(rows)
-}
-
-export async function fetchSectorBenchmarkOptions(): Promise<BenchmarkOption[]> {
-  const { data, error } = await supabase
-    .from('sector_benchmarks')
-    .select(`id, ticker, sector_benchmarks, sector, ${SECTOR_RETURN_COLS}`)
-    .order('ticker', { ascending: true })
-  if (error) throw error
-  const rows = (data ?? []).map((r) => ({
-    category_benchmark: null,
-    category: null,
-    historical_sharpe_3y: null,
-    historical_sortino_3y: null,
-    ...r,
-  })) as BenchmarkOption[]
-  return dedupByTicker(rows)
-}
-
-export type BenchmarkSource = 'category_benchmarks' | 'sector_benchmarks'
+import {
+  fetchBenchmarkOptions,
+  fetchSectorBenchmarkOptions,
+  type BenchmarkOption,
+  type BenchmarkSource,
+} from '@/lib/benchmarks'
 
 interface Props {
   slot: 1 | 2

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { updatePortfolioRebalanceDates } from '@/lib/portfolio'
 import {
   fetchComplianceRules, createComplianceRule, deleteComplianceRule,
   runComplianceChecks, runPositionChecks, overallComplianceResult,
@@ -63,16 +63,12 @@ export function CompliancePanel({ portfolioId, positions, portfolio, modelPortfo
   }, [portfolio.last_rebalance_date, portfolio.next_rebalance_date, rebalanceEditing])
 
   const rebalanceMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from('portfolio')
-        .update({
-          last_rebalance_date: lastRebalance || null,
-          next_rebalance_date: nextRebalance || null,
-        })
-        .eq('name', portfolioId)
-      if (error) throw error
-    },
+    mutationFn: () =>
+      updatePortfolioRebalanceDates(
+        portfolioId,
+        lastRebalance || null,
+        nextRebalance || null,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolio(portfolioId) })
       setRebalanceEditing(false)

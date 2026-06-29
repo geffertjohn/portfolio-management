@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fmtDecimalPct, fmtInt, stripTotalReturn } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
-import { BenchmarkPickerModal, fetchBenchmarkOptions, type BenchmarkOption } from './BenchmarkPickerModal'
+import { BenchmarkPickerModal } from './BenchmarkPickerModal'
+import { fetchBenchmarkOptions, type BenchmarkOption } from '@/lib/benchmarks'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 // ── Period column definitions ─────────────────────────────────────────────────
