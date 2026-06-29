@@ -16,6 +16,7 @@ import { AllocationComparison } from '@/components/AllocationComparison'
 import { usePortfolio, usePositions } from '@/hooks/usePortfolio'
 import { updatePortfolioObjective } from '@/lib/portfolio'
 import { updatePositionBands } from '@/lib/positions'
+import { isCashTicker } from '@/lib/positionBands'
 import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelPortfolioId, fetchModelPortfolioById } from '@/lib/modelPortfolios'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { PortfolioPosition } from '@/types/position'
@@ -457,7 +458,7 @@ export function PortfolioDetailPage() {
                             <td className="whitespace-nowrap px-4 py-2.5 text-gray-500">
                               {(() => {
                                 if (pos.lowerLimit != null) return `${pos.lowerLimit.toFixed(1)}%`
-                                if (pos.securityId === 'CASH' && modelPortfolio?.cash_lower_limit != null)
+                                if (isCashTicker(pos.securityId) && modelPortfolio?.cash_lower_limit != null)
                                   return `${modelPortfolio.cash_lower_limit.toFixed(1)}%`
                                 const target = pos.targetWeight ?? pos.weight
                                 const val = driftLower(target)
@@ -470,7 +471,7 @@ export function PortfolioDetailPage() {
                             <td className="whitespace-nowrap px-4 py-2.5 text-gray-500">
                               {(() => {
                                 if (pos.upperLimit != null) return `${pos.upperLimit.toFixed(1)}%`
-                                if (pos.securityId === 'CASH' && modelPortfolio?.cash_upper_limit != null)
+                                if (isCashTicker(pos.securityId) && modelPortfolio?.cash_upper_limit != null)
                                   return `${modelPortfolio.cash_upper_limit.toFixed(1)}%`
                                 const target = pos.targetWeight ?? pos.weight
                                 const val = driftUpper(target)

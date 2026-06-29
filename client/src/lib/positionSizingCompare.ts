@@ -8,7 +8,7 @@
  */
 import * as XLSX from 'xlsx'
 import type { PortfolioPosition } from '@/types/position'
-import { computePositionBands, type BandModel } from './positionBands'
+import { computePositionBands, isCashTicker, type BandModel } from './positionBands'
 
 /** Tolerance (percent points) so rounding noise doesn't register as a breach. */
 const EPS = 0.005
@@ -65,8 +65,15 @@ export function compareSizing(
   const unmatchedPositions: string[] = []
   let withinCount = 0
 
+  // All cash-like file tickers (e.g. FDXCASH) collapse into one cash actual that
+  // matches the cash position ($Cash). null = no cash row present in the file.
+  let cashActual: number | null = null
+  for (const [k, v] of actuals) {
+    if (isCashTicker(k)) cashActual = (cashActual ?? 0) + v
+  }
+
   for (const b of bands) {
-    const actual = actuals.get(b.symbol.toUpperCase())
+    const actual = isCashTicker(b.symbol) ? cashActual : (actuals.get(b.symbol.toUpperCase()) ?? null)
     if (actual == null) {
       unmatchedPositions.push(b.symbol)
       continue
@@ -80,7 +87,8 @@ export function compareSizing(
     }
   }
 
-  const unmatchedFile = [...actuals.keys()].filter((k) => !positionKeys.has(k))
+  // Cash-like tickers are folded into the cash position above, never "off-model".
+  const unmatchedFile = [...actuals.keys()].filter((k) => !positionKeys.has(k) && !isCashTicker(k))
 
   // Largest breach first.
   breaches.sort((a, b) => b.breachBy - a.breachBy)

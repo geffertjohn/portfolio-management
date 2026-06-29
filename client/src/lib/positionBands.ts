@@ -28,8 +28,17 @@ function roundToHalf(v: number): number {
   return Math.round(v / 0.5) * 0.5
 }
 
+/**
+ * A cash bucket — `$Cash`, `CASH`, `$:CASH`, and money-market sweep tickers like
+ * `FDXCASH` all collapse to one bucket. (Cash uses the model's cash limits, not a
+ * drift band.) Match the same predicate wherever cash is special-cased.
+ */
+export function isCashTicker(ticker: string): boolean {
+  return ticker.trim().toUpperCase().includes('CASH')
+}
+
 function isCashPosition(p: PortfolioPosition): boolean {
-  return p.securityId.toUpperCase() === 'CASH' || p.ticker.trim().toUpperCase() === 'CASH'
+  return isCashTicker(p.securityId) || isCashTicker(p.ticker)
 }
 
 export function computePositionBands(
