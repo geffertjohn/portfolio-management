@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AddPositionModal } from '@/components/AddPositionModal'
@@ -14,7 +14,6 @@ import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePane
 import { AllocationHistoryPanel } from '@/components/AllocationHistoryPanel'
 import { AllocationComparison } from '@/components/AllocationComparison'
 import { usePortfolio, usePositions } from '@/hooks/usePortfolio'
-import { uploadPortfolioFromExcel } from '@/lib/portfolioExcelUpload'
 import { updatePortfolioObjective } from '@/lib/portfolio'
 import { updatePositionBands } from '@/lib/positions'
 import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelPortfolioId, fetchModelPortfolioById } from '@/lib/modelPortfolios'
@@ -44,27 +43,6 @@ export function PortfolioDetailPage() {
   const [bulkSaving, setBulkSaving] = useState(false)
   type DraftBands = Record<string, { lower: string; target: string; upper: string }>
   const [draftBands, setDraftBands] = useState<DraftBands>({})
-  const [uploadStatus, setUploadStatus] = useState<{
-    text: string
-    status: 'success' | 'error'
-  } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadPortfolioFromExcel(file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolio(id) })
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.positions(id) })
-      setUploadStatus({ text: 'Portfolio data updated successfully.', status: 'success' })
-      setTimeout(() => setUploadStatus(null), 4000)
-    },
-    onError: (err: unknown) => {
-      setUploadStatus({
-        text: err instanceof Error ? err.message : 'Upload failed.',
-        status: 'error',
-      })
-    },
-  })
 
   const { data: modelPortfolios = [] } = useQuery({
     queryKey: QUERY_KEYS.modelPortfolios,
@@ -318,8 +296,6 @@ export function PortfolioDetailPage() {
         {tab === 'overview' && (
           <div className="space-y-6">
             <PortfolioOverview
-              portfolioId={id}
-              positions={positions}
               portfolio={portfolio}
               overrideModelPortfolio={modelPortfolio}
             />

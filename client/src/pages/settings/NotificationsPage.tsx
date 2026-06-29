@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { getSettings, saveSettings } from '@/lib/appSettings'
 
 interface NotificationSettings {
   emailEnabled: boolean
@@ -77,11 +76,6 @@ export function NotificationsPage() {
     if (settings.emailEnabled && settings.emailAddress && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.emailAddress)) {
       setEmailError('Enter a valid email address')
       return
-    }
-    // Also persist the firm name if set
-    const appSettings = getSettings()
-    if (settings.emailAddress && !appSettings.firmName) {
-      // Nothing extra needed
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     setSaved(true)

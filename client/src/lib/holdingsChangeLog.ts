@@ -24,7 +24,10 @@ export async function fetchHoldingsChangeLog(portfolioName: string): Promise<Hol
     .order('changed_at', { ascending: false })
     .limit(100)
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
+  type HoldingsChangeRow = HoldingsChange & {
+    securities2: { security_id: string | null; security_name: string | null } | null
+  }
+  return (data ?? []).map((row: HoldingsChangeRow): HoldingsChange => ({
     ...row,
     symbol: row.securities2?.security_id ?? null,
     name: row.securities2?.security_name ?? null,

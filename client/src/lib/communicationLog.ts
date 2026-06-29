@@ -26,7 +26,11 @@ export async function fetchCommunicationLog(clientId: number): Promise<CommEntry
     .eq('client_id', clientId)
     .order('occurred_at', { ascending: false })
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
+  type CommRow = CommEntry & {
+    clients: { name: string | null } | null
+    securities2: { security_id: string | null } | null
+  }
+  return (data ?? []).map((row: CommRow): CommEntry => ({
     ...row,
     client_name: row.clients?.name ?? null,
     security_symbol: row.securities2?.security_id ?? null,

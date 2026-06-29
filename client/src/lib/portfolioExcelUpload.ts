@@ -274,34 +274,3 @@ export async function bulkUploadPortfoliosFromExcel(
 
   return { succeeded, failed, errors }
 }
-
-export async function uploadPortfolioFromExcel(file: File): Promise<string> {
-  const { portfolioName, patch } = await buildPortfolioPatchFromExcel(file)
-
-  const safe: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === undefined || v === null) continue
-    if (DATE_COLS.has(k)) {
-      if (typeof v === 'string' && isValidCalendarDateString(v)) safe[k] = v
-    } else if (TEXT_COLS.has(k)) {
-      if (typeof v === 'string' && v !== '') safe[k] = v
-    } else {
-      if (typeof v === 'number' && Number.isFinite(v)) safe[k] = v
-    }
-  }
-
-  if (Object.keys(safe).length === 0) {
-    throw new Error('No valid data found in the template after parsing.')
-  }
-
-  const { error } = await supabase
-    .from('portfolio')
-    .update(safe)
-    .eq('name', portfolioName)
-
-  if (error) {
-    throw new Error(`Failed to update portfolio: ${error.message}`)
-  }
-
-  return portfolioName
-}

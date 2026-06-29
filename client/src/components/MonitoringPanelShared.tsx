@@ -63,7 +63,6 @@ export function MetricCard({
   displayValue,
   rawValue,
   neutral,
-  scale,
   higherIsBetter,
   benchmarkValue,
   benchmark2Value,

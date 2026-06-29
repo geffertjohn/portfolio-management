@@ -137,12 +137,15 @@ export async function fetchPortfoliosHoldingSecurity(
     .eq('security_id', securityId)
     .is('deleted_at', null)
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
-    portfolioId: row.portfolio_name as string,
-    portfolioName: (row.portfolio?.name ?? row.portfolio_name) as string,
-    portfolioStrategy: (row.portfolio?.portfolio_strategy ?? null) as string | null,
-    weight: Number(row.allocation_pct),
-  }))
+  return (data ?? []).map((row) => {
+    const p = Array.isArray(row.portfolio) ? row.portfolio[0] : row.portfolio
+    return {
+      portfolioId: row.portfolio_name as string,
+      portfolioName: (p?.name ?? row.portfolio_name) as string,
+      portfolioStrategy: (p?.portfolio_strategy ?? null) as string | null,
+      weight: Number(row.allocation_pct),
+    }
+  })
 }
 
 export async function fetchPositionsByPortfolioId(

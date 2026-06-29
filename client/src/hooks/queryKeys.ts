@@ -43,7 +43,6 @@ export const QUERY_KEYS = {
   householdMembers: (householdName: string) => ['household_members', householdName] as const,
   householdPositions: (householdName: string) => ['household_positions', householdName] as const,
   portfolioReviews: (portfolioName: string) => ['portfolio_reviews', portfolioName] as const,
-  assetClassTargets: (portfolioName: string) => ['asset_class_targets', portfolioName] as const,
   modelPortfolios: ['model_portfolios'] as const,
   modelPortfolioByObjective: (objective: string) => ['model_portfolio_by_objective', objective] as const,
   modelPortfolioById: (id: number) => ['model_portfolio_by_id', id] as const,

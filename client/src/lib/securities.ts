@@ -336,14 +336,6 @@ export interface SecurityDetail extends Security {
   next_earnings_release: string | null
 }
 
-export interface FundProfile {
-  issuer?: string | null
-  advisor?: string | null
-  distributor?: string | null
-  website?: string | null
-  inception_date?: string | null
-}
-
 /** UI badge text; derived from `detailed_security_type` / `peer_group_name` when present. */
 export type SecurityDisplayType = 'Mutual fund' | 'ETF' | 'Stock'
 
@@ -425,15 +417,6 @@ export async function updateSecurityThesis(securityId: number, thesis: string): 
     .eq('id', securityId)
 
   if (error) throw error
-}
-
-export function getFundProfile(security: SecurityDetail): FundProfile | null {
-  const issuer = security.fund_company_name ?? security.fund_family
-  const inception = security.inception_date
-  const hasAny =
-    (issuer != null && issuer !== '') || (inception != null && inception !== '')
-  if (!hasAny) return null
-  return { issuer: issuer ?? undefined, inception_date: inception ?? undefined }
 }
 
 export async function fetchSecurities(): Promise<Security[]> {

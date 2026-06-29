@@ -39,16 +39,6 @@ export function calcDrift(positions: PortfolioPosition[]): DriftRow[] {
   })
 }
 
-export async function fetchRebalanceLog(portfolioName: string): Promise<RebalanceLogEntry[]> {
-  const { data, error } = await supabase
-    .from('rebalance_log')
-    .select('*')
-    .eq('portfolio_name', portfolioName)
-    .order('rebalanced_at', { ascending: false })
-  if (error) throw error
-  return data ?? []
-}
-
 export async function logRebalance(
   portfolioName: string,
   snapshot: unknown,

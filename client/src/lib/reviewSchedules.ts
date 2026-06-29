@@ -45,7 +45,17 @@ export async function fetchReviewSchedules(): Promise<ReviewScheduleWithSecurity
     .select('*, securities2(id, security_id, security_name, broad_asset_class, last_earnings_release, next_earnings_release)')
     .order('next_review_at', { ascending: true })
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
+  type ScheduleRow = ReviewSchedule & {
+    securities2: {
+      id: number | null
+      security_id: string | null
+      security_name: string | null
+      broad_asset_class: string | null
+      last_earnings_release: string | null
+      next_earnings_release: string | null
+    } | null
+  }
+  return (data ?? []).map((row: ScheduleRow): ReviewScheduleWithSecurity => ({
     ...row,
     symbol: row.securities2?.security_id ?? '',
     name: row.securities2?.security_name ?? null,

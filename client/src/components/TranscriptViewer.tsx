@@ -17,7 +17,7 @@ interface Segment {
 function parseSegments(content: string): Segment[] {
   const segments: Segment[] = []
   const lines = content.split('\n')
-  const speakerStart = /^([A-Z][a-zA-Z\s\-\.]{1,58}?):\s*(.*)/
+  const speakerStart = /^([A-Z][a-zA-Z\s\-.]{1,58}?):\s*(.*)/
 
   let currentSpeaker = ''
   let currentLines: string[] = []

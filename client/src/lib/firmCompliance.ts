@@ -34,7 +34,7 @@ export async function fetchClientPortfolioNames(): Promise<Set<string>> {
     .from('client_portfolios')
     .select('portfolio_name')
   if (error) throw error
-  return new Set((data ?? []).map((r: any) => r.portfolio_name as string))
+  return new Set((data ?? []).map((r: { portfolio_name: string }) => r.portfolio_name))
 }
 
 export async function fetchAllPortfolioPositions(): Promise<
@@ -45,9 +45,10 @@ export async function fetchAllPortfolioPositions(): Promise<
     .select('portfolio_name, security_id, allocation_pct')
     .is('deleted_at', null)
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
-    portfolioName: row.portfolio_name as string,
-    securityId: row.security_id as string,
+  type PositionRow = { portfolio_name: string; security_id: string; allocation_pct: number | string }
+  return (data ?? []).map((row: PositionRow) => ({
+    portfolioName: row.portfolio_name,
+    securityId: row.security_id,
     weight: Number(row.allocation_pct),
   }))
 }

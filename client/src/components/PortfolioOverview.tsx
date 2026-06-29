@@ -3,7 +3,6 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { ASSET_CLASS_ROWS, type ModelPortfolio } from '@/lib/modelPortfolios'
 import { supabase } from '@/lib/supabase'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import type { PortfolioPosition } from '@/types/position'
 import type { Portfolio } from '@/types/portfolio'
 
 interface BenchmarkReturns {
@@ -31,8 +30,6 @@ async function fetchBenchmarkByName(name: string): Promise<BenchmarkReturns | nu
 }
 
 interface PortfolioOverviewProps {
-  portfolioId: string
-  positions: PortfolioPosition[]
   portfolio: Portfolio
   overrideModelPortfolio: ModelPortfolio | null | undefined
 }
@@ -65,7 +62,7 @@ function fmtPct(v: number | null) {
   return v != null ? `${v.toFixed(1)}%` : '—'
 }
 
-export function PortfolioOverview({ portfolioId, positions, portfolio, overrideModelPortfolio }: PortfolioOverviewProps) {
+export function PortfolioOverview({ portfolio, overrideModelPortfolio }: PortfolioOverviewProps) {
   const modelPortfolio = overrideModelPortfolio
 
   const effectiveBenchmark = modelPortfolio?.benchmark ?? ''

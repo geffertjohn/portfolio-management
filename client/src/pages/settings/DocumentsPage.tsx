@@ -5,7 +5,6 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 const SERVER_BASE = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const FILES_QUERY_KEY = ['documents-files']
-const FOLDERS_QUERY_KEY = ['documents-folders']
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -305,7 +304,8 @@ export function DocumentsPage() {
   function toggleCollapse(folder: string) {
     setCollapsedFolders((prev) => {
       const next = new Set(prev)
-      next.has(folder) ? next.delete(folder) : next.add(folder)
+      if (next.has(folder)) next.delete(folder)
+      else next.add(folder)
       return next
     })
   }

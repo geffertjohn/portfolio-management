@@ -57,7 +57,10 @@ export async function fetchClientPortfolios(clientId: number): Promise<ClientPor
     .select('*, portfolio(portfolio_strategy)')
     .eq('client_id', clientId)
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
+  type ClientPortfolioRow = ClientPortfolio & {
+    portfolio: { portfolio_strategy: string | null } | null
+  }
+  return (data ?? []).map((row: ClientPortfolioRow): ClientPortfolio => ({
     ...row,
     portfolio_strategy: row.portfolio?.portfolio_strategy ?? null,
   }))

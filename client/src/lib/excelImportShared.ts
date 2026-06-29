@@ -9,9 +9,6 @@ export function normalizeHeader(h: string): string {
     .toLowerCase()
 }
 
-const PG_INT32_MAX = 2147483647
-const PG_INT32_MIN = -2147483648
-
 export function isValidCalendarDateString(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
   const y = parseInt(s.slice(0, 4), 10)
@@ -255,5 +252,3 @@ export function pickWideTableRows(sheet: XLSX.WorkSheet): Record<string, unknown
   }
   return defaultRows
 }
-
-export { PG_INT32_MAX, PG_INT32_MIN }

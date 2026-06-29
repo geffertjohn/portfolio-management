@@ -45,7 +45,6 @@ export function HomePage() {
 
   const overdueReviews = schedules.filter((s) => isOverdue(s.next_review_at))
   const dueSoonReviews = schedules.filter((s) => isDueSoon(s.next_review_at) && !isOverdue(s.next_review_at))
-  const overdueActions = actionItems.filter((a) => a.due_date && new Date(a.due_date) < new Date())
   const highPriorityActions = actionItems.filter((a) => a.priority === 'high')
 
   const statCards = [

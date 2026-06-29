@@ -127,7 +127,6 @@ function AtRiskCard({
           </p>
           <SubstitutionsList
             atRiskId={entry.id}
-            incumbentSecurityId={sec.security_id}
             securityStringId={sec.security_id}
           />
         </div>
