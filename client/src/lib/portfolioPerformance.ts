@@ -25,6 +25,7 @@
  */
 import { fetchAllocationSnapshots } from './portfolioAllocations'
 import { fetchDailyAdjustedSeries, type DailyPrice } from './fmpMarket'
+import { fetchPositionsByPortfolioId } from './positions'
 
 const CASH = '$Cash'
 
@@ -262,4 +263,62 @@ export async function computePortfolioPeriodReturns(portfolioName: string): Prom
     heldFlat: full.heldFlat,
     notes: full.notes,
   }
+}
+
+// ── Trailing-window holding movers (per-position total return) ──────────────
+
+export interface HoldingMover {
+  symbol: string
+  name: string | null
+  /** securities2.id for routing, when the holding is in securities2. */
+  numericId: number | null
+  /** Trailing-window total return as a decimal (0.0123 = +1.23%). */
+  ret: number
+}
+
+/** Cash / non-priceable tickers excluded from the movers ranking. */
+function isCashLike(ticker: string): boolean {
+  const t = ticker.trim().toUpperCase()
+  return t === '' || t === CASH.toUpperCase() || t === 'CASH' || t === '$:CASH'
+}
+
+/**
+ * Per-holding total return over the trailing `days` window for the portfolio's
+ * current positions, sorted best→worst. Uses FMP dividend-adjusted closes (a
+ * ratio of two points is a total return). Cash and anything FMP can't price are
+ * dropped. Each holding is one FMP call; results that fail to price are omitted.
+ */
+export async function fetchPortfolioMovers(
+  portfolioName: string,
+  days = 30,
+): Promise<HoldingMover[]> {
+  const positions = await fetchPositionsByPortfolioId(portfolioName)
+  const holdings = positions.filter((p) => p.ticker && !isCashLike(p.ticker))
+  if (holdings.length === 0) return []
+
+  const today = new Date()
+  // Buffer the fetch window so a base price exists across weekends/holidays.
+  const from = new Date(today); from.setDate(from.getDate() - days - 15)
+  const fromStr = from.toISOString().slice(0, 10)
+  const base = new Date(today); base.setDate(base.getDate() - days)
+  const baseStr = base.toISOString().slice(0, 10)
+
+  const rows = await Promise.all(
+    holdings.map(async (p): Promise<HoldingMover | null> => {
+      try {
+        const series = await fetchDailyAdjustedSeries(p.ticker, fromStr)
+        if (series.length === 0) return null
+        const latest = series[series.length - 1].adjClose
+        const basePrice = priceOnOrBefore(series, baseStr)
+        if (basePrice == null || basePrice === 0) return null
+        return { symbol: p.ticker, name: p.name, numericId: p.numericId, ret: latest / basePrice - 1 }
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  return rows
+    .filter((r): r is HoldingMover => r !== null)
+    .sort((a, b) => b.ret - a.ret)
 }

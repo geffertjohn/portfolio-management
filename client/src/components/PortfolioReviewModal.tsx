@@ -9,6 +9,7 @@ import {
   type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { AttributionMovers } from '@/components/AttributionMovers'
 
 interface PortfolioReviewModalProps {
   open: boolean
@@ -125,6 +126,9 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
                   {it.label}
                 </span>
               </label>
+              {it.key === 'performance_attribution' && (
+                <AttributionMovers portfolioId={portfolioId} days={30} />
+              )}
               <input
                 type="text"
                 value={it.notes ?? ''}

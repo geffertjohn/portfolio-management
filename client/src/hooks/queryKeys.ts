@@ -20,6 +20,7 @@ export const QUERY_KEYS = {
   portfolioPerformance: (portfolioName: string, start: string, end: string) =>
     ['portfolio_performance', portfolioName, start, end] as const,
   portfolioPeriodReturns: (portfolioName: string) => ['portfolio_period_returns', portfolioName] as const,
+  portfolioMovers: (portfolioName: string, days: number) => ['portfolio_movers', portfolioName, days] as const,
   allocationGrid: (portfolioName: string) => ['allocation_grid', portfolioName] as const,
   alertRules: (securityId: string) => ['alert_rules', securityId] as const,
   alertEvents: ['alert_events'] as const,
