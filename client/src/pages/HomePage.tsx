@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { fetchReviewSchedules, isOverdue, isDueSoon } from '@/lib/reviewSchedules'
+import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from '@/lib/portfolioReviews'
 import { fetchActionItems } from '@/lib/actionItems'
 import { fetchUnacknowledgedAlerts, acknowledgeAlert } from '@/lib/alertRules'
 import { fetchActiveAtRisk } from '@/lib/atRisk'
@@ -38,6 +39,11 @@ export function HomePage() {
     queryFn: fetchActiveProspects,
   })
 
+  const { data: portfolioSchedules = [] } = useQuery({
+    queryKey: QUERY_KEYS.portfolioReviewSchedules,
+    queryFn: fetchPortfolioReviewSchedules,
+  })
+
   const ackMutation = useMutation({
     mutationFn: (id: number) => acknowledgeAlert(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.alertEvents }),
@@ -47,8 +53,12 @@ export function HomePage() {
   const dueSoonReviews = schedules.filter((s) => isDueSoon(s.next_review_at) && !isOverdue(s.next_review_at))
   const highPriorityActions = actionItems.filter((a) => a.priority === 'high')
 
+  const overduePortfolioReviews = portfolioSchedules.filter((s) => isOverdue(s.next_review_at))
+  const dueSoonPortfolioReviews = portfolioSchedules.filter((s) => isDueSoon(s.next_review_at) && !isOverdue(s.next_review_at))
+
   const statCards = [
     { label: 'Overdue Reviews', value: overdueReviews.length, color: overdueReviews.length > 0 ? 'text-red-600' : 'text-gray-900', link: '/reviews', sublabel: `${dueSoonReviews.length} due within 14 days` },
+    { label: 'Portfolio Reviews Due', value: overduePortfolioReviews.length, color: overduePortfolioReviews.length > 0 ? 'text-red-600' : 'text-gray-900', link: '/portfolio', sublabel: `${dueSoonPortfolioReviews.length} due within 14 days` },
     { label: 'Open Action Items', value: actionItems.length, color: actionItems.length > 0 ? 'text-amber-600' : 'text-gray-900', link: '/actions', sublabel: `${highPriorityActions.length} high priority` },
     { label: 'Unacknowledged Alerts', value: alerts.length, color: alerts.length > 0 ? 'text-red-600' : 'text-gray-900', link: null, sublabel: 'Performance threshold breaches' },
     { label: 'At-Risk', value: atRisk.length, color: 'text-gray-900', link: '/at-risk', sublabel: 'Held securities flagged for replacement' },
@@ -93,6 +103,30 @@ export function HomePage() {
                     <button onClick={() => s.security_numeric_id != null && navigate(`/security/${s.security_numeric_id}`)}
                       className="text-sm font-medium text-blue-600 hover:underline">{s.symbol}</button>
                     <p className="text-xs text-gray-500">{s.name}</p>
+                  </div>
+                  <span className="text-xs text-red-600">Due {formatDate(s.next_review_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Portfolio Reviews Due */}
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-gray-900">Portfolio Reviews Due</h2>
+            <button onClick={() => navigate('/portfolio')} className="text-xs text-blue-600 hover:underline">View all</button>
+          </div>
+          {overduePortfolioReviews.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-gray-500">No overdue portfolio reviews. 🎉</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {overduePortfolioReviews.slice(0, 5).map((s) => (
+                <li key={s.id} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <button onClick={() => navigate(`/portfolio/${encodeURIComponent(s.portfolio_name)}`)}
+                      className="text-sm font-medium text-blue-600 hover:underline">{s.portfolio_name}</button>
+                    <p className="text-xs text-gray-500">{CADENCE_LABELS[s.cadence]} review</p>
                   </div>
                   <span className="text-xs text-red-600">Due {formatDate(s.next_review_at)}</span>
                 </li>

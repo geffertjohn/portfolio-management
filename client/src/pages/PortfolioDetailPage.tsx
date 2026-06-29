@@ -7,8 +7,7 @@ import { RebalancingPanel } from '@/components/RebalancingPanel'
 import { CompliancePanel } from '@/components/CompliancePanel'
 import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
-import { PortfolioReviewLog } from '@/components/PortfolioReviewLog'
-import { LogPortfolioReviewModal } from '@/components/LogPortfolioReviewModal'
+import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
 import { PortfolioOverview } from '@/components/PortfolioOverview'
 import { DetailPageState } from '@/components/DetailPageState'
 import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePanel'
@@ -37,7 +36,6 @@ export function PortfolioDetailPage() {
   const [editingObjective, setEditingObjective] = useState(false)
   const [pendingObjective, setPendingObjective] = useState('')
   const [addPositionOpen, setAddPositionOpen] = useState(false)
-  const [logReviewOpen, setLogReviewOpen] = useState(false)
   const [changeLogView, setChangeLogView] = useState<ChangeLogView>('changelog')
   const [editPosition, setEditPosition] = useState<PortfolioPosition | null>(null)
   const [bulkEditMode, setBulkEditMode] = useState(false)
@@ -565,21 +563,7 @@ export function PortfolioDetailPage() {
         {/* Reviews Tab */}
         {tab === 'reviews' && (
           <div className="mt-6">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
-                Portfolio Reviews
-              </h2>
-              <button
-                type="button"
-                onClick={() => setLogReviewOpen(true)}
-                className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
-              >
-                Log Review
-              </button>
-            </div>
-            <div className="mt-4">
-              <PortfolioReviewLog portfolioId={id} />
-            </div>
+            <PortfolioReviewsPanel portfolioId={id} />
           </div>
         )}
 
@@ -588,12 +572,6 @@ export function PortfolioDetailPage() {
       <AddPositionModal
         open={addPositionOpen}
         onClose={() => setAddPositionOpen(false)}
-        portfolioId={id}
-      />
-
-      <LogPortfolioReviewModal
-        open={logReviewOpen}
-        onClose={() => setLogReviewOpen(false)}
         portfolioId={id}
       />
 

@@ -1,8 +1,3 @@
-// Generated from the live Supabase schema (project oulahvazpuzfqxudmfef).
-// Canonical DB shape — wired into the Supabase client (see lib/supabase.ts).
-// Regenerate after any schema change via the Supabase MCP generate_typescript_types
-// tool, or: supabase gen types typescript --project-id oulahvazpuzfqxudmfef > client/src/types/database.types.ts
-
 export type Json =
   | string
   | number
@@ -2124,36 +2119,86 @@ export type Database = {
       }
       portfolio_review_log: {
         Row: {
+          cadence: string | null
+          checklist: Json | null
           created_at: string
           id: number
+          next_review_at: string | null
           notes: string | null
-          outcome: string
+          outcome: string | null
           period: string | null
           portfolio_name: string
+          review_date: string | null
           reviewed_at: string
-          reviewed_by: string
+          reviewed_by: string | null
         }
         Insert: {
+          cadence?: string | null
+          checklist?: Json | null
           created_at?: string
           id?: number
+          next_review_at?: string | null
           notes?: string | null
-          outcome: string
+          outcome?: string | null
           period?: string | null
           portfolio_name: string
+          review_date?: string | null
           reviewed_at?: string
-          reviewed_by: string
+          reviewed_by?: string | null
         }
         Update: {
+          cadence?: string | null
+          checklist?: Json | null
           created_at?: string
           id?: number
+          next_review_at?: string | null
           notes?: string | null
-          outcome?: string
+          outcome?: string | null
           period?: string | null
           portfolio_name?: string
+          review_date?: string | null
           reviewed_at?: string
-          reviewed_by?: string
+          reviewed_by?: string | null
         }
         Relationships: []
+      }
+      portfolio_review_schedules: {
+        Row: {
+          cadence: string
+          created_at: string
+          id: number
+          last_reviewed_at: string | null
+          next_review_at: string
+          portfolio_name: string
+          updated_at: string
+        }
+        Insert: {
+          cadence: string
+          created_at?: string
+          id?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string
+          portfolio_name: string
+          updated_at?: string
+        }
+        Update: {
+          cadence?: string
+          created_at?: string
+          id?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string
+          portfolio_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_review_schedules_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+        ]
       }
       positions: {
         Row: {

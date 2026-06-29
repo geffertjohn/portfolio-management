@@ -418,6 +418,23 @@ A **stock** review records a buy/sell/hold decision with a documented rationale 
 - The **evidence snapshot is frozen at submit time** from on-demand FMP (`fetchScorecardMetrics` + `fetchAnalystData` + `fetchQuote`, deduped with the page's queries) so a review stays reconstructable later even though stock metrics are never persisted. `ReviewLogSection` shows the recommendation badge, conviction, rationale, and the frozen metrics.
 - `markReviewed()` takes `recommendation` / `conviction` / `priceAtReview` / `metricsSnapshot`; pass them for stocks, null for funds.
 
+## Portfolio Reviews (cadence-driven)
+
+Portfolio-level reviews are **separate from per-security reviews** (above) and from the per-security `review_schedules`/`review_log` tables. Each portfolio carries **three independent cadence timers** — monthly, quarterly, annual — that advance separately. Data layer is `lib/portfolioReviews.ts`; the Reviews tab on `PortfolioDetailPage` renders `PortfolioReviewsPanel`.
+
+### Two tables
+
+- **`portfolio_review_schedules`** — one row per `(portfolio_name, cadence)` (unique constraint on that pair; FK `portfolio_name → portfolio.name ON DELETE CASCADE`). Columns: `cadence` (`monthly`/`quarterly`/`annual`), `last_reviewed_at`, `next_review_at`. **Every portfolio is seeded with all three rows** (`next_review_at = now()`), so a newly-added portfolio needs the three rows inserted too (the seed was a one-time migration, not a trigger). Cross-portfolio "due" queries (`fetchPortfolioReviewSchedules`) drive the HomePage **"Portfolio Reviews Due"** card.
+- **`portfolio_review_log`** — the completed-review record. Structured + cadence-tagged: `cadence`, `review_date` (the due date it addressed), `reviewed_at`, `next_review_at`, `notes` (summary), and **`checklist` `jsonb`** = the frozen `ReviewChecklistItem[]` (each `{key, label, done, notes}`) for audit defense. The legacy `outcome`/`period`/`reviewed_by` columns are now nullable and unused by the cadence flow (single-user, no "reviewed by").
+
+### Checklists are the documented process
+
+`PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the fixed task list per cadence (monthly: performance attribution · position sizing · valuation changes; quarterly: full monitoring review · update thesis scorecards · update watchlist status; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction). These are hard-coded, not per-portfolio editable — change them here and the modal + history follow.
+
+### `markPortfolioReviewed()` advances ONE timer
+
+`markPortfolioReviewed({ portfolioName, cadence, checklist, notes, reviewDate, nextReviewAt })` upserts only that cadence's schedule row (`onConflict: 'portfolio_name,cadence'`) and inserts one frozen `portfolio_review_log` row. `next_review_at` defaults to the cadence interval from the completion date (+1 month / +3 months / +1 year). `isOverdue`/`isDueSoon` are re-exported from `reviewSchedules.ts` (shared date helpers). Query keys: `portfolioReviewSchedules` (all) + `portfolioReviewSchedulesFor(name)`; invalidate both plus `portfolioReviews(name)` after a mutation.
+
 ## Portfolio Allocations & Performance
 
 ### `portfolio_allocations` is the dated-allocation source of truth
