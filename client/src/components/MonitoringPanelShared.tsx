@@ -1,5 +1,5 @@
 /**
- * Shared primitives used by EquityMonitoringPanel and FixedIncomeMonitoringPanel.
+ * Shared primitives used by FundMonitoringPanel.
  */
 
 import type { ReactNode } from 'react'

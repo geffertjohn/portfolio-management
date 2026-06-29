@@ -5,7 +5,12 @@ import { MetricCard } from './MonitoringPanelShared'
 import { ReturnRanksTable } from './ReturnRanksTable'
 import { CategoryScorecardTable, PeerGroupScorecardTable, categoryScorecardScore, peerGroupScorecardScore } from './FundScorecard'
 
-export function FixedIncomeMonitoringPanel({ security }: { security: SecurityDetail }) {
+/**
+ * Monitoring panel for funds/ETFs (both equity and fixed income). The equity and
+ * fixed-income variants were byte-for-byte identical, so they were merged into
+ * this single component.
+ */
+export function FundMonitoringPanel({ security }: { security: SecurityDetail }) {
   const [rankMode, setRankMode] = useState<'pg' | 'cat'>('pg')
 
   const {
@@ -24,7 +29,7 @@ export function FixedIncomeMonitoringPanel({ security }: { security: SecurityDet
     expense_ratio_rank,
     expense_ratio_peer_group_rank,
   } = security
-  const pgSize  = security.three_year_total_return_peer_group_size_nav
+  const pgSize = security.three_year_total_return_peer_group_size_nav
   const catSize = security.three_year_total_return_rank_category_size_nav
 
   const isPg = rankMode === 'pg'

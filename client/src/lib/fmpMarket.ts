@@ -7,35 +7,7 @@
  * fetched live so the UI reflects current FMP data without a manual sync.
  */
 
-const FMP_STABLE = 'https://financialmodelingprep.com/stable'
-
-function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  if (!key) throw new Error('VITE_FMP_API_KEY is not configured.')
-  return key
-}
-
-function num(v: unknown): number | null {
-  if (v === null || v === undefined) return null
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`FMP ${res.status}: ${url}`)
-  return res.json() as Promise<unknown>
-}
-
-function asArray(raw: unknown): Record<string, unknown>[] {
-  return Array.isArray(raw)
-    ? raw.filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
-    : []
-}
-
-function str(v: unknown): string | null {
-  return typeof v === 'string' && v.trim() !== '' ? v : null
-}
+import { FMP_STABLE, apiKey, asArray, fmpFetch, fmpSymbol, num, str } from './fmpClient'
 
 // ── Company profile (identity) ──────────────────────────────────────────────
 
@@ -47,7 +19,7 @@ export interface Profile {
 }
 
 export async function fetchProfile(symbol: string): Promise<Profile> {
-  const rows = asArray(await fetchJson(`${FMP_STABLE}/profile?symbol=${symbol}&apikey=${apiKey()}`))
+  const rows = asArray(await fmpFetch(`${FMP_STABLE}/profile?symbol=${fmpSymbol(symbol)}&apikey=${apiKey()}`))
   const p = rows[0] ?? {}
   return {
     companyName: str(p.companyName),
@@ -66,7 +38,7 @@ export interface Quote {
 }
 
 export async function fetchQuote(symbol: string): Promise<Quote> {
-  const rows = asArray(await fetchJson(`${FMP_STABLE}/quote?symbol=${symbol}&apikey=${apiKey()}`))
+  const rows = asArray(await fmpFetch(`${FMP_STABLE}/quote?symbol=${fmpSymbol(symbol)}&apikey=${apiKey()}`))
   const q = rows[0] ?? {}
   return {
     price: num(q.price),
@@ -85,7 +57,7 @@ export interface EarningsDates {
 }
 
 export async function fetchEarningsDates(symbol: string): Promise<EarningsDates> {
-  const rows = asArray(await fetchJson(`${FMP_STABLE}/earnings?symbol=${symbol}&limit=12&apikey=${apiKey()}`))
+  const rows = asArray(await fmpFetch(`${FMP_STABLE}/earnings?symbol=${fmpSymbol(symbol)}&limit=12&apikey=${apiKey()}`))
   const today = new Date().toISOString().slice(0, 10)
   const dates = rows
     .map((r) => (typeof r.date === 'string' ? r.date : null))
@@ -114,8 +86,8 @@ export async function fetchDailyAdjustedSeries(
   from: string,
   to?: string,
 ): Promise<DailyPrice[]> {
-  const url = `${FMP_STABLE}/historical-price-eod/dividend-adjusted?symbol=${symbol}&from=${from}${to ? `&to=${to}` : ''}&apikey=${apiKey()}`
-  const rows = asArray(await fetchJson(url))
+  const url = `${FMP_STABLE}/historical-price-eod/dividend-adjusted?symbol=${fmpSymbol(symbol)}&from=${from}${to ? `&to=${to}` : ''}&apikey=${apiKey()}`
+  const rows = asArray(await fmpFetch(url))
     .map((r) => ({ date: typeof r.date === 'string' ? r.date : '', adjClose: num(r.adjClose) ?? NaN }))
     .filter((p) => p.date !== '' && Number.isFinite(p.adjClose))
   rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
@@ -158,7 +130,7 @@ export async function fetchStockReturns(symbol: string): Promise<TrailingReturns
     .toISOString().slice(0, 10)
 
   const prices: PriceRow[] = asArray(
-    await fetchJson(`${FMP_STABLE}/historical-price-eod/dividend-adjusted?symbol=${symbol}&from=${from}&apikey=${apiKey()}`)
+    await fmpFetch(`${FMP_STABLE}/historical-price-eod/dividend-adjusted?symbol=${fmpSymbol(symbol)}&from=${from}&apikey=${apiKey()}`)
   )
     .map((r) => ({ date: typeof r.date === 'string' ? r.date : '', adjClose: num(r.adjClose) ?? NaN }))
     .filter((p) => p.date !== '' && Number.isFinite(p.adjClose))
