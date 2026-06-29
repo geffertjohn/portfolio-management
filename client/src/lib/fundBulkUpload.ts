@@ -278,7 +278,7 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
       const { error: delErr } = await supabase
         .from('fund_alternatives').delete().eq('parent_security_id', parent)
       if (delErr) { errors.push(`${parent} alts clear: ${delErr.message}`); continue }
-      const { error: insErr } = await supabase.from('fund_alternatives').insert(alts)
+      const { error: insErr } = await supabase.from('fund_alternatives').insert(alts as never)
       if (insErr) errors.push(`${parent} alts: ${insErr.message}`)
       else relatedLinked += alts.length
     }

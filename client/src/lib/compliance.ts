@@ -112,7 +112,8 @@ export async function fetchAllComplianceRules(): Promise<ComplianceRule[]> {
     .order('portfolio_name', { ascending: true })
     .order('created_at', { ascending: true })
   if (error) throw error
-  return data ?? []
+  // DB stores rule_type as text; domain type narrows it
+  return (data ?? []) as ComplianceRule[]
 }
 
 export async function fetchComplianceRules(portfolioName: string): Promise<ComplianceRule[]> {
@@ -123,7 +124,8 @@ export async function fetchComplianceRules(portfolioName: string): Promise<Compl
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
   if (error) throw error
-  return data ?? []
+  // DB stores rule_type as text; domain type narrows it
+  return (data ?? []) as ComplianceRule[]
 }
 
 export async function createComplianceRule(rule: Omit<ComplianceRule, 'id' | 'created_at'>): Promise<void> {

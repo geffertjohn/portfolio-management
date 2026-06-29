@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 // ── Shared row type ─────────────────────────────────────────────────────────
@@ -182,7 +183,7 @@ export async function fetchSectorBenchmarkOptions(): Promise<BenchmarkOption[]> 
 
 /** Fetch every row of a benchmark table ordered by id (Benchmarks settings page). */
 export async function fetchBenchmarkTable(table: string): Promise<AnyRow[]> {
-  const { data, error } = await supabase.from(table).select('*').order('id', { ascending: true })
+  const { data, error } = await (supabase as SupabaseClient).from(table).select('*').order('id', { ascending: true })
   if (error) throw error
   return (data ?? []) as AnyRow[]
 }

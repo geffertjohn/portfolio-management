@@ -35,7 +35,8 @@ export async function fetchActionItems(filters?: { status?: ActionStatus }): Pro
 
   const { data, error } = await q
   if (error) throw error
-  return (data ?? []).map(mapSecurityJoin)
+  // DB stores priority/status as text; domain type narrows them
+  return (data ?? []).map(mapSecurityJoin) as ActionItem[]
 }
 
 export async function fetchActionItemsBySecurity(securityId: string): Promise<ActionItem[]> {
@@ -46,7 +47,8 @@ export async function fetchActionItemsBySecurity(securityId: string): Promise<Ac
     .is('deleted_at', null)
     .order('due_date', { ascending: true, nullsFirst: false })
   if (error) throw error
-  return data ?? []
+  // DB stores priority/status as text; domain type narrows them
+  return (data ?? []) as ActionItem[]
 }
 
 export async function createActionItem(item: {

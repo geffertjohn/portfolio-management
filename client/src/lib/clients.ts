@@ -57,13 +57,11 @@ export async function fetchClientPortfolios(clientId: number): Promise<ClientPor
     .select('*, portfolio(portfolio_strategy)')
     .eq('client_id', clientId)
   if (error) throw error
-  type ClientPortfolioRow = ClientPortfolio & {
-    portfolio: { portfolio_strategy: string | null } | null
-  }
-  return (data ?? []).map((row: ClientPortfolioRow): ClientPortfolio => ({
+  // DB stores portfolio_name as nullable text; domain type narrows it
+  return (data ?? []).map((row) => ({
     ...row,
     portfolio_strategy: row.portfolio?.portfolio_strategy ?? null,
-  }))
+  })) as ClientPortfolio[]
 }
 
 export async function createClient(client: {

@@ -45,17 +45,8 @@ export async function fetchReviewSchedules(): Promise<ReviewScheduleWithSecurity
     .select('*, securities2(id, security_id, security_name, broad_asset_class, last_earnings_release, next_earnings_release)')
     .order('next_review_at', { ascending: true })
   if (error) throw error
-  type ScheduleRow = ReviewSchedule & {
-    securities2: {
-      id: number | null
-      security_id: string | null
-      security_name: string | null
-      broad_asset_class: string | null
-      last_earnings_release: string | null
-      next_earnings_release: string | null
-    } | null
-  }
-  return (data ?? []).map((row: ScheduleRow): ReviewScheduleWithSecurity => ({
+  // DB stores cadence as text; domain type narrows it
+  return (data ?? []).map((row) => ({
     ...row,
     symbol: row.securities2?.security_id ?? '',
     name: row.securities2?.security_name ?? null,
@@ -63,7 +54,7 @@ export async function fetchReviewSchedules(): Promise<ReviewScheduleWithSecurity
     security_numeric_id: row.securities2?.id ?? null,
     last_earnings_release: row.securities2?.last_earnings_release ?? null,
     next_earnings_release: row.securities2?.next_earnings_release ?? null,
-  }))
+  })) as ReviewScheduleWithSecurity[]
 }
 
 export async function fetchReviewScheduleBySecurity(securityId: string): Promise<ReviewSchedule | null> {
@@ -73,7 +64,8 @@ export async function fetchReviewScheduleBySecurity(securityId: string): Promise
     .eq('security_id', securityId)
     .maybeSingle()
   if (error) throw error
-  return data
+  // DB stores cadence as text; domain type narrows it
+  return data as ReviewSchedule | null
 }
 
 export async function upsertReviewSchedule(
@@ -145,7 +137,7 @@ export async function markReviewed(opts: MarkReviewedOptions): Promise<void> {
       conviction: conviction ?? null,
       price_at_review: priceAtReview ?? null,
       metrics_snapshot: metricsSnapshot ?? null,
-    })
+    } as never)
   if (logError) throw logError
 }
 

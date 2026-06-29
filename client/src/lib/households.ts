@@ -33,15 +33,11 @@ export async function fetchHouseholdMembers(householdName: string): Promise<Hous
     .is('deleted_at', null)
     .order('name')
   if (error) throw error
-  type MemberRow = {
-    id: number
-    name: string
-    client_portfolios: { portfolio_name: string }[] | null
-  }
-  return (data ?? []).map((row: MemberRow) => ({
+  // DB stores portfolio_name as nullable text; domain treats it as non-null
+  return (data ?? []).map((row) => ({
     id: row.id,
     name: row.name,
-    portfolioNames: (row.client_portfolios ?? []).map((cp) => cp.portfolio_name),
+    portfolioNames: (row.client_portfolios ?? []).map((cp) => cp.portfolio_name) as string[],
   }))
 }
 
@@ -72,7 +68,8 @@ export async function fetchHouseholdPositions(householdName: string): Promise<{
     .in('client_id', clientIds)
   if (cpErr) throw cpErr
 
-  const portfolioNames = [...new Set((cps ?? []).map((r: { portfolio_name: string }) => r.portfolio_name))]
+  // DB stores portfolio_name as nullable text; domain treats it as non-null
+  const portfolioNames = [...new Set((cps ?? []).map((r) => r.portfolio_name) as string[])]
   if (portfolioNames.length === 0) return { positions: [], portfolioNames: [] }
 
   // 3. All active positions across those portfolios

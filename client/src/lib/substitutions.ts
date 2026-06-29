@@ -44,15 +44,14 @@ export async function fetchSubstitutionsByAtRisk(atRiskId: number): Promise<Subs
     .eq('at_risk_id', atRiskId)
     .order('created_at', { ascending: false })
   if (error) throw error
-  type JoinedSec = { security_id: string | null; security_name: string | null } | null
-  type SubstitutionRow = Substitution & { incumbent: JoinedSec; proposed: JoinedSec }
-  return (data ?? []).map((row: SubstitutionRow): Substitution => ({
+  // DB stores status as text; domain type narrows it
+  return (data ?? []).map((row) => ({
     ...row,
     incumbent_symbol: row.incumbent?.security_id ?? null,
     incumbent_name: row.incumbent?.security_name ?? null,
     proposed_symbol: row.proposed?.security_id ?? null,
     proposed_name: row.proposed?.security_name ?? null,
-  }))
+  })) as Substitution[]
 }
 
 export async function createSubstitution(sub: {

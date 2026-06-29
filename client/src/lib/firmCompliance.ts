@@ -15,7 +15,8 @@ export async function fetchFirmComplianceRules(): Promise<FirmComplianceRule[]> 
     .select('*')
     .order('id')
   if (error) throw error
-  return data ?? []
+  // DB stores rule_type as text; domain type narrows it
+  return (data ?? []) as FirmComplianceRule[]
 }
 
 export async function updateFirmComplianceRule(
@@ -34,7 +35,8 @@ export async function fetchClientPortfolioNames(): Promise<Set<string>> {
     .from('client_portfolios')
     .select('portfolio_name')
   if (error) throw error
-  return new Set((data ?? []).map((r: { portfolio_name: string }) => r.portfolio_name))
+  // DB stores portfolio_name as nullable text; domain treats it as non-null
+  return new Set((data ?? []).map((r) => r.portfolio_name) as string[])
 }
 
 export async function fetchAllPortfolioPositions(): Promise<

@@ -24,12 +24,10 @@ export async function fetchHoldingsChangeLog(portfolioName: string): Promise<Hol
     .order('changed_at', { ascending: false })
     .limit(100)
   if (error) throw error
-  type HoldingsChangeRow = HoldingsChange & {
-    securities2: { security_id: string | null; security_name: string | null } | null
-  }
-  return (data ?? []).map((row: HoldingsChangeRow): HoldingsChange => ({
+  // DB stores change_type/portfolio_name as nullable text; domain type narrows them
+  return (data ?? []).map((row) => ({
     ...row,
     symbol: row.securities2?.security_id ?? null,
     name: row.securities2?.security_name ?? null,
-  }))
+  })) as HoldingsChange[]
 }
