@@ -431,6 +431,12 @@ Portfolio-level reviews are **separate from per-security reviews** (above) and f
 
 `PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the fixed task list per cadence (monthly: performance attribution · position sizing · valuation changes; quarterly: full monitoring review · update thesis scorecards · update watchlist status; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction). These are hard-coded, not per-portfolio editable — change them here and the modal + history follow.
 
+### Monthly review task data aids (in `PortfolioReviewModal`)
+
+Two checklist items render an inline data panel above their notes field (keyed off `it.key`):
+- **`performance_attribution`** → `AttributionMovers` — top-5 / bottom-5 holdings by trailing 30-day total return (`fetchPortfolioMovers` in `lib/portfolioPerformance.ts`, FMP dividend-adjusted closes, one call per current position; cash/unpriceable dropped).
+- **`position_sizing`** → `PositionSizingCheck` — an **allocations file upload** (YCharts export: col A ticker, col B weight in percent points; `.xls/.xlsx/.csv`). `parseActualAllocations` + `compareSizing` (`lib/positionSizingCompare.ts`) compare each holding's actual weight to its effective band and surface **only breaches** (actual outside lower/upper). Display-only — nothing is persisted. Effective bands come from `computePositionBands` (`lib/positionBands.ts`), which **mirrors the inline driftLower/driftUpper logic in `PortfolioDetailPage`** (explicit per-position limits win; else `roundToHalf(target × (1 ± drift_percentage/100))` from the resolved model portfolio; cash uses the model's cash limits) — keep the two in sync. `positions` + the resolved `modelPortfolio` are threaded from the page down through `PortfolioReviewsPanel` → modal.
+
 ### `markPortfolioReviewed()` advances ONE timer
 
 `markPortfolioReviewed({ portfolioName, cadence, checklist, notes, reviewDate, nextReviewAt })` upserts only that cadence's schedule row (`onConflict: 'portfolio_name,cadence'`) and inserts one frozen `portfolio_review_log` row. `next_review_at` defaults to the cadence interval from the completion date (+1 month / +3 months / +1 year). `isOverdue`/`isDueSoon` are re-exported from `reviewSchedules.ts` (shared date helpers). Query keys: `portfolioReviewSchedules` (all) + `portfolioReviewSchedulesFor(name)`; invalidate both plus `portfolioReviews(name)` after a mutation.

@@ -13,9 +13,13 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { PortfolioReviewModal } from '@/components/PortfolioReviewModal'
 import { PortfolioReviewLog } from '@/components/PortfolioReviewLog'
 import { formatDate } from '@/lib/fundFormat'
+import type { BandModel } from '@/lib/positionBands'
+import type { PortfolioPosition } from '@/types/position'
 
 interface PortfolioReviewsPanelProps {
   portfolioId: string
+  positions: PortfolioPosition[]
+  modelPortfolio: BandModel
 }
 
 function statusBadge(s: PortfolioReviewSchedule | undefined) {
@@ -29,7 +33,7 @@ function statusBadge(s: PortfolioReviewSchedule | undefined) {
   return <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">On track</span>
 }
 
-export function PortfolioReviewsPanel({ portfolioId }: PortfolioReviewsPanelProps) {
+export function PortfolioReviewsPanel({ portfolioId, positions, modelPortfolio }: PortfolioReviewsPanelProps) {
   const [activeCadence, setActiveCadence] = useState<PortfolioCadence | null>(null)
 
   const { data: schedules = [], isLoading } = useQuery({
@@ -97,6 +101,8 @@ export function PortfolioReviewsPanel({ portfolioId }: PortfolioReviewsPanelProp
         portfolioId={portfolioId}
         cadence={activeCadence}
         dueDate={active?.next_review_at ?? null}
+        positions={positions}
+        modelPortfolio={modelPortfolio}
       />
     </div>
   )

@@ -10,6 +10,9 @@ import {
 } from '@/lib/portfolioReviews'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { AttributionMovers } from '@/components/AttributionMovers'
+import { PositionSizingCheck } from '@/components/PositionSizingCheck'
+import type { BandModel } from '@/lib/positionBands'
+import type { PortfolioPosition } from '@/types/position'
 
 interface PortfolioReviewModalProps {
   open: boolean
@@ -18,13 +21,17 @@ interface PortfolioReviewModalProps {
   cadence: PortfolioCadence | null
   /** The schedule's current next_review_at — logged as the review_date this review addressed. */
   dueDate: string | null
+  /** Current target positions — for the position-sizing band check. */
+  positions: PortfolioPosition[]
+  /** Resolved model portfolio — supplies drift/cash limits for derived bands. */
+  modelPortfolio: BandModel
 }
 
 function toDateInputValue(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueDate }: PortfolioReviewModalProps) {
+export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueDate, positions, modelPortfolio }: PortfolioReviewModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const queryClient = useQueryClient()
 
@@ -128,6 +135,9 @@ export function PortfolioReviewModal({ open, onClose, portfolioId, cadence, dueD
               </label>
               {it.key === 'performance_attribution' && (
                 <AttributionMovers portfolioId={portfolioId} days={30} />
+              )}
+              {it.key === 'position_sizing' && (
+                <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} />
               )}
               <input
                 type="text"
