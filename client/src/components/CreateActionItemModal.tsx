@@ -1,0 +1,127 @@
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createActionItem, type ActionPriority } from '@/lib/actionItems'
+import { fetchSecurities } from '@/lib/securities'
+import { fetchPortfolios } from '@/lib/portfolio'
+import type { Portfolio } from '@/types/portfolio'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
+
+interface CreateActionItemModalProps {
+  open: boolean
+  onClose: () => void
+  defaultSecurityId?: string | null
+  defaultPortfolioName?: string | null
+}
+
+export function CreateActionItemModal({ open, onClose, defaultSecurityId, defaultPortfolioName }: CreateActionItemModalProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const queryClient = useQueryClient()
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [securityId, setSecurityId] = useState<string>(defaultSecurityId ?? '')
+  const [portfolioId, setPortfolioId] = useState<string>(defaultPortfolioName || '')
+  const [dueDate, setDueDate] = useState('')
+  const [priority, setPriority] = useState<ActionPriority>('medium')
+
+  const { data: securities = [] } = useQuery({ queryKey: QUERY_KEYS.securities, queryFn: fetchSecurities, enabled: open })
+  const { data: portfolios = [] } = useQuery<Portfolio[]>({ queryKey: QUERY_KEYS.portfolios, queryFn: fetchPortfolios, enabled: open })
+
+  useEffect(() => {
+    const d = dialogRef.current
+    if (!d) return
+    if (open) { d.showModal(); setSecurityId(defaultSecurityId ?? ''); setPortfolioId(defaultPortfolioName || '') }
+    else d.close()
+  }, [open, defaultSecurityId, defaultPortfolioName])
+
+  const mutation = useMutation({
+    mutationFn: () => createActionItem({
+      title,
+      description: description || undefined,
+      security_id: securityId || null,
+      portfolio_name: portfolioId || null,
+      due_date: dueDate || null,
+      priority,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.actionItems })
+      if (securityId) queryClient.invalidateQueries({ queryKey: QUERY_KEYS.actionItemsBySecurity(securityId) })
+      if (portfolioId) queryClient.invalidateQueries({ queryKey: QUERY_KEYS.actionItemsByPortfolio(portfolioId) })
+      onClose(); reset()
+    },
+  })
+
+  const reset = () => { setTitle(''); setDescription(''); setDueDate(''); setPriority('medium'); mutation.reset() }
+  const handleClose = () => { if (!mutation.isPending) { onClose(); reset() } }
+
+  return (
+    <dialog ref={dialogRef} onCancel={handleClose}
+      className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30">
+      <form onSubmit={(e) => { e.preventDefault(); mutation.mutate() }} className="p-6">
+        <h2 className="text-lg font-semibold text-gray-900">New Action Item</h2>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Title <span className="text-red-500">*</span></label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} required
+              placeholder="e.g. Review UITB vs benchmark"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Security</label>
+              <select value={securityId} onChange={(e) => setSecurityId(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
+                <option value="">None</option>
+                {securities.map((s) => <option key={s.id} value={s.security_id}>{s.security_id}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Portfolio</label>
+              <select value={portfolioId} onChange={(e) => setPortfolioId(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
+                <option value="">None</option>
+                {portfolios.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Due Date</label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Priority</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value as ActionPriority)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {mutation.isError && (
+          <p className="mt-3 text-sm text-red-600">{mutation.error instanceof Error ? mutation.error.message : 'Failed to create'}</p>
+        )}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" onClick={handleClose} disabled={mutation.isPending}
+            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            Cancel
+          </button>
+          <button type="submit" disabled={mutation.isPending || !title.trim()}
+            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">
+            {mutation.isPending ? 'Saving…' : 'Create'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  )
+}

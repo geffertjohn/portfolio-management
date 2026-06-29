@@ -1,0 +1,68 @@
+---
+description: TypeScript patterns, type safety rules, and formatting conventions for this codebase
+globs: client/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# TypeScript Patterns
+
+## No `any`
+
+Use `unknown` with type guards or explicit casts. `any` bypasses type checking and hides real bugs.
+
+## Dynamic key access on typed objects
+
+When accessing a typed interface with a computed string key (e.g. model portfolio asset class fields), use the double cast to document that the unsafe access is intentional:
+
+```ts
+// ✅ correct — makes intent explicit
+const mp = modelPortfolio as unknown as Record<string, unknown>
+const target = mp[`${key}_target`] as number | null
+
+// ❌ TypeScript rejects this direct cast
+const mp = modelPortfolio as Record<string, unknown>
+```
+
+## Display formatting
+
+Use helpers from `lib/formatters`. Never format numbers inline.
+
+```ts
+import { fmtDecimalPct, fmtNum, fmtInt, EMPTY } from '@/lib/formatters'
+
+fmtDecimalPct(value)   // 0.0831 → "8.31%"
+fmtNum(value)          // 1.234 → "1.23"
+fmtInt(value)          // 42.7 → "43"
+EMPTY                  // '—' — always use for null/missing display values, never hardcode '—'
+```
+
+## Null guards before navigation
+
+```ts
+// ✅ safe
+onClick={() => { if (id != null) navigate(`/security/${id}`) }}
+
+// ❌ navigates to the literal string "/security/null"
+onClick={() => navigate(`/security/${id}`)}
+```
+
+## Strict mode is enabled
+
+Both `noUnusedLocals` and `noUnusedParameters` are on. If you add a parameter or variable, use it or remove it. The build will fail otherwise.
+
+## Path aliases
+
+Use `@/` for imports from `src/`:
+```ts
+import { supabase } from '@/lib/supabase'     // ✅
+import { supabase } from '../../lib/supabase' // ❌
+```
+
+## Component file structure
+
+- `lib/*.ts` — pure async Supabase functions + TypeScript types for that domain
+- `hooks/*.ts` — `useQuery`/`useMutation` wrappers; import from lib
+- `components/*.tsx` — UI only; accept props, call hooks, no direct Supabase
+- `pages/*.tsx` — route-level; own URL params, compose components
+
+Keep business logic in `lib/`, not in components or pages.

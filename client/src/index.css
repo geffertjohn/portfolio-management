@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Responsive <dialog> — full-width on mobile, capped at max-w-md on larger screens */
+@media (max-width: 639px) {
+  dialog[open] {
+    width: calc(100% - 2rem);
+    max-width: 100%;
+  }
+}

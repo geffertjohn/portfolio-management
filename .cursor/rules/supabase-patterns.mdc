@@ -1,0 +1,68 @@
+---
+description: Supabase query conventions, error handling, and TanStack Query integration
+globs: client/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Supabase Query Conventions
+
+## Always use the singleton client
+
+```ts
+import { supabase } from '@/lib/supabase'
+```
+
+Never instantiate a new client anywhere else.
+
+## Always destructure and check the error
+
+```ts
+const { data, error } = await supabase.from('table').select('*')
+if (error) throw error
+return data ?? []
+```
+
+Never silently swallow `error`. If an error occurs and you don't throw, the component will render with empty/stale data and show no indication of failure.
+
+## `maybeSingle()` vs `single()`
+
+- `maybeSingle()` — returns `null` when no row is found. Use for any lookup that may legitimately return nothing.
+- `single()` — throws when no row is found. Use only when absence is a programming error.
+
+## TanStack Query owns all server state
+
+No raw Supabase calls in components or pages. Data lives in `lib/`, hooks wrap it in `useQuery`/`useMutation`, components receive it as props or via the hook.
+
+## All query keys live in `hooks/queryKeys.ts`
+
+Never inline a query key. Add it to the factory and import it. To invalidate stale cache after a schema change, add a version suffix — e.g. `['benchmarks', 'v4']`.
+
+## Invalidate related keys after mutations
+
+```ts
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.watchlist })
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.watchlistBySecurity(security.security_id) })
+}
+```
+
+## Security ID — text ticker, not integer
+
+All FK columns in child tables (watchlist, review_log, review_schedules, action_items, alert_rules, alert_events, communication_log, substitutions) reference `securities2.security_id` (TEXT), not `securities2.id` (BIGINT).
+
+When filtering by security, always pass `security.security_id` — e.g.:
+```ts
+.eq('security_id', security.security_id)   // ✅ text ticker
+.eq('security_id', security.id)            // ❌ integer — will silently return 0 rows
+```
+
+## category_benchmarks column name
+
+The ticker column in `category_benchmarks` is `category_ticker`, not `ticker`. PostgREST returns a 400 (not a TypeScript error) if you select a non-existent column — the symptom is an empty result or "Failed to load" in the UI.
+
+## DDL via apply_migration, reads via execute_sql
+
+When using the Supabase MCP:
+- Schema changes (CREATE TABLE, ALTER, DROP): `apply_migration` — tracked and transactional
+- Data reads: `execute_sql`
+- Never use `execute_sql` for DDL

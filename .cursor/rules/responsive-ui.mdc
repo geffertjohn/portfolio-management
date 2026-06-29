@@ -1,0 +1,15 @@
+---
+description: UI must support desktop and mobile; use responsive layouts and Tailwind breakpoints
+globs: client/**/*.{tsx,ts,css,html}
+alwaysApply: false
+---
+
+# Responsive UI (Desktop + Mobile)
+
+The app is built for **desktop and mobile** viewing. When adding or changing UI:
+
+- Use **Tailwind responsive utilities** (`sm:`, `md:`, `lg:`, `xl:`) so layouts and typography adapt to viewport size.
+- Prefer **mobile-first** classes (base = small screens; add `md:` / `lg:` for larger).
+- Ensure **touch targets** are adequate on small screens (min ~44px where interactive).
+- Test that **tables and dense content** are usable on narrow viewports (e.g. horizontal scroll, stacked layout, or simplified columns on mobile).
+- Keep **navigation and key actions** accessible on both desktop and mobile (e.g. collapsible menu or bottom nav on mobile).
