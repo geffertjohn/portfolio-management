@@ -21,7 +21,7 @@ client/src/
   hooks/         Custom React hooks + query key factory
   lib/           Data access layer — pure async Supabase functions, one file per domain
   types/         Shared TypeScript interfaces
-supabase/        SQL migrations
+supabase/        Historical SQL (archive/) + README + generated schema reference; live DB is authoritative (see DDL note)
 ```
 
 The lib → hooks → components → pages layering is strict:
@@ -107,6 +107,22 @@ import { supabase } from '@/lib/supabase'
 
 Never instantiate a new client.
 
+### The client is schema-typed
+
+`supabase.ts` uses `createClient<Database>` with `Database` generated from the live
+schema in `client/src/types/database.types.ts`. This means **column/table names in
+`.select()` / `.eq()` / `.insert()` are type-checked** — a select naming a dropped or
+mistyped column (incl. inside an embed) now fails `tsc`/CI instead of 400ing at
+runtime. Regenerate the types after any schema change (Supabase MCP
+`generate_typescript_types`, or `supabase gen types typescript --project-id … >
+client/src/types/database.types.ts`).
+
+DB text columns surface as `string`, so where a domain type narrows to a union/enum
+(e.g. `priority`, `cadence`, `outcome`) the lib fn casts the *result* at the return
+boundary (`as DomainType[]`) — the column names stay checked. Genuinely dynamic table
+names (the benchmark/ychart bulk uploaders) opt out locally via `supabase as
+SupabaseClient`; don't spread that pattern to static-table code.
+
 ### Always destructure and handle the error
 
 ```ts
@@ -145,6 +161,7 @@ onSuccess: () => {
 - Schema changes (CREATE, ALTER, DROP): use `apply_migration` — runs in a transaction and is tracked.
 - Read queries: use `execute_sql`.
 - Never use `execute_sql` for DDL.
+- **The live DB is the source of truth, tracked by the remote MCP migration history — NOT the `supabase/` directory.** The checked-in `.sql` files are historical reference only: dead scripts were deleted and the rest moved to `supabase/archive/`. See `supabase/README.md` for the migration list and regeneration. After any schema change, regenerate `client/src/types/database.types.ts` (see "The client is schema-typed").
 
 ### RLS is enabled
 
@@ -181,6 +198,8 @@ fmtUsd(value)          // 1234.5 → "$1,234.50"
 fmtSignedPct(value)    // 0.0123 → "+1.23%"  (decimal-stored, always signed)
 EMPTY                  // '—' — use for null/missing display values
 ```
+
+`lib/formatters` also exports `stripTotalReturn(name)` and **`consensusColor(label)`** — the single source of truth for analyst-consensus text colors (used by both `AnalystCoveragePanel` and `AnalystSummaryCards`; don't re-implement it inline). Other cross-cutting shared helpers: **`mapSecurityJoin(row)`** in `lib/securityJoin.ts` (flattens an embedded `securities2(id, security_id, security_name)` join onto a row — used by the action-items / alerts / comm-log / review-schedule fetchers); shared UI primitives **`DetailPageState`** (loading/error/not-found scaffold for detail pages) and **`RangeBar`** (analyst range bar) in `components/`.
 
 ### No `any`
 
@@ -220,13 +239,13 @@ npm run lint        # eslint .    — no-explicit-any, unused vars, hook deps, f
 - **No `any`** — it's lint-enforced; use `unknown` + a type guard or an explicit cast (see "No `any`" above).
 - **Clean up as you go** — if a refactor orphans an import/variable, delete it in the same change; `typecheck` will flag it if you forget.
 
-### Automated gates to add as the project grows
+### Automated gates — now in place
 
-The manual definition-of-done above is the gate *today*. Make it automatic as soon as the surrounding infrastructure exists:
+The manual definition-of-done above is still the per-change discipline, but two automated gates now enforce it (the backlog was driven to zero first, so they hold from a clean baseline):
 
-- **Pre-commit hook** (husky + lint-staged) running `tsc --noEmit` + `eslint` on staged files — highest-leverage prevention. (Requires git; the project is not yet a git repo.)
-- **CI check** on every PR running `npm run build` (already includes `tsc -b`) **and** `npm run lint`, blocking merge on failure.
-- **Keep the baseline at zero.** A gate only holds from a clean baseline, so the existing backlog must be driven to zero first, then held there by the per-change discipline above. Treat any real type mismatch (e.g. a property that doesn't exist on a type) as a latent runtime bug, not just noise — fix the code or the type, don't silence it.
+- **Pre-commit hook** — `.githooks/pre-commit` runs client `typecheck` + `lint` whenever staged files include `client/src/**/*.{ts,tsx}`. Dependency-free (no husky); activated by the root `package.json` `prepare` script (`git config core.hooksPath .githooks` on `npm install`). Bypass with `git commit --no-verify`.
+- **CI** — `.github/workflows/ci.yml` runs on push to `main` and every PR: `npm ci`, `npm run lint --workspace=client`, and `npm run build` (client `tsc -b && vite build` + server `tsc`). Build/lint failures should block merge.
+- **Keep the baseline at zero.** Treat any real type mismatch (e.g. a property that doesn't exist on a type) as a latent runtime bug, not just noise — fix the code or the type, don't silence it. If CI's `npm ci` ever fails on a lockfile mismatch, run `npm install` and commit the updated `package-lock.json`.
 
 ---
 
@@ -264,7 +283,7 @@ There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`,
 
 - `category_benchmarks` — broad asset-class benchmarks; column is `category_ticker` (not `ticker`), renamed to `ticker` in the fetch layer. **One ticker can serve multiple categories** — the unique key is the composite `(category_ticker, category)`, not ticker alone.
 - `sector_benchmarks` — sector ETF benchmarks; column is `ticker` (unique).
-- `BenchmarkPickerModal` handles both sources via the `source` prop and owns the SELECT column lists. When adding a benchmark column, add it to those SELECT strings **and** the `BenchmarkOption` interface.
+- Benchmark **data access lives in `lib/benchmarks.ts`** (`fetchBenchmarkOptions`, `fetchSectorBenchmarkOptions`, `fetchBenchmarkByName`, `fetchBenchmarkAll`, `fetchCategoryBenchmark`, `fetchPeerGroupBenchmark`, `fetchBenchmarkTable`, plus the `BenchmarkOption` type and SELECT column lists). `BenchmarkPickerModal` is now just the picker UI and imports the fetchers from there (it no longer exports data fns). When adding a benchmark column, add it to the SELECT strings **and** the `BenchmarkOption` interface in `lib/benchmarks.ts`.
 - Growth columns are YCharts **annualized** figures: `sales_growth_1_yr_generic`, `eps_growth_1_yr_generic`, `sales_growth_3_yr_generic`, `eps_growth_3_yr_generic` (the 3-yr ones are annualized CAGRs, comparable to derived stock 3Y CAGRs).
 
 ### LocalStorage persistence for UI state
@@ -276,6 +295,8 @@ Benchmark selections in return tables are persisted to localStorage with key `fu
 ## FMP Financial Metrics
 
 Financial figures are fetched on-demand from Financial Modeling Prep (stable API) in `lib/fmpFinancials.ts` (income statements, estimates, earnings) and `lib/fmpRatios.ts` (margins, growth, CAGR). They are **not** persisted to Supabase — only derived aggregates land on `securities2` via `fmpSync.ts`.
+
+**Shared FMP plumbing lives in `lib/fmpClient.ts`** — `FMP_STABLE`/`FMP_V3`, the guarded `apiKey()`, `num()`/`str()`/`asArray()`/`firstItem()`, `fmpFetch()`, and `fmpSymbol()`. All `fmp*.ts` modules import from it instead of redefining the boilerplate. `fetchScorecardMetrics` fetches each distinct endpoint at most once (ratios-ttm, cash-flow-ttm, income-statement-ttm, annual income limit=4) and derives all six scorecard metrics from the shared rows — 4 calls, not 7. The standalone exported fetchers (`fetchFcfMargins`/`fetchTtmGrowth`/`fetchCagr3y`/`fetchRatiosTTM`, used by `StockScorecardPanels`) are unchanged.
 
 ### Stock detail page reads FMP on-demand, not `securities2`
 
@@ -294,7 +315,7 @@ For **stocks** (not funds), the detail page pulls these live via `useQuery` rath
 - Identity uses `(isStock ? profile.x : null) ?? security.x` — live FMP for stocks (so new positions aren't blank), stored `securities2` value as fallback and for funds. **Excel can no longer write these four** (mapped to `null` / in the `SKIP` set in `securities2ExcelUpload.ts`).
 - The **benchmark/peer rows** in Total Performance still come from the YCharts `category_benchmarks` / `sector_benchmarks` tables — only the security's own row is live FMP.
 - **`fmpSync.ts` was slimmed (Jun 2026 Phase 1).** 41 write-only stock-analytic columns (price snapshot, margins, growth, valuation, analyst counts, price targets, `dividend_yield`, `enhanced_market_beta_60_month`) were **dropped from `securities2`** (267 → 229 cols) — nothing read them; they were removed from the `SecurityDetail` type too. `syncStockFromFMP` now fetches only 4 endpoints (profile, two price-history, earnings) and writes only identity, earnings dates, `*_total_return_nav` returns, and risk metrics. It runs from Settings → Import/Export (bulk), not the stock page. `securities2ExcelUpload.ts` strips the dropped columns via `RETIRED_SECURITIES2_COLS`. Header **Consensus** = `grades-consensus` `consensus` string (on-demand).
-  - **Beware stale selects on dropped columns.** A PostgREST `select` (top-level or embedded `securities2(...)`) naming a dropped column 400s the *entire* query. This bit `lib/positions.ts`, which embedded `securities2(..., dividend_yield)` after the slim-down and silently failed every portfolio's positions load. Reads via `select('*')` (e.g. `fetchSecurityById`) are immune — they just return whatever columns exist. When in doubt, validate an explicit embed's column list against the live schema.
+  - **Stale selects on dropped columns** — now caught at compile time. A PostgREST `select` (top-level or embedded `securities2(...)`) naming a dropped column 400s the *entire* query at runtime. This bit `lib/positions.ts`, which embedded `securities2(..., dividend_yield)` after the slim-down and silently failed every portfolio's positions load. Since the client is schema-typed (see "The client is schema-typed"), such a select now fails `tsc`/CI instead — but keep `client/src/types/database.types.ts` regenerated after schema changes, or the check goes stale.
   - **`securities2.thesis`** is an advisor-authored thesis column (added Jun 2026), distinct from the vendor-sourced `long_description`. The detail-page thesis editor reads it via `getThesisText` and writes it via `updateSecurityThesis`. (The dead `lib/securityFields.ts` field-registry, which mapped to retired columns, was deleted — do not resurrect a `securities2` select from a column registry without schema-checking it.)
 - `fetchEarningsDates` derives last = most recent release ≤ today, next = soonest release > today, from `/stable/earnings` (which lists past + scheduled releases).
 
@@ -331,6 +352,7 @@ On the Overview tab. News and Press Releases are company-specific feeds, side by
 - Use `/stable/news/stock?symbols=` and `/stable/news/press-releases?symbols=` — **NOT** the `*-latest` endpoints, which return a GLOBAL feed and ignore the symbol filter. Results come back newest-first; no client-side sorting.
 - Each item shows publisher · date above the title (title links out); no domain/url text, no snippet.
 - "Alerts" is a separate placeholder card under Analysts (not part of `NewsAlertsPanel`).
+- **Alert-rules management was removed as dead code.** The `alert_rules` table still exists, but the rule CRUD UI (`AlertRulesSection`) and the firing engine (`fireAlertIfBreached`) were never wired up and are deleted. `lib/alertRules.ts` keeps only the live path: `fetchUnacknowledgedAlerts` + `acknowledgeAlert` (the HomePage "Performance Alerts" list reads/acks `alert_events`). Rebuild the rule/fire side deliberately if alerts are wanted — don't assume it exists.
 
 ### At-Risk criteria mirror the scorecard
 
@@ -460,6 +482,6 @@ Removed columns (`pe_5`, `ps_ratio_3y_mean`, `revenue_per_share_ttm`) are explic
 
 14. **PostgREST embed needs a real FK** — `portfolio_allocations` has **no FK** to `securities2` (it stages import symbols), so `select('..., securities2(...)')` 400s with "could not find a relationship." Resolve names/fields with a separate `.in('security_id', syms)` lookup, not an embed. (Only embed across tables with a declared FK.)
 
-15. **FMP class tickers use hyphens** — `BRK.B` (our `security_id` / YCharts symbol) is `BRK-B` on FMP. Any code that fetches FMP by symbol must map `.`→`-` (`fmpSymbol`), keeping the original `security_id` for the DB. Without it the price fetch returns empty and the holding is silently held flat / dropped (bit `portfolioPerformance` and `fmpSync`).
+15. **FMP class tickers use hyphens** — `BRK.B` (our `security_id` / YCharts symbol) is `BRK-B` on FMP. `fmpSymbol()` (`.`→`-`) now lives in **`lib/fmpClient.ts`** and is applied in **every** symbol-keyed FMP fetch (on-demand reads included), keeping the original `security_id` for the DB. Earlier only `portfolioPerformance`/`fmpSync` mapped it, so class-ticker stocks silently returned blank profile/quote/scorecard/analyst/news/financials/transcripts — fixed by routing all fetches through `fmpSymbol`. Any new FMP-by-symbol call must use it.
 
 16. **Performance vs YCharts won't be bit-identical** — `lib/portfolioPerformance.ts` recomputes from FMP dividend-adjusted prices; the stored `portfolio.*_total_return` are YCharts' own model figures. They agree to ~0.2% except (a) **All-Time** when the portfolio launched on a big move day (since-inception is measured from the inception *close*; YCharts credits the launch day) and (b) base-date sensitivity near volatile dates. Don't "fix" the engine to chase an exact match — verify the convention first (see Portfolio Allocations & Performance).
