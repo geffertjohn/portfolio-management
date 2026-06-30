@@ -1402,6 +1402,14 @@ export type Database = {
           rebalance_frequency: string | null
           review_frequency: string | null
           risk_profile: string | null
+          tier1_lower: number | null
+          tier1_upper: number | null
+          tier2_lower: number | null
+          tier2_upper: number | null
+          tier3_lower: number | null
+          tier3_upper: number | null
+          tier4_lower: number | null
+          tier4_upper: number | null
           updated_at: string | null
           us_mid_cap_lower_limit: number | null
           us_mid_cap_target: number | null
@@ -1468,6 +1476,14 @@ export type Database = {
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
+          tier1_lower?: number | null
+          tier1_upper?: number | null
+          tier2_lower?: number | null
+          tier2_upper?: number | null
+          tier3_lower?: number | null
+          tier3_upper?: number | null
+          tier4_lower?: number | null
+          tier4_upper?: number | null
           updated_at?: string | null
           us_mid_cap_lower_limit?: number | null
           us_mid_cap_target?: number | null
@@ -1534,6 +1550,14 @@ export type Database = {
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
+          tier1_lower?: number | null
+          tier1_upper?: number | null
+          tier2_lower?: number | null
+          tier2_upper?: number | null
+          tier3_lower?: number | null
+          tier3_upper?: number | null
+          tier4_lower?: number | null
+          tier4_upper?: number | null
           updated_at?: string | null
           us_mid_cap_lower_limit?: number | null
           us_mid_cap_target?: number | null

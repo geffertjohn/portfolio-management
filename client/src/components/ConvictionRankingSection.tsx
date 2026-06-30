@@ -1,5 +1,5 @@
 import {
-  CONVICTION_TIER_OPTIONS, CONVICTION_TIER_INFO,
+  CONVICTION_TIER_OPTIONS, resolveTierInfo,
   CONVICTION_LABELS, type MonitorConviction,
   type HoldingAssessment, type ConvictionTier,
 } from '@/lib/holdingReviews'
@@ -9,12 +9,14 @@ import type { PortfolioPosition } from '@/types/position'
 interface ConvictionRankingSectionProps {
   positions: PortfolioPosition[]
   assessments: Record<string, HoldingAssessment>
+  /** Tier meaning + target bands, resolved from the model portfolio's editable bands. */
+  tierInfo: ReturnType<typeof resolveTierInfo>
   /** Most recent prior conviction per security (from quarterly history), as a hint. */
   recentConviction: Record<string, MonitorConviction>
   onChange: (securityId: string, field: keyof HoldingAssessment, value: string | number | boolean | null) => void
 }
 
-export function ConvictionRankingSection({ positions, assessments, recentConviction, onChange }: ConvictionRankingSectionProps) {
+export function ConvictionRankingSection({ positions, assessments, tierInfo, recentConviction, onChange }: ConvictionRankingSectionProps) {
   const holdings = positions
     .filter((p) => p.ticker && !isCashTicker(p.ticker) && !isCashTicker(p.securityId))
     .sort((a, b) => b.weight - a.weight)
@@ -34,8 +36,8 @@ export function ConvictionRankingSection({ positions, assessments, recentConvict
             {CONVICTION_TIER_OPTIONS.map((t) => (
               <tr key={t} className="border-t border-gray-100">
                 <td className="px-3 py-1.5 font-medium text-gray-700">Tier {t}</td>
-                <td className="px-3 py-1.5 text-gray-500">{CONVICTION_TIER_INFO[t].meaning}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-gray-600">{CONVICTION_TIER_INFO[t].target}</td>
+                <td className="px-3 py-1.5 text-gray-500">{tierInfo[t].meaning}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-gray-600">{tierInfo[t].target}</td>
               </tr>
             ))}
           </tbody>
@@ -57,7 +59,7 @@ export function ConvictionRankingSection({ positions, assessments, recentConvict
             {holdings.map((p) => {
               const a = assessments[p.securityId]
               const tier = a?.convictionTier ?? null
-              const info = tier ? CONVICTION_TIER_INFO[tier] : null
+              const info = tier ? tierInfo[tier] : null
               const w = p.weight
               const outOfBand = info != null && (w < info.lower || (info.upper != null && w > info.upper))
               const prior = recentConviction[p.securityId]

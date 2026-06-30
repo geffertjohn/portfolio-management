@@ -69,6 +69,33 @@ export const CONVICTION_TIER_INFO: Record<ConvictionTier, { meaning: string; tar
   4: { meaning: 'Replace / exit candidates',                  target: '0–1% or exit', lower: 0, upper: 1 },
 }
 
+export interface TierBands {
+  tier1_lower: number | null; tier1_upper: number | null
+  tier2_lower: number | null; tier2_upper: number | null
+  tier3_lower: number | null; tier3_upper: number | null
+  tier4_lower: number | null; tier4_upper: number | null
+}
+
+/**
+ * Tier meaning + target band, using the model portfolio's editable bands when
+ * present and falling back to the default framework bands. Tier 4 keeps the
+ * "or exit" wording on its target string.
+ */
+export function resolveTierInfo(model: Partial<TierBands> | null | undefined): Record<ConvictionTier, { meaning: string; lower: number; upper: number; target: string }> {
+  const band = (tier: ConvictionTier, lo: number | null | undefined, up: number | null | undefined) => {
+    const lower = lo ?? CONVICTION_TIER_INFO[tier].lower
+    const upper = up ?? CONVICTION_TIER_INFO[tier].upper ?? 0
+    const target = tier === 4 ? `${lower}–${upper}% or exit` : `${lower}–${upper}%`
+    return { meaning: CONVICTION_TIER_INFO[tier].meaning, lower, upper, target }
+  }
+  return {
+    1: band(1, model?.tier1_lower, model?.tier1_upper),
+    2: band(2, model?.tier2_lower, model?.tier2_upper),
+    3: band(3, model?.tier3_lower, model?.tier3_upper),
+    4: band(4, model?.tier4_lower, model?.tier4_upper),
+  }
+}
+
 /** Annual deep-review guidance areas (#1) — "If I were building this from scratch today…". */
 export const DEEP_REVIEW_AREAS: { area: string; question: string }[] = [
   { area: 'Business quality',    question: 'Is this still a high-quality company?' },

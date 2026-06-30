@@ -7,7 +7,7 @@ import {
   type PortfolioCadence, type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
 import {
-  saveHoldingReviews, fetchHoldingReviewsForLog, fetchHoldingReviewsByPortfolio, emptyAssessment,
+  saveHoldingReviews, fetchHoldingReviewsForLog, fetchHoldingReviewsByPortfolio, emptyAssessment, resolveTierInfo,
   type HoldingAssessment, type MonitorConviction,
 } from '@/lib/holdingReviews'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -332,7 +332,7 @@ export function PortfolioReviewWorkspace() {
                 <DeepReviewSection positions={positions} assessments={assessments} onChange={setHoldingField} />
               )}
               {active === 'conviction_rankings' && (
-                <ConvictionRankingSection positions={positions} assessments={assessments} recentConviction={recentConviction} onChange={setHoldingField} />
+                <ConvictionRankingSection positions={positions} assessments={assessments} tierInfo={resolveTierInfo(modelPortfolio)} recentConviction={recentConviction} onChange={setHoldingField} />
               )}
               {active === 'portfolio_construction' && (
                 <PortfolioConstructionSection positions={positions} />

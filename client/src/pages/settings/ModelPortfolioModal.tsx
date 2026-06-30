@@ -99,6 +99,15 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
   const [acDrift,     setAcDrift]     = useState(String(initial?.asset_class_drift_percentage ?? 20))
   const [posDrift,    setPosDrift]    = useState(String(initial?.drift_percentage              ?? 20))
 
+  // Conviction-tier target weight bands (position-sizing for annual reviews)
+  const [tiers, setTiers] = useState({
+    t1l: String(initial?.tier1_lower ?? 5), t1u: String(initial?.tier1_upper ?? 7),
+    t2l: String(initial?.tier2_lower ?? 3), t2u: String(initial?.tier2_upper ?? 5),
+    t3l: String(initial?.tier3_lower ?? 1), t3u: String(initial?.tier3_upper ?? 3),
+    t4l: String(initial?.tier4_lower ?? 0), t4u: String(initial?.tier4_upper ?? 1),
+  })
+  const setTier = (k: keyof typeof tiers, v: string) => setTiers((p) => ({ ...p, [k]: v }))
+
   // Category: only targets for equity/fixedIncome (lower/upper computed); cash is explicit
   const [catTargets, setCatTargets] = useState<DraftCategoryTargets>(
     initial ? buildDraftCategory(initial) : { equityTarget: '0', fixedIncomeTarget: '0' }
@@ -190,6 +199,10 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       cash_lower_limit:              n(cash.lower),
       cash_target:                   n(cash.target),
       cash_upper_limit:              n(cash.upper),
+      tier1_lower: n(tiers.t1l), tier1_upper: n(tiers.t1u),
+      tier2_lower: n(tiers.t2l), tier2_upper: n(tiers.t2u),
+      tier3_lower: n(tiers.t3l), tier3_upper: n(tiers.t3u),
+      tier4_lower: n(tiers.t4l), tier4_upper: n(tiers.t4u),
       ...acPayload,
     } as ModelPortfolioInput)
   }
@@ -505,6 +518,47 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                 className="w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none" />
               <span className="text-sm text-gray-400">%</span>
               <span className="ml-1 text-xs text-gray-400">Applied ± to each position's target weight</span>
+            </div>
+
+            {/* ── Conviction Tiers (annual position-sizing bands) ──────────── */}
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Conviction Tiers</p>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[#0f2d4d] text-white">
+                    <th className="px-3 py-2 text-left font-semibold rounded-tl-md">Tier</th>
+                    <th className="px-3 py-2 text-left font-semibold">Meaning</th>
+                    <th className="w-24 px-3 py-2 text-center font-semibold">Lower</th>
+                    <th className="w-24 px-3 py-2 text-center font-semibold rounded-tr-md">Upper</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {([
+                    { t: 'Tier 1', meaning: 'Best ideas; core holdings',  lk: 't1l' as const, uk: 't1u' as const },
+                    { t: 'Tier 2', meaning: 'Solid holdings; normal',     lk: 't2l' as const, uk: 't2u' as const },
+                    { t: 'Tier 3', meaning: 'Lower conviction; smaller',  lk: 't3l' as const, uk: 't3u' as const },
+                    { t: 'Tier 4', meaning: 'Replace / exit candidates',  lk: 't4l' as const, uk: 't4u' as const },
+                  ]).map(({ t, meaning, lk, uk }) => {
+                    const inpClass = 'w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none'
+                    return (
+                      <tr key={t} className="bg-gray-50 even:bg-white">
+                        <td className="px-3 py-1.5 font-medium text-gray-800">{t}</td>
+                        <td className="px-3 py-1.5 text-xs text-gray-500">{meaning}</td>
+                        {([lk, uk] as const).map((k) => (
+                          <td key={k} className="px-2 py-1.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <input type="number" min={0} max={100} step={0.5} value={tiers[k]}
+                                onChange={(e) => setTier(k, e.target.value)} className={inpClass} />
+                              <span className="text-xs text-gray-400">%</span>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-1 text-xs text-gray-400">Target weight bands used by the annual conviction-ranking review.</p>
             </div>
 
             {error && (

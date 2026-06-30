@@ -82,6 +82,16 @@ export interface ModelPortfolio {
   cash_target: number | null
   cash_upper_limit: number | null
 
+  // Conviction-ranking tier target weight bands (percent points), for annual reviews.
+  tier1_lower: number | null
+  tier1_upper: number | null
+  tier2_lower: number | null
+  tier2_upper: number | null
+  tier3_lower: number | null
+  tier3_upper: number | null
+  tier4_lower: number | null
+  tier4_upper: number | null
+
   created_at: string
   updated_at: string
 }
