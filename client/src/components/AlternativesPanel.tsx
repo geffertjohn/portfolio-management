@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fmtDecimalPct, stripTotalReturn, EMPTY } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { saveAlternatives } from '@/lib/securities'
-import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, type BenchmarkOption } from '@/lib/benchmarks'
+import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, benchmarkEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
 import { fetchScorecardMetrics, type ScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchStockReturns, fetchProfile, type TrailingReturns } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -146,6 +146,22 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
 
   const bench1 = allBenchmarks.find((b) => b.id === security.preferred_benchmark1_id) ?? null
   const bench2 = allSectorBenchmarks.find((b) => b.id === security.preferred_benchmark2_id) ?? null
+
+  // Benchmark trailing returns from the representative ETF (total return) — FMP
+  // doesn't serve the TR index symbols. Falls back to stored YCharts columns
+  // when no proxy is mapped.
+  const proxy1 = benchmarkEtfProxy(bench1?.ticker)
+  const proxy2 = benchmarkEtfProxy(bench2?.ticker)
+  const { data: bench1Returns } = useQuery({
+    queryKey: QUERY_KEYS.stockReturns(proxy1 ?? ''),
+    queryFn: () => fetchStockReturns(proxy1!),
+    enabled: !!proxy1, staleTime: 1000 * 60 * 60, retry: false,
+  })
+  const { data: bench2Returns } = useQuery({
+    queryKey: QUERY_KEYS.stockReturns(proxy2 ?? ''),
+    queryFn: () => fetchStockReturns(proxy2!),
+    enabled: !!proxy2, staleTime: 1000 * 60 * 60, retry: false,
+  })
   const bench1Label = bench1 ? stripTotalReturn(bench1.category_benchmark ?? bench1.ticker) : 'Benchmark 1'
   const bench2Label = bench2 ? stripTotalReturn(bench2.sector ?? bench2.ticker) : 'Benchmark 2'
 
@@ -256,8 +272,11 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
         columns: RET_COLS,
         cells: (symbol) => <ReturnsCells symbol={symbol} />,
         benchCell: (b, idx) => {
-          const key = RET_COLS[idx].bench
-          return b && key ? pct(benchNum(b, key)) : EMPTY
+          const col = RET_COLS[idx]
+          // Benchmark returns from the ETF proxy (total return); fall back to stored.
+          if (b === bench1 && proxy1) return pct(bench1Returns?.[col.metric])
+          if (b === bench2 && proxy2) return pct(bench2Returns?.[col.metric])
+          return b && col.bench ? pct(benchNum(b, col.bench)) : EMPTY
         },
       })}
     </div>

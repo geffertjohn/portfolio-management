@@ -5,6 +5,41 @@ import { supabase } from './supabase'
 
 type AnyRow = Record<string, unknown>
 
+/**
+ * ETF proxy for a benchmark's total-return index ticker. FMP does not serve the
+ * total-return index symbols (^SPXTR, ^RLGTR, the ^SP15…STR sector indices), so
+ * benchmark trailing returns on the stock pages are sourced from the
+ * representative ETF's dividend-adjusted closes (= total return) via
+ * `fetchStockReturns` — the same method as the security row. Maps the benchmark
+ * `ticker` (category_ticker / sector ticker) to its ETF.
+ */
+export const BENCHMARK_ETF_PROXY: Record<string, string> = {
+  // Category / style indices
+  '^SPXTR': 'IVV',  // S&P 500
+  '^RLGTR': 'IWF',  // Russell 1000 Growth
+  '^RLVTR': 'IWD',  // Russell 1000 Value
+  '^RDGTR': 'IWP',  // Russell Mid Cap Growth
+  '^RMCTR': 'IWR',  // Russell Mid Cap
+  '^RUOTR': 'IWO',  // Russell 2000 Growth
+  '^RUTTR': 'IWM',  // Russell 2000
+  // S&P 500 sector indices → SPDR sector ETFs
+  '^SP15IFTSTR': 'XLK',  // Technology
+  '^SP15FINSTR': 'XLF',  // Financials
+  '^SP15HCSTR':  'XLV',  // Health Care
+  '^SP15CNDSTR': 'XLY',  // Consumer Discretionary
+  '^SP15CMSVST': 'XLC',  // Communication Services
+  '^SP15INSTR':  'XLI',  // Industrials
+  '^SP15CNSSTR': 'XLP',  // Consumer Staples
+  '^SPXUSTR':    'XLU',  // Utilities
+  '^SP15NRGSTR': 'XLE',  // Energy
+  '^SP15RESTR':  'XLRE', // Real Estate
+}
+
+/** The ETF proxy symbol for a benchmark ticker, or null when none is mapped. */
+export function benchmarkEtfProxy(ticker: string | null | undefined): string | null {
+  return ticker ? (BENCHMARK_ETF_PROXY[ticker.toUpperCase()] ?? null) : null
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Benchmark name lookups (header rows, comparison tables)
 // ─────────────────────────────────────────────────────────────────────────────
