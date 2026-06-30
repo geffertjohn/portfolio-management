@@ -18,6 +18,10 @@ export type HoldingAction = 'add' | 'hold' | 'trim' | 'exit' | 'watchlist'
 export type WatchlistTrigger =
   | 'fundamental_deterioration' | 'margin_pressure' | 'estimate_cuts'
   | 'thesis_concern' | 'valuation_issue' | 'portfolio_issue'
+/** Annual deep-review output per holding. */
+export type AnnualDecision = 'keep' | 'increase' | 'reduce' | 'replace' | 'exit'
+/** Annual conviction ranking tier (1 = best ideas … 4 = replace/exit candidates). */
+export type ConvictionTier = 1 | 2 | 3 | 4
 
 export const THESIS_STATUS_OPTIONS: ThesisStatus[] = ['intact', 'at_risk', 'broken']
 export const BUSINESS_TREND_OPTIONS: BusinessTrend[] = ['improving', 'stable', 'deteriorating']
@@ -28,6 +32,8 @@ export const WATCHLIST_TRIGGER_OPTIONS: WatchlistTrigger[] = [
   'fundamental_deterioration', 'margin_pressure', 'estimate_cuts',
   'thesis_concern', 'valuation_issue', 'portfolio_issue',
 ]
+export const ANNUAL_DECISION_OPTIONS: AnnualDecision[] = ['keep', 'increase', 'reduce', 'replace', 'exit']
+export const CONVICTION_TIER_OPTIONS: ConvictionTier[] = [1, 2, 3, 4]
 
 export const THESIS_STATUS_LABELS: Record<ThesisStatus, string> = {
   intact: 'Intact', at_risk: 'At Risk', broken: 'Broken',
@@ -52,6 +58,42 @@ export const WATCHLIST_TRIGGER_LABELS: Record<WatchlistTrigger, string> = {
   valuation_issue: 'Valuation issue',
   portfolio_issue: 'Portfolio issue',
 }
+export const ANNUAL_DECISION_LABELS: Record<AnnualDecision, string> = {
+  keep: 'Keep', increase: 'Increase', reduce: 'Reduce', replace: 'Replace', exit: 'Exit',
+}
+/** Conviction tier meaning + target weight band (percent points), per the annual framework. */
+export const CONVICTION_TIER_INFO: Record<ConvictionTier, { meaning: string; target: string; lower: number; upper: number | null }> = {
+  1: { meaning: 'Best ideas; high conviction; core holdings', target: '5–7%', lower: 5, upper: 7 },
+  2: { meaning: 'Solid holdings; normal weights',             target: '3–5%', lower: 3, upper: 5 },
+  3: { meaning: 'Lower conviction; smaller weights',          target: '1–3%', lower: 1, upper: 3 },
+  4: { meaning: 'Replace / exit candidates',                  target: '0–1% or exit', lower: 0, upper: 1 },
+}
+
+/** Annual deep-review guidance areas (#1) — "If I were building this from scratch today…". */
+export const DEEP_REVIEW_AREAS: { area: string; question: string }[] = [
+  { area: 'Business quality',    question: 'Is this still a high-quality company?' },
+  { area: 'Competitive position', question: 'Is the moat stronger, weaker, or unchanged?' },
+  { area: 'Management',          question: 'Are they executing?' },
+  { area: 'Financial strength',  question: 'Balance sheet, FCF, margins, ROIC' },
+  { area: 'Growth runway',       question: 'Is the opportunity still attractive?' },
+  { area: 'Valuation',           question: 'Is expected return compelling?' },
+  { area: 'Alternatives',        question: 'Is there a better stock for the same role?' },
+]
+
+/** Annual portfolio-construction check areas (#3) — whole-portfolio, not per-stock. */
+export const PORTFOLIO_CONSTRUCTION_AREAS: { area: string; prompt: string }[] = [
+  { area: 'Number of holdings', prompt: 'Still appropriate?' },
+  { area: 'Sector exposure',    prompt: 'Any unintended concentration?' },
+  { area: 'Factor exposure',    prompt: 'Too growth-heavy, value-heavy, cyclical, defensive?' },
+  { area: 'Position sizing',    prompt: 'Best ideas actually sized as best ideas?' },
+  { area: 'Redundancy',         prompt: 'Do multiple holdings do the same thing?' },
+  { area: 'Risk exposure',      prompt: 'Any single theme dominating the portfolio?' },
+  { area: 'Cash level',         prompt: 'Too much or too little?' },
+  { area: 'Turnover',           prompt: 'Are you trading too much?' },
+]
+
+export const ANNUAL_PURPOSE = 'If I were building this portfolio from scratch today, would I still own these names at these weights?'
+export const ANNUAL_CONSTRUCTION_QUESTION = 'Does the portfolio reflect my highest-conviction ideas, or is it just an accumulation of past decisions?'
 
 /** The five guidance areas surfaced above the monitoring grid (#1). */
 export const MONITORING_AREAS: { area: string; prompt: string }[] = [
@@ -101,6 +143,10 @@ export interface HoldingAssessment {
   requiredImprovement: string | null
   reviewDeadline: string | null
   exitTrigger: string | null
+  // annual: deep review (#1) + conviction ranking (#2)
+  annualDecision: AnnualDecision | null
+  annualNotes: string | null
+  convictionTier: ConvictionTier | null
 }
 
 export function emptyAssessment(securityId: string): HoldingAssessment {
@@ -110,6 +156,7 @@ export function emptyAssessment(securityId: string): HoldingAssessment {
     originalThesis: null, thesisChange: null, evidenceFor: null, evidenceAgainst: null, currentConclusion: null,
     onWatchlist: false, watchlistTrigger: null, watchlistReason: null,
     requiredImprovement: null, reviewDeadline: null, exitTrigger: null,
+    annualDecision: null, annualNotes: null, convictionTier: null,
   }
 }
 
@@ -118,6 +165,7 @@ export function isAssessmentEmpty(a: HoldingAssessment): boolean {
     && !a.originalThesis && !a.thesisChange && !a.evidenceFor && !a.evidenceAgainst && !a.currentConclusion
     && !a.onWatchlist && !a.watchlistTrigger && !a.watchlistReason
     && !a.requiredImprovement && !a.reviewDeadline && !a.exitTrigger
+    && !a.annualDecision && !a.annualNotes && !a.convictionTier
 }
 
 export interface HoldingReviewRow extends HoldingAssessment {
@@ -131,7 +179,8 @@ const SELECT_COLS =
   'id, review_log_id, portfolio_name, security_id, reviewed_at, ' +
   'thesis_status, business_trend, valuation, conviction, action, ' +
   'original_thesis, thesis_change, evidence_for, evidence_against, current_conclusion, ' +
-  'on_watchlist, watchlist_trigger, watchlist_reason, required_improvement, review_deadline, exit_trigger'
+  'on_watchlist, watchlist_trigger, watchlist_reason, required_improvement, review_deadline, exit_trigger, ' +
+  'annual_decision, annual_notes, conviction_tier'
 
 function rowToAssessment(r: Record<string, unknown>): HoldingReviewRow {
   return {
@@ -156,6 +205,9 @@ function rowToAssessment(r: Record<string, unknown>): HoldingReviewRow {
     requiredImprovement: (r.required_improvement as string | null) ?? null,
     reviewDeadline: (r.review_deadline as string | null) ?? null,
     exitTrigger: (r.exit_trigger as string | null) ?? null,
+    annualDecision: (r.annual_decision as AnnualDecision | null) ?? null,
+    annualNotes: (r.annual_notes as string | null) ?? null,
+    convictionTier: (r.conviction_tier as ConvictionTier | null) ?? null,
   }
 }
 
@@ -196,6 +248,9 @@ export async function saveHoldingReviews(
       required_improvement: a.requiredImprovement,
       review_deadline: a.reviewDeadline,
       exit_trigger: a.exitTrigger,
+      annual_decision: a.annualDecision,
+      annual_notes: a.annualNotes,
+      conviction_tier: a.convictionTier,
     }))
   if (rows.length === 0) return
   const { error } = await supabase.from('holding_reviews').insert(rows)

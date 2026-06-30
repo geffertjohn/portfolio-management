@@ -726,8 +726,11 @@ export type Database = {
       holding_reviews: {
         Row: {
           action: string | null
+          annual_decision: string | null
+          annual_notes: string | null
           business_trend: string | null
           conviction: string | null
+          conviction_tier: number | null
           created_at: string
           current_conclusion: string | null
           evidence_against: string | null
@@ -751,8 +754,11 @@ export type Database = {
         }
         Insert: {
           action?: string | null
+          annual_decision?: string | null
+          annual_notes?: string | null
           business_trend?: string | null
           conviction?: string | null
+          conviction_tier?: number | null
           created_at?: string
           current_conclusion?: string | null
           evidence_against?: string | null
@@ -776,8 +782,11 @@ export type Database = {
         }
         Update: {
           action?: string | null
+          annual_decision?: string | null
+          annual_notes?: string | null
           business_trend?: string | null
           conviction?: string | null
+          conviction_tier?: number | null
           created_at?: string
           current_conclusion?: string | null
           evidence_against?: string | null

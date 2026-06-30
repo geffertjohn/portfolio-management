@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -7,8 +7,8 @@ import {
   type PortfolioCadence, type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
 import {
-  saveHoldingReviews, fetchHoldingReviewsForLog, emptyAssessment,
-  type HoldingAssessment,
+  saveHoldingReviews, fetchHoldingReviewsForLog, fetchHoldingReviewsByPortfolio, emptyAssessment,
+  type HoldingAssessment, type MonitorConviction,
 } from '@/lib/holdingReviews'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { usePortfolio, usePositions, useResolvedModelPortfolio } from '@/hooks/usePortfolio'
@@ -18,6 +18,9 @@ import { PositionSizingCheck } from '@/components/PositionSizingCheck'
 import { HoldingMonitorGrid } from '@/components/HoldingMonitorGrid'
 import { ThesisScorecardSection } from '@/components/ThesisScorecardSection'
 import { WatchlistStatusSection } from '@/components/WatchlistStatusSection'
+import { DeepReviewSection } from '@/components/DeepReviewSection'
+import { ConvictionRankingSection } from '@/components/ConvictionRankingSection'
+import { PortfolioConstructionSection } from '@/components/PortfolioConstructionSection'
 import { formatDate } from '@/lib/fundFormat'
 
 const SUMMARY = '__summary__'
@@ -36,6 +39,21 @@ export function PortfolioReviewWorkspace() {
   const { data: portfolio, isLoading: pLoading, error: pError } = usePortfolio(id)
   const { data: positions = [] } = usePositions(id, !!portfolio)
   const modelPortfolio = useResolvedModelPortfolio(portfolio)
+
+  // Prior conviction per security (most recent from history) — a hint in the
+  // annual conviction-ranking section. Only fetched for the annual cadence.
+  const { data: holdingHistory = [] } = useQuery({
+    queryKey: QUERY_KEYS.holdingReviews(id),
+    queryFn: () => fetchHoldingReviewsByPortfolio(id),
+    enabled: !!id && cadence === 'annual',
+  })
+  const recentConviction = useMemo(() => {
+    const map: Record<string, MonitorConviction> = {}
+    for (const r of holdingHistory) {
+      if (r.conviction && !(r.securityId in map)) map[r.securityId] = r.conviction
+    }
+    return map
+  }, [holdingHistory])
 
   // The cadence's current due date (for a new draft's review_date).
   const { data: schedules = [] } = useQuery({
@@ -150,7 +168,7 @@ export function PortfolioReviewWorkspace() {
   const setHoldingField = (
     securityId: string,
     field: keyof HoldingAssessment,
-    value: string | boolean | null,
+    value: string | number | boolean | null,
   ) => {
     setAssessments((prev) => {
       const cur = prev[securityId] ?? emptyAssessment(securityId)
@@ -309,6 +327,15 @@ export function PortfolioReviewWorkspace() {
               )}
               {active === 'watchlist_status' && (
                 <WatchlistStatusSection positions={positions} assessments={assessments} onChange={setHoldingField} />
+              )}
+              {active === 'deep_review' && (
+                <DeepReviewSection positions={positions} assessments={assessments} onChange={setHoldingField} />
+              )}
+              {active === 'conviction_rankings' && (
+                <ConvictionRankingSection positions={positions} assessments={assessments} recentConviction={recentConviction} onChange={setHoldingField} />
+              )}
+              {active === 'portfolio_construction' && (
+                <PortfolioConstructionSection positions={positions} />
               )}
 
               <div>
