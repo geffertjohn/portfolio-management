@@ -9,6 +9,7 @@ import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
 import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
 import { CandidatesPanel } from '@/components/CandidatesPanel'
+import { PortfolioDocumentsPanel } from '@/components/PortfolioDocumentsPanel'
 import { PortfolioOverview } from '@/components/PortfolioOverview'
 import { DetailPageState } from '@/components/DetailPageState'
 import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePanel'
@@ -22,7 +23,7 @@ import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelP
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { PortfolioPosition } from '@/types/position'
 
-type PortfolioTab = 'overview' | 'allocation' | 'compliance' | 'change_log' | 'reviews' | 'candidates'
+type PortfolioTab = 'overview' | 'allocation' | 'compliance' | 'change_log' | 'reviews' | 'candidates' | 'documents'
 type AllocationSubTab = 'positions' | 'history' | 'comparison'
 type ChangeLogView = 'changelog' | 'rebalance' | 'suitability'
 
@@ -257,6 +258,7 @@ export function PortfolioDetailPage() {
               { id: 'change_log', label: 'Change Log'  },
               { id: 'reviews',    label: 'Reviews'     },
               { id: 'candidates', label: 'Candidates'  },
+              { id: 'documents',  label: 'Documents'   },
             ] as { id: PortfolioTab; label: string }[]).map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
@@ -573,6 +575,12 @@ export function PortfolioDetailPage() {
         {tab === 'candidates' && (
           <div className="mt-6">
             <CandidatesPanel portfolioId={id} />
+          </div>
+        )}
+
+        {tab === 'documents' && (
+          <div className="mt-6">
+            <PortfolioDocumentsPanel portfolioId={id} />
           </div>
         )}
 

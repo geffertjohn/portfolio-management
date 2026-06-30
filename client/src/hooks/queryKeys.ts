@@ -49,6 +49,7 @@ export const QUERY_KEYS = {
   holdingReviews: (portfolioName: string) => ['holding_reviews', portfolioName] as const,
   securityAdditions: (portfolioName: string) => ['security_additions', portfolioName] as const,
   securityAddition: (id: number) => ['security_addition', id] as const,
+  documentsFiles: ['documents-files'] as const,
   modelPortfolios: ['model_portfolios'] as const,
   modelPortfolioByObjective: (objective: string) => ['model_portfolio_by_objective', objective] as const,
   modelPortfolioById: (id: number) => ['model_portfolio_by_id', id] as const,

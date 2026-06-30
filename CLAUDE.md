@@ -457,6 +457,10 @@ A guided "add a new **stock** to a portfolio" workflow, mirroring the review wor
 - **Stages** = the documented buy process 3–8 (1–2 idea-generation/screening are non-actionable, omitted): **Full Research** (business overview · thesis · risks · financial review · valuation · portfolio fit) · **Portfolio Fit Review** (strategy/sector/factor/existing-holdings) · **Approval Decision** (thesis strength · expected return · downside risk · fit · decision · rationale) · **Position Sizing** (conviction → 4–5/2–4/1–2% reference · initial/max weight · reason) · **Purchase** (date · price · allocation · funding · rationale) · **Monitoring Setup** (success criteria · watchlist triggers · exit triggers). `ADDITION_STAGES` in `lib/securityAdditions.ts` defines the stages + fields (rendered generically by `type`: textarea/text/number/date/select); change them there and the workspace + summary follow.
 - **Recorded-only** — no side effects into Watchlist/positions/At-Risk yet (a `watchlist`/`approve` decision is captured but doesn't create a prospects/position row). Query keys: `securityAdditions(name)` (list) + `securityAddition(id)`.
 
+## Documents (Express file store)
+
+Files live in the Express server's file store (`server/`, `/api/files|upload|folders|files/signed-url`), organized into **named folders**. The client lives in **`lib/documents.ts`** (`fetchAllFiles`, `uploadFile`, `deleteFile`, `getSignedUrl`, `createFolder`, `deleteFolder`, `formatBytes`, `StoredFile`) — shared by **Settings → Documents** (`DocumentsPage`, all folders) and the **per-portfolio Documents tab** (`PortfolioDocumentsPanel`, on `PortfolioDetailPage`). A portfolio's documents use a **folder named after the portfolio** (`file.folder === portfolioName`); uploads go to that folder. Both surfaces share the `documentsFiles` query key, so an upload in one reflects in the other. When the server is down the panel shows a graceful "Express server not reachable" banner (`cd server && npm run dev`).
+
 ## Portfolio Allocations & Performance
 
 ### `portfolio_allocations` is the dated-allocation source of truth
