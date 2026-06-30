@@ -71,6 +71,16 @@ export async function getSignedUrl(path: string): Promise<string> {
   return data.url
 }
 
+/**
+ * True when an error looks like "the Express proxy isn't reachable" — covers the
+ * browser-specific fetch-failure messages (Chrome "Failed to fetch", Safari
+ * "Load failed", Firefox "NetworkError"). Used to show a graceful banner.
+ */
+export function isServerUnreachable(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  return /failed to fetch|load failed|networkerror|could not connect/i.test(err.message)
+}
+
 export function formatBytes(bytes: number | null): string {
   if (bytes == null) return '—'
   if (bytes < 1024) return `${bytes} B`

@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  fetchAllFiles, uploadFile, deleteFile, getSignedUrl, formatBytes,
+  fetchAllFiles, uploadFile, deleteFile, getSignedUrl, formatBytes, isServerUnreachable,
   type StoredFile,
 } from '@/lib/documents'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -46,7 +46,7 @@ export function PortfolioDocumentsPanel({ portfolioId }: { portfolioId: string }
     onError: (e) => alert(e instanceof Error ? e.message : 'Could not open file'),
   })
 
-  const serverDown = error instanceof Error && error.message.includes('Failed to fetch')
+  const serverDown = isServerUnreachable(error)
 
   return (
     <div className="space-y-4">
@@ -78,7 +78,9 @@ export function PortfolioDocumentsPanel({ portfolioId }: { portfolioId: string }
         </div>
       )}
 
-      {uploadMut.isError && <p className="text-sm text-red-600">{uploadMut.error instanceof Error ? uploadMut.error.message : 'Upload failed'}</p>}
+      {uploadMut.isError && !isServerUnreachable(uploadMut.error) && (
+        <p className="text-sm text-red-600">{uploadMut.error instanceof Error ? uploadMut.error.message : 'Upload failed'}</p>
+      )}
 
       {!serverDown && (
         isLoading ? (

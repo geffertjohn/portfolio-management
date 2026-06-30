@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSecurities } from '@/lib/securities'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import {
-  fetchAllFiles as fetchAll, createFolder, deleteFolder, uploadFile, deleteFile, getSignedUrl, formatBytes,
+  fetchAllFiles as fetchAll, createFolder, deleteFolder, uploadFile, deleteFile, getSignedUrl, formatBytes, isServerUnreachable,
   type StoredFile,
 } from '@/lib/documents'
 
@@ -204,8 +204,7 @@ export function DocumentsPage() {
     ? Object.entries(grouped).filter(([, f]) => f.length > 0)
     : Object.entries(grouped)
 
-  const serverDown =
-    loadError instanceof Error && loadError.message.includes('Failed to fetch')
+  const serverDown = isServerUnreachable(loadError)
 
   function toggleCollapse(folder: string) {
     setCollapsedFolders((prev) => {
