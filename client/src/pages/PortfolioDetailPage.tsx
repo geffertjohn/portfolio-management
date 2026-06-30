@@ -564,7 +564,7 @@ export function PortfolioDetailPage() {
         {/* Reviews Tab */}
         {tab === 'reviews' && (
           <div className="mt-6">
-            <PortfolioReviewsPanel portfolioId={id} positions={positions} modelPortfolio={modelPortfolio} />
+            <PortfolioReviewsPanel portfolioId={id} />
           </div>
         )}
 

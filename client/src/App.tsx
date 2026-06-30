@@ -8,6 +8,7 @@ import { Layout } from '@/components/Layout'
 const HomePage = lazy(() => import('@/pages/HomePage').then((m) => ({ default: m.HomePage })))
 const PortfolioPage = lazy(() => import('@/pages/PortfolioPage').then((m) => ({ default: m.PortfolioPage })))
 const PortfolioDetailPage = lazy(() => import('@/pages/PortfolioDetailPage').then((m) => ({ default: m.PortfolioDetailPage })))
+const PortfolioReviewWorkspace = lazy(() => import('@/pages/PortfolioReviewWorkspace').then((m) => ({ default: m.PortfolioReviewWorkspace })))
 const SecurityDetailPage = lazy(() => import('@/pages/SecurityDetailPage').then((m) => ({ default: m.SecurityDetailPage })))
 const SecuritiesPage = lazy(() => import('@/pages/SecuritiesPage').then((m) => ({ default: m.SecuritiesPage })))
 const ResearchPage = lazy(() => import('@/pages/ResearchPage').then((m) => ({ default: m.ResearchPage })))
@@ -51,6 +52,7 @@ function App() {
           <Route path="clients" element={<Page><ClientsPage /></Page>} />
           <Route path="clients/:clientId" element={<Page><ClientDetailPage /></Page>} />
           <Route path="portfolio/:portfolioId" element={<Page><PortfolioDetailPage /></Page>} />
+          <Route path="portfolio/:portfolioId/review/:cadence" element={<Page><PortfolioReviewWorkspace /></Page>} />
           <Route path="security/:securityId" element={<Page><SecurityDetailPage /></Page>} />
           <Route path="research" element={<Page><ResearchPage /></Page>} />
           <Route path="audit" element={<Page><AuditLogPage /></Page>} />

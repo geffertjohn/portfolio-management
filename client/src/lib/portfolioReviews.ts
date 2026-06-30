@@ -87,6 +87,19 @@ export interface PortfolioReview {
   created_at: string
 }
 
+/** An in-progress (draft) review loaded into the workspace for editing/resuming. */
+export interface ReviewDraft {
+  id: number
+  cadence: PortfolioCadence
+  checklist: ReviewChecklistItem[]
+  notes: string | null
+  /** Due date the review addresses. */
+  reviewDate: string | null
+  /** Next due date (set in the Summary section; defaults at completion). */
+  nextReviewAt: string | null
+  reviewedAt: string
+}
+
 function calcNextReview(cadence: PortfolioCadence, from = new Date()): Date {
   const d = new Date(from)
   if (cadence === 'monthly') d.setMonth(d.getMonth() + 1)
@@ -125,68 +138,136 @@ export async function fetchPortfolioReviewSchedulesFor(
   return (data ?? []) as PortfolioReviewSchedule[]
 }
 
+/** Completed reviews only (drafts are excluded from history). */
 export async function fetchPortfolioReviews(portfolioName: string): Promise<PortfolioReview[]> {
   const { data, error } = await supabase
     .from('portfolio_review_log')
     .select('*')
     .eq('portfolio_name', portfolioName)
+    .eq('status', 'completed')
     .order('reviewed_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as PortfolioReview[]
 }
 
-export interface MarkPortfolioReviewedOptions {
+const DRAFT_COLS = 'id, cadence, checklist, notes, review_date, next_review_at, reviewed_at'
+
+function mapDraft(row: Record<string, unknown>): ReviewDraft {
+  return {
+    id: row.id as number,
+    cadence: row.cadence as PortfolioCadence,
+    checklist: (row.checklist as ReviewChecklistItem[] | null) ?? [],
+    notes: (row.notes as string | null) ?? null,
+    reviewDate: (row.review_date as string | null) ?? null,
+    nextReviewAt: (row.next_review_at as string | null) ?? null,
+    reviewedAt: row.reviewed_at as string,
+  }
+}
+
+/**
+ * Start a new draft review for a cadence, or resume the existing open draft.
+ * At most one draft per (portfolio, cadence) exists (DB partial unique index).
+ * A fresh draft seeds the checklist from the cadence's task list.
+ */
+export async function startOrResumeDraft(
+  portfolioName: string,
+  cadence: PortfolioCadence,
+  dueDate: string | null,
+): Promise<ReviewDraft> {
+  const { data: existing, error: findErr } = await supabase
+    .from('portfolio_review_log')
+    .select(DRAFT_COLS)
+    .eq('portfolio_name', portfolioName)
+    .eq('cadence', cadence)
+    .eq('status', 'draft')
+    .maybeSingle()
+  if (findErr) throw findErr
+  if (existing) return mapDraft(existing as Record<string, unknown>)
+
+  const checklist: ReviewChecklistItem[] = PORTFOLIO_REVIEW_TASKS[cadence].map((t) => ({
+    key: t.key, label: t.label, done: false, notes: null,
+  }))
+  const { data, error } = await supabase
+    .from('portfolio_review_log')
+    .insert({
+      portfolio_name: portfolioName,
+      cadence,
+      status: 'draft',
+      reviewed_at: new Date().toISOString(),
+      review_date: dueDate,
+      checklist: checklist as unknown as Json,
+    })
+    .select(DRAFT_COLS)
+    .single()
+  if (error) throw error
+  return mapDraft(data as Record<string, unknown>)
+}
+
+export interface SaveDraftFields {
+  checklist: ReviewChecklistItem[]
+  notes: string | null
+  reviewDate?: Date | null
+  nextReviewAt?: Date | null
+}
+
+/** Persist draft progress (checklist + notes + dates). Per-holding data saves separately. */
+export async function saveReviewDraft(reviewLogId: number, fields: SaveDraftFields): Promise<void> {
+  const patch: Record<string, unknown> = {
+    checklist: fields.checklist as unknown as Json,
+    notes: fields.notes?.trim() || null,
+  }
+  if (fields.reviewDate !== undefined) patch.review_date = fields.reviewDate ? fields.reviewDate.toISOString() : null
+  if (fields.nextReviewAt !== undefined) patch.next_review_at = fields.nextReviewAt ? fields.nextReviewAt.toISOString() : null
+  const { error } = await supabase.from('portfolio_review_log').update(patch).eq('id', reviewLogId)
+  if (error) throw error
+}
+
+export interface CompleteReviewOptions {
+  reviewLogId: number
   portfolioName: string
   cadence: PortfolioCadence
   checklist: ReviewChecklistItem[]
   notes?: string | null
-  /** Actual completion date. Defaults to now. */
-  reviewedAt?: Date
-  /** Scheduled due date the review addressed (from the schedule). */
+  /** Completion date the advisor chose. */
+  reviewedAt: Date
   reviewDate?: Date | null
-  /** Explicit next due date; falls back to cadence interval from completion date. */
+  /** Next due date; falls back to the cadence interval from the completion date. */
   nextReviewAt?: Date | null
 }
 
 /**
- * Record a completed cadence review.
- * Upserts the matching `portfolio_review_schedules` row (advancing only that
- * cadence's timer) and appends a frozen record to `portfolio_review_log`.
- * Returns the new `portfolio_review_log.id` (so callers can attach per-holding
- * assessments, etc.).
+ * Finalize a draft review: stamp it completed and advance ONLY that cadence's
+ * schedule timer. Per-holding assessments are saved separately (saveHoldingReviews).
  */
-export async function markPortfolioReviewed(opts: MarkPortfolioReviewedOptions): Promise<number> {
-  const { portfolioName, cadence, checklist, notes } = opts
-  const now = opts.reviewedAt ?? new Date()
-  const nextReviewAt = (opts.nextReviewAt ?? calcNextReview(cadence, now)).toISOString()
+export async function completeReview(opts: CompleteReviewOptions): Promise<void> {
+  const { reviewLogId, portfolioName, cadence, checklist, notes, reviewedAt } = opts
+  const nextReviewAt = (opts.nextReviewAt ?? calcNextReview(cadence, reviewedAt)).toISOString()
+
+  const { error: logError } = await supabase
+    .from('portfolio_review_log')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      reviewed_at: reviewedAt.toISOString(),
+      review_date: opts.reviewDate ? opts.reviewDate.toISOString() : null,
+      next_review_at: nextReviewAt,
+      notes: notes?.trim() || null,
+      checklist: checklist as unknown as Json,
+    })
+    .eq('id', reviewLogId)
+  if (logError) throw logError
 
   const { error: schedError } = await supabase
     .from('portfolio_review_schedules')
     .upsert(
       {
-        portfolio_name:   portfolioName,
+        portfolio_name: portfolioName,
         cadence,
-        last_reviewed_at: now.toISOString(),
-        next_review_at:   nextReviewAt,
-        updated_at:       now.toISOString(),
+        last_reviewed_at: reviewedAt.toISOString(),
+        next_review_at: nextReviewAt,
+        updated_at: new Date().toISOString(),
       },
       { onConflict: 'portfolio_name,cadence' },
     )
   if (schedError) throw schedError
-
-  const { data: logRow, error: logError } = await supabase
-    .from('portfolio_review_log')
-    .insert({
-      portfolio_name: portfolioName,
-      cadence,
-      reviewed_at:    now.toISOString(),
-      review_date:    opts.reviewDate ? opts.reviewDate.toISOString() : null,
-      next_review_at: nextReviewAt,
-      notes:          notes?.trim() || null,
-      checklist:      checklist as unknown as Json,
-    })
-    .select('id')
-    .single()
-  if (logError) throw logError
-  return logRow.id
 }

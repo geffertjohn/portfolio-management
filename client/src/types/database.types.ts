@@ -729,42 +729,75 @@ export type Database = {
           business_trend: string | null
           conviction: string | null
           created_at: string
+          current_conclusion: string | null
+          evidence_against: string | null
+          evidence_for: string | null
+          exit_trigger: string | null
           id: number
           notes: string | null
+          on_watchlist: boolean
+          original_thesis: string | null
           portfolio_name: string
+          required_improvement: string | null
+          review_deadline: string | null
           review_log_id: number
           reviewed_at: string
           security_id: string
+          thesis_change: string | null
           thesis_status: string | null
           valuation: string | null
+          watchlist_reason: string | null
+          watchlist_trigger: string | null
         }
         Insert: {
           action?: string | null
           business_trend?: string | null
           conviction?: string | null
           created_at?: string
+          current_conclusion?: string | null
+          evidence_against?: string | null
+          evidence_for?: string | null
+          exit_trigger?: string | null
           id?: number
           notes?: string | null
+          on_watchlist?: boolean
+          original_thesis?: string | null
           portfolio_name: string
+          required_improvement?: string | null
+          review_deadline?: string | null
           review_log_id: number
           reviewed_at?: string
           security_id: string
+          thesis_change?: string | null
           thesis_status?: string | null
           valuation?: string | null
+          watchlist_reason?: string | null
+          watchlist_trigger?: string | null
         }
         Update: {
           action?: string | null
           business_trend?: string | null
           conviction?: string | null
           created_at?: string
+          current_conclusion?: string | null
+          evidence_against?: string | null
+          evidence_for?: string | null
+          exit_trigger?: string | null
           id?: number
           notes?: string | null
+          on_watchlist?: boolean
+          original_thesis?: string | null
           portfolio_name?: string
+          required_improvement?: string | null
+          review_deadline?: string | null
           review_log_id?: number
           reviewed_at?: string
           security_id?: string
+          thesis_change?: string | null
           thesis_status?: string | null
           valuation?: string | null
+          watchlist_reason?: string | null
+          watchlist_trigger?: string | null
         }
         Relationships: [
           {
@@ -2181,6 +2214,7 @@ export type Database = {
         Row: {
           cadence: string | null
           checklist: Json | null
+          completed_at: string | null
           created_at: string
           id: number
           next_review_at: string | null
@@ -2191,10 +2225,12 @@ export type Database = {
           review_date: string | null
           reviewed_at: string
           reviewed_by: string | null
+          status: string
         }
         Insert: {
           cadence?: string | null
           checklist?: Json | null
+          completed_at?: string | null
           created_at?: string
           id?: number
           next_review_at?: string | null
@@ -2205,10 +2241,12 @@ export type Database = {
           review_date?: string | null
           reviewed_at?: string
           reviewed_by?: string | null
+          status?: string
         }
         Update: {
           cadence?: string | null
           checklist?: Json | null
+          completed_at?: string | null
           created_at?: string
           id?: number
           next_review_at?: string | null
@@ -2219,6 +2257,7 @@ export type Database = {
           review_date?: string | null
           reviewed_at?: string
           reviewed_by?: string | null
+          status?: string
         }
         Relationships: []
       }
