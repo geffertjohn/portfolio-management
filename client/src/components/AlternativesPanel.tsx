@@ -30,13 +30,14 @@ const SCORE_COLS: { label: string; metric: keyof ScorecardMetrics; bench: keyof 
   { label: 'EPS Growth 3Y',        metric: 'epsCagr3y',       bench: 'eps_growth_3_yr_generic' },
 ]
 
-const RET_COLS: { label: string; metric: keyof TrailingReturns; bench: keyof BenchmarkOption }[] = [
+const RET_COLS: { label: string; metric: keyof TrailingReturns; bench: keyof BenchmarkOption | null }[] = [
+  // 5D has no benchmark-table equivalent (shortest benchmark return is 1M) → bench null.
+  { label: '5D',  metric: 'fiveDay',    bench: null },
   { label: '1M',  metric: 'oneMonth',   bench: 'one_month_total_return' },
   { label: '3M',  metric: 'threeMonth', bench: 'three_month_total_return' },
   { label: 'YTD', metric: 'ytd',        bench: 'ytd_total_return' },
   { label: '1Y',  metric: 'oneYear',    bench: 'annualized_daily_one_year_total_return' },
   { label: '3Y',  metric: 'threeYear',  bench: 'annualized_daily_three_year_return' },
-  { label: '5Y',  metric: 'fiveYear',   bench: 'annualized_daily_five_year_total_return' },
 ]
 
 const CELL = 'whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900'
@@ -254,7 +255,10 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
         title: 'Trailing Returns',
         columns: RET_COLS,
         cells: (symbol) => <ReturnsCells symbol={symbol} />,
-        benchCell: (b, idx) => (b ? pct(benchNum(b, RET_COLS[idx].bench)) : EMPTY),
+        benchCell: (b, idx) => {
+          const key = RET_COLS[idx].bench
+          return b && key ? pct(benchNum(b, key)) : EMPTY
+        },
       })}
     </div>
   )

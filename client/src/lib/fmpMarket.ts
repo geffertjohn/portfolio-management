@@ -97,6 +97,7 @@ export async function fetchDailyAdjustedSeries(
 // ── Trailing returns (dividend-adjusted, price-based) ───────────────────────
 
 export interface TrailingReturns {
+  fiveDay: number | null
   oneMonth: number | null
   threeMonth: number | null
   ytd: number | null
@@ -121,7 +122,7 @@ function priceOnOrBefore(prices: PriceRow[], target: Date): number | null {
 
 export async function fetchStockReturns(symbol: string): Promise<TrailingReturns> {
   const empty: TrailingReturns = {
-    oneMonth: null, threeMonth: null, ytd: null, oneYear: null, threeYear: null, fiveYear: null,
+    fiveDay: null, oneMonth: null, threeMonth: null, ytd: null, oneYear: null, threeYear: null, fiveYear: null,
   }
 
   const today = new Date()
@@ -147,6 +148,8 @@ export async function fetchStockReturns(symbol: string): Promise<TrailingReturns
     priceOnOrBefore(prices, new Date(y, mOffset, d))
 
   return {
+    // 5 trading sessions ago (newest-first series → index 5).
+    fiveDay:    simple(prices[5]?.adjClose ?? null),
     oneMonth:   simple(at(today.getFullYear(), today.getMonth() - 1, today.getDate())),
     threeMonth: simple(at(today.getFullYear(), today.getMonth() - 3, today.getDate())),
     ytd:        simple(at(today.getFullYear() - 1, 11, 31)),
