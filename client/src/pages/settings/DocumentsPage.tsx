@@ -4,10 +4,10 @@ import { fetchSecurities } from '@/lib/securities'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import {
   fetchAllFiles as fetchAll, createFolder, deleteFolder, uploadFile, deleteFile, getSignedUrl, formatBytes, isServerUnreachable,
-  type StoredFile,
+  DEFAULT_BUCKET, type StoredFile,
 } from '@/lib/documents'
 
-const FILES_QUERY_KEY = QUERY_KEYS.documentsFiles
+const FILES_QUERY_KEY = QUERY_KEYS.documentsFiles(DEFAULT_BUCKET)
 
 
 function FileIcon({ mimetype }: { mimetype: string | null }) {
@@ -108,7 +108,7 @@ export function DocumentsPage() {
 
   const { data, isLoading, error: loadError } = useQuery({
     queryKey: FILES_QUERY_KEY,
-    queryFn: fetchAll,
+    queryFn: () => fetchAll(),
     staleTime: 1000 * 30,
   })
 

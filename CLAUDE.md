@@ -459,7 +459,11 @@ A guided "add a new **stock** to a portfolio" workflow, mirroring the review wor
 
 ## Documents (Express file store)
 
-Files live in the Express server's file store (`server/`, `/api/files|upload|folders|files/signed-url`), organized into **named folders**. The client lives in **`lib/documents.ts`** (`fetchAllFiles`, `uploadFile`, `deleteFile`, `getSignedUrl`, `createFolder`, `deleteFolder`, `formatBytes`, `StoredFile`) — shared by **Settings → Documents** (`DocumentsPage`, all folders) and the **per-portfolio Documents tab** (`PortfolioDocumentsPanel`, on `PortfolioDetailPage`). A portfolio's documents use a **folder named after the portfolio** (`file.folder === portfolioName`); uploads go to that folder. Both surfaces share the `documentsFiles` query key, so an upload in one reflects in the other. When the server is down the panel shows a graceful "Express server not reachable" banner (`cd server && npm run dev`).
+Files live in **Supabase Storage**, brokered by the Express server (`server/`, `/api/files|upload|folders|files/signed-url`) which holds the service-role key. The client lives in **`lib/documents.ts`** (`fetchAllFiles`, `uploadFile`, `deleteFile`, `getSignedUrl`, `createFolder`, `deleteFolder`, `formatBytes`, `isServerUnreachable`, `StoredFile`).
+
+- **Buckets** — every file endpoint takes a **`bucket`** param (server allowlists it; defaults to `security-uploads`): **`Portfolio Documents`** (portfolio tab), **`Security Documents`** (stock detail tab), **`security-uploads`** (Settings → Documents general store + the `/api/securities/:id/files` legacy path), `fund-fact-sheets`. Bucket constants: `PORTFOLIO_DOCS_BUCKET` / `SECURITY_DOCS_BUCKET` / `DEFAULT_BUCKET`.
+- **Within a bucket**, files are organized into **folders**: a portfolio's folder = its name; a security's folder = its ticker. `DocumentsFolderPanel({ bucket, folder, scopeLabel, emptyHint })` is the shared upload/list/view/delete UI used by both the portfolio Documents tab and the stock Documents tab; it fetches all files in the bucket and filters to `f.folder === folder`.
+- Query key is **bucket-scoped**: `documentsFiles(bucket)` — so the three surfaces don't collide and an upload invalidates only its bucket. `isServerUnreachable(err)` matches Chrome/Safari/Firefox network-error messages → graceful "Express server not reachable" banner (`cd server && npm run dev`). Funds keep their non-tabbed layout (no Documents tab).
 
 ## Portfolio Allocations & Performance
 

@@ -37,6 +37,8 @@ import { fetchKeyExecutives } from '@/lib/fmpTranscripts'
 import { fetchEarningsDates, fetchProfile } from '@/lib/fmpMarket'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { FinancialsSection } from '@/components/FinancialsSection'
+import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
+import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
 
 /**
@@ -829,9 +831,12 @@ export function SecurityDetailPage() {
       {/* ── Stock: Documents tab ────────────────────────────────────────────── */}
       {!isFundOrEtfSecurity(security) && activeTab === 'documents' && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500">
-            Content to be added.
-          </div>
+          <DocumentsFolderPanel
+            bucket={SECURITY_DOCS_BUCKET}
+            folder={security.security_id}
+            scopeLabel={security.security_id}
+            emptyHint="Upload research notes, filings, and other files for this security here."
+          />
         </div>
       )}
 

@@ -18,30 +18,41 @@ function FileIcon({ mimetype }: { mimetype: string | null }) {
   return <svg className={`${cls} text-gray-400`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
 }
 
-/** Documents for one portfolio — files in a folder named after the portfolio. */
-export function PortfolioDocumentsPanel({ portfolioId }: { portfolioId: string }) {
+interface DocumentsFolderPanelProps {
+  /** Storage bucket the documents live in. */
+  bucket: string
+  /** Folder within the bucket (portfolio name or security ticker). */
+  folder: string
+  /** What the files belong to, shown in the subtitle (e.g. "Core Growth", "AAPL"). */
+  scopeLabel?: string
+  /** Hint shown in the empty state. */
+  emptyHint?: string
+}
+
+/** Documents for one folder within a Storage bucket — upload / list / view / delete. */
+export function DocumentsFolderPanel({ bucket, folder, scopeLabel, emptyHint }: DocumentsFolderPanelProps) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading, error } = useQuery({
-    queryKey: QUERY_KEYS.documentsFiles,
-    queryFn: fetchAllFiles,
+    queryKey: QUERY_KEYS.documentsFiles(bucket),
+    queryFn: () => fetchAllFiles(bucket),
     staleTime: 1000 * 30,
   })
-  const files: StoredFile[] = (data?.files ?? []).filter((f) => f.folder === portfolioId)
+  const files: StoredFile[] = (data?.files ?? []).filter((f) => f.folder === folder)
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(bucket) })
 
   const uploadMut = useMutation({
-    mutationFn: (file: File) => uploadFile(portfolioId, file),
+    mutationFn: (file: File) => uploadFile(folder, file, bucket),
     onSuccess: () => { invalidate(); if (inputRef.current) inputRef.current.value = '' },
   })
   const deleteMut = useMutation({
-    mutationFn: (path: string) => deleteFile(path),
+    mutationFn: (path: string) => deleteFile(path, bucket),
     onSuccess: invalidate,
   })
   const viewMut = useMutation({
-    mutationFn: (path: string) => getSignedUrl(path),
+    mutationFn: (path: string) => getSignedUrl(path, bucket),
     onSuccess: (url) => window.open(url, '_blank'),
     onError: (e) => alert(e instanceof Error ? e.message : 'Could not open file'),
   })
@@ -53,7 +64,7 @@ export function PortfolioDocumentsPanel({ portfolioId }: { portfolioId: string }
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Documents</h2>
-          <p className="mt-1 text-xs text-gray-400">Files stored for <span className="font-medium text-gray-600">{portfolioId}</span>.</p>
+          <p className="mt-1 text-xs text-gray-400">Files stored for <span className="font-medium text-gray-600">{scopeLabel ?? folder}</span>.</p>
         </div>
         <button
           type="button"
@@ -87,8 +98,8 @@ export function PortfolioDocumentsPanel({ portfolioId }: { portfolioId: string }
           <p className="text-sm text-gray-500">Loading documents…</p>
         ) : files.length === 0 ? (
           <div className="rounded-md border border-dashed border-gray-200 p-6 text-center">
-            <p className="text-sm text-gray-500">No documents for this portfolio yet.</p>
-            <p className="mt-1 text-xs text-gray-400">Upload IPS, statements, compliance records, and other files here.</p>
+            <p className="text-sm text-gray-500">No documents yet.</p>
+            {emptyHint && <p className="mt-1 text-xs text-gray-400">{emptyHint}</p>}
           </div>
         ) : (
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 bg-white">

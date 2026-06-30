@@ -7,6 +7,12 @@
  */
 export const SERVER_BASE = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 
+/** Storage buckets. Default `security-uploads` is the general store (Settings →
+ *  Documents); per-entity Documents tabs use a dedicated bucket. */
+export const DEFAULT_BUCKET = 'security-uploads'
+export const PORTFOLIO_DOCS_BUCKET = 'Portfolio Documents'
+export const SECURITY_DOCS_BUCKET = 'Security Documents'
+
 export interface StoredFile {
   id: string
   name: string
@@ -28,44 +34,45 @@ async function asError(res: Response, fallback: string): Promise<never> {
   throw new Error(body.error ?? `${fallback} (${res.status})`)
 }
 
-export async function fetchAllFiles(): Promise<FilesResponse> {
-  const res = await fetch(`${SERVER_BASE}/api/files`)
+export async function fetchAllFiles(bucket: string = DEFAULT_BUCKET): Promise<FilesResponse> {
+  const res = await fetch(`${SERVER_BASE}/api/files?bucket=${encodeURIComponent(bucket)}`)
   if (!res.ok) return asError(res, 'Failed to load files')
   return res.json() as Promise<FilesResponse>
 }
 
-export async function createFolder(name: string): Promise<{ folder: string }> {
+export async function createFolder(name: string, bucket: string = DEFAULT_BUCKET): Promise<{ folder: string }> {
   const res = await fetch(`${SERVER_BASE}/api/folders`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, bucket }),
   })
   if (!res.ok) return asError(res, 'Failed to create folder')
   return res.json() as Promise<{ folder: string }>
 }
 
-export async function deleteFolder(name: string): Promise<void> {
+export async function deleteFolder(name: string, bucket: string = DEFAULT_BUCKET): Promise<void> {
   const res = await fetch(`${SERVER_BASE}/api/folders`, {
-    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, bucket }),
   })
   if (!res.ok) await asError(res, 'Failed to delete folder')
 }
 
-export async function uploadFile(folder: string, file: File): Promise<void> {
+export async function uploadFile(folder: string, file: File, bucket: string = DEFAULT_BUCKET): Promise<void> {
   const formData = new FormData()
   formData.append('folder', folder)
+  formData.append('bucket', bucket)
   formData.append('file', file)
   const res = await fetch(`${SERVER_BASE}/api/upload`, { method: 'POST', body: formData })
   if (!res.ok) await asError(res, 'Upload failed')
 }
 
-export async function deleteFile(path: string): Promise<void> {
+export async function deleteFile(path: string, bucket: string = DEFAULT_BUCKET): Promise<void> {
   const res = await fetch(`${SERVER_BASE}/api/files`, {
-    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }),
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, bucket }),
   })
   if (!res.ok) await asError(res, 'Delete failed')
 }
 
-export async function getSignedUrl(path: string): Promise<string> {
-  const res = await fetch(`${SERVER_BASE}/api/files/signed-url?path=${encodeURIComponent(path)}`)
+export async function getSignedUrl(path: string, bucket: string = DEFAULT_BUCKET): Promise<string> {
+  const res = await fetch(`${SERVER_BASE}/api/files/signed-url?path=${encodeURIComponent(path)}&bucket=${encodeURIComponent(bucket)}`)
   if (!res.ok) return asError(res, 'Could not get signed URL')
   const data = (await res.json()) as { url: string }
   return data.url

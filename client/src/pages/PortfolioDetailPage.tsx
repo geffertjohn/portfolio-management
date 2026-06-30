@@ -9,7 +9,8 @@ import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
 import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
 import { CandidatesPanel } from '@/components/CandidatesPanel'
-import { PortfolioDocumentsPanel } from '@/components/PortfolioDocumentsPanel'
+import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
+import { PORTFOLIO_DOCS_BUCKET } from '@/lib/documents'
 import { PortfolioOverview } from '@/components/PortfolioOverview'
 import { DetailPageState } from '@/components/DetailPageState'
 import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePanel'
@@ -580,7 +581,12 @@ export function PortfolioDetailPage() {
 
         {tab === 'documents' && (
           <div className="mt-6">
-            <PortfolioDocumentsPanel portfolioId={id} />
+            <DocumentsFolderPanel
+              bucket={PORTFOLIO_DOCS_BUCKET}
+              folder={id}
+              scopeLabel={portfolio.name}
+              emptyHint="Upload IPS, statements, compliance records, and other files here."
+            />
           </div>
         )}
 
