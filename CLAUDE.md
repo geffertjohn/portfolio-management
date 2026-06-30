@@ -321,10 +321,9 @@ For **stocks** (not funds), the detail page pulls these live via `useQuery` rath
 
 ### Stock detail tab layout
 
-There is **no Alternatives tab** — tabs are **Overview · Monitor · Research · Documents**.
-- **Overview:** Scorecard cards · Total Performance · (Analysts | News) side by side, with an **Alerts** card stacked under Analysts.
-- **Monitor:** Scorecard cards (with Review button) · the two **Alternatives comparison tables** below.
-- **Research:** Transcripts · Financials.
+Tabs are **Overview · Monitor · Documents** (no Alternatives tab; the Research tab was removed and its blocks redistributed).
+- **Overview:** Scorecard cards · Total Performance · (Analysts | News) side by side (Alerts card under Analysts) · the **Investment Thesis card** (Thesis · Risks · Exit Criteria · Review Schedule · Review History).
+- **Monitor:** Scorecard cards (with Review button) · the two **Alternatives comparison tables** · **Transcripts** · **Financials**.
 
 ### Alternatives comparison tables (`AlternativesPanel.tsx`)
 
