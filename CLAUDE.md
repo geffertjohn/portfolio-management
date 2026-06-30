@@ -455,6 +455,7 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 
 - **No DB FK to securities2** — the table intentionally stages arbitrary import symbols (incl. tickers not yet in `securities2`), so PostgREST **cannot embed** `securities2(...)`. Resolve names with a **separate `securities2` lookup** keyed by the distinct symbols, never an embed (an embed 400s — "no relationship found").
 - **UI:** the **Allocation → History** sub-tab (`AllocationHistoryPanel`) is the editable grid (dates as columns, securities as rows, per-date totals, add/delete date, add ticker). Production-editable.
+- **Allocation → Comparison** (`AllocationComparison`) compares the portfolio to its model benchmark across Asset Allocation · Statistical Analysis · Equity Style · **Fixed Income Style** · Equity Sector · Regional sections. The **Fixed Income Style Analysis section is hidden for all-equity portfolios** (`portfolio_strategy === 'Equity'` — Core Growth, Equity Income, Equity Income & Core Growth; zero bonds), since it's meaningless there.
 - **Importer:** the YCharts dynamic **source file is the LONG format** — columns `Date · Symbol · Target Weight`, one row per holding per date, weights in **decimal** (0.075 = 7.5%). `parseYchartsDynamic` pivots it to dated snapshots; `$:CASH` normalizes to `$Cash`. (Not the wide grid shown in the YCharts editor.)
 
 ### Performance engine (`lib/portfolioPerformance.ts`)
