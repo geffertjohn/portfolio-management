@@ -3432,6 +3432,53 @@ export type Database = {
           },
         ]
       }
+      security_additions: {
+        Row: {
+          checklist: Json | null
+          completed_at: string | null
+          content: Json | null
+          created_at: string
+          decision: string | null
+          id: number
+          portfolio_name: string
+          security_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          checklist?: Json | null
+          completed_at?: string | null
+          content?: Json | null
+          created_at?: string
+          decision?: string | null
+          id?: number
+          portfolio_name: string
+          security_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          checklist?: Json | null
+          completed_at?: string | null
+          content?: Json | null
+          created_at?: string
+          decision?: string | null
+          id?: number
+          portfolio_name?: string
+          security_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_additions_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
       security_related_securities: {
         Row: {
           id: number

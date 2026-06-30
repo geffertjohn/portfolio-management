@@ -8,6 +8,7 @@ import { CompliancePanel } from '@/components/CompliancePanel'
 import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
 import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
+import { CandidatesPanel } from '@/components/CandidatesPanel'
 import { PortfolioOverview } from '@/components/PortfolioOverview'
 import { DetailPageState } from '@/components/DetailPageState'
 import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePanel'
@@ -21,7 +22,7 @@ import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelP
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { PortfolioPosition } from '@/types/position'
 
-type PortfolioTab = 'overview' | 'allocation' | 'compliance' | 'change_log' | 'reviews'
+type PortfolioTab = 'overview' | 'allocation' | 'compliance' | 'change_log' | 'reviews' | 'candidates'
 type AllocationSubTab = 'positions' | 'history' | 'comparison'
 type ChangeLogView = 'changelog' | 'rebalance' | 'suitability'
 
@@ -255,6 +256,7 @@ export function PortfolioDetailPage() {
               { id: 'compliance',  label: 'Compliance'  },
               { id: 'change_log', label: 'Change Log'  },
               { id: 'reviews',    label: 'Reviews'     },
+              { id: 'candidates', label: 'Candidates'  },
             ] as { id: PortfolioTab; label: string }[]).map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
@@ -565,6 +567,12 @@ export function PortfolioDetailPage() {
         {tab === 'reviews' && (
           <div className="mt-6">
             <PortfolioReviewsPanel portfolioId={id} />
+          </div>
+        )}
+
+        {tab === 'candidates' && (
+          <div className="mt-6">
+            <CandidatesPanel portfolioId={id} />
           </div>
         )}
 
