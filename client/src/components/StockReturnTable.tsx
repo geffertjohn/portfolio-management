@@ -13,16 +13,17 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 type Period = {
   label: string
   retKey: keyof TrailingReturns
-  benchKey: keyof BenchmarkOption
+  benchKey: keyof BenchmarkOption | null
 }
 
 const PERIODS: Period[] = [
+  // 5D has no stored-benchmark equivalent (benchKey null) — it comes from the ETF proxy.
+  { label: '5 D',  retKey: 'fiveDay',    benchKey: null },
   { label: '1 M',  retKey: 'oneMonth',   benchKey: 'one_month_total_return' },
   { label: '3 M',  retKey: 'threeMonth', benchKey: 'three_month_total_return' },
   { label: 'YTD',  retKey: 'ytd',        benchKey: 'ytd_total_return' },
   { label: '1 Y',  retKey: 'oneYear',    benchKey: 'annualized_daily_one_year_total_return' },
   { label: '3 Y',  retKey: 'threeYear',  benchKey: 'annualized_daily_three_year_return' },
-  { label: '5 Y',  retKey: 'fiveYear',   benchKey: 'annualized_daily_five_year_total_return' },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
   ): string => {
     if (!bench) return '—'
     if (proxy) return fmtDecimalPct(proxyReturns?.[p.retKey] ?? null)
-    return fmtDecimalPct(benchVal(bench, p.benchKey))
+    return p.benchKey ? fmtDecimalPct(benchVal(bench, p.benchKey)) : '—'
   }
 
   function applyBenchmarks(next1: number | null, next2: number | null) {
