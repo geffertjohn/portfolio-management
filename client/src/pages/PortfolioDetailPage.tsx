@@ -7,8 +7,10 @@ import { RebalancingPanel } from '@/components/RebalancingPanel'
 import { CompliancePanel } from '@/components/CompliancePanel'
 import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
-import { PortfolioReviewLog } from '@/components/PortfolioReviewLog'
-import { LogPortfolioReviewModal } from '@/components/LogPortfolioReviewModal'
+import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
+import { CandidatesPanel } from '@/components/CandidatesPanel'
+import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
+import { PORTFOLIO_DOCS_BUCKET } from '@/lib/documents'
 import { PortfolioOverview } from '@/components/PortfolioOverview'
 import { DetailPageState } from '@/components/DetailPageState'
 import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePanel'
@@ -17,11 +19,12 @@ import { AllocationComparison } from '@/components/AllocationComparison'
 import { usePortfolio, usePositions } from '@/hooks/usePortfolio'
 import { updatePortfolioObjective } from '@/lib/portfolio'
 import { updatePositionBands } from '@/lib/positions'
+import { isCashTicker } from '@/lib/positionBands'
 import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelPortfolioId, fetchModelPortfolioById } from '@/lib/modelPortfolios'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { PortfolioPosition } from '@/types/position'
 
-type PortfolioTab = 'overview' | 'allocation' | 'compliance' | 'change_log' | 'reviews'
+type PortfolioTab = 'overview' | 'allocation' | 'compliance' | 'change_log' | 'reviews' | 'candidates' | 'documents'
 type AllocationSubTab = 'positions' | 'history' | 'comparison'
 type ChangeLogView = 'changelog' | 'rebalance' | 'suitability'
 
@@ -37,7 +40,6 @@ export function PortfolioDetailPage() {
   const [editingObjective, setEditingObjective] = useState(false)
   const [pendingObjective, setPendingObjective] = useState('')
   const [addPositionOpen, setAddPositionOpen] = useState(false)
-  const [logReviewOpen, setLogReviewOpen] = useState(false)
   const [changeLogView, setChangeLogView] = useState<ChangeLogView>('changelog')
   const [editPosition, setEditPosition] = useState<PortfolioPosition | null>(null)
   const [bulkEditMode, setBulkEditMode] = useState(false)
@@ -256,6 +258,8 @@ export function PortfolioDetailPage() {
               { id: 'compliance',  label: 'Compliance'  },
               { id: 'change_log', label: 'Change Log'  },
               { id: 'reviews',    label: 'Reviews'     },
+              { id: 'candidates', label: 'Candidates'  },
+              { id: 'documents',  label: 'Documents'   },
             ] as { id: PortfolioTab; label: string }[]).map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
@@ -459,7 +463,7 @@ export function PortfolioDetailPage() {
                             <td className="whitespace-nowrap px-4 py-2.5 text-gray-500">
                               {(() => {
                                 if (pos.lowerLimit != null) return `${pos.lowerLimit.toFixed(1)}%`
-                                if (pos.securityId === 'CASH' && modelPortfolio?.cash_lower_limit != null)
+                                if (isCashTicker(pos.securityId) && modelPortfolio?.cash_lower_limit != null)
                                   return `${modelPortfolio.cash_lower_limit.toFixed(1)}%`
                                 const target = pos.targetWeight ?? pos.weight
                                 const val = driftLower(target)
@@ -472,7 +476,7 @@ export function PortfolioDetailPage() {
                             <td className="whitespace-nowrap px-4 py-2.5 text-gray-500">
                               {(() => {
                                 if (pos.upperLimit != null) return `${pos.upperLimit.toFixed(1)}%`
-                                if (pos.securityId === 'CASH' && modelPortfolio?.cash_upper_limit != null)
+                                if (isCashTicker(pos.securityId) && modelPortfolio?.cash_upper_limit != null)
                                   return `${modelPortfolio.cash_upper_limit.toFixed(1)}%`
                                 const target = pos.targetWeight ?? pos.weight
                                 const val = driftUpper(target)
@@ -565,21 +569,24 @@ export function PortfolioDetailPage() {
         {/* Reviews Tab */}
         {tab === 'reviews' && (
           <div className="mt-6">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
-                Portfolio Reviews
-              </h2>
-              <button
-                type="button"
-                onClick={() => setLogReviewOpen(true)}
-                className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
-              >
-                Log Review
-              </button>
-            </div>
-            <div className="mt-4">
-              <PortfolioReviewLog portfolioId={id} />
-            </div>
+            <PortfolioReviewsPanel portfolioId={id} />
+          </div>
+        )}
+
+        {tab === 'candidates' && (
+          <div className="mt-6">
+            <CandidatesPanel portfolioId={id} />
+          </div>
+        )}
+
+        {tab === 'documents' && (
+          <div className="mt-6">
+            <DocumentsFolderPanel
+              bucket={PORTFOLIO_DOCS_BUCKET}
+              folder={id}
+              scopeLabel={portfolio.name}
+              emptyHint="Upload IPS, statements, compliance records, and other files here."
+            />
           </div>
         )}
 
@@ -588,12 +595,6 @@ export function PortfolioDetailPage() {
       <AddPositionModal
         open={addPositionOpen}
         onClose={() => setAddPositionOpen(false)}
-        portfolioId={id}
-      />
-
-      <LogPortfolioReviewModal
-        open={logReviewOpen}
-        onClose={() => setLogReviewOpen(false)}
         portfolioId={id}
       />
 

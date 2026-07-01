@@ -19,8 +19,16 @@ const adminSupabase = createClient(
 
 const upload = multer({ storage: multer.memoryStorage() })
 
-const BUCKET = 'security-uploads'
 const KEEP_FILE = '.keep'
+
+// Files live in named Storage buckets. Default is the general `security-uploads`
+// bucket (Settings → Documents); per-entity Documents tabs pass a dedicated
+// bucket. Allowlisted so a bad/unknown value can't be targeted.
+const DEFAULT_BUCKET = 'security-uploads'
+const ALLOWED_BUCKETS = new Set([DEFAULT_BUCKET, 'fund-fact-sheets', 'Portfolio Documents', 'Security Documents'])
+function resolveBucket(v: unknown): string {
+  return typeof v === 'string' && ALLOWED_BUCKETS.has(v) ? v : DEFAULT_BUCKET
+}
 
 app.use(express.json())
 app.use((_req, res, next) => {
@@ -49,9 +57,10 @@ app.get('/api/ping', (_req, res) => {
  * GET /api/folders
  * Returns all top-level folder names in the bucket.
  */
-app.get('/api/folders', async (_req, res) => {
+app.get('/api/folders', async (req, res) => {
+  const bucket = resolveBucket(req.query.bucket)
   const { data, error } = await adminSupabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .list('', { limit: 500 })
 
   if (error) {
@@ -73,6 +82,7 @@ app.get('/api/folders', async (_req, res) => {
  */
 app.post('/api/folders', async (req, res) => {
   const { name } = req.body as { name?: string }
+  const bucket = resolveBucket(req.body.bucket)
   if (!name || !name.trim()) {
     res.status(400).json({ error: 'Folder name is required' })
     return
@@ -83,7 +93,7 @@ app.post('/api/folders', async (req, res) => {
   const keepPath = `${safe}/${KEEP_FILE}`
 
   const { error } = await adminSupabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .upload(keepPath, new Uint8Array(0), {
       contentType: 'application/octet-stream',
       upsert: false,
@@ -105,6 +115,7 @@ app.post('/api/folders', async (req, res) => {
  */
 app.delete('/api/folders', async (req, res) => {
   const { name } = req.body as { name?: string }
+  const bucket = resolveBucket(req.body.bucket)
   if (!name) {
     res.status(400).json({ error: 'Folder name is required' })
     return
@@ -112,7 +123,7 @@ app.delete('/api/folders', async (req, res) => {
 
   // List all files in folder, then remove them all
   const { data: files, error: listErr } = await adminSupabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .list(name, { limit: 500 })
 
   if (listErr) {
@@ -122,7 +133,7 @@ app.delete('/api/folders', async (req, res) => {
 
   if (files && files.length > 0) {
     const paths = files.map((f) => `${name}/${f.name}`)
-    const { error: delErr } = await adminSupabase.storage.from(BUCKET).remove(paths)
+    const { error: delErr } = await adminSupabase.storage.from(bucket).remove(paths)
     if (delErr) {
       res.status(500).json({ error: delErr.message })
       return
@@ -139,9 +150,10 @@ app.delete('/api/folders', async (req, res) => {
  * Returns all files (excluding .keep placeholders) across every folder,
  * plus the list of all folder names (so empty folders are visible).
  */
-app.get('/api/files', async (_req, res) => {
+app.get('/api/files', async (req, res) => {
+  const bucket = resolveBucket(req.query.bucket)
   const { data: topLevel, error: fErr } = await adminSupabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .list('', { limit: 500 })
 
   if (fErr) {
@@ -170,7 +182,7 @@ app.get('/api/files', async (_req, res) => {
   await Promise.all(
     folderNames.map(async (folderName) => {
       const { data: files, error: fErr2 } = await adminSupabase.storage
-        .from(BUCKET)
+        .from(bucket)
         .list(folderName, { limit: 500 })
       if (fErr2 || !files) return
       for (const f of files) {
@@ -200,6 +212,7 @@ app.get('/api/files', async (_req, res) => {
  */
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   const folder = (req.body.folder as string | undefined)?.trim()
+  const bucket = resolveBucket(req.body.bucket)
   const file = req.file
 
   if (!folder) {
@@ -216,7 +229,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   const storagePath = `${folder}/${datePrefix}_${safeName}`
 
   const { error } = await adminSupabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .upload(storagePath, file.buffer, { contentType: file.mimetype, upsert: true })
 
   if (error) {
@@ -233,6 +246,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
  */
 app.post('/api/securities/:securityId/files', upload.single('file'), async (req, res) => {
   const { securityId } = req.params
+  const bucket = resolveBucket(req.body.bucket)
   const file = req.file
   if (!file) {
     res.status(400).json({ error: 'No file provided' })
@@ -244,7 +258,7 @@ app.post('/api/securities/:securityId/files', upload.single('file'), async (req,
   const storagePath = `${securityId}/${datePrefix}_${safeName}`
 
   const { error } = await adminSupabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .upload(storagePath, file.buffer, { contentType: file.mimetype, upsert: true })
 
   if (error) {
@@ -261,12 +275,13 @@ app.post('/api/securities/:securityId/files', upload.single('file'), async (req,
  */
 app.delete('/api/files', async (req, res) => {
   const { path: filePath } = req.body as { path?: string }
+  const bucket = resolveBucket((req.body as { bucket?: unknown }).bucket)
   if (!filePath) {
     res.status(400).json({ error: 'Missing path in request body' })
     return
   }
 
-  const { error } = await adminSupabase.storage.from(BUCKET).remove([filePath])
+  const { error } = await adminSupabase.storage.from(bucket).remove([filePath])
 
   if (error) {
     res.status(500).json({ error: error.message })
@@ -282,13 +297,14 @@ app.delete('/api/files', async (req, res) => {
  */
 app.get('/api/files/signed-url', async (req, res) => {
   const filePath = req.query.path as string | undefined
+  const bucket = resolveBucket(req.query.bucket)
   if (!filePath) {
     res.status(400).json({ error: 'Missing path query parameter' })
     return
   }
 
   const { data, error } = await adminSupabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .createSignedUrl(filePath, 60 * 60)
 
   if (error || !data?.signedUrl) {

@@ -1,8 +1,3 @@
-// Generated from the live Supabase schema (project oulahvazpuzfqxudmfef).
-// Canonical DB shape — wired into the Supabase client (see lib/supabase.ts).
-// Regenerate after any schema change via the Supabase MCP generate_typescript_types
-// tool, or: supabase gen types typescript --project-id oulahvazpuzfqxudmfef > client/src/types/database.types.ts
-
 export type Json =
   | string
   | number
@@ -728,6 +723,108 @@ export type Database = {
           },
         ]
       }
+      holding_reviews: {
+        Row: {
+          action: string | null
+          annual_decision: string | null
+          annual_notes: string | null
+          business_trend: string | null
+          conviction: string | null
+          conviction_tier: number | null
+          created_at: string
+          current_conclusion: string | null
+          evidence_against: string | null
+          evidence_for: string | null
+          exit_trigger: string | null
+          id: number
+          notes: string | null
+          on_watchlist: boolean
+          original_thesis: string | null
+          portfolio_name: string
+          required_improvement: string | null
+          review_deadline: string | null
+          review_log_id: number
+          reviewed_at: string
+          security_id: string
+          thesis_change: string | null
+          thesis_status: string | null
+          valuation: string | null
+          watchlist_reason: string | null
+          watchlist_trigger: string | null
+        }
+        Insert: {
+          action?: string | null
+          annual_decision?: string | null
+          annual_notes?: string | null
+          business_trend?: string | null
+          conviction?: string | null
+          conviction_tier?: number | null
+          created_at?: string
+          current_conclusion?: string | null
+          evidence_against?: string | null
+          evidence_for?: string | null
+          exit_trigger?: string | null
+          id?: number
+          notes?: string | null
+          on_watchlist?: boolean
+          original_thesis?: string | null
+          portfolio_name: string
+          required_improvement?: string | null
+          review_deadline?: string | null
+          review_log_id: number
+          reviewed_at?: string
+          security_id: string
+          thesis_change?: string | null
+          thesis_status?: string | null
+          valuation?: string | null
+          watchlist_reason?: string | null
+          watchlist_trigger?: string | null
+        }
+        Update: {
+          action?: string | null
+          annual_decision?: string | null
+          annual_notes?: string | null
+          business_trend?: string | null
+          conviction?: string | null
+          conviction_tier?: number | null
+          created_at?: string
+          current_conclusion?: string | null
+          evidence_against?: string | null
+          evidence_for?: string | null
+          exit_trigger?: string | null
+          id?: number
+          notes?: string | null
+          on_watchlist?: boolean
+          original_thesis?: string | null
+          portfolio_name?: string
+          required_improvement?: string | null
+          review_deadline?: string | null
+          review_log_id?: number
+          reviewed_at?: string
+          security_id?: string
+          thesis_change?: string | null
+          thesis_status?: string | null
+          valuation?: string | null
+          watchlist_reason?: string | null
+          watchlist_trigger?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_reviews_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "holding_reviews_review_log_id_fkey"
+            columns: ["review_log_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_review_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holdings_change_log: {
         Row: {
           change_type: string
@@ -1305,6 +1402,14 @@ export type Database = {
           rebalance_frequency: string | null
           review_frequency: string | null
           risk_profile: string | null
+          tier1_lower: number | null
+          tier1_upper: number | null
+          tier2_lower: number | null
+          tier2_upper: number | null
+          tier3_lower: number | null
+          tier3_upper: number | null
+          tier4_lower: number | null
+          tier4_upper: number | null
           updated_at: string | null
           us_mid_cap_lower_limit: number | null
           us_mid_cap_target: number | null
@@ -1371,6 +1476,14 @@ export type Database = {
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
+          tier1_lower?: number | null
+          tier1_upper?: number | null
+          tier2_lower?: number | null
+          tier2_upper?: number | null
+          tier3_lower?: number | null
+          tier3_upper?: number | null
+          tier4_lower?: number | null
+          tier4_upper?: number | null
           updated_at?: string | null
           us_mid_cap_lower_limit?: number | null
           us_mid_cap_target?: number | null
@@ -1437,6 +1550,14 @@ export type Database = {
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
+          tier1_lower?: number | null
+          tier1_upper?: number | null
+          tier2_lower?: number | null
+          tier2_upper?: number | null
+          tier3_lower?: number | null
+          tier3_upper?: number | null
+          tier4_lower?: number | null
+          tier4_upper?: number | null
           updated_at?: string | null
           us_mid_cap_lower_limit?: number | null
           us_mid_cap_target?: number | null
@@ -2124,36 +2245,92 @@ export type Database = {
       }
       portfolio_review_log: {
         Row: {
+          cadence: string | null
+          checklist: Json | null
+          completed_at: string | null
           created_at: string
           id: number
+          next_review_at: string | null
           notes: string | null
-          outcome: string
+          outcome: string | null
           period: string | null
           portfolio_name: string
+          review_date: string | null
           reviewed_at: string
-          reviewed_by: string
+          reviewed_by: string | null
+          status: string
         }
         Insert: {
+          cadence?: string | null
+          checklist?: Json | null
+          completed_at?: string | null
           created_at?: string
           id?: number
+          next_review_at?: string | null
           notes?: string | null
-          outcome: string
+          outcome?: string | null
           period?: string | null
           portfolio_name: string
+          review_date?: string | null
           reviewed_at?: string
-          reviewed_by: string
+          reviewed_by?: string | null
+          status?: string
         }
         Update: {
+          cadence?: string | null
+          checklist?: Json | null
+          completed_at?: string | null
           created_at?: string
           id?: number
+          next_review_at?: string | null
           notes?: string | null
-          outcome?: string
+          outcome?: string | null
           period?: string | null
           portfolio_name?: string
+          review_date?: string | null
           reviewed_at?: string
-          reviewed_by?: string
+          reviewed_by?: string | null
+          status?: string
         }
         Relationships: []
+      }
+      portfolio_review_schedules: {
+        Row: {
+          cadence: string
+          created_at: string
+          id: number
+          last_reviewed_at: string | null
+          next_review_at: string
+          portfolio_name: string
+          updated_at: string
+        }
+        Insert: {
+          cadence: string
+          created_at?: string
+          id?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string
+          portfolio_name: string
+          updated_at?: string
+        }
+        Update: {
+          cadence?: string
+          created_at?: string
+          id?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string
+          portfolio_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_review_schedules_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+        ]
       }
       positions: {
         Row: {
@@ -3252,6 +3429,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sector_benchmarks"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      security_additions: {
+        Row: {
+          checklist: Json | null
+          completed_at: string | null
+          content: Json | null
+          created_at: string
+          decision: string | null
+          id: number
+          portfolio_name: string
+          security_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          checklist?: Json | null
+          completed_at?: string | null
+          content?: Json | null
+          created_at?: string
+          decision?: string | null
+          id?: number
+          portfolio_name: string
+          security_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          checklist?: Json | null
+          completed_at?: string | null
+          content?: Json | null
+          created_at?: string
+          decision?: string | null
+          id?: number
+          portfolio_name?: string
+          security_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_additions_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
           },
         ]
       }

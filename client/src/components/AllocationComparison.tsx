@@ -186,6 +186,9 @@ export function AllocationComparison({ portfolio, modelPortfolio }: Props) {
 
   const effectiveBenchmark = modelPortfolio?.benchmark ?? ''
   const port = portfolio as unknown as AnyRow
+  // All-equity portfolios (Core Growth, Equity Income, Equity Income & Core Growth)
+  // carry no fixed income, so the fixed-income style breakdown is irrelevant.
+  const isEquityStrategy = portfolio.portfolio_strategy === 'Equity'
 
   const { data: bench = null } = useQuery({
     queryKey: QUERY_KEYS.benchmarkAllByName(effectiveBenchmark),
@@ -278,7 +281,8 @@ export function AllocationComparison({ portfolio, modelPortfolio }: Props) {
         </div>
       </Section>
 
-      {/* ── Fixed Income Style Analysis ──────────────────────────────────── */}
+      {/* ── Fixed Income Style Analysis (hidden for all-equity portfolios) ── */}
+      {!isEquityStrategy && (
       <Section title="Fixed Income Style Analysis">
         <table className="min-w-full text-sm">
           <TableHeader benchmarkName={benchmarkName} />
@@ -307,6 +311,7 @@ export function AllocationComparison({ portfolio, modelPortfolio }: Props) {
           </tbody>
         </table>
       </Section>
+      )}
 
       {/* ── Equity Sector Weights ────────────────────────────────────────── */}
       <Section title="Equity Sector Weights">

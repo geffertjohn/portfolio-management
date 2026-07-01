@@ -4,7 +4,7 @@ import { fmtDecimalPct, stripTotalReturn } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { saveSecurityBenchmarks } from '@/lib/securities'
 import { BenchmarkPickerModal } from './BenchmarkPickerModal'
-import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, type BenchmarkOption } from '@/lib/benchmarks'
+import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, benchmarkEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
 import { fetchStockReturns, type TrailingReturns } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
@@ -13,16 +13,17 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 type Period = {
   label: string
   retKey: keyof TrailingReturns
-  benchKey: keyof BenchmarkOption
+  benchKey: keyof BenchmarkOption | null
 }
 
 const PERIODS: Period[] = [
+  // 5D has no stored-benchmark equivalent (benchKey null) — it comes from the ETF proxy.
+  { label: '5 D',  retKey: 'fiveDay',    benchKey: null },
   { label: '1 M',  retKey: 'oneMonth',   benchKey: 'one_month_total_return' },
   { label: '3 M',  retKey: 'threeMonth', benchKey: 'three_month_total_return' },
   { label: 'YTD',  retKey: 'ytd',        benchKey: 'ytd_total_return' },
   { label: '1 Y',  retKey: 'oneYear',    benchKey: 'annualized_daily_one_year_total_return' },
   { label: '3 Y',  retKey: 'threeYear',  benchKey: 'annualized_daily_three_year_return' },
-  { label: '5 Y',  retKey: 'fiveYear',   benchKey: 'annualized_daily_five_year_total_return' },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -109,6 +110,36 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
   const bench1 = allBenchmarks.find((b) => b.id === bench1Id) ?? null
   const bench2 = allSectorBenchmarks.find((b) => b.id === bench2Id) ?? null
 
+  // Benchmark trailing returns come from the representative ETF (total return),
+  // since FMP doesn't serve the TR index symbols. Falls back to the stored
+  // YCharts columns when no ETF proxy is mapped.
+  const proxy1 = benchmarkEtfProxy(bench1?.ticker)
+  const proxy2 = benchmarkEtfProxy(bench2?.ticker)
+  const { data: bench1Returns } = useQuery({
+    queryKey: QUERY_KEYS.stockReturns(proxy1 ?? ''),
+    queryFn: () => fetchStockReturns(proxy1!),
+    enabled: !!proxy1,
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  })
+  const { data: bench2Returns } = useQuery({
+    queryKey: QUERY_KEYS.stockReturns(proxy2 ?? ''),
+    queryFn: () => fetchStockReturns(proxy2!),
+    enabled: !!proxy2,
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  })
+  const benchCell = (
+    bench: BenchmarkOption | null,
+    proxy: string | null,
+    proxyReturns: TrailingReturns | undefined,
+    p: Period,
+  ): string => {
+    if (!bench) return '—'
+    if (proxy) return fmtDecimalPct(proxyReturns?.[p.retKey] ?? null)
+    return p.benchKey ? fmtDecimalPct(benchVal(bench, p.benchKey)) : '—'
+  }
+
   function applyBenchmarks(next1: number | null, next2: number | null) {
     setBench1Id(next1)
     setBench2Id(next2)
@@ -189,10 +220,11 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
                     placeholder="Select benchmark 1"
                     onClick={() => setPickerOpen(1)}
                   />
+                  {proxy1 && <span className="ml-1 text-xs font-normal text-gray-400" title={`Total-return proxy: ${proxy1}`}>· {proxy1}</span>}
                 </th>
                 {PERIODS.map((p) => (
                   <td key={p.label} className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-gray-800">
-                    {bench1 ? fmtDecimalPct(benchVal(bench1, p.benchKey)) : '—'}
+                    {benchCell(bench1, proxy1, bench1Returns, p)}
                   </td>
                 ))}
               </tr>
@@ -205,10 +237,11 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
                     placeholder="Select benchmark 2"
                     onClick={() => setPickerOpen(2)}
                   />
+                  {proxy2 && <span className="ml-1 text-xs font-normal text-gray-400" title={`Total-return proxy: ${proxy2}`}>· {proxy2}</span>}
                 </th>
                 {PERIODS.map((p) => (
                   <td key={p.label} className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-gray-800">
-                    {bench2 ? fmtDecimalPct(benchVal(bench2, p.benchKey)) : '—'}
+                    {benchCell(bench2, proxy2, bench2Returns, p)}
                   </td>
                 ))}
               </tr>

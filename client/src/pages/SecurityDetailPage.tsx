@@ -37,6 +37,8 @@ import { fetchKeyExecutives } from '@/lib/fmpTranscripts'
 import { fetchEarningsDates, fetchProfile } from '@/lib/fmpMarket'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { FinancialsSection } from '@/components/FinancialsSection'
+import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
+import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
 
 /**
@@ -76,7 +78,7 @@ export function SecurityDetailPage() {
   const [atRiskModalOpen, setAtRiskModalOpen] = useState(false)
   const [prospectModalOpen, setProspectModalOpen] = useState(false)
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'monitor' | 'research' | 'documents'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'monitor' | 'documents'>('overview')
   const [financialsOpen, setFinancialsOpen] = useState(false)
   const [excelStatus, setExcelStatus] = useState<{ text: string; ok: boolean } | null>(null)
   const excelInputRef = useRef<HTMLInputElement>(null)
@@ -591,7 +593,7 @@ export function SecurityDetailPage() {
       {!isFundOrEtfSecurity(security) && (
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex gap-6">
-            {(['overview', 'monitor', 'research', 'documents'] as const).map((tab) => (
+            {(['overview', 'monitor', 'documents'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -652,95 +654,8 @@ export function SecurityDetailPage() {
               <NewsAlertsPanel security={security} />
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Stock: Monitor tab ──────────────────────────────────────────────── */}
-      {!isFundOrEtfSecurity(security) && activeTab === 'monitor' && (
-        <div className="space-y-6">
-
-          {/* Scorecard — TODO: wire to captured metrics from most recent review */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">Scorecard</h2>
-              {reviewSchedule && (
-                <button
-                  type="button"
-                  onClick={() => setReviewModalOpen(true)}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Review
-                </button>
-              )}
-            </div>
-            <div className="mt-6">
-              <StockScorecardPanels security={security} />
-            </div>
-          </div>
-
-          {/* Alternatives comparison tables */}
-          <AlternativesPanel security={security} />
-
-        </div>
-      )}
-
-      {/* ── Stock: Documents tab ────────────────────────────────────────────── */}
-      {!isFundOrEtfSecurity(security) && activeTab === 'documents' && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500">
-            Content to be added.
-          </div>
-        </div>
-      )}
-
-      {/* ── Stock: Research tab ─────────────────────────────────────────────── */}
-      {!isFundOrEtfSecurity(security) && activeTab === 'research' && (
-        <div className="space-y-6">
-
-          {/* Transcripts */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-base font-semibold text-gray-900">Transcripts</h2>
-
-            {transcriptLoading && (
-              <p className="text-sm text-gray-400">Loading transcript…</p>
-            )}
-
-            {!transcriptLoading && !transcript && (
-              <p className="text-sm text-gray-400">No transcript available.</p>
-            )}
-
-            {!transcriptLoading && transcript && (
-              <TranscriptViewer
-                transcript={transcript}
-                companyName={companyName}
-                executives={executives ?? []}
-              />
-            )}
-          </div>
-
-          {/* Financials */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setFinancialsOpen(o => !o)}
-              className="flex w-full items-center justify-between"
-            >
-              <h2 className="text-base font-semibold text-gray-900">Financials</h2>
-              <svg
-                className={`h-4 w-4 text-gray-900 transition-transform ${financialsOpen ? 'rotate-180' : ''}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {financialsOpen && (
-              <div className="mt-6">
-                <FinancialsSection security={security} />
-              </div>
-            )}
-          </div>
-
-          {/* Thesis, Risks, Exit Criteria, Review Schedule, Review History */}
+          {/* Thesis, Risks, Exit Criteria, Review Schedule, Review History (moved from Research) */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="space-y-6">
             <section>
@@ -838,6 +753,90 @@ export function SecurityDetailPage() {
             </section>
           </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Stock: Monitor tab ──────────────────────────────────────────────── */}
+      {!isFundOrEtfSecurity(security) && activeTab === 'monitor' && (
+        <div className="space-y-6">
+
+          {/* Scorecard — TODO: wire to captured metrics from most recent review */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">Scorecard</h2>
+              {reviewSchedule && (
+                <button
+                  type="button"
+                  onClick={() => setReviewModalOpen(true)}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Review
+                </button>
+              )}
+            </div>
+            <div className="mt-6">
+              <StockScorecardPanels security={security} />
+            </div>
+          </div>
+
+          {/* Alternatives comparison tables */}
+          <AlternativesPanel security={security} />
+
+          {/* Transcripts (moved from Research) */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold text-gray-900">Transcripts</h2>
+
+            {transcriptLoading && (
+              <p className="text-sm text-gray-400">Loading transcript…</p>
+            )}
+
+            {!transcriptLoading && !transcript && (
+              <p className="text-sm text-gray-400">No transcript available.</p>
+            )}
+
+            {!transcriptLoading && transcript && (
+              <TranscriptViewer
+                transcript={transcript}
+                companyName={companyName}
+                executives={executives ?? []}
+              />
+            )}
+          </div>
+
+          {/* Financials (moved from Research) */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setFinancialsOpen(o => !o)}
+              className="flex w-full items-center justify-between"
+            >
+              <h2 className="text-base font-semibold text-gray-900">Financials</h2>
+              <svg
+                className={`h-4 w-4 text-gray-900 transition-transform ${financialsOpen ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {financialsOpen && (
+              <div className="mt-6">
+                <FinancialsSection security={security} />
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* ── Stock: Documents tab ────────────────────────────────────────────── */}
+      {!isFundOrEtfSecurity(security) && activeTab === 'documents' && (
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <DocumentsFolderPanel
+            bucket={SECURITY_DOCS_BUCKET}
+            folder={security.security_id}
+            scopeLabel={security.security_id}
+            emptyHint="Upload research notes, filings, and other files for this security here."
+          />
         </div>
       )}
 

@@ -2,107 +2,13 @@ import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSecurities } from '@/lib/securities'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import {
+  fetchAllFiles as fetchAll, createFolder, deleteFolder, uploadFile, deleteFile, getSignedUrl, formatBytes, isServerUnreachable,
+  DEFAULT_BUCKET, type StoredFile,
+} from '@/lib/documents'
 
-const SERVER_BASE = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
-const FILES_QUERY_KEY = ['documents-files']
+const FILES_QUERY_KEY = QUERY_KEYS.documentsFiles(DEFAULT_BUCKET)
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface StoredFile {
-  id: string
-  name: string
-  folder: string
-  fullPath: string
-  size: number | null
-  mimetype: string | null
-  updatedAt: string
-  createdAt: string
-}
-
-interface FilesResponse {
-  files: StoredFile[]
-  folders: string[]
-}
-
-// ── API helpers ──────────────────────────────────────────────────────────────
-
-async function fetchAll(): Promise<FilesResponse> {
-  const res = await fetch(`${SERVER_BASE}/api/files`)
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? `Failed to load files (${res.status})`)
-  }
-  return res.json() as Promise<FilesResponse>
-}
-
-async function createFolder(name: string): Promise<{ folder: string }> {
-  const res = await fetch(`${SERVER_BASE}/api/folders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? `Failed to create folder (${res.status})`)
-  }
-  return res.json() as Promise<{ folder: string }>
-}
-
-async function deleteFolder(name: string): Promise<void> {
-  const res = await fetch(`${SERVER_BASE}/api/folders`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? `Failed to delete folder (${res.status})`)
-  }
-}
-
-async function uploadFile(folder: string, file: File): Promise<void> {
-  const formData = new FormData()
-  formData.append('folder', folder)
-  formData.append('file', file)
-  const res = await fetch(`${SERVER_BASE}/api/upload`, { method: 'POST', body: formData })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? `Upload failed (${res.status})`)
-  }
-}
-
-async function deleteFile(path: string): Promise<void> {
-  const res = await fetch(`${SERVER_BASE}/api/files`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? `Delete failed (${res.status})`)
-  }
-}
-
-async function getSignedUrl(path: string): Promise<string> {
-  const res = await fetch(
-    `${SERVER_BASE}/api/files/signed-url?path=${encodeURIComponent(path)}`
-  )
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? `Could not get signed URL (${res.status})`)
-  }
-  const data = await res.json() as { url: string }
-  return data.url
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatBytes(bytes: number | null) {
-  if (bytes == null) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 function FileIcon({ mimetype }: { mimetype: string | null }) {
   if (mimetype?.includes('pdf')) {
@@ -202,7 +108,7 @@ export function DocumentsPage() {
 
   const { data, isLoading, error: loadError } = useQuery({
     queryKey: FILES_QUERY_KEY,
-    queryFn: fetchAll,
+    queryFn: () => fetchAll(),
     staleTime: 1000 * 30,
   })
 
@@ -298,8 +204,7 @@ export function DocumentsPage() {
     ? Object.entries(grouped).filter(([, f]) => f.length > 0)
     : Object.entries(grouped)
 
-  const serverDown =
-    loadError instanceof Error && loadError.message.includes('Failed to fetch')
+  const serverDown = isServerUnreachable(loadError)
 
   function toggleCollapse(folder: string) {
     setCollapsedFolders((prev) => {

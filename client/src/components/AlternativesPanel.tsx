@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fmtDecimalPct, stripTotalReturn, EMPTY } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { saveAlternatives } from '@/lib/securities'
-import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, type BenchmarkOption } from '@/lib/benchmarks'
+import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, benchmarkEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
 import { fetchScorecardMetrics, type ScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchStockReturns, fetchProfile, type TrailingReturns } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -30,13 +30,14 @@ const SCORE_COLS: { label: string; metric: keyof ScorecardMetrics; bench: keyof 
   { label: 'EPS Growth 3Y',        metric: 'epsCagr3y',       bench: 'eps_growth_3_yr_generic' },
 ]
 
-const RET_COLS: { label: string; metric: keyof TrailingReturns; bench: keyof BenchmarkOption }[] = [
+const RET_COLS: { label: string; metric: keyof TrailingReturns; bench: keyof BenchmarkOption | null }[] = [
+  // 5D has no benchmark-table equivalent (shortest benchmark return is 1M) → bench null.
+  { label: '5D',  metric: 'fiveDay',    bench: null },
   { label: '1M',  metric: 'oneMonth',   bench: 'one_month_total_return' },
   { label: '3M',  metric: 'threeMonth', bench: 'three_month_total_return' },
   { label: 'YTD', metric: 'ytd',        bench: 'ytd_total_return' },
   { label: '1Y',  metric: 'oneYear',    bench: 'annualized_daily_one_year_total_return' },
   { label: '3Y',  metric: 'threeYear',  bench: 'annualized_daily_three_year_return' },
-  { label: '5Y',  metric: 'fiveYear',   bench: 'annualized_daily_five_year_total_return' },
 ]
 
 const CELL = 'whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-900'
@@ -145,6 +146,22 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
 
   const bench1 = allBenchmarks.find((b) => b.id === security.preferred_benchmark1_id) ?? null
   const bench2 = allSectorBenchmarks.find((b) => b.id === security.preferred_benchmark2_id) ?? null
+
+  // Benchmark trailing returns from the representative ETF (total return) — FMP
+  // doesn't serve the TR index symbols. Falls back to stored YCharts columns
+  // when no proxy is mapped.
+  const proxy1 = benchmarkEtfProxy(bench1?.ticker)
+  const proxy2 = benchmarkEtfProxy(bench2?.ticker)
+  const { data: bench1Returns } = useQuery({
+    queryKey: QUERY_KEYS.stockReturns(proxy1 ?? ''),
+    queryFn: () => fetchStockReturns(proxy1!),
+    enabled: !!proxy1, staleTime: 1000 * 60 * 60, retry: false,
+  })
+  const { data: bench2Returns } = useQuery({
+    queryKey: QUERY_KEYS.stockReturns(proxy2 ?? ''),
+    queryFn: () => fetchStockReturns(proxy2!),
+    enabled: !!proxy2, staleTime: 1000 * 60 * 60, retry: false,
+  })
   const bench1Label = bench1 ? stripTotalReturn(bench1.category_benchmark ?? bench1.ticker) : 'Benchmark 1'
   const bench2Label = bench2 ? stripTotalReturn(bench2.sector ?? bench2.ticker) : 'Benchmark 2'
 
@@ -254,7 +271,13 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
         title: 'Trailing Returns',
         columns: RET_COLS,
         cells: (symbol) => <ReturnsCells symbol={symbol} />,
-        benchCell: (b, idx) => (b ? pct(benchNum(b, RET_COLS[idx].bench)) : EMPTY),
+        benchCell: (b, idx) => {
+          const col = RET_COLS[idx]
+          // Benchmark returns from the ETF proxy (total return); fall back to stored.
+          if (b === bench1 && proxy1) return pct(bench1Returns?.[col.metric])
+          if (b === bench2 && proxy2) return pct(bench2Returns?.[col.metric])
+          return b && col.bench ? pct(benchNum(b, col.bench)) : EMPTY
+        },
       })}
     </div>
   )
