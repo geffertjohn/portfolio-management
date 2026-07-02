@@ -24,3 +24,30 @@ jobs:
 
       - name: Build (client + server — includes tsc type-check)
         run: npm run build
+
+  # Guardrail: a regenerated database.types.ts implies a schema change, which must
+  # be captured in supabase/schema.sql. (schema.sql may change alone — e.g. an index
+  # or RLS-only change that doesn't alter the generated types — so the check is
+  # one-directional.)
+  schema-sync:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: types change requires schema.sql change
+        run: |
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          changed="$(git diff --name-only "$base" "$head")"
+          echo "Changed files:"; echo "$changed"
+          types_changed=false; schema_changed=false
+          echo "$changed" | grep -qx 'client/src/types/database.types.ts' && types_changed=true
+          echo "$changed" | grep -qx 'supabase/schema.sql' && schema_changed=true
+          if [ "$types_changed" = true ] && [ "$schema_changed" = false ]; then
+            echo "::error::database.types.ts changed but supabase/schema.sql did not. After a schema change, regenerate BOTH — 'npx supabase db dump -f supabase/schema.sql' and the types (see CLAUDE.md → DDL vs DML)."
+            exit 1
+          fi
+          echo "schema-sync OK (types_changed=$types_changed, schema_changed=$schema_changed)"
