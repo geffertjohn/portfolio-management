@@ -1,10 +1,29 @@
 # Supabase
 
-**The live Supabase database is the source of truth for the schema — not this directory.**
+**The live Supabase database is the operational source of truth for the schema; `schema.sql` is its git-committed mirror.**
 
 All schema changes are applied through the Supabase MCP `apply_migration` path (see
 `CLAUDE.md` → "DDL vs DML via Supabase MCP") and are tracked in the project's remote
-migration history. As of 2026-06-29 the remote history holds these 25 migrations:
+migration history.
+
+## `schema.sql` — reproducible snapshot
+
+`schema.sql` is the **full current schema dumped from the live DB**, committed so a fresh
+environment can be rebuilt from git (and for audit reproducibility). **Regenerate it after
+every schema change**, alongside `client/src/types/database.types.ts`:
+
+```
+npx supabase db dump -f supabase/schema.sql      # requires: supabase login + link, and Docker running
+```
+
+The CLI is pinned as a dev-dependency (`npx supabase`); link once with
+`npx supabase link --project-ref oulahvazpuzfqxudmfef`. (Note: `supabase db pull` — the
+per-migration flow — conflicts with the pre-existing remote history, so use `db dump`.)
+
+## Remote migration history (point-in-time)
+
+As of 2026-07-01 the remote history holds 37 migrations (snapshot below may lag; `schema.sql`
+is authoritative for current state):
 
 ```
 20260526175057  add_partial_indexes_and_missing_fk_indexes
