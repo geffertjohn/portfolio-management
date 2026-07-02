@@ -10,6 +10,7 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import { DetailPageState } from '@/components/DetailPageState'
 import { ICReviewPanel } from '@/components/ICReviewPanel'
+import { AutoGrowTextarea } from '@/components/AutoGrowTextarea'
 
 const SUMMARY = '__summary__'
 const IC_REVIEW = '__ic_review__'
@@ -101,7 +102,12 @@ export function SecurityAdditionWorkspace() {
         <label className="block text-sm font-medium text-gray-700">{f.label}</label>
         {f.guidance && <p className="mt-0.5 text-xs text-gray-400">{f.guidance}</p>}
         {f.type === 'textarea' ? (
-          <textarea value={val} onChange={(e) => setField(f.key, e.target.value)} rows={3} placeholder={f.placeholder} className={base} />
+          <AutoGrowTextarea
+            value={val}
+            onChange={(v) => setField(f.key, v)}
+            placeholder={f.placeholder}
+            className={`${base} min-h-[4.5rem] resize-none overflow-hidden leading-relaxed`}
+          />
         ) : f.type === 'select' ? (
           <select value={val} onChange={(e) => setField(f.key, e.target.value)} className={base}>
             <option value="">—</option>
@@ -158,12 +164,11 @@ export function SecurityAdditionWorkspace() {
         <nav className="space-y-1">
           {stages.map((s) => {
             const it = checklist.find((i) => i.key === s.key)
-            const stageDef = ADDITION_STAGES.find((d) => d.key === s.key)
             return (
               <button key={s.key} type="button" onClick={() => setActive(s.key)}
                 className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${active === s.key ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>
                 {it && <span className={it.done ? 'text-green-400' : active === s.key ? 'text-gray-400' : 'text-gray-300'}>{it.done ? '✓' : '○'}</span>}
-                <span className="flex-1">{stageDef ? `${stageDef.stage}. ${s.label}` : s.label}</span>
+                <span className="flex-1">{s.label}</span>
               </button>
             )
           })}
@@ -181,7 +186,7 @@ export function SecurityAdditionWorkspace() {
                   return (
                     <li key={s.key} className="flex items-center gap-2">
                       <span className={it?.done ? 'text-green-600' : 'text-gray-300'}>{it?.done ? '✓' : '○'}</span>
-                      <span className="text-gray-700">{s.stage}. {s.label}</span>
+                      <span className="text-gray-700">{s.label}</span>
                       {s.output && it?.done && <span className="text-xs text-gray-400">→ {s.output}</span>}
                     </li>
                   )
@@ -197,7 +202,7 @@ export function SecurityAdditionWorkspace() {
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">{activeStage.stage}. {activeStage.label}</h2>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">{activeStage.label}</h2>
                   {activeStage.purpose && <p className="mt-1 text-sm text-gray-500">{activeStage.purpose}</p>}
                 </div>
                 <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-gray-600">

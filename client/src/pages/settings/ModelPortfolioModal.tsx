@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ASSET_CLASS_ROWS } from '@/lib/modelPortfolios'
 import type { ModelPortfolio, ModelPortfolioInput } from '@/lib/modelPortfolios'
+import { AutoGrowTextarea } from '@/components/AutoGrowTextarea'
 
 // target string → number, defaulting 0
 function n(v: string) { return Number(v) || 0 }
@@ -280,9 +281,8 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
               </div>
               <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
                 <label className="block text-sm font-medium text-gray-700">Description</label>
-                <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none" />
+                <AutoGrowTextarea value={description} onChange={setDescription}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[4.5rem]" />
               </div>
 
               {(initial?.id ?? 0) >= 10 && (
@@ -290,16 +290,14 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
                     <label className="block text-sm font-medium text-gray-700">Objective</label>
                     <p className="mt-0.5 text-xs text-gray-400">Narrative objective shown on the portfolio Overview.</p>
-                    <textarea value={objectiveStatement} onChange={(e) => setObjectiveStatement(e.target.value)}
-                      rows={2}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none" />
+                    <AutoGrowTextarea value={objectiveStatement} onChange={setObjectiveStatement}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[3rem]" />
                   </div>
                   <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
                     <label className="block text-sm font-medium text-gray-700">Investment Philosophy</label>
                     <p className="mt-0.5 text-xs text-gray-400">Income / stability / growth criteria + strategy shown on the portfolio Overview.</p>
-                    <textarea value={investmentPhilosophy} onChange={(e) => setInvestmentPhilosophy(e.target.value)}
-                      rows={10}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500" />
+                    <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[8rem]" />
                   </div>
                 </>
               )}
