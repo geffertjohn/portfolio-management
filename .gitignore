@@ -27,6 +27,7 @@ Thumbs.db
 
 # Office temp/lock files
 ~$*
+.~lock.*#
 
 # Supabase CLI local state
 supabase/.temp/
