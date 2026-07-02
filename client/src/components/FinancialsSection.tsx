@@ -17,8 +17,13 @@ import { fetchFinancialsData, fetchAnnualFinancialsData, num } from '@/lib/fmpFi
 import type { MergedQuarter } from '@/lib/fmpFinancials'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { SecurityDetail } from '@/lib/securities'
+import { RevenueSegmentsPanel } from '@/components/RevenueSegmentsPanel'
 
+// Metrics with estimates/surprise (the original income-statement tabs).
 type Metric = 'revenue' | 'ebitda' | 'ebit' | 'netIncome' | 'eps' | 'sga'
+// Segmentation tabs — revenue split, no estimates.
+type SegmentTab = 'revProduct' | 'revGeo'
+type Tab = Metric | SegmentTab
 
 const METRIC_DEFS: Record<Metric, { label: string; higherIsBetter: boolean; isEps: boolean }> = {
   revenue:   { label: 'Revenue',     higherIsBetter: true,  isEps: false },
@@ -27,6 +32,13 @@ const METRIC_DEFS: Record<Metric, { label: string; higherIsBetter: boolean; isEp
   ebit:      { label: 'EBIT',        higherIsBetter: true,  isEps: false },
   netIncome: { label: 'Net Income',  higherIsBetter: true,  isEps: false },
   sga:       { label: 'SGA Expense', higherIsBetter: false, isEps: false },
+}
+
+// Tab order + labels — the six estimate metrics, then the two segmentation tabs.
+const TAB_ORDER: Tab[] = ['revenue', 'eps', 'ebitda', 'ebit', 'netIncome', 'sga', 'revProduct', 'revGeo']
+const TAB_LABELS: Record<Tab, string> = {
+  revenue: 'Revenue', eps: 'EPS', ebitda: 'EBITDA', ebit: 'EBIT', netIncome: 'Net Income', sga: 'SGA Expense',
+  revProduct: 'Revenue by Product', revGeo: 'Revenue by Geography',
 }
 
 interface MetricValues {
@@ -262,8 +274,13 @@ interface Props {
 }
 
 export function FinancialsSection({ security }: Props) {
-  const [metric, setMetric] = useState<Metric>('revenue')
+  const [tab, setTab] = useState<Tab>('revenue')
   const [period, setPeriod] = useState<'1y' | '3y' | '5y'>('1y')
+
+  const isSegment = tab === 'revProduct' || tab === 'revGeo'
+  // Segmentation tabs reuse the shared frame but have no estimate metric; fall
+  // back to 'revenue' so the estimate-branch computations stay valid (unused).
+  const metric: Metric = isSegment ? 'revenue' : tab
 
   const { data, isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.financialsData(security.security_id),
@@ -346,7 +363,7 @@ export function FinancialsSection({ security }: Props) {
       return { label: q.fiscalPeriod, pct, beat }
     })
 
-  if (isLoading) {
+  if (!isSegment && isLoading) {
     return (
       <div className="space-y-3 animate-pulse">
         <div className="h-8 w-64 rounded bg-gray-100" />
@@ -356,7 +373,7 @@ export function FinancialsSection({ security }: Props) {
     )
   }
 
-  if (error) {
+  if (!isSegment && error) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
         Failed to load financials:{' '}
@@ -365,7 +382,7 @@ export function FinancialsSection({ security }: Props) {
     )
   }
 
-  if (!data || (data.prices.length === 0 && data.quarters.length === 0)) {
+  if (!isSegment && (!data || (data.prices.length === 0 && data.quarters.length === 0))) {
     return (
       <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-400">
         No financials data available for {security.security_id}.
@@ -377,20 +394,20 @@ export function FinancialsSection({ security }: Props) {
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex items-center justify-between gap-4">
-        {/* Metric tabs */}
-        <div className="flex border-b border-gray-200">
-          {(Object.keys(METRIC_DEFS) as Metric[]).map((m) => (
+        {/* Metric + segmentation tabs */}
+        <div className="flex overflow-x-auto border-b border-gray-200">
+          {TAB_ORDER.map((t) => (
             <button
-              key={m}
+              key={t}
               type="button"
-              onClick={() => setMetric(m)}
+              onClick={() => setTab(t)}
               className={`px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
-                metric === m
+                tab === t
                   ? 'border-gray-900 text-gray-900'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              {METRIC_DEFS[m].label}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </div>
@@ -414,6 +431,15 @@ export function FinancialsSection({ security }: Props) {
         </div>
       </div>
 
+      {/* Segmentation tabs render their own composition chart + tables */}
+      {isSegment ? (
+        <RevenueSegmentsPanel
+          securityId={security.security_id}
+          kind={tab === 'revProduct' ? 'product' : 'geo'}
+          periodYears={periodYears}
+        />
+      ) : (
+      <>
       {/* Chart */}
       {chartData.length > 0 ? (
         <ResponsiveContainer width="100%" height={300}>
@@ -483,6 +509,8 @@ export function FinancialsSection({ security }: Props) {
           metricDef={metricDef}
         />
       </div>
+      </>
+      )}
     </div>
   )
 }

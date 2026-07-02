@@ -1,26 +1,33 @@
 import { useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { parseActualAllocations, compareSizing, type SizingComparison } from '@/lib/positionSizingCompare'
 import type { BandModel } from '@/lib/positionBands'
 import type { PortfolioPosition } from '@/types/position'
 import { fmtDecimalPct, fmtNum } from '@/lib/formatters'
+import { uploadFile, PORTFOLIO_DOCS_BUCKET, isServerUnreachable } from '@/lib/documents'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 interface PositionSizingCheckProps {
   positions: PortfolioPosition[]
   modelPortfolio: BandModel
+  /** Portfolio name — the uploaded file is archived to this portfolio's Documents folder. */
+  portfolioName: string
 }
 
 /** percent points (e.g. 7.36) → display "7.36%" */
 const pct = (v: number | null) => (v == null ? '—' : `${fmtNum(v)}%`)
 
-export function PositionSizingCheck({ positions, modelPortfolio }: PositionSizingCheckProps) {
+export function PositionSizingCheck({ positions, modelPortfolio, portfolioName }: PositionSizingCheckProps) {
+  const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   const [result, setResult] = useState<SizingComparison | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [parsing, setParsing] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   async function handleFile(file: File) {
-    setParsing(true); setError(null); setResult(null)
+    setParsing(true); setError(null); setResult(null); setSaveState('idle')
     try {
       const buf = await file.arrayBuffer()
       const actuals = parseActualAllocations(buf)
@@ -30,8 +37,25 @@ export function PositionSizingCheck({ positions, modelPortfolio }: PositionSizin
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to read the file.')
       setFileName(null)
-    } finally {
       setParsing(false)
+      return
+    }
+    setParsing(false)
+
+    // Archive the uploaded file to the portfolio's Documents folder. Secondary to
+    // the comparison above — a failure here never discards the parsed result.
+    setSaveState('saving')
+    try {
+      await uploadFile(portfolioName, file, PORTFOLIO_DOCS_BUCKET)
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(PORTFOLIO_DOCS_BUCKET) })
+      setSaveState('saved')
+    } catch (e) {
+      setSaveState('error')
+      setError(
+        isServerUnreachable(e)
+          ? 'Comparison ready, but the file was not archived — the document server is unreachable (cd server && npm run dev).'
+          : `Comparison ready, but archiving to Documents failed: ${e instanceof Error ? e.message : 'unknown error'}`,
+      )
     }
   }
 
@@ -43,6 +67,8 @@ export function PositionSizingCheck({ positions, modelPortfolio }: PositionSizin
         </p>
         <div className="flex items-center gap-2">
           {fileName && <span className="max-w-[10rem] truncate text-xs text-gray-400" title={fileName}>{fileName}</span>}
+          {saveState === 'saving' && <span className="text-xs text-gray-400">Archiving…</span>}
+          {saveState === 'saved' && <span className="text-xs text-green-600" title={`Saved to ${portfolioName} Documents`}>✓ Saved to Documents</span>}
           <button
             type="button"
             onClick={() => inputRef.current?.click()}

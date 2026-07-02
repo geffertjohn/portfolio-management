@@ -6,6 +6,9 @@
  * of each holdings change.
  */
 import { supabase } from './supabase'
+import type {
+  ThesisStatus, BusinessTrend, ValuationCall, MonitorConviction, HoldingAction,
+} from './holdingReviews'
 
 export type TradeAction = 'add' | 'increase' | 'decrease' | 'replace' | 'remove'
 
@@ -28,6 +31,12 @@ export interface TradeSuitability {
   old_weight: number | null
   new_weight: number | null
   recorded_at: string
+  // Monitoring assessment captured at the time of the change (Edit Position).
+  thesis_status: ThesisStatus | null
+  business_trend: BusinessTrend | null
+  valuation: ValuationCall | null
+  conviction: MonitorConviction | null
+  monitor_action: HoldingAction | null
 }
 
 export const ACTION_LABELS: Record<TradeAction, string> = {
@@ -64,6 +73,19 @@ export const REASON_OPTIONS_BY_ACTION: Record<TradeAction, ReasonCode[]> = {
   remove:   ['risk_reduction', 'client_request', 'rebalance_ips', 'tax_loss_harvest', 'other'],
 }
 
+/**
+ * Reason codes offered for each monitoring Action (add/hold/trim/exit/watchlist)
+ * from the full-monitoring review. Drives the Edit Position reason dropdown so
+ * the documented reason aligns with the advisor's Action call.
+ */
+export const REASON_OPTIONS_BY_MONITOR_ACTION: Record<HoldingAction, ReasonCode[]> = {
+  add:       ['new_position', 'rebalance_ips', 'client_request', 'sector_rotation', 'other'],
+  hold:      ['rebalance_ips', 'client_request', 'other'],
+  trim:      ['rebalance_ips', 'risk_reduction', 'tax_loss_harvest', 'sector_rotation', 'client_request', 'other'],
+  exit:      ['risk_reduction', 'tax_loss_harvest', 'rebalance_ips', 'client_request', 'other'],
+  watchlist: ['risk_reduction', 'rebalance_ips', 'client_request', 'other'],
+}
+
 export function determineTradeAction(
   oldSecurityId: string,
   newSecurityId: string,
@@ -83,6 +105,11 @@ export async function recordTradeSuitability(note: {
   rationale?: string | null
   old_weight?: number | null
   new_weight?: number | null
+  thesis_status?: ThesisStatus | null
+  business_trend?: BusinessTrend | null
+  valuation?: ValuationCall | null
+  conviction?: MonitorConviction | null
+  monitor_action?: HoldingAction | null
 }): Promise<void> {
   const { error } = await supabase.from('trade_suitability').insert({
     portfolio_name: note.portfolio_name,
@@ -92,6 +119,11 @@ export async function recordTradeSuitability(note: {
     rationale:      note.rationale?.trim() || null,
     old_weight:     note.old_weight ?? null,
     new_weight:     note.new_weight ?? null,
+    thesis_status:  note.thesis_status ?? null,
+    business_trend: note.business_trend ?? null,
+    valuation:      note.valuation ?? null,
+    conviction:     note.conviction ?? null,
+    monitor_action: note.monitor_action ?? null,
   })
   if (error) throw error
 }

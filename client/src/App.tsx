@@ -27,6 +27,7 @@ const ImportExportPage = lazy(() => import('@/pages/settings/ImportExportPage').
 const BenchmarksPage = lazy(() => import('@/pages/settings/BenchmarksPage').then((m) => ({ default: m.BenchmarksPage })))
 const NotificationsPage = lazy(() => import('@/pages/settings/NotificationsPage').then((m) => ({ default: m.NotificationsPage })))
 const ModelPortfoliosPage = lazy(() => import('@/pages/settings/ModelPortfoliosPage').then((m) => ({ default: m.ModelPortfoliosPage })))
+const EditModelPortfolioPage = lazy(() => import('@/pages/settings/EditModelPortfolioPage').then((m) => ({ default: m.EditModelPortfolioPage })))
 const CompliancePage = lazy(() => import('@/pages/settings/CompliancePage').then((m) => ({ default: m.CompliancePage })))
 
 function Page({ children }: { children: ReactNode }) {
@@ -64,6 +65,7 @@ function App() {
           <Route path="settings/benchmarks" element={<Page><BenchmarksPage /></Page>} />
           <Route path="settings/notifications" element={<Page><NotificationsPage /></Page>} />
           <Route path="settings/model-portfolios" element={<Page><ModelPortfoliosPage /></Page>} />
+          <Route path="settings/model-portfolios/:id/edit" element={<Page><EditModelPortfolioPage /></Page>} />
           <Route path="settings/compliance" element={<Page><CompliancePage /></Page>} />
         </Route>
       </Routes>

@@ -9,8 +9,10 @@ import {
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { usePortfolio } from '@/hooks/usePortfolio'
 import { DetailPageState } from '@/components/DetailPageState'
+import { ICReviewPanel } from '@/components/ICReviewPanel'
 
 const SUMMARY = '__summary__'
+const IC_REVIEW = '__ic_review__'
 
 export function SecurityAdditionWorkspace() {
   const { portfolioId, additionId } = useParams<{ portfolioId: string; additionId: string }>()
@@ -81,7 +83,11 @@ export function SecurityAdditionWorkspace() {
     )
   }
 
-  const stages = [...ADDITION_STAGES.map((s) => ({ key: s.key, label: s.label })), { key: SUMMARY, label: 'Summary & complete' }]
+  const stages = [
+    ...ADDITION_STAGES.map((s) => ({ key: s.key, label: s.label })),
+    { key: IC_REVIEW, label: 'IC Review · AI committee' },
+    { key: SUMMARY, label: 'Summary & complete' },
+  ]
   const doneCount = checklist.filter((it) => it.done).length
   const activeStage = ADDITION_STAGES.find((s) => s.key === active)
   const activeItem = checklist.find((it) => it.key === active)
@@ -164,7 +170,9 @@ export function SecurityAdditionWorkspace() {
         </nav>
 
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          {active === SUMMARY ? (
+          {active === IC_REVIEW ? (
+            <ICReviewPanel additionId={candidateId} ticker={candidate.security_id} />
+          ) : active === SUMMARY ? (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Summary &amp; complete</h2>
               <ul className="space-y-1 text-sm">

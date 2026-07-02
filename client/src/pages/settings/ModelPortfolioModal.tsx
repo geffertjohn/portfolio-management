@@ -60,6 +60,8 @@ interface ModalProps {
   onCancel: () => void
   isPending: boolean
   error: Error | null
+  /** Render as an inline page (no modal overlay). Used by EditModelPortfolioPage. */
+  asPage?: boolean
 }
 
 // Category targets (equity/fixedIncome drift-computed; cash explicit lower/target/upper)
@@ -81,7 +83,7 @@ function buildDraftCash(mp: ModelPortfolio): DraftCash {
   }
 }
 
-export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave, onCancel, isPending, error }: ModalProps) {
+export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave, onCancel, isPending, error, asPage }: ModalProps) {
   const uniq = <T,>(arr: (T | null | undefined)[]) =>
     [...new Set(arr.filter((v): v is T => v != null))].sort()
 
@@ -93,6 +95,8 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
   const [rebalanceFrequency, setRebalanceFrequency]   = useState(initial?.rebalance_frequency ?? '')
   const [reviewFrequency,    setReviewFrequency]      = useState(initial?.review_frequency ?? '')
   const [description,        setDescription]          = useState(initial?.description ?? '')
+  const [objectiveStatement,   setObjectiveStatement]   = useState(initial?.objective_statement ?? '')
+  const [investmentPhilosophy, setInvestmentPhilosophy] = useState(initial?.investment_philosophy ?? '')
 
   // Independent drift % per level
   const [catDrift,    setCatDrift]    = useState(String(initial?.category_drift_percentage    ?? 20))
@@ -185,6 +189,8 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       rebalance_frequency:           rebalanceFrequency  || null,
       review_frequency:              reviewFrequency     || null,
       description:                   description         || null,
+      objective_statement:           objectiveStatement    || null,
+      investment_philosophy:         investmentPhilosophy  || null,
       category_drift_percentage:     cd || null,
       asset_class_drift_percentage:  ad || null,
       drift_percentage:              n(posDrift)  || null,
@@ -207,9 +213,8 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
     } as ModelPortfolioInput)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 px-4 py-8">
-      <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white shadow-xl">
+  const panel = (
+      <div className={`w-full rounded-lg border border-gray-200 bg-white ${asPage ? 'shadow-sm' : 'max-w-2xl shadow-xl'}`}>
         <form onSubmit={handleSubmit}>
           <div className="border-b border-gray-200 px-6 py-4">
             <h2 className="text-lg font-semibold text-gray-900">
@@ -218,7 +223,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
           </div>
 
           <div className="px-6 py-5 space-y-5">
-            <div className="grid grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${asPage ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-2'}`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Investment Objective</label>
                 {(initial?.id ?? 0) >= 10 ? (
@@ -273,14 +278,34 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   <option value="Annual">Annual</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
                 <label className="block text-sm font-medium text-gray-700">Description</label>
                 <textarea value={description} onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none" />
               </div>
+
+              {(initial?.id ?? 0) >= 10 && (
+                <>
+                  <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                    <label className="block text-sm font-medium text-gray-700">Objective</label>
+                    <p className="mt-0.5 text-xs text-gray-400">Narrative objective shown on the portfolio Overview.</p>
+                    <textarea value={objectiveStatement} onChange={(e) => setObjectiveStatement(e.target.value)}
+                      rows={2}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none" />
+                  </div>
+                  <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                    <label className="block text-sm font-medium text-gray-700">Investment Philosophy</label>
+                    <p className="mt-0.5 text-xs text-gray-400">Income / stability / growth criteria + strategy shown on the portfolio Overview.</p>
+                    <textarea value={investmentPhilosophy} onChange={(e) => setInvestmentPhilosophy(e.target.value)}
+                      rows={10}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500" />
+                  </div>
+                </>
+              )}
             </div>
 
+            <div className={asPage ? 'grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start' : 'space-y-5'}>
             {/* ── Asset Allocation (Category) ──────────────────────────────── */}
             <div>
               <div className="mb-2 flex items-center justify-between">
@@ -509,6 +534,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                 </tfoot>
               </table>
             </div>
+            </div>
 
             {/* ── Position Drift ───────────────────────────────────────────── */}
             <div className="flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
@@ -580,6 +606,11 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
           </div>
         </form>
       </div>
+  )
+
+  return asPage ? panel : (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 px-4 py-8">
+      {panel}
     </div>
   )
 }

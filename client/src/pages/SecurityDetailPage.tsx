@@ -38,6 +38,7 @@ import { fetchEarningsDates, fetchProfile } from '@/lib/fmpMarket'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { FinancialsSection } from '@/components/FinancialsSection'
 import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
+import { SecurityResearchPanel } from '@/components/SecurityResearchPanel'
 import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
 
@@ -781,6 +782,9 @@ export function SecurityDetailPage() {
 
           {/* Alternatives comparison tables */}
           <AlternativesPanel security={security} />
+
+          {/* AI research reports + pre-earnings briefs */}
+          <SecurityResearchPanel securityId={security.security_id} />
 
           {/* Transcripts (moved from Research) */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">

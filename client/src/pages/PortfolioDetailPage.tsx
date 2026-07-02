@@ -9,6 +9,8 @@ import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
 import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
 import { CandidatesPanel } from '@/components/CandidatesPanel'
+import { PortfolioRiskPanel } from '@/components/PortfolioRiskPanel'
+import { PortfolioNarrative } from '@/components/PortfolioNarrative'
 import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
 import { PORTFOLIO_DOCS_BUCKET } from '@/lib/documents'
 import { PortfolioOverview } from '@/components/PortfolioOverview'
@@ -238,16 +240,15 @@ export function PortfolioDetailPage() {
           </div>
         </dl>
 
-        <div className="mt-6 border-t border-gray-200 pt-6">
-          <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
-            Description
-          </dt>
-          <dd className="mt-2 text-gray-700">
-            {(['ETF', 'Foundation', 'Hybrid'].includes(portfolio.portfolio_strategy) && !isEquityStrategy && modelPortfolio?.description)
+        <PortfolioNarrative
+          description={
+            (['ETF', 'Foundation', 'Hybrid'].includes(portfolio.portfolio_strategy) && !isEquityStrategy && modelPortfolio?.description)
               ? modelPortfolio.description
-              : portfolio.description}
-          </dd>
-        </div>
+              : portfolio.description
+          }
+          objective={modelPortfolio?.objective_statement ?? portfolio.objective_statement}
+          philosophy={modelPortfolio?.investment_philosophy ?? portfolio.investment_philosophy}
+        />
 
         {/* Tab Bar */}
         <div className="mt-8 border-t border-gray-200 pt-6">
@@ -568,8 +569,9 @@ export function PortfolioDetailPage() {
 
         {/* Reviews Tab */}
         {tab === 'reviews' && (
-          <div className="mt-6">
+          <div className="mt-6 space-y-6">
             <PortfolioReviewsPanel portfolioId={id} />
+            <PortfolioRiskPanel portfolioName={id} />
           </div>
         )}
 
