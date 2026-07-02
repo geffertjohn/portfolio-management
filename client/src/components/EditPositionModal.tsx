@@ -9,9 +9,46 @@ import {
   recordTradeSuitability,
   determineTradeAction,
   REASON_OPTIONS_BY_ACTION,
+  REASON_OPTIONS_BY_MONITOR_ACTION,
   REASON_LABELS,
 } from '@/lib/tradeSuitability'
 import type { ReasonCode } from '@/lib/tradeSuitability'
+import {
+  THESIS_STATUS_OPTIONS, THESIS_STATUS_LABELS,
+  BUSINESS_TREND_OPTIONS, BUSINESS_TREND_LABELS,
+  VALUATION_OPTIONS, VALUATION_LABELS,
+  CONVICTION_OPTIONS, CONVICTION_LABELS,
+  ACTION_OPTIONS, ACTION_LABELS,
+} from '@/lib/holdingReviews'
+import type {
+  ThesisStatus, BusinessTrend, ValuationCall, MonitorConviction, HoldingAction,
+} from '@/lib/holdingReviews'
+
+interface MonitorAssessment {
+  thesisStatus: ThesisStatus | null
+  businessTrend: BusinessTrend | null
+  valuation: ValuationCall | null
+  conviction: MonitorConviction | null
+  monitorAction: HoldingAction | null
+}
+
+const EMPTY_ASSESSMENT: MonitorAssessment = {
+  thesisStatus: null, businessTrend: null, valuation: null, conviction: null, monitorAction: null,
+}
+
+// The four categorical assignments mirrored from the full-monitoring review,
+// shown above the Action select (which drives the reason options).
+const MONITOR_COLUMNS: {
+  field: 'thesisStatus' | 'businessTrend' | 'valuation' | 'conviction'
+  label: string
+  options: readonly string[]
+  labels: Record<string, string>
+}[] = [
+  { field: 'thesisStatus',  label: 'Thesis Status',  options: THESIS_STATUS_OPTIONS,  labels: THESIS_STATUS_LABELS },
+  { field: 'businessTrend', label: 'Business Trend', options: BUSINESS_TREND_OPTIONS, labels: BUSINESS_TREND_LABELS },
+  { field: 'valuation',     label: 'Valuation',      options: VALUATION_OPTIONS,      labels: VALUATION_LABELS },
+  { field: 'conviction',    label: 'Conviction',     options: CONVICTION_OPTIONS,     labels: CONVICTION_LABELS },
+]
 
 interface EditPositionModalProps {
   open: boolean
@@ -40,6 +77,12 @@ export function EditPositionModal({
   const [removeRationale, setRemoveRationale] = useState('')
   const [removeReasonCode, setRemoveReasonCode] = useState<ReasonCode | ''>('')
 
+  // Monitoring assessment (mirrors the full-monitoring review)
+  const [assessment, setAssessment] = useState<MonitorAssessment>(EMPTY_ASSESSMENT)
+  const setAssessmentField = <K extends keyof MonitorAssessment>(field: K, value: MonitorAssessment[K]) => {
+    setAssessment((prev) => ({ ...prev, [field]: value }))
+  }
+
   const { data: securities = [] } = useQuery({
     queryKey: QUERY_KEYS.securities,
     queryFn: fetchSecurities,
@@ -58,6 +101,7 @@ export function EditPositionModal({
       setRationale('')
       setRemoveReasonCode('')
       setRemoveRationale('')
+      setAssessment(EMPTY_ASSESSMENT)
     }
   }, [position])
 
@@ -82,11 +126,15 @@ export function EditPositionModal({
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tradeSuitability(portfolioId) })
   }
 
-  // Derive the action from current field values so we can show the right reason options
+  // The weight-derived trade action is recorded for the log badge (increase /
+  // decrease / replace), but the reason options are driven by the advisor's
+  // monitoring Action call (add / hold / trim / exit / watchlist).
   const derivedAction = position
     ? determineTradeAction(position.securityId, securityId, position.weight, Number(weight) || position.weight)
     : 'increase'
-  const reasonOptions = REASON_OPTIONS_BY_ACTION[derivedAction]
+  const reasonOptions = assessment.monitorAction
+    ? REASON_OPTIONS_BY_MONITOR_ACTION[assessment.monitorAction]
+    : []
   const removeReasonOptions = REASON_OPTIONS_BY_ACTION['remove']
 
   const updateMutation = useMutation({
@@ -109,6 +157,11 @@ export function EditPositionModal({
         rationale: rationale || null,
         old_weight: position.weight,
         new_weight: numWeight,
+        thesis_status: assessment.thesisStatus,
+        business_trend: assessment.businessTrend,
+        valuation: assessment.valuation,
+        conviction: assessment.conviction,
+        monitor_action: assessment.monitorAction,
       })
     },
     onSuccess: () => { invalidate(); onClose() },
@@ -135,7 +188,7 @@ export function EditPositionModal({
     e.preventDefault()
     const numWeight = Number(weight)
     if (!securityId || Number.isNaN(numWeight) || numWeight <= 0 || numWeight > 100) return
-    if (!reasonCode) return
+    if (!assessment.monitorAction || !reasonCode) return
     updateMutation.mutate()
   }
 
@@ -248,6 +301,49 @@ export function EditPositionModal({
                 )}
               </p>
 
+              {/* Monitoring assessment — mirrors the full-monitoring review */}
+              <div className="grid grid-cols-2 gap-3">
+                {MONITOR_COLUMNS.map((c) => (
+                  <div key={c.field}>
+                    <label htmlFor={`edit-${c.field}`} className="block text-sm font-medium text-gray-700">
+                      {c.label} <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <select
+                      id={`edit-${c.field}`}
+                      value={assessment[c.field] ?? ''}
+                      onChange={(e) => setAssessmentField(c.field, (e.target.value || null) as MonitorAssessment[typeof c.field])}
+                      className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                    >
+                      <option value="">—</option>
+                      {c.options.map((o) => (
+                        <option key={o} value={o}>{c.labels[o]}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label htmlFor="edit-monitor-action" className="block text-sm font-medium text-gray-700">
+                  Action <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="edit-monitor-action"
+                  value={assessment.monitorAction ?? ''}
+                  onChange={(e) => {
+                    setAssessmentField('monitorAction', (e.target.value || null) as HoldingAction | null)
+                    setReasonCode('') // reason options depend on the Action
+                  }}
+                  required
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                >
+                  <option value="">Select an action</option>
+                  {ACTION_OPTIONS.map((o) => (
+                    <option key={o} value={o}>{ACTION_LABELS[o]}</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label htmlFor="edit-reason-code" className="block text-sm font-medium text-gray-700">
                   Reason <span className="text-red-500">*</span>
@@ -257,9 +353,10 @@ export function EditPositionModal({
                   value={reasonCode}
                   onChange={(e) => setReasonCode(e.target.value as ReasonCode)}
                   required
-                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  disabled={!assessment.monitorAction}
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-100 disabled:text-gray-400"
                 >
-                  <option value="">Select a reason</option>
+                  <option value="">{assessment.monitorAction ? 'Select a reason' : 'Select an action first'}</option>
                   {reasonOptions.map((code) => (
                     <option key={code} value={code}>{REASON_LABELS[code]}</option>
                   ))}
@@ -376,6 +473,7 @@ export function EditPositionModal({
                 Number.isNaN(Number(weight)) ||
                 Number(weight) <= 0 ||
                 Number(weight) > 100 ||
+                !assessment.monitorAction ||
                 !reasonCode
               }
               className="rounded-md border border-transparent bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"

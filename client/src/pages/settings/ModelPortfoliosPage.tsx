@@ -1,13 +1,13 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchModelPortfolios,
   createModelPortfolio,
-  updateModelPortfolio,
   deleteModelPortfolio,
   ASSET_CLASS_ROWS,
 } from '@/lib/modelPortfolios'
-import type { ModelPortfolio, ModelPortfolioInput } from '@/lib/modelPortfolios'
+import type { ModelPortfolio } from '@/lib/modelPortfolios'
 import { fetchModelPortfolioBenchmarkOptions } from '@/lib/benchmarks'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { ModelPortfolioModal } from './ModelPortfolioModal'
@@ -20,8 +20,8 @@ function pct(v: number | null) {
 
 export function ModelPortfoliosPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
-  const [editing, setEditing] = useState<ModelPortfolio | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
@@ -40,12 +40,6 @@ export function ModelPortfoliosPage() {
   const createMutation = useMutation({
     mutationFn: createModelPortfolio,
     onSuccess: () => { invalidate(); setCreating(false) },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, input }: { id: number; input: Partial<ModelPortfolioInput> }) =>
-      updateModelPortfolio(id, input),
-    onSuccess: () => { invalidate(); setEditing(null) },
   })
 
   const deleteMutation = useMutation({
@@ -118,7 +112,7 @@ export function ModelPortfoliosPage() {
                   </div>
                 </button>
                 <div className="flex shrink-0 gap-2">
-                  <button onClick={() => setEditing(mp)}
+                  <button onClick={() => navigate(`/settings/model-portfolios/${mp.id}/edit`)}
                     className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
                     Edit
                   </button>
@@ -238,17 +232,6 @@ export function ModelPortfoliosPage() {
         />
       )}
 
-      {editing && (
-        <ModelPortfolioModal
-          initial={editing}
-          models={models}
-          benchmarkOptions={benchmarkOptions}
-          onSave={(input) => updateMutation.mutate({ id: editing.id, input })}
-          onCancel={() => setEditing(null)}
-          isPending={updateMutation.isPending}
-          error={updateMutation.error as Error | null}
-        />
-      )}
     </div>
   )
 }

@@ -5,8 +5,24 @@ import {
   ACTION_LABELS,
   ACTION_COLORS,
   REASON_LABELS,
+  type TradeSuitability,
 } from '@/lib/tradeSuitability'
+import {
+  THESIS_STATUS_LABELS, BUSINESS_TREND_LABELS, VALUATION_LABELS,
+  CONVICTION_LABELS, ACTION_LABELS as MONITOR_ACTION_LABELS,
+} from '@/lib/holdingReviews'
 import { formatDate } from '@/lib/fundFormat'
+
+/** Captured monitoring assessment chips (Edit Position), when present. */
+function assessmentChips(e: TradeSuitability): { label: string; value: string }[] {
+  const chips: { label: string; value: string }[] = []
+  if (e.monitor_action) chips.push({ label: 'Action', value: MONITOR_ACTION_LABELS[e.monitor_action] })
+  if (e.thesis_status)  chips.push({ label: 'Thesis', value: THESIS_STATUS_LABELS[e.thesis_status] })
+  if (e.business_trend) chips.push({ label: 'Trend', value: BUSINESS_TREND_LABELS[e.business_trend] })
+  if (e.valuation)      chips.push({ label: 'Valuation', value: VALUATION_LABELS[e.valuation] })
+  if (e.conviction)     chips.push({ label: 'Conviction', value: CONVICTION_LABELS[e.conviction] })
+  return chips
+}
 
 interface TradeSuitabilityLogProps {
   portfolioId: string
@@ -86,6 +102,17 @@ export function TradeSuitabilityLog({ portfolioId }: TradeSuitabilityLogProps) {
               <p className="text-sm text-gray-600">{entry.rationale}</p>
             )}
           </div>
+
+          {/* Monitoring assessment captured at the time of the change */}
+          {assessmentChips(entry).length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {assessmentChips(entry).map((c) => (
+                <span key={c.label} className="inline-flex items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-500">
+                  <span className="font-medium text-gray-600">{c.label}:</span> {c.value}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>

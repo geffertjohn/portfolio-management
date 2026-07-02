@@ -5,6 +5,8 @@ export interface Portfolio {
   updated_at: string | null
   investment_objective: string | null
   description: string
+  objective_statement: string | null
+  investment_philosophy: string | null
   created_at: string
   market_alpha_12_month: number | null
   quarterly_market_beta_12_month: number | null

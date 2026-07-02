@@ -318,7 +318,7 @@ export function PortfolioReviewWorkspace() {
               </div>
 
               {active === 'performance_attribution' && <AttributionMovers portfolioId={id} days={30} />}
-              {active === 'position_sizing' && <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} />}
+              {active === 'position_sizing' && <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} portfolioName={id} />}
               {active === 'full_monitoring' && (
                 <HoldingMonitorGrid positions={positions} assessments={assessments} onChange={setHoldingField} />
               )}

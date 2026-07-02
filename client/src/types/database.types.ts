@@ -873,6 +873,92 @@ export type Database = {
           },
         ]
       }
+      ic_memos: {
+        Row: {
+          addition_id: number | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
+          deleted_at: string | null
+          id: number
+          pm_rationale: string | null
+          portfolio_name: string | null
+          proposed_weight: number | null
+          rationale: string | null
+          recommendation: string | null
+          research_report_id: number | null
+          risk_report_id: number | null
+          security_id: string
+          status: string
+        }
+        Insert: {
+          addition_id?: number | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          deleted_at?: string | null
+          id?: never
+          pm_rationale?: string | null
+          portfolio_name?: string | null
+          proposed_weight?: number | null
+          rationale?: string | null
+          recommendation?: string | null
+          research_report_id?: number | null
+          risk_report_id?: number | null
+          security_id: string
+          status?: string
+        }
+        Update: {
+          addition_id?: number | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          deleted_at?: string | null
+          id?: never
+          pm_rationale?: string | null
+          portfolio_name?: string | null
+          proposed_weight?: number | null
+          rationale?: string | null
+          recommendation?: string | null
+          research_report_id?: number | null
+          risk_report_id?: number | null
+          security_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ic_memos_addition_id_fkey"
+            columns: ["addition_id"]
+            isOneToOne: false
+            referencedRelation: "security_additions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ic_memos_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "ic_memos_research_report_id_fkey"
+            columns: ["research_report_id"]
+            isOneToOne: false
+            referencedRelation: "research_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ic_memos_risk_report_id_fkey"
+            columns: ["risk_report_id"]
+            isOneToOne: false
+            referencedRelation: "risk_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       investment_policy_statements: {
         Row: {
           cash_max_pct: number | null
@@ -1376,6 +1462,7 @@ export type Database = {
           ig_short_fixed_income_target: number | null
           ig_short_fixed_income_upper_limit: number | null
           investment_objective: string | null
+          investment_philosophy: string | null
           large_cap_blend_lower_limit: number | null
           large_cap_blend_target: number | null
           large_cap_blend_upper_limit: number | null
@@ -1399,6 +1486,7 @@ export type Database = {
           non_us_fixed_income_lower_limit: number | null
           non_us_fixed_income_target: number | null
           non_us_fixed_income_upper_limit: number | null
+          objective_statement: string | null
           rebalance_frequency: string | null
           review_frequency: string | null
           risk_profile: string | null
@@ -1450,6 +1538,7 @@ export type Database = {
           ig_short_fixed_income_target?: number | null
           ig_short_fixed_income_upper_limit?: number | null
           investment_objective?: string | null
+          investment_philosophy?: string | null
           large_cap_blend_lower_limit?: number | null
           large_cap_blend_target?: number | null
           large_cap_blend_upper_limit?: number | null
@@ -1473,6 +1562,7 @@ export type Database = {
           non_us_fixed_income_lower_limit?: number | null
           non_us_fixed_income_target?: number | null
           non_us_fixed_income_upper_limit?: number | null
+          objective_statement?: string | null
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
@@ -1524,6 +1614,7 @@ export type Database = {
           ig_short_fixed_income_target?: number | null
           ig_short_fixed_income_upper_limit?: number | null
           investment_objective?: string | null
+          investment_philosophy?: string | null
           large_cap_blend_lower_limit?: number | null
           large_cap_blend_target?: number | null
           large_cap_blend_upper_limit?: number | null
@@ -1547,6 +1638,7 @@ export type Database = {
           non_us_fixed_income_lower_limit?: number | null
           non_us_fixed_income_target?: number | null
           non_us_fixed_income_upper_limit?: number | null
+          objective_statement?: string | null
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
@@ -1797,6 +1889,7 @@ export type Database = {
           industrials_exposure_generic: number | null
           investment_grade_bond_allocation_generic: number | null
           investment_objective: string | null
+          investment_philosophy: string | null
           large_cap_equity_allocation_generic: number | null
           last_rebalance_date: string | null
           latin_america_total_exposure_generic: number | null
@@ -1822,6 +1915,7 @@ export type Database = {
           next_rebalance_date: string | null
           north_america_total_exposure_generic: number | null
           number_of_holdings: number | null
+          objective_statement: string | null
           one_month_total_return: number | null
           one_year_total_return: number | null
           other_bond_exposure_generic: number | null
@@ -1944,6 +2038,7 @@ export type Database = {
           industrials_exposure_generic?: number | null
           investment_grade_bond_allocation_generic?: number | null
           investment_objective?: string | null
+          investment_philosophy?: string | null
           large_cap_equity_allocation_generic?: number | null
           last_rebalance_date?: string | null
           latin_america_total_exposure_generic?: number | null
@@ -1969,6 +2064,7 @@ export type Database = {
           next_rebalance_date?: string | null
           north_america_total_exposure_generic?: number | null
           number_of_holdings?: number | null
+          objective_statement?: string | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
           other_bond_exposure_generic?: number | null
@@ -2091,6 +2187,7 @@ export type Database = {
           industrials_exposure_generic?: number | null
           investment_grade_bond_allocation_generic?: number | null
           investment_objective?: string | null
+          investment_philosophy?: string | null
           large_cap_equity_allocation_generic?: number | null
           last_rebalance_date?: string | null
           latin_america_total_exposure_generic?: number | null
@@ -2116,6 +2213,7 @@ export type Database = {
           next_rebalance_date?: string | null
           north_america_total_exposure_generic?: number | null
           number_of_holdings?: number | null
+          objective_statement?: string | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
           other_bond_exposure_generic?: number | null
@@ -2471,6 +2569,87 @@ export type Database = {
           },
         ]
       }
+      research_reports: {
+        Row: {
+          addition_id: number | null
+          author_role: string
+          bear_case: string | null
+          bull_case: string | null
+          conviction: string | null
+          created_at: string
+          current_price: number | null
+          dcf_inputs: Json | null
+          deleted_at: string | null
+          fair_value: number | null
+          id: number
+          portfolio_name: string | null
+          rating: string | null
+          report_type: string
+          security_id: string
+          sources: Json | null
+          status: string
+          thesis: string | null
+          valuation_summary: Json | null
+        }
+        Insert: {
+          addition_id?: number | null
+          author_role: string
+          bear_case?: string | null
+          bull_case?: string | null
+          conviction?: string | null
+          created_at?: string
+          current_price?: number | null
+          dcf_inputs?: Json | null
+          deleted_at?: string | null
+          fair_value?: number | null
+          id?: never
+          portfolio_name?: string | null
+          rating?: string | null
+          report_type?: string
+          security_id: string
+          sources?: Json | null
+          status?: string
+          thesis?: string | null
+          valuation_summary?: Json | null
+        }
+        Update: {
+          addition_id?: number | null
+          author_role?: string
+          bear_case?: string | null
+          bull_case?: string | null
+          conviction?: string | null
+          created_at?: string
+          current_price?: number | null
+          dcf_inputs?: Json | null
+          deleted_at?: string | null
+          fair_value?: number | null
+          id?: never
+          portfolio_name?: string | null
+          rating?: string | null
+          report_type?: string
+          security_id?: string
+          sources?: Json | null
+          status?: string
+          thesis?: string | null
+          valuation_summary?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_reports_addition_id_fkey"
+            columns: ["addition_id"]
+            isOneToOne: false
+            referencedRelation: "security_additions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_reports_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
       review_log: {
         Row: {
           conviction: string | null
@@ -2562,6 +2741,66 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "securities2"
             referencedColumns: ["security_id"]
+          },
+        ]
+      }
+      risk_reports: {
+        Row: {
+          addition_id: number | null
+          concentration: Json | null
+          created_at: string
+          deleted_at: string | null
+          factor_exposures: Json | null
+          id: number
+          mandate_checks: Json | null
+          notes: string | null
+          portfolio_name: string | null
+          scope: string
+          security_id: string | null
+          verdict: string
+        }
+        Insert: {
+          addition_id?: number | null
+          concentration?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          factor_exposures?: Json | null
+          id?: never
+          mandate_checks?: Json | null
+          notes?: string | null
+          portfolio_name?: string | null
+          scope?: string
+          security_id?: string | null
+          verdict?: string
+        }
+        Update: {
+          addition_id?: number | null
+          concentration?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          factor_exposures?: Json | null
+          id?: never
+          mandate_checks?: Json | null
+          notes?: string | null
+          portfolio_name?: string | null
+          scope?: string
+          security_id?: string | null
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_reports_addition_id_fkey"
+            columns: ["addition_id"]
+            isOneToOne: false
+            referencedRelation: "security_additions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "risk_reports_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
           },
         ]
       }
@@ -3575,7 +3814,10 @@ export type Database = {
       trade_suitability: {
         Row: {
           action: string
+          business_trend: string | null
+          conviction: string | null
           id: number
+          monitor_action: string | null
           new_weight: number | null
           old_weight: number | null
           portfolio_name: string
@@ -3583,10 +3825,15 @@ export type Database = {
           reason_code: string
           recorded_at: string
           security_id: string
+          thesis_status: string | null
+          valuation: string | null
         }
         Insert: {
           action: string
+          business_trend?: string | null
+          conviction?: string | null
           id?: never
+          monitor_action?: string | null
           new_weight?: number | null
           old_weight?: number | null
           portfolio_name: string
@@ -3594,10 +3841,15 @@ export type Database = {
           reason_code: string
           recorded_at?: string
           security_id: string
+          thesis_status?: string | null
+          valuation?: string | null
         }
         Update: {
           action?: string
+          business_trend?: string | null
+          conviction?: string | null
           id?: never
+          monitor_action?: string | null
           new_weight?: number | null
           old_weight?: number | null
           portfolio_name?: string
@@ -3605,6 +3857,8 @@ export type Database = {
           reason_code?: string
           recorded_at?: string
           security_id?: string
+          thesis_status?: string | null
+          valuation?: string | null
         }
         Relationships: []
       }
