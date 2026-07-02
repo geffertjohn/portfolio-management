@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
-    "supabase": "^2.95.0"
+    "supabase": "^2.109.0"
   },
   "workspaces": [
     "client",
