@@ -10,11 +10,14 @@ export function AutoGrowTextarea({
   onChange,
   placeholder,
   className = '',
+  maxHeightPx,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   className?: string
+  /** Cap the grown height; content beyond it scrolls instead of expanding. */
+  maxHeightPx?: number
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
@@ -23,12 +26,15 @@ export function AutoGrowTextarea({
     if (!el) return
     const resize = () => {
       el.style.height = 'auto'
-      el.style.height = `${el.scrollHeight}px`
+      const full = el.scrollHeight
+      const capped = maxHeightPx != null ? Math.min(full, maxHeightPx) : full
+      el.style.height = `${capped}px`
+      el.style.overflowY = maxHeightPx != null && full > maxHeightPx ? 'auto' : 'hidden'
     }
     resize()
     window.addEventListener('resize', resize)
     return () => window.removeEventListener('resize', resize)
-  }, [value])
+  }, [value, maxHeightPx])
 
   return (
     <textarea

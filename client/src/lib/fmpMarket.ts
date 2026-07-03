@@ -158,3 +158,39 @@ export async function fetchStockReturns(symbol: string): Promise<TrailingReturns
     fiveYear:   annualized(at(today.getFullYear() - 5, today.getMonth(), today.getDate()), 5),
   }
 }
+
+// ── S&P 500 current sector weights (reference) ──────────────────────────────
+
+/**
+ * FMP reports SPY holdings by Morningstar-style sector names; map them to our
+ * GICS `SECTOR_ROWS` keys. "Cash & Others" is intentionally dropped.
+ */
+const SPY_SECTOR_TO_KEY: Record<string, string> = {
+  'Basic Materials':        'materials',
+  'Communication Services': 'communication_services',
+  'Consumer Cyclical':      'consumer_discretionary',
+  'Consumer Defensive':     'consumer_staples',
+  'Energy':                 'energy',
+  'Financial Services':     'financials',
+  'Healthcare':             'health_care',
+  'Industrials':            'industrials',
+  'Real Estate':            'real_estate',
+  'Technology':             'information_technology',
+  'Utilities':              'utilities',
+}
+
+/**
+ * Current S&P 500 sector allocation (percent points), keyed by our GICS sector
+ * keys — a reference point for editing model sector targets. Sourced from the
+ * SPY ETF's sector weightings (the standard S&P 500 proxy).
+ */
+export async function fetchSp500SectorWeights(): Promise<Record<string, number>> {
+  const raw = await fmpFetch(`${FMP_STABLE}/etf/sector-weightings?symbol=SPY&apikey=${apiKey()}`)
+  const out: Record<string, number> = {}
+  for (const row of asArray(raw)) {
+    const key = SPY_SECTOR_TO_KEY[str(row.sector) ?? '']
+    const w = num(row.weightPercentage)
+    if (key && w != null) out[key] = w
+  }
+  return out
+}

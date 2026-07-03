@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchSecurities } from '@/lib/securities'
+import { fetchPortfolios } from '@/lib/portfolio'
 import { addProspect } from '@/lib/prospects'
-import { CONVICTION_OPTIONS, CONVICTION_LABELS, type Conviction } from '@/lib/reviewLog'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 interface Props {
@@ -18,14 +18,18 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
 
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [targetPortfolio, setTargetPortfolio] = useState('')
+  const [selectedPortfolios, setSelectedPortfolios] = useState<string[]>([])
   const [targetPrice, setTargetPrice] = useState('')
-  const [conviction, setConviction] = useState<Conviction | ''>('')
-  const [thesis, setThesis] = useState('')
 
   const { data: securities = [] } = useQuery({
     queryKey: QUERY_KEYS.securities,
     queryFn: fetchSecurities,
+    enabled: open,
+  })
+
+  const { data: portfolios = [] } = useQuery({
+    queryKey: QUERY_KEYS.portfolios,
+    queryFn: fetchPortfolios,
     enabled: open,
   })
 
@@ -36,10 +40,8 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
       d.showModal()
       setSearch('')
       setSelectedId(presetSecurityId ?? null)
-      setTargetPortfolio('')
+      setSelectedPortfolios([])
       setTargetPrice('')
-      setConviction('')
-      setThesis('')
       mutation.reset()
     } else {
       d.close()
@@ -49,17 +51,22 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
 
   const handleClose = () => { if (!mutation.isPending) onClose() }
 
+  const togglePortfolio = (name: string) =>
+    setSelectedPortfolios((prev) => (prev.includes(name) ? prev.filter((p) => p !== name) : [...prev, name]))
+
   const mutation = useMutation({
-    mutationFn: () => {
+    // One watchlist entry per selected portfolio, so each gets its own
+    // portfolio-specific AI research + recommendation.
+    mutationFn: async () => {
       if (!selectedId) throw new Error('No security selected')
+      if (selectedPortfolios.length === 0) throw new Error('Select at least one portfolio')
       const price = targetPrice.trim() ? Number(targetPrice) : null
-      return addProspect({
-        securityId: selectedId,
-        targetPortfolio: targetPortfolio || null,
-        targetPrice: price != null && Number.isFinite(price) ? price : null,
-        conviction: conviction || null,
-        thesis: thesis || null,
-      })
+      const targetPriceVal = price != null && Number.isFinite(price) ? price : null
+      await Promise.all(
+        selectedPortfolios.map((portfolio) =>
+          addProspect({ securityId: selectedId, targetPortfolio: portfolio, targetPrice: targetPriceVal }),
+        ),
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.prospects })
@@ -78,6 +85,8 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
   }).slice(0, 50)
 
   const selected = securities.find((s) => s.security_id === selectedId) ?? null
+  const typedTicker = search.trim().toUpperCase()
+  const hasExactMatch = securities.some((s) => s.security_id.toUpperCase() === typedTicker)
 
   return (
     <dialog
@@ -94,12 +103,14 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
         {/* Security search */}
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Security</label>
-          {selected ? (
+          {selectedId ? (
             <div className="mt-2 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
               <div>
-                <span className="font-mono text-sm font-semibold text-gray-900">{selected.security_id}</span>
-                {selected.security_name && (
+                <span className="font-mono text-sm font-semibold text-gray-900">{selectedId}</span>
+                {selected?.security_name ? (
                   <span className="ml-2 text-xs text-gray-500">{selected.security_name}</span>
+                ) : (
+                  <span className="ml-2 text-xs text-gray-400">Not in your securities — will be watched by ticker.</span>
                 )}
               </div>
               <button
@@ -115,29 +126,43 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
               <input
                 autoFocus
                 type="text"
-                placeholder="Search by symbol or name…"
+                placeholder="Enter or search any ticker…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && typedTicker) {
+                    e.preventDefault()
+                    setSelectedId(typedTicker); setSearch('')
+                  }
+                }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
               />
               {search.trim() && (
                 <div className="max-h-48 overflow-y-auto rounded-md border border-gray-200 bg-white">
-                  {filtered.length === 0 ? (
-                    <p className="px-3 py-3 text-sm text-gray-400">No results</p>
-                  ) : (
-                    filtered.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => { setSelectedId(s.security_id); setSearch('') }}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50"
-                      >
-                        <span className="font-mono text-sm font-medium text-gray-900">{s.security_id}</span>
-                        {s.security_name && (
-                          <span className="text-xs text-gray-500 truncate">{s.security_name}</span>
-                        )}
-                      </button>
-                    ))
+                  {filtered.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { setSelectedId(s.security_id); setSearch('') }}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50"
+                    >
+                      <span className="font-mono text-sm font-medium text-gray-900">{s.security_id}</span>
+                      {s.security_name && (
+                        <span className="text-xs text-gray-500 truncate">{s.security_name}</span>
+                      )}
+                    </button>
+                  ))}
+                  {/* Always allow watching the typed ticker as-is (any security). */}
+                  {typedTicker && !hasExactMatch && (
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedId(typedTicker); setSearch('') }}
+                      className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2.5 text-left hover:bg-indigo-50"
+                    >
+                      <span className="text-sm text-indigo-600">Watch</span>
+                      <span className="font-mono text-sm font-semibold text-indigo-700">{typedTicker}</span>
+                      <span className="text-xs text-gray-400">— not in your securities</span>
+                    </button>
                   )}
                 </div>
               )}
@@ -145,74 +170,55 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
           )}
         </div>
 
-        {selected && (
+        {selectedId && (
           <>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="prospect-portfolio" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Target portfolio <span className="font-normal normal-case text-gray-400">(optional)</span>
-                </label>
-                <input
-                  id="prospect-portfolio"
-                  type="text"
-                  value={targetPortfolio}
-                  onChange={(e) => setTargetPortfolio(e.target.value)}
-                  placeholder="e.g. Core Growth"
-                  className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="prospect-price" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Target price <span className="font-normal normal-case text-gray-400">(optional)</span>
-                </label>
-                <input
-                  id="prospect-price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={targetPrice}
-                  onChange={(e) => setTargetPrice(e.target.value)}
-                  placeholder="0.00"
-                  className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-                />
-              </div>
-            </div>
-
+            {/* Which portfolio(s) is this being considered for — one entry each. */}
             <div>
               <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Conviction <span className="font-normal normal-case text-gray-400">(optional)</span>
+                Considered for portfolio(s)
               </label>
-              <div className="mt-2 flex gap-2">
-                {CONVICTION_OPTIONS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setConviction(conviction === c ? '' : c)}
-                    className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
-                      conviction === c
-                        ? 'border-gray-700 bg-gray-800 text-white'
-                        : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    {CONVICTION_LABELS[c]}
-                  </button>
-                ))}
+              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-1">
+                {portfolios.length === 0 ? (
+                  <p className="px-2 py-2 text-sm text-gray-400">No portfolios found.</p>
+                ) : (
+                  portfolios.map((p) => (
+                    <label
+                      key={p.name}
+                      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPortfolios.includes(p.name)}
+                        onChange={() => togglePortfolio(p.name)}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-gray-900">{p.name}</span>
+                    </label>
+                  ))
+                )}
               </div>
             </div>
 
             <div>
-              <label htmlFor="prospect-thesis" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Thesis <span className="font-normal normal-case text-gray-400">(optional)</span>
+              <label htmlFor="prospect-price" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Target price <span className="font-normal normal-case text-gray-400">(optional)</span>
               </label>
-              <textarea
-                id="prospect-thesis"
-                value={thesis}
-                onChange={(e) => setThesis(e.target.value)}
-                rows={3}
-                placeholder="Why this is a candidate — what you're watching for before buying."
-                className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+              <input
+                id="prospect-price"
+                type="number"
+                step="0.01"
+                min="0"
+                value={targetPrice}
+                onChange={(e) => setTargetPrice(e.target.value)}
+                placeholder="0.00"
+                className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
               />
             </div>
+
+            <p className="rounded-md bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+              The AI research team will draft the thesis, bull &amp; bear case, conviction, and
+              recommendation for each selected portfolio.
+            </p>
           </>
         )}
 
@@ -234,7 +240,7 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
         </button>
         <button
           type="button"
-          disabled={!selectedId || mutation.isPending}
+          disabled={!selectedId || selectedPortfolios.length === 0 || mutation.isPending}
           onClick={() => mutation.mutate()}
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         >

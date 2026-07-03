@@ -939,6 +939,7 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_data" (
     "tier4_upper" numeric DEFAULT 1,
     "objective_statement" "text",
     "investment_philosophy" "text",
+    "sector_allocations" "jsonb",
     CONSTRAINT "model_portfolio_data_rebalance_frequency_check" CHECK (("rebalance_frequency" = ANY (ARRAY['Quarterly'::"text", 'Semi-Annual'::"text", 'Annual'::"text"]))),
     CONSTRAINT "model_portfolio_data_review_frequency_check" CHECK (("review_frequency" = ANY (ARRAY['Quarterly'::"text", 'Semi-Annual'::"text", 'Annual'::"text"])))
 );
@@ -2796,11 +2797,6 @@ ALTER TABLE ONLY "public"."positions"
 
 ALTER TABLE ONLY "public"."positions"
     ADD CONSTRAINT "positions_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id");
-
-
-
-ALTER TABLE ONLY "public"."prospects"
-    ADD CONSTRAINT "prospects_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id");
 
 
 

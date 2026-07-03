@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AddPositionModal } from '@/components/AddPositionModal'
 import { EditPositionModal } from '@/components/EditPositionModal'
 import { RebalancingPanel } from '@/components/RebalancingPanel'
-import { CompliancePanel } from '@/components/CompliancePanel'
 import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
 import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
@@ -18,7 +17,7 @@ import { DetailPageState } from '@/components/DetailPageState'
 import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePanel'
 import { AllocationHistoryPanel } from '@/components/AllocationHistoryPanel'
 import { AllocationComparison } from '@/components/AllocationComparison'
-import { usePortfolio, usePositions } from '@/hooks/usePortfolio'
+import { usePortfolio, usePositions, useLatestActualAllocation } from '@/hooks/usePortfolio'
 import { updatePortfolioObjective } from '@/lib/portfolio'
 import { updatePositionBands } from '@/lib/positions'
 import { isCashTicker } from '@/lib/positionBands'
@@ -26,7 +25,7 @@ import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelP
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { PortfolioPosition } from '@/types/position'
 
-type PortfolioTab = 'overview' | 'allocation' | 'compliance' | 'change_log' | 'reviews' | 'candidates' | 'documents'
+type PortfolioTab = 'overview' | 'allocation' | 'change_log' | 'reviews' | 'candidates' | 'documents'
 type AllocationSubTab = 'positions' | 'history' | 'comparison'
 type ChangeLogView = 'changelog' | 'rebalance' | 'suitability'
 
@@ -113,6 +112,22 @@ export function PortfolioDetailPage() {
     isLoading: positionsLoading,
     error: positionsError,
   } = usePositions(id, !!portfolio)
+
+  // Most recent actual allocation (from the latest monthly file in Documents).
+  const { data: currentAllocation } = useLatestActualAllocation(id, !!portfolio)
+
+  /** Actual weight (percent points) for a position, or null if not in the file.
+   *  All cash-like file tickers (e.g. FDXCASH) collapse into the one cash position. */
+  function actualWeightFor(securityId: string, ticker: string): number | null {
+    if (!currentAllocation) return null
+    const { weights } = currentAllocation
+    if (isCashTicker(securityId) || isCashTicker(ticker)) {
+      let cash: number | null = null
+      for (const [k, v] of weights) if (isCashTicker(k)) cash = (cash ?? 0) + v
+      return cash
+    }
+    return weights.get(securityId.toUpperCase()) ?? weights.get(ticker.toUpperCase()) ?? null
+  }
 
   if (isLoading || error || !portfolio) {
     return (
@@ -242,12 +257,10 @@ export function PortfolioDetailPage() {
 
         <PortfolioNarrative
           description={
-            (['ETF', 'Foundation', 'Hybrid'].includes(portfolio.portfolio_strategy) && !isEquityStrategy && modelPortfolio?.description)
+            ((mappedModelPortfolioId != null || (['ETF', 'Foundation', 'Hybrid'].includes(portfolio.portfolio_strategy) && !isEquityStrategy)) && modelPortfolio?.description)
               ? modelPortfolio.description
               : portfolio.description
           }
-          objective={modelPortfolio?.objective_statement ?? portfolio.objective_statement}
-          philosophy={modelPortfolio?.investment_philosophy ?? portfolio.investment_philosophy}
         />
 
         {/* Tab Bar */}
@@ -256,7 +269,6 @@ export function PortfolioDetailPage() {
             {([
               { id: 'overview',    label: 'Overview'    },
               { id: 'allocation',  label: 'Allocation'  },
-              { id: 'compliance',  label: 'Compliance'  },
               { id: 'change_log', label: 'Change Log'  },
               { id: 'reviews',    label: 'Reviews'     },
               { id: 'candidates', label: 'Candidates'  },
@@ -309,9 +321,17 @@ export function PortfolioDetailPage() {
           {/* Positions sub-tab */}
           {allocationSubTab === 'positions' && <>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
-              Positions
-            </h2>
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
+                Positions
+              </h2>
+              {currentAllocation && (
+                <p className="mt-0.5 text-xs text-gray-400">
+                  Current allocation as of{' '}
+                  {new Date(currentAllocation.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {bulkEditMode ? (
                 <>
@@ -402,6 +422,7 @@ export function PortfolioDetailPage() {
                   <tr>
                     <th scope="col" className="px-4 py-2.5 font-semibold text-gray-900">Ticker</th>
                     <th scope="col" className="px-4 py-2.5 font-semibold text-gray-900">Name</th>
+                    {!bulkEditMode && currentAllocation && <th scope="col" className="px-4 py-2.5 font-semibold text-gray-900">Current</th>}
                     <th scope="col" className="px-4 py-2.5 font-semibold text-gray-900">Lower Limit</th>
                     <th scope="col" className="px-4 py-2.5 font-semibold text-gray-900">Target</th>
                     <th scope="col" className="px-4 py-2.5 font-semibold text-gray-900">Upper Limit</th>
@@ -461,6 +482,23 @@ export function PortfolioDetailPage() {
                           </>
                         ) : (
                           <>
+                            {currentAllocation && (() => {
+                              const actual = actualWeightFor(pos.securityId, pos.ticker)
+                              if (actual == null)
+                                return <td className="whitespace-nowrap px-4 py-2.5 text-gray-400">—</td>
+                              const target = pos.targetWeight ?? pos.weight
+                              const lower = pos.lowerLimit
+                                ?? (isCashTicker(pos.securityId) ? modelPortfolio?.cash_lower_limit ?? null : driftLower(target))
+                              const upper = pos.upperLimit
+                                ?? (isCashTicker(pos.securityId) ? modelPortfolio?.cash_upper_limit ?? null : driftUpper(target))
+                              const outOfBand =
+                                (lower != null && actual < lower - 0.05) || (upper != null && actual > upper + 0.05)
+                              return (
+                                <td className={`whitespace-nowrap px-4 py-2.5 font-medium tabular-nums ${outOfBand ? 'text-amber-600' : 'text-gray-900'}`}>
+                                  {actual.toFixed(1)}%
+                                </td>
+                              )
+                            })()}
                             <td className="whitespace-nowrap px-4 py-2.5 text-gray-500">
                               {(() => {
                                 if (pos.lowerLimit != null) return `${pos.lowerLimit.toFixed(1)}%`
@@ -506,6 +544,11 @@ export function PortfolioDetailPage() {
                   <tr>
                     <td className="px-4 py-2.5 text-sm font-semibold text-gray-900">Total</td>
                     <td />
+                    {!bulkEditMode && currentAllocation && (
+                      <td className="whitespace-nowrap px-4 py-2.5 text-sm font-semibold text-gray-900">
+                        {positions.reduce((sum, p) => sum + (actualWeightFor(p.securityId, p.ticker) ?? 0), 0).toFixed(1)}%
+                      </td>
+                    )}
                     <td />
                     <td className={`whitespace-nowrap px-4 py-2.5 text-sm font-semibold ${
                       Math.abs(positions.reduce((sum, p) => sum + p.weight, 0) - 100) < 0.05
@@ -533,13 +576,6 @@ export function PortfolioDetailPage() {
           )}
 
         </div>} {/* end allocation tab */}
-
-        {/* Compliance Tab */}
-        {tab === 'compliance' && (
-          <div className="mt-6">
-            <CompliancePanel portfolioId={id} positions={positions} portfolio={portfolio} modelPortfolio={modelPortfolio} />
-          </div>
-        )}
 
         {/* Change Log Tab — with sub-view dropdown */}
         {tab === 'change_log' && (
