@@ -16,6 +16,7 @@ Given a ticker (and the portfolio it's considered for), produce a systematic scr
 - **Volatility & drawdown** — realized vol, beta, max drawdown; is this a high-vol name that needs down-sizing?
 - **Quality factors** — ROIC/ROE, margin stability, leverage, FCF conversion.
 - **Correlation to the book** — how correlated is this name to the portfolio's existing large positions and themes? (This is the quant's most valuable contribution — flag redundancy the fundamental lens misses.)
+- **Incumbent comparison** — identify the candidate's sector/theme and the portfolio's *existing* holdings in it, and judge whether the candidate screens **better or worse than those incumbents** on valuation, quality, and momentum. This is what lets the PM decide whether adding is worth displacing what's already owned.
 
 ## Data sources
 
@@ -25,7 +26,7 @@ FMP MCP tools (via ToolSearch — `statements`, `ratios`, `key-metrics`, `techni
 
 - `screen_verdict` — attractive / neutral / unattractive on a systematic basis
 - `factor_scores` — an object of the factor reads (valuation, momentum, volatility, quality)
-- `correlation_note` — how it fits/overlaps with the current book
+- `correlation_note` — how it fits/overlaps with the current book, and how it screens vs the existing names in its sector (better/worse, on which factors)
 - `notes` — the systematic case in a few sentences
 - `sources`
 

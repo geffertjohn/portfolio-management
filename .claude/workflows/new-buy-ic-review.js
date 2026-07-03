@@ -76,8 +76,10 @@ const QUANT_ROLE =
   'percentiles vs the name\'s own history and its sector, momentum (3/6/12-mo price + estimate-revision ' +
   'direction), volatility/beta/max-drawdown, quality (ROIC/ROE, margin stability, leverage, FCF conversion), ' +
   'and — most importantly — CORRELATION/overlap with the portfolio\'s existing large positions and themes ' +
-  '(flag redundancy the fundamental lens misses). Be explicit about data limits; do not over-fit noise. ' +
-  'Recommend-only: never trade. ' + FMP_NOTE
+  '(flag redundancy the fundamental lens misses). Also compare the candidate to the portfolio\'s EXISTING ' +
+  'holdings in its sector/theme — does it screen better or worse than those incumbents on ' +
+  'valuation/quality/momentum (the input the PM needs to decide whether adding is worth displacing what is ' +
+  'owned)? Be explicit about data limits; do not over-fit noise. Recommend-only: never trade. ' + FMP_NOTE
 
 const PM_ROLE =
   'You are a PORTFOLIO MANAGER (capital allocator, not a stock picker) on an AI investment team. Given the ' +
@@ -86,7 +88,13 @@ const PM_ROLE =
   'volatility, liquidity, and correlation with existing holdings; respect the model\'s position/cash bands ' +
   'and flag any breach; state the funding source. Read positions/model bands read-only via the Supabase MCP ' +
   'if available, else reason from the context you are given. Recommend-only: never execute, never write ' +
-  'positions/allocations. If a sensible size would breach the mandate, recommend watchlist or reject.'
+  'positions/allocations. Construction is RELATIVE, not standalone: use model_portfolio_data (style/asset-class ' +
+  'targets + bands, conviction tiers, equity/cash bands) with the current positions to place the candidate in ' +
+  'its sector, read the book\'s CURRENT allocation to that sector, and run the opportunity-cost test — if the ' +
+  'sector is already well-served, is the candidate clearly better than the marginal existing name it would ' +
+  'displace? A high-merit stock can still be watchlist/reject when maintaining the existing holdings is the ' +
+  'better allocation; say so and name the incumbents. If a sensible size would breach the mandate, recommend ' +
+  'watchlist or reject.'
 
 const RISK_ROLE =
   'You are the RISK MANAGER on an AI investment team — a control gate before the CIO. Assess what could hurt ' +
@@ -214,7 +222,7 @@ const researchThunks = [
 if (!lean) {
   researchThunks.push(() => agent(
     `${QUANT_ROLE}\n\nRun a systematic screen on ${ticker}${forCtx}, including correlation/overlap with the ` +
-    `portfolio's current holdings. Return structured data.`,
+    `portfolio's current holdings and how it screens vs the existing names in its sector. Return structured data.`,
     { schema: QUANT_SCHEMA, label: `quant:${ticker}`, phase: 'Research' },
   ))
 }
@@ -230,7 +238,10 @@ const pm = await agent(
   `Research summary:\n${JSON.stringify(research)}\n\nBear case:\n${JSON.stringify(bear)}\n\n` +
   (quant ? `Quant screen:\n${JSON.stringify(quant)}\n\n` : '') +
   `Propose a target weight and explain the sizing (conviction, fit, concentration impact, funding). ` +
-  `Respect the model bands; if a sensible size would breach them, recommend watchlist/reject. Return structured data.`,
+  `Explicitly evaluate portfolio CONSTRUCTION: read model_portfolio_data and the current positions, identify ` +
+  `${ticker}'s sector, measure the book's current allocation to that sector, and run the opportunity-cost test ` +
+  `vs the existing names there — a high-merit stock can still be watchlist/reject if keeping the incumbents is ` +
+  `the better allocation. Respect the model bands; if a sensible size would breach them, recommend watchlist/reject. Return structured data.`,
   { schema: SIZING_SCHEMA, label: `pm:${ticker}`, phase: 'Construct' },
 )
 
@@ -269,7 +280,9 @@ const rationale = await agent(
   (quant ? `the quant screen, ` : '') + `the PM's sizing proposal, the risk verdict, ` +
   (compliance ? `and the compliance/IPS suitability finding ` : '') +
   `into a clear recommendation and its reasoning. State the committee recommendation (${recommendation}) and ` +
-  `why, and flag any risk warn/veto or compliance caution/unsuitable prominently.\n\n` +
+  `why, and flag any risk warn/veto or compliance caution/unsuitable prominently. If the committee declines a ` +
+  `fundamentally sound name for portfolio-construction reasons (sector already well-served / existing holdings ` +
+  `preferable), make that reasoning explicit — "good business, but not additive to this book because …".\n\n` +
   `Analyst: ${JSON.stringify(research)}\nBear: ${JSON.stringify(bear)}\n` +
   (quant ? `Quant: ${JSON.stringify(quant)}\n` : '') +
   `PM: ${JSON.stringify(pm)}\nRisk: ${JSON.stringify(risk)}\n` +

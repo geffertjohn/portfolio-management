@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { ASSET_CLASS_ROWS } from '@/lib/modelPortfolios'
-import type { ModelPortfolio, ModelPortfolioInput } from '@/lib/modelPortfolios'
+import { useQuery } from '@tanstack/react-query'
+import { ASSET_CLASS_ROWS, SECTOR_ROWS, hasSectorAllocations, EQUITY_MODEL_HIDDEN_ASSET_CLASSES } from '@/lib/modelPortfolios'
+import type { ModelPortfolio, ModelPortfolioInput, SectorAllocations } from '@/lib/modelPortfolios'
+import { fetchSp500SectorWeights } from '@/lib/fmpMarket'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { AutoGrowTextarea } from '@/components/AutoGrowTextarea'
 
 // target string → number, defaulting 0
@@ -113,6 +116,33 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
   })
   const setTier = (k: keyof typeof tiers, v: string) => setTiers((p) => ({ ...p, [k]: v }))
 
+  // Per-sector target weight bands — only shown for the all-equity stock models.
+  const showSectors = hasSectorAllocations(initial?.name)
+  // Those same models hide the international / fixed-income asset-class rows.
+  const visibleAssetClassRows = showSectors
+    ? ASSET_CLASS_ROWS.filter((r) => !EQUITY_MODEL_HIDDEN_ASSET_CLASSES.has(r.key))
+    : ASSET_CLASS_ROWS
+  type SectorDraft = Record<string, { lower: string; target: string; upper: string }>
+  const [sectors, setSectors] = useState<SectorDraft>(() => {
+    const src = (initial?.sector_allocations ?? {}) as SectorAllocations
+    const out: SectorDraft = {}
+    for (const { key } of SECTOR_ROWS) {
+      const b = src[key]
+      out[key] = { lower: String(b?.lower ?? 0), target: String(b?.target ?? 0), upper: String(b?.upper ?? 0) }
+    }
+    return out
+  })
+  const setSectorField = (key: string, field: 'lower' | 'target' | 'upper', v: string) =>
+    setSectors((p) => ({ ...p, [key]: { ...p[key], [field]: v } }))
+
+  // Current S&P 500 sector weights (from FMP) — a read-only reference beside the targets.
+  const { data: spyWeights = {} } = useQuery({
+    queryKey: QUERY_KEYS.sp500SectorWeights,
+    queryFn: fetchSp500SectorWeights,
+    enabled: showSectors,
+    staleTime: 1000 * 60 * 60 * 24, // index sector weights drift slowly
+  })
+
   // Category: only targets for equity/fixedIncome (lower/upper computed); cash is explicit
   const [catTargets, setCatTargets] = useState<DraftCategoryTargets>(
     initial ? buildDraftCategory(initial) : { equityTarget: '0', fixedIncomeTarget: '0' }
@@ -210,9 +240,69 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       tier2_lower: n(tiers.t2l), tier2_upper: n(tiers.t2u),
       tier3_lower: n(tiers.t3l), tier3_upper: n(tiers.t3u),
       tier4_lower: n(tiers.t4l), tier4_upper: n(tiers.t4u),
+      sector_allocations: showSectors
+        ? Object.fromEntries(SECTOR_ROWS.map(({ key }) => [
+            key,
+            { lower: n(sectors[key].lower), target: n(sectors[key].target), upper: n(sectors[key].upper) },
+          ])) as SectorAllocations
+        : (initial?.sector_allocations ?? null),
       ...acPayload,
     } as ModelPortfolioInput)
   }
+
+  // Position Drift + Conviction Tiers are laid out inline for the all-equity models
+  // (left column, beside the taller Asset Class table) and after the grid otherwise.
+  const positionDriftBlock = (
+    <div className="flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
+      <span className="text-sm font-medium text-gray-700">Position Drift ±</span>
+      <input type="number" min={0} max={100} step={1} value={posDrift}
+        onChange={(e) => setPosDrift(e.target.value)}
+        className="w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none" />
+      <span className="text-sm text-gray-400">%</span>
+      <span className="ml-1 text-xs text-gray-400">Applied ± to each position's target weight</span>
+    </div>
+  )
+  const convictionTiersBlock = (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Conviction Tiers</p>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-[#0f2d4d] text-white">
+            <th className="px-3 py-2 text-left font-semibold rounded-tl-md">Tier</th>
+            <th className="px-3 py-2 text-left font-semibold">Meaning</th>
+            <th className="w-24 px-3 py-2 text-center font-semibold">Lower</th>
+            <th className="w-24 px-3 py-2 text-center font-semibold rounded-tr-md">Upper</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {([
+            { t: 'Tier 1', meaning: 'Best ideas; core holdings',  lk: 't1l' as const, uk: 't1u' as const },
+            { t: 'Tier 2', meaning: 'Solid holdings; normal',     lk: 't2l' as const, uk: 't2u' as const },
+            { t: 'Tier 3', meaning: 'Lower conviction; smaller',  lk: 't3l' as const, uk: 't3u' as const },
+            { t: 'Tier 4', meaning: 'Replace / exit candidates',  lk: 't4l' as const, uk: 't4u' as const },
+          ]).map(({ t, meaning, lk, uk }) => {
+            const inpClass = 'w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none'
+            return (
+              <tr key={t} className="bg-gray-50 even:bg-white">
+                <td className="px-3 py-1.5 font-medium text-gray-800">{t}</td>
+                <td className="px-3 py-1.5 text-xs text-gray-500">{meaning}</td>
+                {([lk, uk] as const).map((k) => (
+                  <td key={k} className="px-2 py-1.5">
+                    <div className="flex items-center justify-center gap-1">
+                      <input type="number" min={0} max={100} step={0.5} value={tiers[k]}
+                        onChange={(e) => setTier(k, e.target.value)} className={inpClass} />
+                      <span className="text-xs text-gray-400">%</span>
+                    </div>
+                  </td>
+                ))}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className="mt-1 text-xs text-gray-400">Target weight bands used by the annual conviction-ranking review.</p>
+    </div>
+  )
 
   const panel = (
       <div className={`w-full rounded-lg border border-gray-200 bg-white ${asPage ? 'shadow-sm' : 'max-w-2xl shadow-xl'}`}>
@@ -281,7 +371,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
               </div>
               <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
                 <label className="block text-sm font-medium text-gray-700">Description</label>
-                <AutoGrowTextarea value={description} onChange={setDescription}
+                <AutoGrowTextarea value={description} onChange={setDescription} maxHeightPx={160}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[4.5rem]" />
               </div>
 
@@ -290,14 +380,14 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
                     <label className="block text-sm font-medium text-gray-700">Objective</label>
                     <p className="mt-0.5 text-xs text-gray-400">Narrative objective shown on the portfolio Overview.</p>
-                    <AutoGrowTextarea value={objectiveStatement} onChange={setObjectiveStatement}
+                    <AutoGrowTextarea value={objectiveStatement} onChange={setObjectiveStatement} maxHeightPx={120}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[3rem]" />
                   </div>
                   <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
                     <label className="block text-sm font-medium text-gray-700">Investment Philosophy</label>
                     <p className="mt-0.5 text-xs text-gray-400">Income / stability / growth criteria + strategy shown on the portfolio Overview.</p>
-                    <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[8rem]" />
+                    <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy} maxHeightPx={260}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
                   </div>
                 </>
               )}
@@ -410,6 +500,14 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   </tr>
                 </tbody>
               </table>
+              {/* All-equity models: tuck Drift + Conviction Tiers under the short
+                  Category table so the left column fills beside Asset Class. */}
+              {showSectors && (
+                <div className="mt-5 space-y-5">
+                  {positionDriftBlock}
+                  {convictionTiersBlock}
+                </div>
+              )}
             </div>
 
             {/* ── Asset Class Allocations ──────────────────────────────────── */}
@@ -446,7 +544,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {ASSET_CLASS_ROWS.map(({ label, key }) => {
+                  {visibleAssetClassRows.map(({ label, key }) => {
                     if (key === 'cash') {
                       // Cash synced from Category — read only
                       return (
@@ -512,7 +610,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                 </tbody>
                 <tfoot className="border-t-2 border-gray-300">
                   {(() => {
-                    const totalTarget = ASSET_CLASS_ROWS.reduce(
+                    const totalTarget = visibleAssetClassRows.reduce(
                       (sum, { key }) => sum + (key === 'cash' ? n(cash.target) : n(acTargets[key])), 0
                     )
                     const off = Math.abs(totalTarget - 100) >= 0.05
@@ -534,56 +632,66 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
             </div>
             </div>
 
-            {/* ── Position Drift ───────────────────────────────────────────── */}
-            <div className="flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
-              <span className="text-sm font-medium text-gray-700">Position Drift ±</span>
-              <input type="number" min={0} max={100} step={1} value={posDrift}
-                onChange={(e) => setPosDrift(e.target.value)}
-                className="w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none" />
-              <span className="text-sm text-gray-400">%</span>
-              <span className="ml-1 text-xs text-gray-400">Applied ± to each position's target weight</span>
-            </div>
+            {/* Non-equity models keep Drift + Conviction Tiers full-width below the grid. */}
+            {!showSectors && (
+              <>
+                {positionDriftBlock}
+                {convictionTiersBlock}
+              </>
+            )}
 
-            {/* ── Conviction Tiers (annual position-sizing bands) ──────────── */}
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Conviction Tiers</p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-[#0f2d4d] text-white">
-                    <th className="px-3 py-2 text-left font-semibold rounded-tl-md">Tier</th>
-                    <th className="px-3 py-2 text-left font-semibold">Meaning</th>
-                    <th className="w-24 px-3 py-2 text-center font-semibold">Lower</th>
-                    <th className="w-24 px-3 py-2 text-center font-semibold rounded-tr-md">Upper</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {([
-                    { t: 'Tier 1', meaning: 'Best ideas; core holdings',  lk: 't1l' as const, uk: 't1u' as const },
-                    { t: 'Tier 2', meaning: 'Solid holdings; normal',     lk: 't2l' as const, uk: 't2u' as const },
-                    { t: 'Tier 3', meaning: 'Lower conviction; smaller',  lk: 't3l' as const, uk: 't3u' as const },
-                    { t: 'Tier 4', meaning: 'Replace / exit candidates',  lk: 't4l' as const, uk: 't4u' as const },
-                  ]).map(({ t, meaning, lk, uk }) => {
-                    const inpClass = 'w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none'
-                    return (
-                      <tr key={t} className="bg-gray-50 even:bg-white">
-                        <td className="px-3 py-1.5 font-medium text-gray-800">{t}</td>
-                        <td className="px-3 py-1.5 text-xs text-gray-500">{meaning}</td>
-                        {([lk, uk] as const).map((k) => (
-                          <td key={k} className="px-2 py-1.5">
-                            <div className="flex items-center justify-center gap-1">
-                              <input type="number" min={0} max={100} step={0.5} value={tiers[k]}
-                                onChange={(e) => setTier(k, e.target.value)} className={inpClass} />
-                              <span className="text-xs text-gray-400">%</span>
-                            </div>
+            {/* ── Sector Allocation (all-equity stock models only) ─────────── */}
+            {showSectors && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Sector Allocation</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-[#0f2d4d] text-white">
+                      <th className="px-3 py-2 text-left font-semibold rounded-tl-md">Sector</th>
+                      <th className="w-24 px-3 py-2 text-center font-semibold">S&amp;P 500</th>
+                      <th className="w-24 px-3 py-2 text-center font-semibold">Lower</th>
+                      <th className="w-24 px-3 py-2 text-center font-semibold">Target</th>
+                      <th className="w-24 px-3 py-2 text-center font-semibold rounded-tr-md">Upper</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {SECTOR_ROWS.map(({ label, key }) => {
+                      const inpClass = 'w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none'
+                      const spy = spyWeights[key]
+                      return (
+                        <tr key={key} className="bg-gray-50 even:bg-white">
+                          <td className="px-3 py-1.5 font-medium text-gray-800">{label}</td>
+                          <td className="px-3 py-1.5 text-center tabular-nums text-gray-500">
+                            {spy != null ? `${spy.toFixed(1)}%` : '—'}
                           </td>
-                        ))}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <p className="mt-1 text-xs text-gray-400">Target weight bands used by the annual conviction-ranking review.</p>
-            </div>
+                          {(['lower', 'target', 'upper'] as const).map((f) => (
+                            <td key={f} className="px-2 py-1.5">
+                              <div className="flex items-center justify-center gap-1">
+                                <input type="number" min={0} max={100} step={0.5} value={sectors[key][f]}
+                                  onChange={(e) => setSectorField(key, f, e.target.value)} className={inpClass} />
+                                <span className="text-xs text-gray-400">%</span>
+                              </div>
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                    <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                      <td className="px-3 py-1.5 text-gray-800">Total</td>
+                      <td className="px-3 py-1.5 text-center tabular-nums text-gray-500">
+                        {SECTOR_ROWS.reduce((s, { key }) => s + (spyWeights[key] ?? 0), 0).toFixed(1)}%
+                      </td>
+                      <td />
+                      <td className="px-3 py-1.5 text-center text-gray-800">
+                        {SECTOR_ROWS.reduce((s, { key }) => s + n(sectors[key].target), 0).toFixed(1)}%
+                      </td>
+                      <td />
+                    </tr>
+                  </tbody>
+                </table>
+                <p className="mt-1 text-xs text-gray-400">Target sector weights across the 11 S&amp;P 500 sectors.</p>
+              </div>
+            )}
 
             {error && (
               <p className="text-sm text-red-600">

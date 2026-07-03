@@ -1490,6 +1490,7 @@ export type Database = {
           rebalance_frequency: string | null
           review_frequency: string | null
           risk_profile: string | null
+          sector_allocations: Json | null
           tier1_lower: number | null
           tier1_upper: number | null
           tier2_lower: number | null
@@ -1566,6 +1567,7 @@ export type Database = {
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
+          sector_allocations?: Json | null
           tier1_lower?: number | null
           tier1_upper?: number | null
           tier2_lower?: number | null
@@ -1642,6 +1644,7 @@ export type Database = {
           rebalance_frequency?: string | null
           review_frequency?: string | null
           risk_profile?: string | null
+          sector_allocations?: Json | null
           tier1_lower?: number | null
           tier1_upper?: number | null
           tier2_lower?: number | null
@@ -2524,15 +2527,7 @@ export type Database = {
           thesis?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "prospects_security_id_fkey"
-            columns: ["security_id"]
-            isOneToOne: false
-            referencedRelation: "securities2"
-            referencedColumns: ["security_id"]
-          },
-        ]
+        Relationships: []
       }
       rebalance_log: {
         Row: {

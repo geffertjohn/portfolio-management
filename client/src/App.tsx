@@ -29,6 +29,7 @@ const NotificationsPage = lazy(() => import('@/pages/settings/NotificationsPage'
 const ModelPortfoliosPage = lazy(() => import('@/pages/settings/ModelPortfoliosPage').then((m) => ({ default: m.ModelPortfoliosPage })))
 const EditModelPortfolioPage = lazy(() => import('@/pages/settings/EditModelPortfolioPage').then((m) => ({ default: m.EditModelPortfolioPage })))
 const CompliancePage = lazy(() => import('@/pages/settings/CompliancePage').then((m) => ({ default: m.CompliancePage })))
+const InvestmentCommitteePage = lazy(() => import('@/pages/settings/InvestmentCommitteePage').then((m) => ({ default: m.InvestmentCommitteePage })))
 
 function Page({ children }: { children: ReactNode }) {
   return (
@@ -67,6 +68,7 @@ function App() {
           <Route path="settings/model-portfolios" element={<Page><ModelPortfoliosPage /></Page>} />
           <Route path="settings/model-portfolios/:id/edit" element={<Page><EditModelPortfolioPage /></Page>} />
           <Route path="settings/compliance" element={<Page><CompliancePage /></Page>} />
+          <Route path="settings/investment-committee" element={<Page><InvestmentCommitteePage /></Page>} />
         </Route>
       </Routes>
     </BrowserRouter>

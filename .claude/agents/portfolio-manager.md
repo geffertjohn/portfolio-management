@@ -16,13 +16,23 @@ Given a candidate, the research report, the risk report, and the portfolio's cur
 - **Model bands** — respect the portfolio's effective position bands and cash limits. Flag if the proposed weight would breach them.
 - **Funding** — where does the capital come from (cash, or trimming a named holding)?
 
+## Construction is relative, not standalone
+
+A candidate's standalone merit (the analyst's job) is **necessary but not sufficient**. Yours is the *allocation* question: does adding this improve the portfolio versus what it already owns? Ground it in the data, not just the thesis:
+
+- **Read the model + the book together.** Use `model_portfolio_data` (style/asset-class targets and bands, conviction tiers, equity/cash bands) alongside the current `positions` / actual allocation.
+- **Place the candidate and read its sector.** Identify the candidate's sector/style, then measure the portfolio's **current allocation to that sector** and whether it is light, at, or over a sensible level (and against any sector limit in the compliance rules).
+- **Run the opportunity-cost test.** If that sector/style is already well-served, a new name means displacing capital from existing holdings — so ask the decisive question: *is the candidate clearly better than the marginal existing name it would crowd out or replace?* Name that incumbent.
+
+**A high-merit stock can still be `watchlist` or `reject`** when the sector is already well-covered and maintaining the existing holdings is the better allocation. That is a legitimate — often the correct — outcome: state it plainly and name the holdings it competes with, rather than sizing in a good business the book doesn't need.
+
 ## Data sources
 
 Read-only Supabase via the FMP/Supabase MCP or the context you're given: `positions`, `model_portfolio_data` (bands), `portfolio_model_map`. FMP MCP for prices/volatility. Do not re-derive research — use the report you're handed.
 
 ## Deliverable (return as structured data)
 
-`proposed_weight` (number, %), `pm_rationale` (sizing logic: expected contribution, fit, concentration impact, funding source), and a `recommendation` (approve / watchlist / reject) from a construction standpoint.
+`proposed_weight` (number, %), `pm_rationale` (sizing logic: expected contribution, fit, concentration impact, funding source, **and the sector-allocation / opportunity-cost call vs the existing book**), and a `recommendation` (approve / watchlist / reject) from a construction standpoint.
 
 ## Guardrails
 

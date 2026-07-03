@@ -94,9 +94,16 @@ export interface ModelPortfolio {
   tier4_lower: number | null
   tier4_upper: number | null
 
+  // Per-sector target weight bands (all-equity stock models only — see hasSectorAllocations).
+  sector_allocations: SectorAllocations | null
+
   created_at: string
   updated_at: string
 }
+
+export type SectorBand = { lower: number | null; target: number | null; upper: number | null }
+/** Per-sector target weight bands (percent points), keyed by SECTOR_ROWS key. */
+export type SectorAllocations = Record<string, SectorBand>
 
 export type ModelPortfolioInput = Omit<ModelPortfolio, 'id' | 'created_at' | 'updated_at'>
 
@@ -116,6 +123,37 @@ export const ASSET_CLASS_ROWS: { label: string; key: string }[] = [
   { label: 'Alternative Investments',                            key: 'alternatives' },
   { label: 'Cash & Cash Alternatives',                           key: 'cash' },
 ]
+
+/**
+ * Asset classes hidden from the all-equity stock models (Core Growth, Equity
+ * Income) — they hold no international or fixed-income sleeves. Stored columns are
+ * left intact; these are just not shown/edited for those models.
+ */
+export const EQUITY_MODEL_HIDDEN_ASSET_CLASSES = new Set<string>([
+  'non_us_developed', 'emerging_market',
+  'ig_intermediate_fixed_income', 'non_ig_fixed_income', 'ig_short_fixed_income',
+  'non_us_fixed_income', 'multi_sector_fixed_income',
+])
+
+/** The 11 S&P 500 GICS sectors, in index-weight order. */
+export const SECTOR_ROWS: { label: string; key: string }[] = [
+  { label: 'Information Technology',   key: 'information_technology' },
+  { label: 'Health Care',             key: 'health_care' },
+  { label: 'Financials',              key: 'financials' },
+  { label: 'Consumer Discretionary',  key: 'consumer_discretionary' },
+  { label: 'Communication Services',  key: 'communication_services' },
+  { label: 'Industrials',             key: 'industrials' },
+  { label: 'Consumer Staples',        key: 'consumer_staples' },
+  { label: 'Energy',                  key: 'energy' },
+  { label: 'Utilities',               key: 'utilities' },
+  { label: 'Real Estate',             key: 'real_estate' },
+  { label: 'Materials',               key: 'materials' },
+]
+
+/** Sector allocation tables are maintained only for the all-equity stock models. */
+export function hasSectorAllocations(name: string | null | undefined): boolean {
+  return name === 'Core Growth' || name === 'Equity Income'
+}
 
 export async function fetchModelPortfolioById(id: number): Promise<ModelPortfolio | null> {
   const { data, error } = await supabase
