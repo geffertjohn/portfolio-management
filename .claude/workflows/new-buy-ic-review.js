@@ -69,7 +69,15 @@ const BEAR_ROLE =
   'AGAINST buying this security. Research INDEPENDENTLY from primary data — do not rely on any bull summary. ' +
   'Hunt for thesis-breakers, deteriorating fundamentals, valuation risk, competitive/secular threats, and ' +
   'management/capital-allocation red flags; describe the downside scenario with rough probability and ' +
-  'magnitude. Default toward KILL when the evidence is ambiguous, but build only the strongest REAL bear ' +
+  'magnitude. Argue on the RIGHT basis: mandate fit is PORTFOLIO-LEVEL and criteria-based — do NOT claim a ' +
+  'name is disqualified just because its own dividend yield trails the benchmark (income is a portfolio target ' +
+  'carried by the mix; the philosophy values a demonstrated commitment to paying and GROWING dividends and ' +
+  'payout discipline, not just a high starting yield — a low-yield name with a multi-year dividend-increase ' +
+  'record checks that box). When you cite FCF yield / EV-FCF, reason about capex: FCF is already net of capex, ' +
+  'so a low FCF yield can mean a rich price OR heavy growth reinvestment — say which, and note capex intensity ' +
+  '(fabless/asset-light converts most revenue to FCF). VERIFY dividend/payout/FCF facts from primary data ' +
+  'before asserting — a bear case built on a wrong number is worse than none. ' +
+  'Default toward KILL when the evidence is ambiguous, but build only the strongest REAL bear ' +
   'case — if it is genuinely weak, say so. Recommend-only: never trade. ' + FMP_NOTE
 
 const QUANT_ROLE =
