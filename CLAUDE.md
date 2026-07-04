@@ -457,6 +457,51 @@ A guided "add a new **stock** to a portfolio" workflow, mirroring the review wor
 - **Stages** = the documented buy process 3–8 (1–2 idea-generation/screening are non-actionable, omitted): **Full Research** (business overview · thesis · risks · financial review · valuation · portfolio fit) · **Portfolio Fit Review** (strategy/sector/factor/existing-holdings) · **Approval Decision** (thesis strength · expected return · downside risk · fit · decision · rationale) · **Position Sizing** (conviction → 4–5/2–4/1–2% reference · initial/max weight · reason) · **Purchase** (date · price · allocation · funding · rationale) · **Monitoring Setup** (success criteria · watchlist triggers · exit triggers). `ADDITION_STAGES` in `lib/securityAdditions.ts` defines the stages + fields (rendered generically by `type`: textarea/text/number/date/select); change them there and the workspace + summary follow.
 - **Recorded-only** — no side effects into Watchlist/positions/At-Risk yet (a `watchlist`/`approve` decision is captured but doesn't create a prospects/position row). Query keys: `securityAdditions(name)` (list) + `securityAddition(id)`.
 
+## AI Investment Team
+
+A **recommend-only** AI committee layered on the app: role-scoped subagents produce documented, audited recommendations. **No agent ever executes a trade or writes to `positions`/`portfolio_allocations`.** Full charter: `docs/ai-investment-team-charter.md`.
+
+**Runs in Claude Code, not the browser.** The committee/agents run in the Claude Code harness (they can't run from the React app); they persist deliverables to Supabase, and the app renders them **read-only** plus a manual CIO decision. A UI-triggered "run" would need an Express/Anthropic-API bridge (not built).
+
+### Roles (`.claude/agents/*.md`)
+
+Seven subagents, each with hard recommend-only guardrails: **research-analyst** (is it ownable? fair value + rating), **devils-advocate** (independent bear case), **quant-analyst** (systematic screen + correlation/incumbent comparison), **portfolio-manager** (capital allocator — sizing + construction), **risk-manager** (concentration/factor/stress **and compliance verification** → verdict pass/warn/veto), **compliance-ips** (mandate/IPS suitability), **macro-strategist** (standing top-down). Also invocable directly via the Agent tool.
+
+### New-buy committee (`.claude/workflows/new-buy-ic-review.js`)
+
+`Workflow({ scriptPath: '…/new-buy-ic-review.js', args: { ticker, portfolioName, additionId } })`. Six-role run: research analyst + devil's advocate + quant (parallel) → PM sizing → risk + compliance (parallel) → memo synthesis. `args.lean: true` runs the original 4 (no quant/compliance). **A risk `veto` OR a compliance `unsuitable` forces the committee recommendation to `reject`.** The workflow RETURNS the bundle; the **orchestrator persists** it (no writes inside the workflow) — analyst/bear/quant → `research_reports` (`author_role` = `research_analyst`/`devils_advocate`/`quant_analyst`), risk → `risk_reports`, memo → `ic_memos` (compliance folded into the memo rationale). Custom `.claude/agents` types don't resolve inside `agent()`, so the workflow **inlines** each role's prompt — keep the inline copy and the `.md` in sync. (Two gotchas: `args` may arrive as a JSON string — parse it; run via `scriptPath`, not `name`.)
+
+### Deliverable tables + UI
+
+`research_reports` · `risk_reports` · `ic_memos` — RLS open, soft-delete via `deleted_at`; `security_id` = text ticker (no FK); `addition_id` links to the candidate. Data layer `lib/{researchReports,riskReports,icMemos}.ts` + query keys. Read-only viewers: **`ICReviewPanel`** (candidate-workspace section — memo + research + risk cards, with the CIO **approve/watchlist/reject** action via `recordIcDecision`), **`SecurityResearchPanel`** (security Monitor tab), **`PortfolioRiskPanel`** (portfolio Reviews tab). Shared cards in `components/icReviewCards.tsx`.
+
+### Section-drafter (`.claude/agents/addition-drafter.md`)
+
+On-demand: re-synthesizes a candidate's committee output into the Add Security workflow fields (`security_additions.content`). **Fills empty fields only; never sets the Approval `decision` or the actual `purchase_*` trade facts** — those stay the CIO's.
+
+### How the committee recommends — key conventions
+
+- **Mandate fit is PORTFOLIO-LEVEL and CRITERIA-BASED, not a per-security gate.** For an income strategy the requirement is that the *portfolio's* yield exceeds its benchmark (carried by the mix — a name like VZ ~6.6% does the heavy lifting), so a low-yield name is fine if the book stays above its benchmark. The strategy's **Investment Philosophy** (`model_portfolio_data.investment_philosophy`) is the justification rubric: a candidate need not meet every INCOME/STABILITY/GROWTH criterion but must justify inclusion by the combination it contributes. **Never disqualify a name on its own dividend yield alone.**
+- **Construction is relative (opportunity cost), not standalone merit.** The PM uses `model_portfolio_data` (style/asset-class targets, bands, conviction tiers) + the current book to place the candidate in its sector, read the book's allocation there, and run the opportunity-cost test vs the existing names — **a high-merit stock can be `watchlist`/`reject` when keeping the incumbents is the better allocation** (the quant supplies the incumbent comparison; the memo states a construction-based decline explicitly).
+- **Objective / risk profile are allocation-derived** (see the portfolio-objective convention in memory), NOT the income-vs-growth style; the style/mandate lives in the narrative fields (below).
+
+### Compliance architecture (rules hub → risk report)
+
+Compliance rules live **only** in the Settings **Compliance Rules hub** (`pages/settings/InvestmentCommitteePage.tsx`), stored in `firm_compliance_rules` (firm-wide, e.g. Max Single Position, Minimum Holdings Count) and `compliance_rules` (per-portfolio). **There is no per-portfolio Compliance tab** (the old `CompliancePanel` was removed). The **risk manager verifies each portfolio against every active rule and folds the results into `mandate_checks`**, measured against the **ACTUAL** book — the most recent file in the `Portfolio Documents` storage bucket, parsed by `lib/currentAllocation.ts` — falling back to model targets (and flagging the basis) if no actual-allocation file exists. The AI risk report **is** the compliance surface; there is no separate per-portfolio compliance report.
+
+### Narrative fields = the mandate rubric
+
+`objective_statement` + `investment_philosophy` live on **`model_portfolio_data`** (source of truth; `portfolio` holds a fallback copy). Editable on the **Edit Model Portfolio page** for custom strategy models (`id >= 10`: Core Growth, Equity Income, …). The committee reads `investment_philosophy` as the mandate rubric (above). The **portfolio Overview renders only Description** — Objective + Investment Philosophy were removed from that UI (`PortfolioNarrative` shows Description only).
+
+### Scheduled jobs (draft-only)
+
+Three `create_scheduled_task` routines (persisted in `~/.claude/scheduled-tasks/`, self-contained prompts that adopt a role): **pre-earnings-brief** (weekday → draft `research_reports`), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; run in Claude Code while the app is open.
+
+### Related UI primitives
+
+- **Edit Model Portfolio is a dedicated page** (`EditModelPortfolioPage`, `/settings/model-portfolios/:id/edit`), reusing `ModelPortfolioModal` via its `asPage` prop (wide two-column layout); "New model" still uses the modal.
+- **`AutoGrowTextarea`** (`components/AutoGrowTextarea.tsx`) — textarea that grows to fit content (optional `maxHeightPx` cap); used on the Add Security workflow and the model-portfolio narrative fields.
+
 ## Documents (Express file store)
 
 Files live in **Supabase Storage**, brokered by the Express server (`server/`, `/api/files|upload|folders|files/signed-url`) which holds the service-role key. The client lives in **`lib/documents.ts`** (`fetchAllFiles`, `uploadFile`, `deleteFile`, `getSignedUrl`, `createFolder`, `deleteFolder`, `formatBytes`, `isServerUnreachable`, `StoredFile`).
