@@ -1,5 +1,5 @@
 import { Suspense, lazy, type ReactNode } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 
 // Pages are code-split per route so the initial bundle stays small. Layout (the
@@ -21,7 +21,6 @@ const ActionItemsPage = lazy(() => import('@/pages/ActionItemsPage').then((m) =>
 const ClientsPage = lazy(() => import('@/pages/ClientsPage').then((m) => ({ default: m.ClientsPage })))
 const ClientDetailPage = lazy(() => import('@/pages/ClientDetailPage').then((m) => ({ default: m.ClientDetailPage })))
 const AuditLogPage = lazy(() => import('@/pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })))
-const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 const DocumentsPage = lazy(() => import('@/pages/settings/DocumentsPage').then((m) => ({ default: m.DocumentsPage })))
 const ImportExportPage = lazy(() => import('@/pages/settings/ImportExportPage').then((m) => ({ default: m.ImportExportPage })))
 const BenchmarksPage = lazy(() => import('@/pages/settings/BenchmarksPage').then((m) => ({ default: m.BenchmarksPage })))
@@ -60,7 +59,7 @@ function App() {
           <Route path="security/:securityId" element={<Page><SecurityDetailPage /></Page>} />
           <Route path="research" element={<Page><ResearchPage /></Page>} />
           <Route path="audit" element={<Page><AuditLogPage /></Page>} />
-          <Route path="settings" element={<Page><SettingsPage /></Page>} />
+          <Route path="settings" element={<Navigate to="/settings/model-portfolios" replace />} />
           <Route path="settings/documents" element={<Page><DocumentsPage /></Page>} />
           <Route path="settings/import-export" element={<Page><ImportExportPage /></Page>} />
           <Route path="settings/benchmarks" element={<Page><BenchmarksPage /></Page>} />

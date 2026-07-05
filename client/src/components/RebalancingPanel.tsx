@@ -7,9 +7,11 @@ import type { PortfolioPosition } from '@/types/position'
 interface RebalancingPanelProps {
   portfolioId: string
   positions: PortfolioPosition[]
+  /** Resolved model portfolio's drift_percentage — the default tolerance when a position has none. */
+  modelDriftPct?: number | null
 }
 
-export function RebalancingPanel({ portfolioId, positions }: RebalancingPanelProps) {
+export function RebalancingPanel({ portfolioId, positions, modelDriftPct }: RebalancingPanelProps) {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [targets, setTargets] = useState<Record<string, { target: string; threshold: string }>>({})
@@ -17,7 +19,9 @@ export function RebalancingPanel({ portfolioId, positions }: RebalancingPanelPro
   const [showRebalancedMsg, setShowRebalancedMsg] = useState(false)
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const driftRows = calcDrift(positions)
+  // Single drift source: per-position override → model drift_percentage → 5% fallback.
+  const defaultThreshold = modelDriftPct ?? 5
+  const driftRows = calcDrift(positions, modelDriftPct)
   const outOfTolerance = driftRows.filter((r) => r.outOfTolerance)
 
   const saveMutation = useMutation({
@@ -26,7 +30,7 @@ export function RebalancingPanel({ portfolioId, positions }: RebalancingPanelPro
       Object.entries(targets).map(([sid, v]) => ({
         securityId: sid,
         targetWeight: v.target === '' ? null : Number(v.target),
-        driftThreshold: v.threshold === '' ? 5 : Number(v.threshold),
+        driftThreshold: v.threshold === '' ? defaultThreshold : Number(v.threshold),
       }))
     ),
     onSuccess: () => {
@@ -51,7 +55,7 @@ export function RebalancingPanel({ portfolioId, positions }: RebalancingPanelPro
     positions.forEach((p) => {
       initial[p.securityId] = {
         target: p.targetWeight != null ? String(p.targetWeight) : '',
-        threshold: p.driftThreshold != null ? String(p.driftThreshold) : '5',
+        threshold: p.driftThreshold != null ? String(p.driftThreshold) : String(defaultThreshold),
       }
     })
     setTargets(initial)
@@ -133,7 +137,7 @@ export function RebalancingPanel({ portfolioId, positions }: RebalancingPanelPro
                   {editing ? (
                     <input
                       type="number" step="0.1" min="0"
-                      value={targets[row.securityId]?.threshold ?? '5'}
+                      value={targets[row.securityId]?.threshold ?? String(defaultThreshold)}
                       onChange={(e) => setTargets((prev) => ({ ...prev, [row.securityId]: { ...prev[row.securityId], threshold: e.target.value } }))}
                       className="w-16 rounded border border-gray-300 px-2 py-1 text-right text-xs"
                     />

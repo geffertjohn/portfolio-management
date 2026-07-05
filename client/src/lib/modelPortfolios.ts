@@ -13,6 +13,7 @@ export interface ModelPortfolio {
   description: string | null
   objective_statement: string | null
   investment_philosophy: string | null
+  investment_strategy: string | null
   category_drift_percentage: number | null
   asset_class_drift_percentage: number | null
   drift_percentage: number | null

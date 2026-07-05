@@ -21,10 +21,16 @@ export interface DriftRow {
   outOfTolerance: boolean
 }
 
-export function calcDrift(positions: PortfolioPosition[]): DriftRow[] {
+/**
+ * `modelDriftPct` is the resolved model portfolio's drift_percentage — used as the
+ * fallback tolerance so the Rebalancing panel and the Allocation-tab bands share a
+ * single drift source. Per-position `driftThreshold` still wins when set; 5% is the
+ * last-resort default when neither is available.
+ */
+export function calcDrift(positions: PortfolioPosition[], modelDriftPct?: number | null): DriftRow[] {
   return positions.map((p) => {
     const target = p.targetWeight ?? null
-    const threshold = p.driftThreshold ?? 5
+    const threshold = p.driftThreshold ?? modelDriftPct ?? 5
     const drift = target != null ? p.weight - target : null
     return {
       securityId: p.securityId,

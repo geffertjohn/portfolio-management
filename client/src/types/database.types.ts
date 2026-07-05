@@ -1463,6 +1463,7 @@ export type Database = {
           ig_short_fixed_income_upper_limit: number | null
           investment_objective: string | null
           investment_philosophy: string | null
+          investment_strategy: string | null
           large_cap_blend_lower_limit: number | null
           large_cap_blend_target: number | null
           large_cap_blend_upper_limit: number | null
@@ -1540,6 +1541,7 @@ export type Database = {
           ig_short_fixed_income_upper_limit?: number | null
           investment_objective?: string | null
           investment_philosophy?: string | null
+          investment_strategy?: string | null
           large_cap_blend_lower_limit?: number | null
           large_cap_blend_target?: number | null
           large_cap_blend_upper_limit?: number | null
@@ -1617,6 +1619,7 @@ export type Database = {
           ig_short_fixed_income_upper_limit?: number | null
           investment_objective?: string | null
           investment_philosophy?: string | null
+          investment_strategy?: string | null
           large_cap_blend_lower_limit?: number | null
           large_cap_blend_target?: number | null
           large_cap_blend_upper_limit?: number | null
@@ -2290,42 +2293,6 @@ export type Database = {
           security_id?: string
           updated_at?: string
           weight?: number
-        }
-        Relationships: []
-      }
-      portfolio_asset_class_targets: {
-        Row: {
-          asset_class: string
-          created_at: string
-          id: number
-          lower_limit: number
-          portfolio_name: string
-          sort_order: number | null
-          target: number
-          updated_at: string
-          upper_limit: number
-        }
-        Insert: {
-          asset_class: string
-          created_at?: string
-          id?: number
-          lower_limit?: number
-          portfolio_name: string
-          sort_order?: number | null
-          target?: number
-          updated_at?: string
-          upper_limit?: number
-        }
-        Update: {
-          asset_class?: string
-          created_at?: string
-          id?: number
-          lower_limit?: number
-          portfolio_name?: string
-          sort_order?: number | null
-          target?: number
-          updated_at?: string
-          upper_limit?: number
         }
         Relationships: []
       }

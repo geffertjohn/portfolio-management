@@ -16,7 +16,6 @@ import { PortfolioOverview } from '@/components/PortfolioOverview'
 import { DetailPageState } from '@/components/DetailPageState'
 import { PortfolioPerformancePanel } from '@/components/PortfolioPerformancePanel'
 import { AllocationHistoryPanel } from '@/components/AllocationHistoryPanel'
-import { AllocationComparison } from '@/components/AllocationComparison'
 import { usePortfolio, usePositions, useLatestActualAllocation } from '@/hooks/usePortfolio'
 import { updatePortfolioObjective } from '@/lib/portfolio'
 import { updatePositionBands } from '@/lib/positions'
@@ -25,8 +24,8 @@ import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelP
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { PortfolioPosition } from '@/types/position'
 
-type PortfolioTab = 'overview' | 'allocation' | 'change_log' | 'reviews' | 'candidates' | 'documents'
-type AllocationSubTab = 'positions' | 'history' | 'comparison'
+type PortfolioTab = 'overview' | 'allocation' | 'reviews' | 'documents'
+type AllocationSubTab = 'positions' | 'history' | 'change_log' | 'candidates'
 type ChangeLogView = 'changelog' | 'rebalance' | 'suitability'
 
 export function PortfolioDetailPage() {
@@ -269,9 +268,7 @@ export function PortfolioDetailPage() {
             {([
               { id: 'overview',    label: 'Overview'    },
               { id: 'allocation',  label: 'Allocation'  },
-              { id: 'change_log', label: 'Change Log'  },
               { id: 'reviews',    label: 'Reviews'     },
-              { id: 'candidates', label: 'Candidates'  },
               { id: 'documents',  label: 'Documents'   },
             ] as { id: PortfolioTab; label: string }[]).map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
@@ -302,18 +299,23 @@ export function PortfolioDetailPage() {
 
           {/* Sub-tab bar */}
           <div className="mb-5 flex gap-4 border-b border-gray-200">
-            {(['positions', 'history', 'comparison'] as AllocationSubTab[]).map((st) => (
+            {([
+              { id: 'positions',  label: 'Positions'  },
+              { id: 'history',    label: 'History'    },
+              { id: 'change_log', label: 'Change Log' },
+              { id: 'candidates', label: 'Candidates' },
+            ] as { id: AllocationSubTab; label: string }[]).map((st) => (
               <button
-                key={st}
+                key={st.id}
                 type="button"
-                onClick={() => setAllocationSubTab(st)}
-                className={`pb-2.5 text-sm font-medium capitalize transition-colors border-b-2 ${
-                  allocationSubTab === st
+                onClick={() => setAllocationSubTab(st.id)}
+                className={`pb-2.5 text-sm font-medium transition-colors border-b-2 ${
+                  allocationSubTab === st.id
                     ? 'border-gray-900 text-gray-900'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 }`}
               >
-                {st.charAt(0).toUpperCase() + st.slice(1)}
+                {st.label}
               </button>
             ))}
           </div>
@@ -570,50 +572,44 @@ export function PortfolioDetailPage() {
             <AllocationHistoryPanel portfolioName={id} />
           )}
 
-          {/* Comparison sub-tab */}
-          {allocationSubTab === 'comparison' && (
-            <AllocationComparison portfolio={portfolio} modelPortfolio={modelPortfolio ?? null} />
+          {/* Change Log sub-tab — with sub-view dropdown */}
+          {allocationSubTab === 'change_log' && (
+            <div>
+              <div className="flex items-center justify-between gap-4">
+                <select
+                  value={changeLogView}
+                  onChange={(e) => setChangeLogView(e.target.value as ChangeLogView)}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                >
+                  <option value="changelog">Change Log</option>
+                  <option value="rebalance">Rebalancing</option>
+                  <option value="suitability">Suitability</option>
+                </select>
+                {changeLogView === 'suitability' && (
+                  <p className="text-xs text-gray-400">Append-only · cannot be modified</p>
+                )}
+              </div>
+
+              <div className="mt-4">
+                {changeLogView === 'changelog' && <HoldingsChangeLog portfolioId={id} />}
+                {changeLogView === 'rebalance' && <RebalancingPanel portfolioId={id} positions={positions} modelDriftPct={driftPct} />}
+                {changeLogView === 'suitability' && <TradeSuitabilityLog portfolioId={id} />}
+              </div>
+            </div>
+          )}
+
+          {/* Candidates sub-tab */}
+          {allocationSubTab === 'candidates' && (
+            <CandidatesPanel portfolioId={id} />
           )}
 
         </div>} {/* end allocation tab */}
-
-        {/* Change Log Tab — with sub-view dropdown */}
-        {tab === 'change_log' && (
-          <div className="mt-6">
-            <div className="flex items-center justify-between gap-4">
-              <select
-                value={changeLogView}
-                onChange={(e) => setChangeLogView(e.target.value as ChangeLogView)}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-              >
-                <option value="changelog">Change Log</option>
-                <option value="rebalance">Rebalancing</option>
-                <option value="suitability">Suitability</option>
-              </select>
-              {changeLogView === 'suitability' && (
-                <p className="text-xs text-gray-400">Append-only · cannot be modified</p>
-              )}
-            </div>
-
-            <div className="mt-4">
-              {changeLogView === 'changelog' && <HoldingsChangeLog portfolioId={id} />}
-              {changeLogView === 'rebalance' && <RebalancingPanel portfolioId={id} positions={positions} />}
-              {changeLogView === 'suitability' && <TradeSuitabilityLog portfolioId={id} />}
-            </div>
-          </div>
-        )}
 
         {/* Reviews Tab */}
         {tab === 'reviews' && (
           <div className="mt-6 space-y-6">
             <PortfolioReviewsPanel portfolioId={id} />
             <PortfolioRiskPanel portfolioName={id} />
-          </div>
-        )}
-
-        {tab === 'candidates' && (
-          <div className="mt-6">
-            <CandidatesPanel portfolioId={id} />
           </div>
         )}
 

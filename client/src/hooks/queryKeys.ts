@@ -42,6 +42,7 @@ export const QUERY_KEYS = {
   relatedSecurities: (securityId: string) => ['related_securities', securityId] as const,
   fundComparison: (securityId: string) => ['fund_comparison', securityId] as const,
   ips: (clientId: number) => ['ips', clientId] as const,
+  ipsModelCompatibility: (clientId: number) => ['ips_model_compatibility', clientId] as const,
   tradeSuitability: (portfolioName: string) => ['trade_suitability', portfolioName] as const,
   householdMembers: (householdName: string) => ['household_members', householdName] as const,
   householdPositions: (householdName: string) => ['household_positions', householdName] as const,

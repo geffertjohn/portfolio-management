@@ -940,6 +940,7 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_data" (
     "objective_statement" "text",
     "investment_philosophy" "text",
     "sector_allocations" "jsonb",
+    "investment_strategy" "text",
     CONSTRAINT "model_portfolio_data_rebalance_frequency_check" CHECK (("rebalance_frequency" = ANY (ARRAY['Quarterly'::"text", 'Semi-Annual'::"text", 'Annual'::"text"]))),
     CONSTRAINT "model_portfolio_data_review_frequency_check" CHECK (("review_frequency" = ANY (ARRAY['Quarterly'::"text", 'Semi-Annual'::"text", 'Annual'::"text"])))
 );
@@ -1208,37 +1209,6 @@ ALTER SEQUENCE "public"."portfolio_allocations_id_seq" OWNER TO "postgres";
 
 
 ALTER SEQUENCE "public"."portfolio_allocations_id_seq" OWNED BY "public"."portfolio_allocations"."id";
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."portfolio_asset_class_targets" (
-    "id" bigint NOT NULL,
-    "portfolio_name" "text" NOT NULL,
-    "asset_class" "text" NOT NULL,
-    "lower_limit" numeric DEFAULT 0 NOT NULL,
-    "target" numeric DEFAULT 0 NOT NULL,
-    "upper_limit" numeric DEFAULT 0 NOT NULL,
-    "sort_order" integer,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-
-ALTER TABLE "public"."portfolio_asset_class_targets" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."portfolio_asset_class_targets_id_seq"
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE "public"."portfolio_asset_class_targets_id_seq" OWNER TO "postgres";
-
-
-ALTER SEQUENCE "public"."portfolio_asset_class_targets_id_seq" OWNED BY "public"."portfolio_asset_class_targets"."id";
 
 
 
@@ -2063,10 +2033,6 @@ ALTER TABLE ONLY "public"."portfolio_allocations" ALTER COLUMN "id" SET DEFAULT 
 
 
 
-ALTER TABLE ONLY "public"."portfolio_asset_class_targets" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."portfolio_asset_class_targets_id_seq"'::"regclass");
-
-
-
 ALTER TABLE ONLY "public"."portfolio_review_log" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."portfolio_review_log_id_seq"'::"regclass");
 
 
@@ -2217,16 +2183,6 @@ ALTER TABLE ONLY "public"."portfolio_allocations"
 
 ALTER TABLE ONLY "public"."portfolio_allocations"
     ADD CONSTRAINT "portfolio_allocations_portfolio_name_effective_date_securit_key" UNIQUE ("portfolio_name", "effective_date", "security_id");
-
-
-
-ALTER TABLE ONLY "public"."portfolio_asset_class_targets"
-    ADD CONSTRAINT "portfolio_asset_class_targets_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."portfolio_asset_class_targets"
-    ADD CONSTRAINT "portfolio_asset_class_targets_portfolio_name_asset_class_key" UNIQUE ("portfolio_name", "asset_class");
 
 
 
@@ -2630,10 +2586,6 @@ CREATE OR REPLACE TRIGGER "portfolio_allocations_updated_at" BEFORE UPDATE ON "p
 
 
 
-CREATE OR REPLACE TRIGGER "portfolio_asset_class_targets_updated_at" BEFORE UPDATE ON "public"."portfolio_asset_class_targets" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
-
-
-
 CREATE OR REPLACE TRIGGER "portfolio_set_updated_at" BEFORE UPDATE ON "public"."portfolio" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
@@ -2943,10 +2895,6 @@ CREATE POLICY "Allow delete portfolio_allocations" ON "public"."portfolio_alloca
 
 
 
-CREATE POLICY "Allow delete portfolio_asset_class_targets" ON "public"."portfolio_asset_class_targets" FOR DELETE TO "authenticated", "anon" USING (true);
-
-
-
 CREATE POLICY "Allow delete portfolio_model_map" ON "public"."portfolio_model_map" FOR DELETE TO "authenticated", "anon" USING (true);
 
 
@@ -3060,10 +3008,6 @@ CREATE POLICY "Allow insert portfolio" ON "public"."portfolio" FOR INSERT TO "au
 
 
 CREATE POLICY "Allow insert portfolio_allocations" ON "public"."portfolio_allocations" FOR INSERT WITH CHECK (true);
-
-
-
-CREATE POLICY "Allow insert portfolio_asset_class_targets" ON "public"."portfolio_asset_class_targets" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
 
 
 
@@ -3183,10 +3127,6 @@ CREATE POLICY "Allow read portfolio_allocations" ON "public"."portfolio_allocati
 
 
 
-CREATE POLICY "Allow read portfolio_asset_class_targets" ON "public"."portfolio_asset_class_targets" FOR SELECT TO "authenticated", "anon" USING (true);
-
-
-
 CREATE POLICY "Allow read portfolio_model_map" ON "public"."portfolio_model_map" FOR SELECT TO "authenticated", "anon" USING (true);
 
 
@@ -3300,10 +3240,6 @@ CREATE POLICY "Allow update portfolio" ON "public"."portfolio" FOR UPDATE TO "au
 
 
 CREATE POLICY "Allow update portfolio_allocations" ON "public"."portfolio_allocations" FOR UPDATE USING (true) WITH CHECK (true);
-
-
-
-CREATE POLICY "Allow update portfolio_asset_class_targets" ON "public"."portfolio_asset_class_targets" FOR UPDATE TO "authenticated", "anon" USING (true);
 
 
 
@@ -3475,9 +3411,6 @@ ALTER TABLE "public"."portfolio" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."portfolio_allocations" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."portfolio_asset_class_targets" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."portfolio_model_map" ENABLE ROW LEVEL SECURITY;
@@ -3975,18 +3908,6 @@ GRANT ALL ON TABLE "public"."portfolio_allocations" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."portfolio_allocations_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."portfolio_allocations_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."portfolio_allocations_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."portfolio_asset_class_targets" TO "anon";
-GRANT ALL ON TABLE "public"."portfolio_asset_class_targets" TO "authenticated";
-GRANT ALL ON TABLE "public"."portfolio_asset_class_targets" TO "service_role";
-
-
-
-GRANT ALL ON SEQUENCE "public"."portfolio_asset_class_targets_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."portfolio_asset_class_targets_id_seq" TO "authenticated";
-GRANT ALL ON SEQUENCE "public"."portfolio_asset_class_targets_id_seq" TO "service_role";
 
 
 

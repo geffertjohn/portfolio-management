@@ -19,6 +19,7 @@ import {
   type LiquidityNeeds,
 } from '@/lib/ips'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { IpsModelCompatibility } from './IpsModelCompatibility'
 
 const RISK_OPTIONS: RiskTolerance[] = [
   'conservative', 'moderately_conservative', 'moderate', 'moderately_aggressive', 'aggressive',
@@ -373,6 +374,11 @@ export function IPSPanel({ clientId }: IPSPanelProps) {
             <RangeValue label="Cash" min={ips.cash_min_pct} max={ips.cash_max_pct} />
           </div>
         </div>
+
+        <div className="border-t border-gray-100" />
+
+        {/* Compatibility of the client's mapped model portfolio(s) with these IPS bands */}
+        <IpsModelCompatibility clientId={clientId} ips={ips} />
 
         {ips.notes && (
           <>
