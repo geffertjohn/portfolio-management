@@ -84,6 +84,18 @@ export async function fetchActionItems(filters?: { status?: ActionStatus }): Pro
   return (data ?? []).map(mapSecurityJoin) as ActionItem[]
 }
 
+export async function fetchActionItemsByClient(clientId: number): Promise<ActionItem[]> {
+  const { data, error } = await supabase
+    .from('action_items')
+    .select('*')
+    .eq('linked_type', 'client')
+    .eq('linked_id', String(clientId))
+    .is('deleted_at', null)
+    .order('due_date', { ascending: true, nullsFirst: false })
+  if (error) throw error
+  return (data ?? []) as ActionItem[]
+}
+
 export async function fetchActionItemsBySecurity(securityId: string): Promise<ActionItem[]> {
   const { data, error } = await supabase
     .from('action_items')

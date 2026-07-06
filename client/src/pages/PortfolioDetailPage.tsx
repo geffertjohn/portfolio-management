@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AddPositionModal } from '@/components/AddPositionModal'
+import { CreateActionItemModal } from '@/components/CreateActionItemModal'
 import { EditPositionModal } from '@/components/EditPositionModal'
 import { RebalancingPanel } from '@/components/RebalancingPanel'
 import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
@@ -40,6 +41,7 @@ export function PortfolioDetailPage() {
   const [editingObjective, setEditingObjective] = useState(false)
   const [pendingObjective, setPendingObjective] = useState('')
   const [addPositionOpen, setAddPositionOpen] = useState(false)
+  const [addActionOpen, setAddActionOpen] = useState(false)
   const [changeLogView, setChangeLogView] = useState<ChangeLogView>('changelog')
   const [editPosition, setEditPosition] = useState<PortfolioPosition | null>(null)
   const [bulkEditMode, setBulkEditMode] = useState(false)
@@ -160,6 +162,10 @@ export function PortfolioDetailPage() {
             {portfolio.security_id && (
               <p className="mt-0.5 text-xs text-gray-400">{portfolio.security_id}</p>
             )}
+            <button type="button" onClick={() => setAddActionOpen(true)}
+              className="mt-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              + Action
+            </button>
           </div>
 
           {portfolio.updated_at && (
@@ -632,6 +638,12 @@ export function PortfolioDetailPage() {
         )}
 
       </div>
+
+      <CreateActionItemModal
+        open={addActionOpen}
+        onClose={() => setAddActionOpen(false)}
+        defaultPortfolioName={id}
+      />
 
       <AddPositionModal
         open={addPositionOpen}

@@ -45,7 +45,7 @@ export function ClientDetailPage() {
     queryFn: fetchPortfolios,
   })
 
-  // Action items linked to any of this client's portfolios
+  // Action items linked directly to this client OR to any of its portfolios.
   const linkedPortfolioNameList = clientPortfolios.map((cp) => cp.portfolio_name)
   const { data: actionItems = [] } = useQuery({
     queryKey: [...QUERY_KEYS.actionItems, 'all'],
@@ -53,9 +53,10 @@ export function ClientDetailPage() {
     select: (items) =>
       items.filter(
         (item) =>
-          item.portfolio_name != null && linkedPortfolioNameList.includes(item.portfolio_name)
+          (item.linked_type === 'client' && item.linked_id === String(id)) ||
+          (item.portfolio_name != null && linkedPortfolioNameList.includes(item.portfolio_name))
       ),
-    enabled: clientPortfolios.length > 0,
+    enabled: Number.isFinite(id),
   })
 
   const linkMutation = useMutation({
@@ -240,7 +241,7 @@ export function ClientDetailPage() {
       </div>
 
       <LogCommunicationModal open={logCommOpen} onClose={() => setLogCommOpen(false)} clientId={id} />
-      <CreateActionItemModal open={createActionOpen} onClose={() => setCreateActionOpen(false)} />
+      <CreateActionItemModal open={createActionOpen} onClose={() => setCreateActionOpen(false)} defaultClientId={id} />
     </div>
   )
 }

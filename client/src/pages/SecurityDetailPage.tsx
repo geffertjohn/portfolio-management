@@ -24,6 +24,7 @@ import { AlternativesPanel } from '@/components/AlternativesPanel'
 import { NewsAlertsPanel } from '@/components/NewsAlertsPanel'
 import { AtRiskModal } from '@/components/AtRiskModal'
 import { AddProspectModal } from '@/components/AddProspectModal'
+import { CreateActionItemModal } from '@/components/CreateActionItemModal'
 import { MarkReviewedModal } from '@/components/MarkReviewedModal'
 import { ReviewLogSection } from '@/components/ReviewLogSection'
 import { fetchReviewScheduleBySecurity, isOverdue, isDueSoon } from '@/lib/reviewSchedules'
@@ -78,6 +79,7 @@ export function SecurityDetailPage() {
   const [thesisSavedFlash, setThesisSavedFlash] = useState(false)
   const [atRiskModalOpen, setAtRiskModalOpen] = useState(false)
   const [prospectModalOpen, setProspectModalOpen] = useState(false)
+  const [addActionOpen, setAddActionOpen] = useState(false)
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'monitor' | 'documents'>('overview')
   const [financialsOpen, setFinancialsOpen] = useState(false)
@@ -309,6 +311,15 @@ export function SecurityDetailPage() {
                 title="Add to the buy-candidate watchlist"
               >
                 + Watchlist
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAddActionOpen(true)}
+                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                title="Create a follow-up action for this security"
+              >
+                + Action
               </button>
 
               {!isAtRisk && (
@@ -859,6 +870,12 @@ export function SecurityDetailPage() {
         open={prospectModalOpen}
         onClose={() => setProspectModalOpen(false)}
         presetSecurityId={security.security_id}
+      />
+
+      <CreateActionItemModal
+        open={addActionOpen}
+        onClose={() => setAddActionOpen(false)}
+        defaultSecurityId={security.security_id}
       />
 
       {reviewModalOpen && (
