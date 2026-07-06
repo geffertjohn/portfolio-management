@@ -254,13 +254,20 @@ export function PortfolioDetailPage() {
           </div>
         </dl>
 
-        <PortfolioNarrative
-          description={
-            ((mappedModelPortfolioId != null || (['ETF', 'Foundation', 'Hybrid'].includes(portfolio.portfolio_strategy) && !isEquityStrategy)) && modelPortfolio?.description)
-              ? modelPortfolio.description
-              : portfolio.description
-          }
-        />
+        {(() => {
+          // Prefer the strategy Description; fall back to the Objective narrative for
+          // portfolios that no longer carry a Description (Equity Income / Core Growth).
+          const usesModelNarrative =
+            mappedModelPortfolioId != null ||
+            (['ETF', 'Foundation', 'Hybrid'].includes(portfolio.portfolio_strategy) && !isEquityStrategy)
+          const description = (usesModelNarrative && modelPortfolio?.description)
+            ? modelPortfolio.description
+            : portfolio.description
+          const objective = (usesModelNarrative ? modelPortfolio?.objective_statement : null) ?? portfolio.objective_statement ?? null
+          return description
+            ? <PortfolioNarrative text={description} label="Description" />
+            : <PortfolioNarrative text={objective} label="Objective" />
+        })()}
 
         {/* Tab Bar */}
         <div className="mt-8 border-t border-gray-200 pt-6">

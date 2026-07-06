@@ -371,11 +371,15 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   <option value="Annual">Annual</option>
                 </select>
               </div>
-              <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
-                <label className="block text-sm font-medium text-gray-700">Description</label>
-                <AutoGrowTextarea value={description} onChange={setDescription} maxHeightPx={160}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[4.5rem]" />
-              </div>
+              {/* Equity Income / Core Growth consolidated their narrative onto Objective —
+                  the Description field/data was retired for them. */}
+              {!showSectors && (
+                <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <AutoGrowTextarea value={description} onChange={setDescription} maxHeightPx={160}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[4.5rem]" />
+                </div>
+              )}
 
               {(initial?.id ?? 0) >= 10 && (
                 <>

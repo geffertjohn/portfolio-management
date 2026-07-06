@@ -1,6 +1,7 @@
 /**
- * The portfolio's strategy narrative on the detail header: a concise Description.
- * (Objective and Investment Philosophy were removed from the UI.)
+ * The portfolio's strategy narrative on the detail header. Shows the Description,
+ * or the Objective narrative for portfolios that no longer carry a Description
+ * (e.g. Equity Income / Core Growth). The label follows the text passed in.
  */
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
@@ -13,9 +14,11 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 export function PortfolioNarrative({
-  description,
+  text,
+  label = 'Description',
 }: {
-  description: string | null
+  text: string | null
+  label?: string
 }) {
-  return <>{description && <Section label="Description">{description}</Section>}</>
+  return <>{text && <Section label={label}>{text}</Section>}</>
 }
