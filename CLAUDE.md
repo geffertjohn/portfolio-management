@@ -489,9 +489,26 @@ On-demand: re-synthesizes a candidate's committee output into the Add Security w
 
 Compliance rules live **only** in the Settings **Compliance Rules hub** (`pages/settings/InvestmentCommitteePage.tsx`), stored in `firm_compliance_rules` (firm-wide, e.g. Max Single Position, Minimum Holdings Count) and `compliance_rules` (per-portfolio). **There is no per-portfolio Compliance tab** (the old `CompliancePanel` was removed). The **risk manager verifies each portfolio against every active rule and folds the results into `mandate_checks`**, measured against the **ACTUAL** book — the most recent file in the `Portfolio Documents` storage bucket, parsed by `lib/currentAllocation.ts` — falling back to model targets (and flagging the basis) if no actual-allocation file exists. The AI risk report **is** the compliance surface; there is no separate per-portfolio compliance report.
 
+### Model IPS vs Client IPS — two distinct documents
+
+Two **separate** IPS concepts; never conflate them:
+- **Model IPS** — how a *strategy* is managed. It **IS** `model_portfolio_data` (the narrative fields above + bands/tiers/drift/cadence/benchmark). **This is what the Investment Committee reviews** (the committee reads `investment_philosophy`). There is **no separate model-IPS table**.
+- **Client IPS** — how a specific *client account* is managed: **`investment_policy_statements`** (per `client_id`; risk tolerance, horizon, liquidity, return target, and equity/FI/cash min–max). Data layer `lib/ips.ts`; edited on the client detail **IPS tab** (`IPSPanel`). **The IC never reads the client IPS** — it is advisor/suitability-side only.
+
+**Compatibility check** (`lib/ipsCompatibility.ts` + `IpsModelCompatibility`, rendered on the client IPS tab): for each portfolio a client's accounts map to, it flags where the **model's category targets fall outside the client IPS asset-class bands**. This links the two stacks *without* the IC touching the client IPS.
+
+### Governance data — single sources of truth (retired parallel stores)
+
+The settings/governance data was consolidated so each concept has one authoritative home:
+- **Firm Settings page + `lib/appSettings.ts` were DELETED** — they were localStorage-only and read by nothing. `/settings` now **redirects** to `/settings/model-portfolios`; there is no firm-settings store. Do not reintroduce localStorage as an authority for governed values (the committee only sees Supabase).
+- **`portfolio_asset_class_targets` was DROPPED** — a dead duplicate of `model_portfolio_data`'s asset-class targets (0 readers).
+- **Position drift is single-sourced on the model**: rebalancing tolerance resolves `position.driftThreshold ?? model_portfolio_data.drift_percentage ?? 5` (`RebalancingPanel` takes `modelDriftPct`), so the Rebalancing panel and the Allocation-tab bands share one drift source.
+
 ### Narrative fields = the mandate rubric
 
-`objective_statement` + `investment_philosophy` live on **`model_portfolio_data`** (source of truth; `portfolio` holds a fallback copy). Editable on the **Edit Model Portfolio page** for custom strategy models (`id >= 10`: Core Growth, Equity Income, …). The committee reads `investment_philosophy` as the mandate rubric (above). The **portfolio Overview renders only Description** — Objective + Investment Philosophy were removed from that UI (`PortfolioNarrative` shows Description only).
+`objective_statement`, `investment_philosophy`, and `investment_strategy` live on **`model_portfolio_data`** (source of truth; `portfolio` holds a fallback copy of objective/philosophy). Editable on the **Edit Model Portfolio page** for custom strategy models (`id >= 10`: Core Growth, Equity Income, …). **`investment_philosophy`** = the income/stability/growth **criteria/rubric the committee reads** (mandate rubric, above); **`investment_strategy`** = how the philosophy is implemented (process/construction) — a **separate** editable box, **not** read by the committee. (These narrative fields + the bands/tiers/drift/cadence/benchmark are the **Model IPS** — see below.)
+
+**Portfolio Overview narrative** (`PortfolioNarrative`): shows the **Description**, or the **Objective** (`objective_statement`) when there is no Description — the block label follows the content (`description || objective`). **Equity Income & Core Growth retired their Description** (data cleared: `model_portfolio_data.description` null, `portfolio.description` `''` since that column is `NOT NULL`) and show the **Objective** on the overview; their edit page **hides** the Description field (gated on `hasSectorAllocations`). Other models keep Description. **Do not re-add a Description for EI/CG.**
 
 ### Scheduled jobs (draft-only)
 
@@ -501,6 +518,16 @@ Three `create_scheduled_task` routines (persisted in `~/.claude/scheduled-tasks/
 
 - **Edit Model Portfolio is a dedicated page** (`EditModelPortfolioPage`, `/settings/model-portfolios/:id/edit`), reusing `ModelPortfolioModal` via its `asPage` prop (wide two-column layout); "New model" still uses the modal.
 - **`AutoGrowTextarea`** (`components/AutoGrowTextarea.tsx`) — textarea that grows to fit content (optional `maxHeightPx` cap); used on the Add Security workflow and the model-portfolio narrative fields.
+
+## Actions Hub (`/actions`)
+
+The Actions page is a **unified command center**, not a plain to-do list. It shows one `UnifiedAction[]` assembled by **per-source adapters** in **`lib/actions.ts`** (`fetchAllActions`), keeping each domain single-sourced.
+
+- **Two kinds of action.** **Manual** tasks are real `action_items` rows (created, completed, snoozed, recurring). **Derived** actions are projected **READ-ONLY** from their own authoritative tables and carry a **route into their own workflow** — they are completed **THERE, never from the Actions page** (no derived state is duplicated into `action_items`). Sources: `review_schedules`, `portfolio_review_schedules`, `ic_memos` (`pending_cio`), `security_additions` (`draft`), `alert_events`, `at_risk` (sell timer), and drift breaches (computed from `positions`).
+- **`action_items` is the manual-task backbone** (extended Jul 2026): `category` (`security`/`portfolio`/`ic`/`compliance`/`client`/`trade`/`operational`), `source` (always `manual` here), polymorphic **`linked_type`/`linked_id`** (e.g. `client`), `recurrence` + `recurrence_interval`, `snoozed_until`, and a widened `status` (`open`/`in_progress`/`waiting`/`blocked`/`snoozed`/`closed`). CHECK constraints enforce the category/recurrence/status sets. Data layer + labels + `advanceDate`/`snoozeActionItem`/recurrence-on-complete live in **`lib/actionItems.ts`**. **Closing a recurring task spawns the next occurrence** (due date advanced by the cadence). Still soft-deleted (`deleted_at`); status transitions audited in `action_item_events` (`ActionItemTimeline`).
+- **Page** (`ActionItemsPage`): category + source filters, **date-bucket grouping** (Overdue/Due Today/This Week/Upcoming/No Date) or group-by-category, auto-priority, snooze, bulk close/snooze, recurring **Templates**, CSV export, and **persisted filters** (localStorage — device-local UI state, OK). Manual rows are editable; derived rows show **"Open →"**.
+- **Create-from-context.** `CreateActionItemModal` takes `defaultSecurityId`/`defaultPortfolioName`/`defaultClientId` and auto-sets the category; **"+ Action" buttons** live on the security detail, portfolio detail, and client detail pages. A client-linked task uses `linked_type='client'`; `fetchActionItemsByClient` scopes the client page's list (client-linked **plus** its portfolios' actions).
+- **Convergence.** The Home **Action Center** band shows bucket + category counts from the same `fetchAllActions` model; the **Review Calendar** stays the review-completion workflow and cross-links to `/actions`.
 
 ## Documents (Express file store)
 
@@ -517,8 +544,8 @@ Files live in **Supabase Storage**, brokered by the Express server (`server/`, `
 A portfolio's allocation **history** lives in `portfolio_allocations` — one row per `(portfolio_name, effective_date, security_id, weight)`, where each `effective_date` is a full target weight vector (weights are **percent points**, e.g. `6.50` = 6.5%). This is the normalized form of the YCharts "dynamic" grid (dates as columns). It **replaced `holdings_change_log`** as the source of truth for both allocation history and performance — the Change Log tab still reads the old delta log but nothing uses it for performance. `lib/portfolioAllocations.ts` owns the data layer (`fetchAllocationGrid`, `fetchAllocationSnapshots`, cell upsert, add/delete date, bulk import); `positions` still holds the *current* target allocation separately.
 
 - **No DB FK to securities2** — the table intentionally stages arbitrary import symbols (incl. tickers not yet in `securities2`), so PostgREST **cannot embed** `securities2(...)`. Resolve names with a **separate `securities2` lookup** keyed by the distinct symbols, never an embed (an embed 400s — "no relationship found").
+- **Portfolio detail tabs** (`PortfolioDetailPage`): top-level **Overview · Allocation · Reviews · Documents**. **Allocation sub-tabs** are **Positions · History · Change Log · Candidates** — Change Log and Candidates were moved from top-level into Allocation, and the **Comparison sub-tab was removed** (the `AllocationComparison` component file is left in place but no longer routed).
 - **UI:** the **Allocation → History** sub-tab (`AllocationHistoryPanel`) is the editable grid (dates as columns, securities as rows, per-date totals, add/delete date, add ticker). Production-editable.
-- **Allocation → Comparison** (`AllocationComparison`) compares the portfolio to its model benchmark across Asset Allocation · Statistical Analysis · Equity Style · **Fixed Income Style** · Equity Sector · Regional sections. The **Fixed Income Style Analysis section is hidden for all-equity portfolios** (`portfolio_strategy === 'Equity'` — Core Growth, Equity Income, Equity Income & Core Growth; zero bonds), since it's meaningless there.
 - **Importer:** the YCharts dynamic **source file is the LONG format** — columns `Date · Symbol · Target Weight`, one row per holding per date, weights in **decimal** (0.075 = 7.5%). `parseYchartsDynamic` pivots it to dated snapshots; `$:CASH` normalizes to `$Cash`. (Not the wide grid shown in the YCharts editor.)
 
 ### Performance engine (`lib/portfolioPerformance.ts`)
