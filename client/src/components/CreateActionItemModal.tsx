@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createActionItem, type ActionPriority } from '@/lib/actionItems'
+import { createActionItem, CATEGORY_LABELS, RECURRENCE_LABELS, type ActionPriority, type ActionCategory, type ActionRecurrence } from '@/lib/actionItems'
 import { fetchSecurities } from '@/lib/securities'
 import { fetchPortfolios } from '@/lib/portfolio'
 import type { Portfolio } from '@/types/portfolio'
@@ -22,6 +22,8 @@ export function CreateActionItemModal({ open, onClose, defaultSecurityId, defaul
   const [portfolioId, setPortfolioId] = useState<string>(defaultPortfolioName || '')
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState<ActionPriority>('medium')
+  const [category, setCategory] = useState<ActionCategory>('operational')
+  const [recurrence, setRecurrence] = useState<ActionRecurrence>('none')
 
   const { data: securities = [] } = useQuery({ queryKey: QUERY_KEYS.securities, queryFn: fetchSecurities, enabled: open })
   const { data: portfolios = [] } = useQuery<Portfolio[]>({ queryKey: QUERY_KEYS.portfolios, queryFn: fetchPortfolios, enabled: open })
@@ -37,20 +39,23 @@ export function CreateActionItemModal({ open, onClose, defaultSecurityId, defaul
     mutationFn: () => createActionItem({
       title,
       description: description || undefined,
+      category,
       security_id: securityId || null,
       portfolio_name: portfolioId || null,
       due_date: dueDate || null,
       priority,
+      recurrence,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.actionItems })
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allActions })
       if (securityId) queryClient.invalidateQueries({ queryKey: QUERY_KEYS.actionItemsBySecurity(securityId) })
       if (portfolioId) queryClient.invalidateQueries({ queryKey: QUERY_KEYS.actionItemsByPortfolio(portfolioId) })
       onClose(); reset()
     },
   })
 
-  const reset = () => { setTitle(''); setDescription(''); setDueDate(''); setPriority('medium'); mutation.reset() }
+  const reset = () => { setTitle(''); setDescription(''); setDueDate(''); setPriority('medium'); setCategory('operational'); setRecurrence('none'); mutation.reset() }
   const handleClose = () => { if (!mutation.isPending) { onClose(); reset() } }
 
   return (
@@ -86,6 +91,26 @@ export function CreateActionItemModal({ open, onClose, defaultSecurityId, defaul
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
                 <option value="">None</option>
                 {portfolios.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value as ActionCategory)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
+                {(Object.keys(CATEGORY_LABELS) as ActionCategory[]).map((c) => (
+                  <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Recurrence</label>
+              <select value={recurrence} onChange={(e) => setRecurrence(e.target.value as ActionRecurrence)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
+                {(Object.keys(RECURRENCE_LABELS) as ActionRecurrence[]).map((r) => (
+                  <option key={r} value={r}>{RECURRENCE_LABELS[r]}</option>
+                ))}
               </select>
             </div>
           </div>

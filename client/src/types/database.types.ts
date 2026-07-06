@@ -51,46 +51,67 @@ export type Database = {
       }
       action_items: {
         Row: {
+          category: string
           closed_at: string | null
           created_at: string
           deleted_at: string | null
           description: string | null
           due_date: string | null
           id: number
+          linked_id: string | null
+          linked_type: string | null
           portfolio_name: string | null
           priority: string
+          recurrence: string
+          recurrence_interval: number
           resolution_notes: string | null
           security_id: string | null
+          snoozed_until: string | null
+          source: string
           status: string
           title: string
           updated_at: string
         }
         Insert: {
+          category?: string
           closed_at?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
           due_date?: string | null
           id?: number
+          linked_id?: string | null
+          linked_type?: string | null
           portfolio_name?: string | null
           priority?: string
+          recurrence?: string
+          recurrence_interval?: number
           resolution_notes?: string | null
           security_id?: string | null
+          snoozed_until?: string | null
+          source?: string
           status?: string
           title: string
           updated_at?: string
         }
         Update: {
+          category?: string
           closed_at?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
           due_date?: string | null
           id?: number
+          linked_id?: string | null
+          linked_type?: string | null
           portfolio_name?: string | null
           priority?: string
+          recurrence?: string
+          recurrence_interval?: number
           resolution_notes?: string | null
           security_id?: string | null
+          snoozed_until?: string | null
+          source?: string
           status?: string
           title?: string
           updated_at?: string

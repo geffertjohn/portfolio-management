@@ -14,6 +14,7 @@ export const QUERY_KEYS = {
   reviewSchedule: (securityId: string) => ['review_schedules', securityId] as const,
   reviewLog: (securityId: string) => ['review_log', securityId] as const,
   actionItems: ['action_items'] as const,
+  allActions: ['all_actions'] as const,
   actionItemsBySecurity: (securityId: string) => ['action_items', 'security', securityId] as const,
   actionItemsByPortfolio: (portfolioName: string) => ['action_items', 'portfolio', portfolioName] as const,
   rebalanceLog: (portfolioName: string) => ['rebalance_log', portfolioName] as const,

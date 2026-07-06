@@ -1,17 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchActionItemEvents } from '@/lib/actionItemEvents'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import type { ActionStatus } from '@/lib/actionItems'
-
-const STATUS_LABELS: Record<ActionStatus, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  closed: 'Closed',
-}
+import { STATUS_LABELS, type ActionStatus } from '@/lib/actionItems'
 
 const STATUS_COLORS: Record<ActionStatus, string> = {
   open: 'bg-gray-200 text-gray-700',
   in_progress: 'bg-blue-100 text-blue-700',
+  waiting: 'bg-purple-100 text-purple-700',
+  blocked: 'bg-red-100 text-red-700',
+  snoozed: 'bg-gray-100 text-gray-500',
   closed: 'bg-green-100 text-green-700',
 }
 

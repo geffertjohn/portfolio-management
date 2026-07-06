@@ -6,6 +6,8 @@ import { fetchActionItems } from '@/lib/actionItems'
 import { fetchUnacknowledgedAlerts, acknowledgeAlert } from '@/lib/alertRules'
 import { fetchActiveAtRisk } from '@/lib/atRisk'
 import { fetchActiveProspects } from '@/lib/prospects'
+import { fetchAllActions, bucketOf, BUCKET_LABELS, BUCKET_ORDER } from '@/lib/actions'
+import { CATEGORY_LABELS, type ActionCategory } from '@/lib/actionItems'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDate } from '@/lib/fundFormat'
@@ -44,10 +46,27 @@ export function HomePage() {
     queryFn: fetchPortfolioReviewSchedules,
   })
 
+  const { data: allActions = [] } = useQuery({
+    queryKey: QUERY_KEYS.allActions,
+    queryFn: fetchAllActions,
+  })
+
   const ackMutation = useMutation({
     mutationFn: (id: number) => acknowledgeAlert(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.alertEvents }),
   })
+
+  // Unified action counts for the Action Center band (derived from the same model
+  // that powers /actions).
+  const activeActions = allActions.filter((a) => (a.isManual ? a.manual!.status !== 'closed' : true))
+  const bucketCounts = BUCKET_ORDER.map((b) => ({
+    bucket: b,
+    label: BUCKET_LABELS[b],
+    count: activeActions.filter((a) => bucketOf(a.dueDate) === b).length,
+  })).filter((x) => x.bucket !== 'no_date')
+  const categoryCounts = (Object.keys(CATEGORY_LABELS) as ActionCategory[])
+    .map((c) => ({ category: c, label: CATEGORY_LABELS[c], count: activeActions.filter((a) => a.category === c).length }))
+    .filter((x) => x.count > 0)
 
   const overdueReviews = schedules.filter((s) => isOverdue(s.next_review_at))
   const dueSoonReviews = schedules.filter((s) => isDueSoon(s.next_review_at) && !isOverdue(s.next_review_at))
@@ -70,6 +89,34 @@ export function HomePage() {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900 sm:text-3xl">Dashboard</h1>
         <p className="mt-1 text-gray-600">Portfolio monitoring overview.</p>
+      </div>
+
+      {/* Action Center — unified view of every open action (reviews, IC, alerts, at-risk, manual) */}
+      <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-900">Action Center</h2>
+          <button onClick={() => navigate('/actions')} className="text-xs text-blue-600 hover:underline">View all actions</button>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {bucketCounts.map(({ bucket, label, count }) => (
+            <button key={bucket} onClick={() => navigate('/actions')}
+              className={`rounded-md border px-3 py-2 text-left hover:bg-gray-50 ${
+                bucket === 'overdue' && count > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'
+              }`}>
+              <p className={`text-xl font-bold ${bucket === 'overdue' && count > 0 ? 'text-red-600' : 'text-gray-900'}`}>{count}</p>
+              <p className="text-xs text-gray-500">{label}</p>
+            </button>
+          ))}
+        </div>
+        {categoryCounts.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+            {categoryCounts.map(({ category, label, count }) => (
+              <button key={category} onClick={() => navigate('/actions')} className="hover:text-gray-800">
+                {label}: <span className="font-medium text-gray-700">{count}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Stat cards */}

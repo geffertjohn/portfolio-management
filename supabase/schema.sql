@@ -163,8 +163,17 @@ CREATE TABLE IF NOT EXISTS "public"."action_items" (
     "portfolio_name" "text",
     "deleted_at" timestamp with time zone,
     "security_id" "text",
+    "category" "text" DEFAULT 'operational'::"text" NOT NULL,
+    "source" "text" DEFAULT 'manual'::"text" NOT NULL,
+    "linked_type" "text",
+    "linked_id" "text",
+    "recurrence" "text" DEFAULT 'none'::"text" NOT NULL,
+    "recurrence_interval" integer DEFAULT 1 NOT NULL,
+    "snoozed_until" "date",
+    CONSTRAINT "action_items_category_check" CHECK (("category" = ANY (ARRAY['security'::"text", 'portfolio'::"text", 'ic'::"text", 'compliance'::"text", 'client'::"text", 'trade'::"text", 'operational'::"text"]))),
     CONSTRAINT "action_items_priority_check" CHECK (("priority" = ANY (ARRAY['low'::"text", 'medium'::"text", 'high'::"text"]))),
-    CONSTRAINT "action_items_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'in_progress'::"text", 'closed'::"text"])))
+    CONSTRAINT "action_items_recurrence_check" CHECK (("recurrence" = ANY (ARRAY['none'::"text", 'daily'::"text", 'weekly'::"text", 'monthly'::"text", 'quarterly'::"text", 'annual'::"text"]))),
+    CONSTRAINT "action_items_status_check" CHECK (("status" = ANY (ARRAY['open'::"text", 'in_progress'::"text", 'waiting'::"text", 'blocked'::"text", 'snoozed'::"text", 'closed'::"text"])))
 );
 
 

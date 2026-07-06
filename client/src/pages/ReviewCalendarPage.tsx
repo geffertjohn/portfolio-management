@@ -42,7 +42,10 @@ export function ReviewCalendarPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 sm:text-3xl">Review Calendar</h1>
-          <p className="mt-1 text-gray-600">Track quarterly, semi-annual, and annual security reviews.</p>
+          <p className="mt-1 text-gray-600">
+            Complete quarterly, semi-annual, and annual security reviews.{' '}
+            <a href="/actions" className="text-blue-600 hover:underline">See all actions →</a>
+          </p>
         </div>
         <div className="flex gap-2">
           {(['all', 'overdue', 'due_soon'] as Filter[]).map((f) => (

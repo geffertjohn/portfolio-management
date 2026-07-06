@@ -1,5 +1,5 @@
 interface StatusBadgeProps {
-  variant: 'pass' | 'warn' | 'breach' | 'open' | 'in_progress' | 'closed' | 'low' | 'medium' | 'high' | 'overdue' | 'due_soon' | 'proposed' | 'under_review' | 'approved' | 'swapped' | 'rejected'
+  variant: 'pass' | 'warn' | 'breach' | 'open' | 'in_progress' | 'waiting' | 'blocked' | 'snoozed' | 'closed' | 'low' | 'medium' | 'high' | 'overdue' | 'due_soon' | 'proposed' | 'under_review' | 'approved' | 'swapped' | 'rejected'
   label?: string
 }
 
@@ -9,6 +9,9 @@ const STYLES: Record<StatusBadgeProps['variant'], string> = {
   breach:       'bg-red-100 text-red-800',
   open:         'bg-blue-100 text-blue-800',
   in_progress:  'bg-amber-100 text-amber-800',
+  waiting:      'bg-purple-100 text-purple-800',
+  blocked:      'bg-red-100 text-red-800',
+  snoozed:      'bg-gray-100 text-gray-500',
   closed:       'bg-gray-100 text-gray-600',
   low:          'bg-gray-100 text-gray-600',
   medium:       'bg-amber-100 text-amber-800',
@@ -24,7 +27,7 @@ const STYLES: Record<StatusBadgeProps['variant'], string> = {
 
 const DEFAULT_LABELS: Record<StatusBadgeProps['variant'], string> = {
   pass: 'Pass', warn: 'Warn', breach: 'Breach',
-  open: 'Open', in_progress: 'In Progress', closed: 'Closed',
+  open: 'Open', in_progress: 'In Progress', waiting: 'Waiting', blocked: 'Blocked', snoozed: 'Snoozed', closed: 'Closed',
   low: 'Low', medium: 'Medium', high: 'High',
   overdue: 'Overdue', due_soon: 'Due Soon',
   proposed: 'Proposed', under_review: 'Under Review',
