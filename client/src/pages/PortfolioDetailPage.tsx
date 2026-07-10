@@ -303,7 +303,10 @@ export function PortfolioDetailPage() {
               portfolio={portfolio}
               overrideModelPortfolio={modelPortfolio}
             />
-            <PortfolioPerformancePanel portfolioName={id} />
+            {/* FMP buy-and-hold performance engine is stocks-only — show it only for
+                the all-stock Equity portfolios (Core Growth, Equity Income, EI & CG).
+                Fund/ETF-based portfolios rely on the Total Returns block above. */}
+            {isEquityStrategy && <PortfolioPerformancePanel portfolioName={id} />}
           </div>
         )}
 
@@ -621,7 +624,7 @@ export function PortfolioDetailPage() {
         {/* Reviews Tab */}
         {tab === 'reviews' && (
           <div className="mt-6 space-y-6">
-            <PortfolioReviewsPanel portfolioId={id} />
+            <PortfolioReviewsPanel portfolioId={id} portfolioStrategy={portfolio.portfolio_strategy} />
             <PortfolioRiskPanel portfolioName={id} />
           </div>
         )}

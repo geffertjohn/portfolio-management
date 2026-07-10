@@ -2637,6 +2637,7 @@ export type Database = {
         Row: {
           conviction: string | null
           created_at: string
+          evidence_doc_path: string | null
           id: number
           ips_suitable: boolean | null
           metrics_snapshot: Json | null
@@ -2652,6 +2653,7 @@ export type Database = {
         Insert: {
           conviction?: string | null
           created_at?: string
+          evidence_doc_path?: string | null
           id?: number
           ips_suitable?: boolean | null
           metrics_snapshot?: Json | null
@@ -2667,6 +2669,7 @@ export type Database = {
         Update: {
           conviction?: string | null
           created_at?: string
+          evidence_doc_path?: string | null
           id?: number
           ips_suitable?: boolean | null
           metrics_snapshot?: Json | null

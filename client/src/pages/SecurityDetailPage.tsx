@@ -601,6 +601,18 @@ export function SecurityDetailPage() {
         </div>
       )}
 
+      {/* ── Fund/ETF: Documents (review-evidence PDFs + uploads) ─────────────── */}
+      {isFundOrEtfSecurity(security) && (
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <DocumentsFolderPanel
+            bucket={SECURITY_DOCS_BUCKET}
+            folder={security.security_id}
+            scopeLabel={security.security_id}
+            emptyHint="Review-evidence PDFs are saved here automatically when you mark a review complete."
+          />
+        </div>
+      )}
+
       {/* ── Stock: Tab bar ───────────────────────────────────────────────────── */}
       {!isFundOrEtfSecurity(security) && (
         <div className="border-b border-gray-200">
@@ -887,6 +899,7 @@ export function SecurityDetailPage() {
           currentCadence={reviewSchedule?.cadence ?? 'quarterly'}
           mode="review"
           isFund={isFundOrEtfSecurity(security)}
+          security={security}
           lastEarnings={lastEarnings}
           nextEarnings={nextEarnings}
         />

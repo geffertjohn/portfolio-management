@@ -4,7 +4,7 @@ import {
   fetchPortfolioReviewSchedulesFor,
   isOverdue,
   isDueSoon,
-  PORTFOLIO_CADENCES,
+  cadencesForStrategy,
   CADENCE_LABELS,
   type PortfolioCadence,
   type PortfolioReviewSchedule,
@@ -15,6 +15,8 @@ import { formatDate } from '@/lib/fundFormat'
 
 interface PortfolioReviewsPanelProps {
   portfolioId: string
+  /** Portfolio strategy — drives which review cadences apply (monthly is Equity-only). */
+  portfolioStrategy: string | null | undefined
 }
 
 function statusBadge(s: PortfolioReviewSchedule | undefined) {
@@ -28,7 +30,7 @@ function statusBadge(s: PortfolioReviewSchedule | undefined) {
   return <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">On track</span>
 }
 
-export function PortfolioReviewsPanel({ portfolioId }: PortfolioReviewsPanelProps) {
+export function PortfolioReviewsPanel({ portfolioId, portfolioStrategy }: PortfolioReviewsPanelProps) {
   const navigate = useNavigate()
 
   const { data: schedules = [], isLoading } = useQuery({
@@ -36,6 +38,7 @@ export function PortfolioReviewsPanel({ portfolioId }: PortfolioReviewsPanelProp
     queryFn: () => fetchPortfolioReviewSchedulesFor(portfolioId),
   })
 
+  const cadences = cadencesForStrategy(portfolioStrategy)
   const byCadence = (c: PortfolioCadence) => schedules.find((s) => s.cadence === c)
   const startReview = (c: PortfolioCadence) =>
     navigate(`/portfolio/${encodeURIComponent(portfolioId)}/review/${c}`)
@@ -45,10 +48,12 @@ export function PortfolioReviewsPanel({ portfolioId }: PortfolioReviewsPanelProp
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Review Cadence</h2>
         <p className="mt-1 text-xs text-gray-400">
-          Monthly, quarterly, and annual reviews run on independent schedules.
+          {cadences.length === 3
+            ? 'Monthly, quarterly, and annual reviews run on independent schedules.'
+            : 'Quarterly and annual reviews run on independent schedules.'}
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          {PORTFOLIO_CADENCES.map((c) => {
+          {cadences.map((c) => {
             const s = byCadence(c)
             return (
               <div key={c} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

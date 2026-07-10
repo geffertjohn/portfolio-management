@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   startOrResumeDraft, saveReviewDraft, completeReview, nextReviewDateFor,
-  CADENCE_LABELS, PORTFOLIO_CADENCES,
+  CADENCE_LABELS, PORTFOLIO_CADENCES, cadencesForStrategy,
   type PortfolioCadence, type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
 import {
@@ -40,6 +40,11 @@ export function PortfolioReviewWorkspace() {
   const { data: positions = [] } = usePositions(id, !!portfolio)
   const modelPortfolio = useResolvedModelPortfolio(portfolio)
 
+  // Monthly reviews are Equity-only; block the monthly workspace for fund/ETF
+  // strategies so it can't create a stray monthly draft. Permissive while loading.
+  const cadenceAllowed =
+    !portfolio || !cadence || cadencesForStrategy(portfolio.portfolio_strategy).includes(cadence)
+
   // Prior conviction per security (most recent from history) — a hint in the
   // annual conviction-ranking section. Only fetched for the annual cadence.
   const { data: holdingHistory = [] } = useQuery({
@@ -67,11 +72,13 @@ export function PortfolioReviewWorkspace() {
   const { data: init, isLoading: dLoading, error: dError } = useQuery({
     queryKey: ['review_workspace', id, cadence],
     queryFn: async () => {
-      const draft = await startOrResumeDraft(id, cadence!, dueDate)
+      // Portfolio strategy drives the seeded checklist (fund/ETF quarterly & annual
+      // reviews lead with the position-size check); portfolio is loaded by `enabled`.
+      const draft = await startOrResumeDraft(id, cadence!, dueDate, portfolio?.portfolio_strategy ?? null)
       const holdings = await fetchHoldingReviewsForLog(draft.id)
       return { draft, holdings }
     },
-    enabled: !!id && !!cadence && schedules.length > 0,
+    enabled: !!id && !!cadence && cadenceAllowed && !!portfolio && schedules.length > 0,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     // Drop the cache on unmount so a return visit re-runs start-or-resume
@@ -178,16 +185,22 @@ export function PortfolioReviewWorkspace() {
     markDirty()
   }
 
-  if (pLoading || pError || !portfolio || !cadence) {
+  if (pLoading || pError || !portfolio || !cadence || !cadenceAllowed) {
     return (
       <DetailPageState
         backTo={`/portfolio/${encodeURIComponent(id)}`}
         backLabel="← Back to portfolio"
         loading={pLoading}
         error={pError}
-        notFound={!portfolio || !cadence}
+        notFound={!portfolio || !cadence || !cadenceAllowed}
         errorTitle="Failed to load review"
-        notFoundText={!cadence ? 'Unknown review cadence.' : 'Portfolio not found.'}
+        notFoundText={
+          !cadence
+            ? 'Unknown review cadence.'
+            : !cadenceAllowed
+              ? `${CADENCE_LABELS[cadence]} reviews don't apply to this portfolio.`
+              : 'Portfolio not found.'
+        }
       />
     )
   }
@@ -317,7 +330,7 @@ export function PortfolioReviewWorkspace() {
                 </label>
               </div>
 
-              {active === 'performance_attribution' && <AttributionMovers portfolioId={id} days={30} />}
+              {active === 'performance_attribution' && <AttributionMovers portfolioId={id} />}
               {active === 'position_sizing' && <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} portfolioName={id} />}
               {active === 'full_monitoring' && (
                 <HoldingMonitorGrid positions={positions} assessments={assessments} onChange={setHoldingField} />

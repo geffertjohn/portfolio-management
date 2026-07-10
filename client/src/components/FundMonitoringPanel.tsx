@@ -1,17 +1,43 @@
 import { useState } from 'react'
-import { fmtNum, fmtDecimalPct, fmtInt, EMPTY } from '@/lib/formatters'
+import { useQuery } from '@tanstack/react-query'
+import { fmtNum, fmtDecimalPct, fmtInt, fmtText, EMPTY } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
+import { fetchCategoryBenchmark, fetchPeerGroupBenchmark } from '@/lib/benchmarks'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { MetricCard } from './MonitoringPanelShared'
 import { ReturnRanksTable } from './ReturnRanksTable'
-import { CategoryScorecardTable, PeerGroupScorecardTable, categoryScorecardScore, peerGroupScorecardScore } from './FundScorecard'
+import { CategoryScorecardTable, PeerGroupScorecardTable } from './FundScorecard'
+import { categoryScorecardScore, peerGroupScorecardScore } from '@/lib/fundScorecard'
 
 /**
  * Monitoring panel for funds/ETFs (both equity and fixed income). The equity and
  * fixed-income variants were byte-for-byte identical, so they were merged into
  * this single component.
+ *
+ * `showCohortReference` renders the Category/Peer group name + benchmark index
+ * below the toggle — used in the review modal (which has no header identity block).
  */
-export function FundMonitoringPanel({ security }: { security: SecurityDetail }) {
+export function FundMonitoringPanel({
+  security,
+  showCohortReference = false,
+}: {
+  security: SecurityDetail
+  showCohortReference?: boolean
+}) {
   const [rankMode, setRankMode] = useState<'pg' | 'cat'>('pg')
+
+  const categoryName = security.ycharts_benchmark_category ?? null
+  const peerGroupName = security.peer_group_name ?? null
+  const { data: categoryBenchmark } = useQuery({
+    queryKey: QUERY_KEYS.categoryBenchmark(categoryName ?? ''),
+    queryFn: () => fetchCategoryBenchmark(categoryName!),
+    enabled: showCohortReference && !!categoryName,
+  })
+  const { data: peerGroupBenchmark } = useQuery({
+    queryKey: QUERY_KEYS.peerGroupBenchmark(peerGroupName ?? ''),
+    queryFn: () => fetchPeerGroupBenchmark(peerGroupName!),
+    enabled: showCohortReference && !!peerGroupName,
+  })
 
   const {
     market_alpha_3y_vs_pg,
@@ -72,6 +98,7 @@ export function FundMonitoringPanel({ security }: { security: SecurityDetail }) 
       <div className="flex items-center">
         <div className="inline-flex rounded-md border border-gray-200 bg-gray-100 p-0.5 text-xs font-medium">
           <button
+            type="button"
             onClick={() => setRankMode('cat')}
             className={`inline-flex items-center gap-1.5 rounded px-3 py-1 transition-colors ${!isPg ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
@@ -81,6 +108,7 @@ export function FundMonitoringPanel({ security }: { security: SecurityDetail }) 
             )}
           </button>
           <button
+            type="button"
             onClick={() => setRankMode('pg')}
             className={`inline-flex items-center gap-1.5 rounded px-3 py-1 transition-colors ${isPg ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
@@ -91,6 +119,22 @@ export function FundMonitoringPanel({ security }: { security: SecurityDetail }) 
           </button>
         </div>
       </div>
+
+      {/* Cohort reference — name + benchmark index for each side (modal only) */}
+      {showCohortReference && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`rounded-md border px-3 py-2 ${!isPg ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50/60'}`}>
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Category</p>
+            <p className="mt-0.5 text-sm text-gray-900">{fmtText(categoryName)}</p>
+            {categoryBenchmark && <p className="mt-0.5 text-xs text-gray-400">{categoryBenchmark}</p>}
+          </div>
+          <div className={`rounded-md border px-3 py-2 ${isPg ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50/60'}`}>
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Peer group</p>
+            <p className="mt-0.5 text-sm text-gray-900">{fmtText(peerGroupName)}</p>
+            {peerGroupBenchmark && <p className="mt-0.5 text-xs text-gray-400">{peerGroupBenchmark}</p>}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard

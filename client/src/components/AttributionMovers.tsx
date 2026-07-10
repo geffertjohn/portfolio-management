@@ -5,9 +5,13 @@ import { fmtSignedPct } from '@/lib/formatters'
 
 interface AttributionMoversProps {
   portfolioId: string
-  /** Trailing window in days. */
-  days?: number
 }
+
+/** Trailing windows shown in the attribution block. */
+const WINDOWS: { label: string; days: number }[] = [
+  { label: '1 Month', days: 30 },
+  { label: '3 Month', days: 90 },
+]
 
 function MoverList({ title, rows }: { title: string; rows: HoldingMover[] }) {
   return (
@@ -33,7 +37,8 @@ function MoverList({ title, rows }: { title: string; rows: HoldingMover[] }) {
   )
 }
 
-export function AttributionMovers({ portfolioId, days = 30 }: AttributionMoversProps) {
+/** One trailing window: top-5 / bottom-5 holdings by total return over `days`. */
+function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: number; label: string }) {
   const { data: movers = [], isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.portfolioMovers(portfolioId, days),
     queryFn: () => fetchPortfolioMovers(portfolioId, days),
@@ -41,7 +46,7 @@ export function AttributionMovers({ portfolioId, days = 30 }: AttributionMoversP
   })
 
   const inner = () => {
-    if (isLoading) return <p className="text-xs text-gray-400">Loading {days}-day movers…</p>
+    if (isLoading) return <p className="text-xs text-gray-400">Loading {label} movers…</p>
     if (error) {
       return (
         <p className="text-xs text-red-600">
@@ -65,9 +70,22 @@ export function AttributionMovers({ portfolioId, days = 30 }: AttributionMoversP
   }
 
   return (
+    <div>
+      <p className="text-sm font-semibold text-gray-700">{label}</p>
+      <div className="mt-1.5">{inner()}</div>
+    </div>
+  )
+}
+
+export function AttributionMovers({ portfolioId }: AttributionMoversProps) {
+  return (
     <div className="mt-2 rounded-md border border-gray-100 bg-gray-50 p-3">
-      <p className="text-xs font-medium text-gray-600">Trailing {days}-day total return</p>
-      <div className="mt-2">{inner()}</div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Trailing Returns</p>
+      <div className="mt-3 space-y-4">
+        {WINDOWS.map((w) => (
+          <MoverWindow key={w.days} portfolioId={portfolioId} days={w.days} label={w.label} />
+        ))}
+      </div>
     </div>
   )
 }

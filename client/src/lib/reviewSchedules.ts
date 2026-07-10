@@ -99,6 +99,8 @@ export interface MarkReviewedOptions {
   conviction?: Conviction | null
   priceAtReview?: number | null
   metricsSnapshot?: ReviewMetricsSnapshot | null
+  /** Path of the uploaded review-evidence document (Security Documents bucket) — funds/ETFs. */
+  evidenceDocPath?: string | null
 }
 
 /**
@@ -109,7 +111,7 @@ export interface MarkReviewedOptions {
  */
 export async function markReviewed(opts: MarkReviewedOptions): Promise<void> {
   const { securityId, cadence, notes, ipsSuitable, reviewedBy, outcome } = opts
-  const { recommendation, conviction, priceAtReview, metricsSnapshot } = opts
+  const { recommendation, conviction, priceAtReview, metricsSnapshot, evidenceDocPath } = opts
   const now = opts.reviewedAt ?? new Date()
   const next_review_at = opts.nextReviewAt ? opts.nextReviewAt.toISOString() : calcNextReview(cadence, now)
 
@@ -137,6 +139,7 @@ export async function markReviewed(opts: MarkReviewedOptions): Promise<void> {
       conviction: conviction ?? null,
       price_at_review: priceAtReview ?? null,
       metrics_snapshot: metricsSnapshot ?? null,
+      evidence_doc_path: evidenceDocPath ?? null,
     } as never)
   if (logError) throw logError
 }

@@ -92,10 +92,19 @@ CREATE OR REPLACE FUNCTION "public"."seed_portfolio_review_schedules"() RETURNS 
     LANGUAGE "plpgsql"
     AS $$
 begin
+  -- Every portfolio gets quarterly + annual review timers.
   insert into public.portfolio_review_schedules (portfolio_name, cadence, next_review_at)
   select new.name, c.cadence, now()
-  from (values ('monthly'),('quarterly'),('annual')) as c(cadence)
+  from (values ('quarterly'),('annual')) as c(cadence)
   on conflict (portfolio_name, cadence) do nothing;
+
+  -- Monthly reviews only for Equity (individual-stock) strategies.
+  if new.portfolio_strategy = 'Equity' then
+    insert into public.portfolio_review_schedules (portfolio_name, cadence, next_review_at)
+    values (new.name, 'monthly', now())
+    on conflict (portfolio_name, cadence) do nothing;
+  end if;
+
   return new;
 end;
 $$;
@@ -1430,6 +1439,7 @@ CREATE TABLE IF NOT EXISTS "public"."review_log" (
     "conviction" "text",
     "price_at_review" numeric,
     "metrics_snapshot" "jsonb",
+    "evidence_doc_path" "text",
     CONSTRAINT "review_log_conviction_chk" CHECK ((("conviction" IS NULL) OR ("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"])))),
     CONSTRAINT "review_log_outcome_check" CHECK (("outcome" = ANY (ARRAY['no_issues'::"text", 'flagged_for_action'::"text", 'placed_on_watchlist'::"text", 'recommended_sell'::"text"]))),
     CONSTRAINT "review_log_recommendation_chk" CHECK ((("recommendation" IS NULL) OR ("recommendation" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))))

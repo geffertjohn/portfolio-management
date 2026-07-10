@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { markReviewed, upsertReviewSchedule, type ReviewCadence } from '@/lib/reviewSchedules'
 import {
   RECOMMENDATION_OPTIONS, RECOMMENDATION_LABELS, RECOMMENDATION_COLORS,
-  CONVICTION_OPTIONS, CONVICTION_LABELS,
+  CONVICTION_OPTIONS, CONVICTION_LABELS, OUTCOME_LABELS,
   type ReviewOutcome, type Recommendation, type Conviction, type ReviewMetricsSnapshot,
 } from '@/lib/reviewLog'
 import { addToAtRisk } from '@/lib/atRisk'
@@ -12,6 +12,11 @@ import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { fmtDecimalPct, fmtUsd, EMPTY } from '@/lib/formatters'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import type { SecurityDetail } from '@/lib/securities'
+import { FundMonitoringPanel } from './FundMonitoringPanel'
+import { buildFundReviewPdf } from '@/lib/reviewEvidencePdf'
+import { uploadFile, SECURITY_DOCS_BUCKET, isServerUnreachable } from '@/lib/documents'
+import { fetchCategoryBenchmark, fetchPeerGroupBenchmark } from '@/lib/benchmarks'
 
 /** 'schedule' — set/update cadence + next review date, no log entry.
  *  'review'   — log a completed review and advance the schedule. */
@@ -25,6 +30,8 @@ interface MarkReviewedModalProps {
   currentCadence: ReviewCadence
   mode: ReviewModalMode
   isFund?: boolean
+  /** Full security record — funds/ETFs use it to render the evidence block and build the review PDF. */
+  security?: SecurityDetail
   /** Last earnings release date (YYYY-MM-DD). Drives the scheduled Review Date (+1 day). */
   lastEarnings?: string | null
   /** Next earnings release date (YYYY-MM-DD). Drives the Next Review Date (+1 day). */
@@ -77,7 +84,7 @@ function SnapRow({ label, value }: { label: string; value: string }) {
 
 export function MarkReviewedModal({
   open, onClose, securityId, securitySymbol, currentCadence, mode, isFund = false,
-  lastEarnings, nextEarnings,
+  security, lastEarnings, nextEarnings,
 }: MarkReviewedModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const queryClient = useQueryClient()
@@ -150,6 +157,20 @@ export function MarkReviewedModal({
     enabled: snapshotEnabled,
   })
 
+  // Fund evidence — benchmark index names for the PDF header (dedupe with the
+  // embedded FundMonitoringPanel's queries via shared keys).
+  const fundSnapEnabled = open && mode === 'review' && isFund && !!security
+  const { data: categoryBenchmark } = useQuery({
+    queryKey: QUERY_KEYS.categoryBenchmark(security?.ycharts_benchmark_category ?? ''),
+    queryFn: () => fetchCategoryBenchmark(security!.ycharts_benchmark_category!),
+    enabled: fundSnapEnabled && !!security?.ycharts_benchmark_category,
+  })
+  const { data: peerGroupBenchmark } = useQuery({
+    queryKey: QUERY_KEYS.peerGroupBenchmark(security?.peer_group_name ?? ''),
+    queryFn: () => fetchPeerGroupBenchmark(security!.peer_group_name!),
+    enabled: fundSnapEnabled && !!security?.peer_group_name,
+  })
+
   function buildSnapshot(): ReviewMetricsSnapshot {
     return {
       capturedAt: new Date().toISOString(),
@@ -200,15 +221,66 @@ export function MarkReviewedModal({
     return notes
   }
 
+  /** Human-readable outcome summary for the evidence PDF (e.g. "Propose (Trim) · At-Risk"). */
+  function fundOutcomeLabel(): string {
+    const parts: string[] = []
+    if (fundMainOutcome === 'propose') {
+      parts.push(fundProposeAction
+        ? `Propose (${fundProposeAction.charAt(0).toUpperCase() + fundProposeAction.slice(1)})`
+        : OUTCOME_LABELS.flagged_for_action)
+    } else if (fundMainOutcome === 'maintain') {
+      parts.push(OUTCOME_LABELS.no_issues)
+    }
+    if (fundAtRisk) parts.push(OUTCOME_LABELS.placed_on_watchlist)
+    return parts.join(' · ') || EMPTY
+  }
+
+  /**
+   * Build the fund review-evidence PDF and upload it to the Security Documents
+   * bucket. Returns the stored path (folder/filename). Throws on failure so the
+   * review is not recorded without its evidence (upload + record are atomic).
+   */
+  async function uploadFundEvidence(reviewedOn: Date): Promise<string | null> {
+    if (!isFund || !security) return null
+    const { blob, filename } = buildFundReviewPdf({
+      security,
+      ticker: securitySymbol,
+      fundName: security.security_name ?? null,
+      reviewDate: reviewedOn,
+      outcomeLabel: fundOutcomeLabel(),
+      notes: resolveFundNotes(),
+      categoryBenchmark: categoryBenchmark ?? null,
+      peerGroupBenchmark: peerGroupBenchmark ?? null,
+    })
+    const file = new File([blob], filename, { type: 'application/pdf' })
+    await uploadFile(securitySymbol, file, SECURITY_DOCS_BUCKET)
+    return `${securitySymbol}/${filename}`
+  }
+
   const reviewMutation = useMutation({
     mutationFn: async () => {
+      const fundReviewedAt = new Date(reviewDate + 'T00:00:00')
+      // Funds: freeze the scorecard evidence to a PDF in the docs bucket first;
+      // if that fails, abort so we never record a review without its evidence.
+      let evidenceDocPath: string | null = null
+      if (isFund) {
+        try {
+          evidenceDocPath = await uploadFundEvidence(fundReviewedAt)
+        } catch (e) {
+          throw new Error(
+            isServerUnreachable(e)
+              ? 'Evidence PDF could not be saved — the Express file server is unreachable (cd server && npm run dev). Review not recorded.'
+              : `Evidence PDF upload failed: ${e instanceof Error ? e.message : 'unknown error'}. Review not recorded.`,
+          )
+        }
+      }
       await markReviewed({
         securityId,
         cadence: isFund ? 'quarterly' : cadence,
         notes: isFund ? resolveFundNotes() : notes,
         // Funds: keep editable review date + cadence-based next review.
         // Stocks: completion = today, scheduled = last earnings + 1, next = next earnings + 1.
-        reviewedAt: isFund ? new Date(reviewDate + 'T00:00:00') : dateReviewed,
+        reviewedAt: isFund ? fundReviewedAt : dateReviewed,
         reviewDate: isFund ? null : scheduledReviewDate,
         nextReviewAt: isFund ? null : stockNextReview,
         ipsSuitable: null,
@@ -219,6 +291,7 @@ export function MarkReviewedModal({
         conviction: isFund ? null : (conviction || null),
         priceAtReview: isFund ? null : (quote?.price ?? null),
         metricsSnapshot: isFund ? null : buildSnapshot(),
+        evidenceDocPath,
       })
       if (isFund && fundAtRisk) {
         await addToAtRisk(securityId, [], notes.trim() || null)
@@ -226,6 +299,9 @@ export function MarkReviewedModal({
     },
     onSuccess: () => {
       invalidateAll()
+      if (isFund) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(SECURITY_DOCS_BUCKET) })
+      }
       if (isFund && fundAtRisk) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRisk })
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRiskBySecurity(securityId) })
@@ -258,7 +334,9 @@ export function MarkReviewedModal({
 
   return (
     <dialog ref={dialogRef} onCancel={handleClose}
-      className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30">
+      className={`w-full rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30 ${
+        mode === 'review' && isFund ? 'max-w-3xl' : 'max-w-md'
+      }`}>
       <form onSubmit={handleSubmit} className="p-6">
 
         {/* Header */}
@@ -314,6 +392,19 @@ export function MarkReviewedModal({
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* Evidence block — funds/ETFs. The on-page Category/Peer group monitoring
+              block, frozen into the uploaded PDF as evidence at the review date. */}
+          {mode === 'review' && isFund && security && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Evidence at review <span className="font-normal text-gray-400">(saved to Documents as a PDF)</span>
+              </label>
+              <div className="mt-2 max-h-[22rem] overflow-y-auto rounded-md border border-gray-200 bg-gray-50/60 p-3">
+                <FundMonitoringPanel security={security} showCohortReference />
+              </div>
             </div>
           )}
 

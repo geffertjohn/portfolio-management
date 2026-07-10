@@ -17,6 +17,19 @@ export type PortfolioCadence = 'monthly' | 'quarterly' | 'annual'
 
 export const PORTFOLIO_CADENCES: PortfolioCadence[] = ['monthly', 'quarterly', 'annual']
 
+/**
+ * The review cadences that apply to a portfolio, driven by its strategy.
+ * Monthly reviews are reserved for individual-stock (Equity) strategies; the
+ * fund/ETF strategic models (Foundation, Hybrid, ETF, Fixed Income) run on
+ * quarterly + annual only. Mirrors the DB seed trigger
+ * (`seed_portfolio_review_schedules`), which seeds monthly for Equity only.
+ */
+export function cadencesForStrategy(strategy: string | null | undefined): PortfolioCadence[] {
+  return strategy === 'Equity'
+    ? ['monthly', 'quarterly', 'annual']
+    : ['quarterly', 'annual']
+}
+
 export const CADENCE_LABELS: Record<PortfolioCadence, string> = {
   monthly:   'Monthly',
   quarterly: 'Quarterly',
@@ -50,6 +63,31 @@ export const PORTFOLIO_REVIEW_TASKS: Record<PortfolioCadence, ReviewTaskDef[]> =
     { key: 'portfolio_construction',  label: 'Reassess portfolio construction' },
     { key: 'valuation_changes',       label: 'Check valuation changes' },
   ],
+}
+
+/** The position-sizing check (actual-vs-target from an uploaded allocation file). */
+const POSITION_SIZING_TASK: ReviewTaskDef = { key: 'position_sizing', label: 'Review position sizing' }
+/** Trailing 30-day top-5 / bottom-5 movers. */
+const PERFORMANCE_ATTRIBUTION_TASK: ReviewTaskDef = { key: 'performance_attribution', label: 'Review performance attribution' }
+
+/**
+ * The task list for a review, given cadence + portfolio strategy.
+ *
+ * Fund/ETF portfolios (Foundation/Hybrid/ETF/Fixed Income) have no monthly
+ * review, so their quarterly & annual reviews lead with the same position-size
+ * check and performance attribution that Equity portfolios run monthly.
+ * Equity portfolios keep the base lists (they do those in their monthly review).
+ */
+export function reviewTasksFor(
+  cadence: PortfolioCadence,
+  strategy: string | null | undefined,
+): ReviewTaskDef[] {
+  const base = PORTFOLIO_REVIEW_TASKS[cadence]
+  const isEquity = strategy === 'Equity'
+  if (!isEquity && (cadence === 'quarterly' || cadence === 'annual')) {
+    return [POSITION_SIZING_TASK, PERFORMANCE_ATTRIBUTION_TASK, ...base]
+  }
+  return base
 }
 
 /** A single checklist item's captured state, frozen into the log row. */
@@ -165,14 +203,36 @@ function mapDraft(row: Record<string, unknown>): ReviewDraft {
 }
 
 /**
+ * Reconcile a stored checklist against the current task list: use the expected
+ * order/labels, carry over `done`/`notes` for tasks already present, and add any
+ * new tasks (e.g. position sizing). Returns null when nothing changed.
+ */
+function reconcileChecklist(
+  stored: ReviewChecklistItem[],
+  expected: ReviewTaskDef[],
+): ReviewChecklistItem[] | null {
+  const byKey = new Map(stored.map((i) => [i.key, i]))
+  const merged: ReviewChecklistItem[] = expected.map((t) => {
+    const prev = byKey.get(t.key)
+    return { key: t.key, label: t.label, done: prev?.done ?? false, notes: prev?.notes ?? null }
+  })
+  const same =
+    merged.length === stored.length &&
+    merged.every((m, i) => stored[i]?.key === m.key && stored[i]?.label === m.label)
+  return same ? null : merged
+}
+
+/**
  * Start a new draft review for a cadence, or resume the existing open draft.
  * At most one draft per (portfolio, cadence) exists (DB partial unique index).
- * A fresh draft seeds the checklist from the cadence's task list.
+ * A fresh draft seeds the checklist from the cadence's task list; a resumed draft
+ * is reconciled against it so newly-added sections appear without losing progress.
  */
 export async function startOrResumeDraft(
   portfolioName: string,
   cadence: PortfolioCadence,
   dueDate: string | null,
+  strategy: string | null | undefined,
 ): Promise<ReviewDraft> {
   const { data: existing, error: findErr } = await supabase
     .from('portfolio_review_log')
@@ -182,9 +242,21 @@ export async function startOrResumeDraft(
     .eq('status', 'draft')
     .maybeSingle()
   if (findErr) throw findErr
-  if (existing) return mapDraft(existing as Record<string, unknown>)
+  if (existing) {
+    const draft = mapDraft(existing as Record<string, unknown>)
+    const reconciled = reconcileChecklist(draft.checklist, reviewTasksFor(cadence, strategy))
+    if (reconciled) {
+      const { error: updErr } = await supabase
+        .from('portfolio_review_log')
+        .update({ checklist: reconciled as unknown as Json })
+        .eq('id', draft.id)
+      if (updErr) throw updErr
+      draft.checklist = reconciled
+    }
+    return draft
+  }
 
-  const checklist: ReviewChecklistItem[] = PORTFOLIO_REVIEW_TASKS[cadence].map((t) => ({
+  const checklist: ReviewChecklistItem[] = reviewTasksFor(cadence, strategy).map((t) => ({
     key: t.key, label: t.label, done: false, notes: null,
   }))
   const { data, error } = await supabase
