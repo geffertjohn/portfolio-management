@@ -10,6 +10,7 @@ import { addToAtRisk } from '@/lib/atRisk'
 import { fetchScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
+import { beatRate, fetchTipRanksSymbolSummary } from '@/lib/fmpTipranks'
 import { fmtDecimalPct, fmtUsd, EMPTY } from '@/lib/formatters'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { SecurityDetail } from '@/lib/securities'
@@ -157,6 +158,15 @@ export function MarkReviewedModal({
     enabled: snapshotEnabled,
   })
 
+  // Whole-street standing, frozen alongside the rest of the evidence.
+  const { data: tipranks } = useQuery({
+    queryKey: QUERY_KEYS.tipranksSummary(securityId),
+    queryFn: () => fetchTipRanksSymbolSummary(securityId),
+    enabled: snapshotEnabled,
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  })
+
   // Fund evidence — benchmark index names for the PDF header (dedupe with the
   // embedded FundMonitoringPanel's queries via shared keys).
   const fundSnapEnabled = open && mode === 'review' && isFund && !!security
@@ -193,6 +203,19 @@ export function MarkReviewedModal({
         sell: analyst?.grades?.sell ?? null,
         strongSell: analyst?.grades?.strongSell ?? null,
       },
+      tipranks: tipranks
+        ? {
+            totalRecommendations: tipranks.totalRecommendations,
+            distinctAnalysts: tipranks.distinctAnalysts,
+            buy: tipranks.buy,
+            hold: tipranks.hold,
+            sell: tipranks.sell,
+            upgraded: tipranks.actions.upgraded,
+            downgraded: tipranks.actions.downgraded,
+            beatRate: beatRate(tipranks),
+            averageReturn: tipranks.averageReturn,
+          }
+        : null,
     }
   }
 

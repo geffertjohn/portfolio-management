@@ -60,6 +60,22 @@ export interface ReviewMetricsSnapshot {
     sell: number | null
     strongSell: number | null
   }
+  /**
+   * Whole-street standing at review time, from TipRanks. Optional so reviews
+   * recorded before the add-on existed still parse.
+   */
+  tipranks?: {
+    totalRecommendations: number
+    distinctAnalysts: number
+    buy: number
+    hold: number
+    sell: number
+    upgraded: number
+    downgraded: number
+    /** Fraction of resolved targets reached, or null when too thin to report. */
+    beatRate: number | null
+    averageReturn: number | null
+  } | null
 }
 
 export type ReviewOutcome =

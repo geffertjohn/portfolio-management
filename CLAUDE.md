@@ -560,6 +560,17 @@ Broker research PDFs uploaded on a **security's Documents tab** are parsed and r
 - **Side effects:** importing a report whose rating is a **downgrade** (a *higher* RJ number) or whose target is cut ≥10% creates an `action_items` row (`category: 'security'`). That is the only write beyond the research record — research never touches positions.
 - **The AI committee reads it.** `research-analyst` and `devils-advocate` query `external_research` by ticker as **one outside opinion to engage with, never an authority**. The `.claude/agents/*.md` files and the **inlined** prompts in `.claude/workflows/new-buy-ic-review.js` (`STREET_NOTE` / `BEAR_STREET_NOTE`) must stay in sync.
 
+## TipRanks Analyst Data (paid FMP add-on)
+
+`lib/fmpTipranks.ts` wraps the TipRanks add-on. It answers a question the base analyst data cannot: **how good is this opinion?** Where `lib/fmpAnalyst.ts` gives a consensus target and a grade distribution, TipRanks adds analyst identity with a **track record** (`stockSuccessRate` = that analyst's hit rate on *this* stock), the **action taxonomy** (initiated / maintained / upgraded / downgraded / reiterated — i.e. *change*, not a snapshot), and **outcome scoring** (beats / misses / average return) at symbol, analyst and firm level.
+
+- **REST-path landmine.** The documented / MCP names do NOT all match the REST paths: point-in-time is **`tipranks-pit-symbol`** and **`tipranks-pit-analyst`**. The documented `-by-symbol` / `-by-analyst` forms return **HTTP 404 with an empty-array body**, so a wrong path reads as "no coverage" rather than an error. Do not "correct" these to match the docs.
+- **On demand, never persisted** (the standing FMP convention), with one exception: `MarkReviewedModal` freezes a summary into `review_log.metrics_snapshot.tipranks` so a stock review stays reconstructable. That field is optional — reviews recorded before the add-on still parse.
+- **`MIN_RATINGS_FOR_ACCURACY` (10)** — `beatRate()` returns null below that many *resolved* targets, and every surface shows the count alongside. Thin coverage is real (BRK.B has 3 ratings); a 3-rating average must never be dressed up as a track record.
+- **`latestByAnalyst(ratings)`** — `tipranks-pit-symbol` is a rating HISTORY (one analyst appears many times), so reduce it before rendering "who covers this now".
+- **Surfaces:** `TipRanksPanel` on the stock Monitor tab (below `ExternalResearchPanel`, above `SecurityResearchPanel` — the paid broker, the whole street, then the AI team), with row-click into `TipRanksAnalystModal` for one analyst's rank, stars, scorecard and recent calls across every name. `ResearchImportModal` shows the **importing firm's** own beat rate and average return, so an imported report carries its source calibration.
+- **The AI committee reads it.** `research-analyst` and `devils-advocate` load the `tipranks` tool via ToolSearch and are told to **weight by track record, not head count**. The `.claude/agents/*.md` files and the inlined `TIPRANKS_NOTE` / `BEAR_TIPRANKS_NOTE` in `.claude/workflows/new-buy-ic-review.js` must stay in sync.
+
 ## Portfolio Allocations & Performance
 
 ### `portfolio_allocations` is the dated-allocation source of truth

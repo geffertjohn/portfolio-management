@@ -5,8 +5,10 @@ import {
 } from '@/lib/externalResearch'
 import { createActionItem } from '@/lib/actionItems'
 import { uploadFile } from '@/lib/documents'
+import { beatRate, fetchTipRanksFirmSummary } from '@/lib/fmpTipranks'
+import { useQuery } from '@tanstack/react-query'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import { fmtSignedPct, fmtUsd } from '@/lib/formatters'
+import { fmtDecimalPct, fmtSignedPct, fmtUsd } from '@/lib/formatters'
 import type { ParsedResearch } from '@/lib/researchPdfParse'
 
 interface Props {
@@ -109,6 +111,17 @@ export function ResearchImportModal({ file, parsed, securityId, bucket, onClose 
     [targetPrice, priceAtPub],
   )
   const tickerMismatch = ticker.trim().toUpperCase() !== securityId.toUpperCase()
+
+  // How well this firm's targets have actually landed — shown so an imported
+  // report carries its own source calibration rather than being cited blind.
+  const { data: firmStats } = useQuery({
+    queryKey: QUERY_KEYS.tipranksFirm(firm.trim()),
+    queryFn: () => fetchTipRanksFirmSummary(firm.trim()),
+    enabled: !!firm.trim(),
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  })
+  const firmRate = firmStats ? beatRate(firmStats) : null
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -222,6 +235,26 @@ export function ResearchImportModal({ file, parsed, securityId, bucket, onClose 
           <Field label="Prior target" value={priorTarget} onChange={setPriorTarget} />
           <Field label="Price at publication" value={priceAtPub} onChange={setPriceAtPub} />
         </div>
+
+        {firm.trim() && firmStats && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+            <p className="text-xs text-gray-600">
+              <span className="font-semibold text-gray-800">{firm.trim()} track record</span>{' '}
+              (TipRanks, trailing year):{' '}
+              {firmRate != null
+                ? <>targets beaten <span className="font-medium">{fmtDecimalPct(firmRate)}</span> of {firmStats.beats + firmStats.misses}</>
+                : <>{firmStats.beats + firmStats.misses} resolved targets</>}
+              {firmStats.averageReturn != null && (
+                <> · avg return{' '}
+                  <span className={firmStats.averageReturn >= 0 ? 'font-medium text-green-700' : 'font-medium text-red-600'}>
+                    {fmtSignedPct(firmStats.averageReturn)}
+                  </span>
+                </>
+              )}
+              {' '}· {firmStats.actions.upgraded} upgrades vs {firmStats.actions.downgraded} downgrades
+            </p>
+          </div>
+        )}
 
         {upside != null && (
           <p className="text-xs text-gray-500">

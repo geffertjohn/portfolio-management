@@ -62,6 +62,23 @@ const STREET_NOTE =
   'order by published_at desc. It is ONE outside opinion to engage with, never an authority: say where you ' +
   'agree or disagree with the street target and why, and cite it as a source when you use it.'
 
+// TipRanks whole-street coverage (paid FMP add-on). Kept in sync with
+// .claude/agents/{research-analyst,devils-advocate}.md.
+const TIPRANKS_NOTE =
+  ' Also load the tipranks tool via ToolSearch for whole-street coverage: tipranks-symbol-summary ' +
+  '(buy/hold/sell, upgrades vs downgrades, target beat rate, average return) and tipranks-pit-by-symbol ' +
+  '(every covering analyst with their hit rate ON THIS NAME). WEIGHT OPINIONS BY TRACK RECORD, not head ' +
+  'count — a highly ranked analyst with a strong hit rate on this stock outranks a consensus of unrated ' +
+  'ones. Suppress any accuracy figure with fewer than 10 resolved targets and report the count instead. ' +
+  'State where you disagree with the street and why.'
+
+const BEAR_TIPRANKS_NOTE =
+  ' Also load the tipranks tool via ToolSearch. Mine two things: DOWNGRADES ' +
+  '(analystAction.downgraded) are other people already changing their minds, and a low target beat rate or ' +
+  'negative average return means the street\'s targets on this name have historically not landed, which ' +
+  'undercuts any bull case resting on "analysts see upside". Weight by stockSuccessRate and ignore ' +
+  'accuracy figures with fewer than 10 resolved targets.'
+
 const BEAR_STREET_NOTE =
   ' Also read external_research in Supabase for this ticker (firm, published_at, rating_label, target_price, ' +
   'prior_target_price, recommendation_text, valuation_text, deleted_at is null). Sell-side research skews ' +
@@ -77,7 +94,7 @@ const ANALYST_ROLE =
   'state what must be true for the thesis to work plus the single biggest risk. For fit with an income ' +
   'strategy, do not treat a below-benchmark per-security yield as disqualifying — note which Investment ' +
   'Philosophy criteria the name checks and leave the portfolio-level allocation call to the PM. ' +
-  'Recommend-only: never trade or modify positions. ' + FMP_NOTE + STREET_NOTE
+  'Recommend-only: never trade or modify positions. ' + FMP_NOTE + STREET_NOTE + TIPRANKS_NOTE
 
 const BEAR_ROLE =
   'You are the RED TEAM / devil\'s advocate on an AI investment team. Build the strongest possible case ' +
@@ -93,7 +110,7 @@ const BEAR_ROLE =
   '(fabless/asset-light converts most revenue to FCF). VERIFY dividend/payout/FCF facts from primary data ' +
   'before asserting — a bear case built on a wrong number is worse than none. ' +
   'Default toward KILL when the evidence is ambiguous, but build only the strongest REAL bear ' +
-  'case — if it is genuinely weak, say so. Recommend-only: never trade. ' + FMP_NOTE + BEAR_STREET_NOTE
+  'case — if it is genuinely weak, say so. Recommend-only: never trade. ' + FMP_NOTE + BEAR_STREET_NOTE + BEAR_TIPRANKS_NOTE
 
 const QUANT_ROLE =
   'You are the QUANTITATIVE ANALYST on an AI investment team — the systematic, data-first lens that ' +
