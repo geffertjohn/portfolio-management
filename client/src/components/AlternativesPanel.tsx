@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fmtDecimalPct, stripTotalReturn, EMPTY } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { saveAlternatives } from '@/lib/securities'
-import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, benchmarkEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
+import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, resolveEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
 import { fetchScorecardMetrics, type ScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchStockReturns, fetchProfile, type TrailingReturns } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -150,8 +150,8 @@ export function AlternativesPanel({ security }: { security: SecurityDetail }) {
   // Benchmark trailing returns from the representative ETF (total return) — FMP
   // doesn't serve the TR index symbols. Falls back to stored YCharts columns
   // when no proxy is mapped.
-  const proxy1 = benchmarkEtfProxy(bench1?.ticker)
-  const proxy2 = benchmarkEtfProxy(bench2?.ticker)
+  const proxy1 = resolveEtfProxy(bench1)
+  const proxy2 = resolveEtfProxy(bench2)
   const { data: bench1Returns } = useQuery({
     queryKey: QUERY_KEYS.stockReturns(proxy1 ?? ''),
     queryFn: () => fetchStockReturns(proxy1!),

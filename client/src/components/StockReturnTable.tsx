@@ -4,7 +4,7 @@ import { fmtDecimalPct, stripTotalReturn } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { saveSecurityBenchmarks } from '@/lib/securities'
 import { BenchmarkPickerModal } from './BenchmarkPickerModal'
-import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, benchmarkEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
+import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, resolveEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
 import { fetchStockReturns, type TrailingReturns } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
@@ -113,8 +113,8 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
   // Benchmark trailing returns come from the representative ETF (total return),
   // since FMP doesn't serve the TR index symbols. Falls back to the stored
   // YCharts columns when no ETF proxy is mapped.
-  const proxy1 = benchmarkEtfProxy(bench1?.ticker)
-  const proxy2 = benchmarkEtfProxy(bench2?.ticker)
+  const proxy1 = resolveEtfProxy(bench1)
+  const proxy2 = resolveEtfProxy(bench2)
   const { data: bench1Returns } = useQuery({
     queryKey: QUERY_KEYS.stockReturns(proxy1 ?? ''),
     queryFn: () => fetchStockReturns(proxy1!),

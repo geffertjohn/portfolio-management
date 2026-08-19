@@ -6,12 +6,21 @@ import { supabase } from './supabase'
 type AnyRow = Record<string, unknown>
 
 /**
- * ETF proxy for a benchmark's total-return index ticker. FMP does not serve the
- * total-return index symbols (^SPXTR, ^RLGTR, the ^SP15…STR sector indices), so
- * benchmark trailing returns on the stock pages are sourced from the
- * representative ETF's dividend-adjusted closes (= total return) via
- * `fetchStockReturns` — the same method as the security row. Maps the benchmark
- * `ticker` (category_ticker / sector ticker) to its ETF.
+ * FALLBACK ETF proxy map, keyed by benchmark ticker.
+ *
+ * The authoritative proxy is the `etf_proxy` COLUMN on `category_benchmarks` /
+ * `sector_benchmarks`, maintained through the benchmark Excel upload — always
+ * resolve through `resolveEtfProxy()`, which prefers that column. This map only
+ * covers a benchmark whose row has no `etf_proxy` set (e.g. a newly added row
+ * before the next upload), so it is deliberately partial.
+ *
+ * Why a proxy at all: FMP does not serve the total-return index symbols
+ * (^SPXTR, ^RLGTR, the ^SP15…STR sector indices — all confirmed "not found"),
+ * so benchmark trailing returns come from the representative ETF's
+ * dividend-adjusted closes (= total return) via `fetchStockReturns`, the same
+ * method used for the security row. The index symbols FMP *does* serve (^RUI,
+ * ^RLG, ^RLV) are PRICE return only and would understate the benchmark by
+ * ~0.5–2.5%/yr, so they are not used here.
  */
 export const BENCHMARK_ETF_PROXY: Record<string, string> = {
   // Category / style indices
@@ -35,9 +44,25 @@ export const BENCHMARK_ETF_PROXY: Record<string, string> = {
   '^SP15RESTR':  'XLRE', // Real Estate
 }
 
-/** The ETF proxy symbol for a benchmark ticker, or null when none is mapped. */
+/** Fallback-map lookup only. Prefer `resolveEtfProxy()`, which reads the DB column first. */
 export function benchmarkEtfProxy(ticker: string | null | undefined): string | null {
   return ticker ? (BENCHMARK_ETF_PROXY[ticker.toUpperCase()] ?? null) : null
+}
+
+/**
+ * The ETF whose dividend-adjusted returns stand in for this benchmark.
+ *
+ * Reads the benchmark row's own `etf_proxy` (the source of truth, loaded from
+ * the benchmark workbook) and falls back to `BENCHMARK_ETF_PROXY` only when the
+ * row has none. Returns null when neither knows a proxy, in which case callers
+ * fall back to the stored YCharts return columns.
+ */
+export function resolveEtfProxy(
+  bench: Pick<BenchmarkOption, 'ticker' | 'etf_proxy'> | null | undefined,
+): string | null {
+  if (!bench) return null
+  const fromDb = bench.etf_proxy?.trim()
+  return fromDb ? fromDb.toUpperCase() : benchmarkEtfProxy(bench.ticker)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,6 +160,8 @@ const SECTOR_RETURN_COLS = 'one_month_total_return, three_month_total_return, yt
 export interface BenchmarkOption {
   id: number
   ticker: string
+  /** Representative ETF for trailing returns — authoritative over BENCHMARK_ETF_PROXY. */
+  etf_proxy: string | null
   // category_benchmarks fields
   category_benchmark: string | null
   category: string | null
@@ -179,7 +206,7 @@ export async function fetchBenchmarkOptions(): Promise<BenchmarkOption[]> {
   // rest of the app can treat both benchmark sources uniformly.
   const { data, error } = await supabase
     .from('category_benchmarks')
-    .select(`id, category_ticker, category_benchmark, category, ${CATEGORY_RETURN_COLS}`)
+    .select(`id, category_ticker, category_benchmark, category, etf_proxy, ${CATEGORY_RETURN_COLS}`)
     .order('category_ticker', { ascending: true })
     .order('id', { ascending: true })
   if (error) throw error
@@ -199,7 +226,7 @@ export async function fetchBenchmarkOptions(): Promise<BenchmarkOption[]> {
 export async function fetchSectorBenchmarkOptions(): Promise<BenchmarkOption[]> {
   const { data, error } = await supabase
     .from('sector_benchmarks')
-    .select(`id, ticker, sector_benchmarks, sector, ${SECTOR_RETURN_COLS}`)
+    .select(`id, ticker, sector_benchmarks, sector, etf_proxy, ${SECTOR_RETURN_COLS}`)
     .order('ticker', { ascending: true })
   if (error) throw error
   const rows = (data ?? []).map((r) => ({
