@@ -2,9 +2,11 @@
  * fmpMarket.ts
  *
  * On-demand (live) FMP fetches for the stock detail UI: current quote/52-week
- * range, last/next earnings dates, and price-based trailing returns. These were
- * previously synced into `securities2` via fmpSync; for stocks they are now
- * fetched live so the UI reflects current FMP data without a manual sync.
+ * range, last/next earnings dates, and price-based trailing returns. Read live
+ * so the UI reflects current FMP data with no manual sync step. The earnings
+ * dates are additionally written through to `securities2` by
+ * `refreshSecurityFromFMP`, because the cross-security list views read the
+ * stored columns and cannot fetch per row.
  */
 
 import { FMP_STABLE, apiKey, asArray, fmpFetch, fmpSymbol, num, str } from './fmpClient'
