@@ -10,6 +10,7 @@ import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
 import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
 import { CandidatesPanel } from '@/components/CandidatesPanel'
 import { PortfolioRiskPanel } from '@/components/PortfolioRiskPanel'
+import { fetchModelBenchmarkTicker } from '@/lib/benchmarks'
 import { PortfolioNarrative } from '@/components/PortfolioNarrative'
 import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
 import { PORTFOLIO_DOCS_BUCKET } from '@/lib/documents'
@@ -76,6 +77,16 @@ export function PortfolioDetailPage() {
   })
 
   const modelPortfolio = mappedModelPortfolio ?? objectiveModelPortfolio ?? null
+
+  // Tradeable ticker behind the model's benchmark, for the performance engine's
+  // benchmark row (Equity portfolios only — the fund/ETF strategies use the
+  // stored Total Returns block instead).
+  const modelBenchmarkName = modelPortfolio?.benchmark ?? ''
+  const { data: benchmarkRef } = useQuery({
+    queryKey: QUERY_KEYS.modelBenchmarkTicker(modelBenchmarkName),
+    queryFn: () => fetchModelBenchmarkTicker(modelBenchmarkName),
+    enabled: !!modelBenchmarkName,
+  })
 
   const isEquityStrategy = portfolio?.portfolio_strategy === 'Equity'
   const isFixedIncomeStrategy = portfolio?.portfolio_strategy === 'Fixed Income'
@@ -306,7 +317,13 @@ export function PortfolioDetailPage() {
             {/* FMP buy-and-hold performance engine is stocks-only — show it only for
                 the all-stock Equity portfolios (Core Growth, Equity Income, EI & CG).
                 Fund/ETF-based portfolios rely on the Total Returns block above. */}
-            {isEquityStrategy && <PortfolioPerformancePanel portfolioName={id} />}
+            {isEquityStrategy && (
+              <PortfolioPerformancePanel
+                portfolioName={id}
+                benchmarkSymbol={benchmarkRef?.symbol ?? null}
+                benchmarkLabel={benchmarkRef?.label ?? null}
+              />
+            )}
           </div>
         )}
 

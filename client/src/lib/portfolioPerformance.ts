@@ -202,21 +202,21 @@ export interface PeriodReturns {
  * Periods ≤ 1 year are cumulative; 3Y/5Y/10Y and All Time are annualized.
  * Periods extending before inception return null ("—").
  */
-export async function computePortfolioPeriodReturns(portfolioName: string): Promise<PeriodReturns> {
-  const blank: PeriodReturns = {
-    inception: null, asOf: null, oneDay: null, fiveDay: null, oneMonth: null, threeMonth: null,
-    ytd: null, oneYear: null, threeYear: null, fiveYear: null, tenYear: null, allTime: null,
-    heldFlat: [], notes: [],
-  }
-  const snaps = await fetchAllocationSnapshots(portfolioName)
-  if (snaps.length === 0) return { ...blank, notes: ['No allocation snapshots for this portfolio yet.'] }
+/** One point of a NAV series normalized so that nav = 1.0 on the inception date. */
+interface NavPoint { date: string; nav: number }
 
-  const inception = snaps[0].effective_date
-  const today = new Date().toISOString().slice(0, 10)
-  const full = await computePortfolioPerformance(portfolioName, inception, today)
-  const s = full.series
-  if (s.length < 2) return { ...blank, inception, heldFlat: full.heldFlat, notes: full.notes }
-
+/**
+ * Derive every standard period from a normalized NAV series.
+ *
+ * Shared by the portfolio row and the benchmark row so both use ONE convention:
+ * periods ≤ 1 year cumulative, 3Y/5Y/10Y and All Time annualized, and anything
+ * reaching before `inception` returns null ("—"). `nav` must be 1.0 at
+ * inception — `ytd` and `allTime` rely on that normalization.
+ */
+function derivePeriods(
+  s: NavPoint[],
+  inception: string,
+): Omit<PeriodReturns, 'heldFlat' | 'notes'> {
   const navLast = s[s.length - 1].nav
   const lastDate = s[s.length - 1].date
   const navOnOrBefore = (date: string): number | null => {
@@ -224,12 +224,10 @@ export async function computePortfolioPeriodReturns(portfolioName: string): Prom
     for (const p of s) { if (p.date <= date) ans = p.nav; else break }
     return ans
   }
-  // Cumulative return from a base date to the latest point.
   const cum = (baseDate: string): number | null => {
     const bn = navOnOrBefore(baseDate)
     return bn != null && bn > 0 ? navLast / bn - 1 : null
   }
-  // Annualized (CAGR) over `years`, null if the base predates inception.
   const ann = (baseDate: string, years: number): number | null => {
     if (baseDate < inception) return null
     const bn = navOnOrBefore(baseDate)
@@ -253,16 +251,60 @@ export async function computePortfolioPeriodReturns(portfolioName: string): Prom
     fiveDay: s.length >= 6 ? navLast / s[s.length - 6].nav - 1 : null,
     oneMonth: cum(shift(1)),
     threeMonth: cum(shift(3)),
-    // YTD from Dec 31 prior year; if the portfolio started this year, since inception.
+    // YTD from Dec 31 prior year; if the series started this year, since inception.
     ytd: ytdBase < inception ? navLast - 1 : cum(ytdBase),
     oneYear: oneYearBase < inception ? null : cum(oneYearBase),
     threeYear: ann(shift(0, 3), 3),
     fiveYear: ann(shift(0, 5), 5),
     tenYear: ann(shift(0, 10), 10),
     allTime: days > 0 ? Math.pow(navLast, 365.25 / days) - 1 : null,
-    heldFlat: full.heldFlat,
-    notes: full.notes,
   }
+}
+
+/**
+ * The same period set for a benchmark ETF, measured on the SAME basis as the
+ * portfolio: dividend-adjusted closes normalized to 1.0 on the portfolio's
+ * inception date, so All Time is since-inception for both rows rather than the
+ * ETF's own history. Returns null when the symbol cannot be priced.
+ */
+export async function computeBenchmarkPeriodReturns(
+  symbol: string,
+  inception: string,
+): Promise<PeriodReturns | null> {
+  // Buffer back so a close on/before inception exists (matches the engine's base-date rule).
+  const from = new Date(new Date(inception + 'T00:00:00').getTime() - 10 * 86_400_000)
+    .toISOString().slice(0, 10)
+  const rows = await fetchDailyAdjustedSeries(symbol, from)
+  if (rows.length < 2) return null
+
+  let base: number | null = null
+  for (const r of rows) { if (r.date <= inception) base = r.adjClose; else break }
+  if (base == null || base <= 0) return null
+
+  const s: NavPoint[] = rows
+    .filter((r) => r.date >= inception)
+    .map((r) => ({ date: r.date, nav: r.adjClose / (base as number) }))
+  if (s.length < 2) return null
+
+  return { ...derivePeriods(s, inception), heldFlat: [], notes: [] }
+}
+
+export async function computePortfolioPeriodReturns(portfolioName: string): Promise<PeriodReturns> {
+  const blank: PeriodReturns = {
+    inception: null, asOf: null, oneDay: null, fiveDay: null, oneMonth: null, threeMonth: null,
+    ytd: null, oneYear: null, threeYear: null, fiveYear: null, tenYear: null, allTime: null,
+    heldFlat: [], notes: [],
+  }
+  const snaps = await fetchAllocationSnapshots(portfolioName)
+  if (snaps.length === 0) return { ...blank, notes: ['No allocation snapshots for this portfolio yet.'] }
+
+  const inception = snaps[0].effective_date
+  const today = new Date().toISOString().slice(0, 10)
+  const full = await computePortfolioPerformance(portfolioName, inception, today)
+  const s = full.series
+  if (s.length < 2) return { ...blank, inception, heldFlat: full.heldFlat, notes: full.notes }
+
+  return { ...derivePeriods(s, inception), heldFlat: full.heldFlat, notes: full.notes }
 }
 
 // ── Trailing-window holding movers (per-position total return) ──────────────

@@ -136,6 +136,29 @@ export async function fetchBenchmarkByName(name: string): Promise<BenchmarkRetur
   return data as BenchmarkReturns | null
 }
 
+/**
+ * The tradeable ticker behind a model-portfolio benchmark name, for pricing the
+ * benchmark row on the FMP performance engine.
+ *
+ * The five YCharts composite benchmarks store a `P:` portfolio id in
+ * `security_id`, which FMP cannot price — those resolve to a null symbol so the
+ * caller skips the live lookup rather than firing a request that must fail.
+ */
+export async function fetchModelBenchmarkTicker(
+  name: string,
+): Promise<{ symbol: string | null; label: string | null }> {
+  const { data, error } = await supabase
+    .from('model_portfolio_benchmarks')
+    .select('security_id, security_name')
+    .eq('security_name', name)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return { symbol: null, label: null }
+  const id = (data.security_id ?? '').trim()
+  const tradeable = id && !id.includes(':') ? id.toUpperCase() : null
+  return { symbol: tradeable, label: data.security_name ?? null }
+}
+
 /** Returns the full model-portfolio benchmark row (Allocation Comparison tables). */
 export async function fetchBenchmarkAll(name: string): Promise<AnyRow | null> {
   const { data, error } = await supabase

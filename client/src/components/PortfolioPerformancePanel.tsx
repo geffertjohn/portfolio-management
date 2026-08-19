@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { computePortfolioPeriodReturns } from '@/lib/portfolioPerformance'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { computeBenchmarkPeriodReturns } from '@/lib/portfolioPerformance'
 
 const COLS: { key: keyof ReturnsRow; label: string }[] = [
   { key: 'oneDay', label: '1 Day' },
@@ -24,11 +25,30 @@ type ReturnsRow = {
 const cell = (v: number | null) =>
   v == null ? '—' : `${(v * 100).toFixed(2)}%`
 
-export function PortfolioPerformancePanel({ portfolioName }: { portfolioName: string }) {
+export function PortfolioPerformancePanel({
+  portfolioName, benchmarkSymbol = null, benchmarkLabel = null,
+}: {
+  portfolioName: string
+  /** Tradeable ticker of the model's benchmark (model_portfolio_benchmarks.security_id). */
+  benchmarkSymbol?: string | null
+  /** Display name for the benchmark row. */
+  benchmarkLabel?: string | null
+}) {
   const { data, isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.portfolioPeriodReturns(portfolioName),
     queryFn: () => computePortfolioPeriodReturns(portfolioName),
     staleTime: 10 * 60 * 1000,
+  })
+
+  // Benchmark measured on the portfolio's own inception date so All Time is
+  // like-for-like. Gated on inception, so it runs only once the portfolio resolves.
+  const inception = data?.inception ?? null
+  const { data: bench } = useQuery({
+    queryKey: QUERY_KEYS.benchmarkPeriodReturns(benchmarkSymbol ?? '', inception ?? ''),
+    queryFn: () => computeBenchmarkPeriodReturns(benchmarkSymbol as string, inception as string),
+    enabled: !!benchmarkSymbol && !!inception,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
   })
 
   return (
@@ -79,6 +99,25 @@ export function PortfolioPerformancePanel({ portfolioName }: { portfolioName: st
                     )
                   })}
                 </tr>
+                {benchmarkSymbol && (
+                  <tr className="bg-gray-50">
+                    <td className="px-4 py-3 text-gray-600">
+                      <span className="font-medium">Benchmark</span>
+                      <span className="ml-1.5 text-xs text-gray-400">
+                        ({benchmarkLabel ?? benchmarkSymbol} · {benchmarkSymbol})
+                      </span>
+                    </td>
+                    {COLS.map((c) => {
+                      const v = bench ? bench[c.key] : null
+                      return (
+                        <td key={c.key} className={`px-4 py-3 tabular-nums ${
+                          v == null ? 'text-gray-400' : v >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          {cell(v)}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -22,6 +22,8 @@ export const QUERY_KEYS = {
   portfolioPerformance: (portfolioName: string, start: string, end: string) =>
     ['portfolio_performance', portfolioName, start, end] as const,
   portfolioPeriodReturns: (portfolioName: string) => ['portfolio_period_returns', portfolioName] as const,
+  benchmarkPeriodReturns: (symbol: string, inception: string) =>
+    ['benchmark_period_returns', symbol, inception] as const,
   portfolioMovers: (portfolioName: string, days: number) => ['portfolio_movers', portfolioName, days] as const,
   allocationGrid: (portfolioName: string) => ['allocation_grid', portfolioName] as const,
   latestActualAllocation: (portfolioName: string) => ['latest_actual_allocation', portfolioName] as const,
@@ -68,6 +70,7 @@ export const QUERY_KEYS = {
   modelPortfolioById: (id: number) => ['model_portfolio_by_id', id] as const,
   directModelPortfolioId: (securityId: string) => ['direct_model_portfolio_id', securityId] as const,
   benchmarkByName: (name: string) => ['benchmark_by_name', name] as const,
+  modelBenchmarkTicker: (name: string) => ['model_benchmark_ticker', name] as const,
   benchmarkAllByName: (name: string) => ['benchmark_all_by_name', name] as const,
   categoryBenchmark: (category: string) => ['cat-benchmark', category] as const,
   peerGroupBenchmark: (name: string) => ['pg-benchmark', name] as const,
