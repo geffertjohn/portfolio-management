@@ -1,20 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AddSecurityModal } from '@/components/AddSecurityModal'
 import { useSecurities } from '@/hooks/useSecurities'
-import { QUERY_KEYS } from '@/hooks/queryKeys'
-import { addNewSecurityFromExcel } from '@/lib/securities2ExcelUpload'
-import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
-import { fetchSecurities, getSecurityDisplayType, type Security } from '@/lib/securities'
+import { getSecurityDisplayType, type Security } from '@/lib/securities'
 
 export function SecuritiesPage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [addSecurityOpen, setAddSecurityOpen] = useState(false)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const addMenuRef = useRef<HTMLDivElement>(null)
-  const [uploadStatus, setUploadStatus] = useState<{ text: string; status: 'success' | 'error' } | null>(null)
 
   const { data: securities = [], isLoading, error } = useSecurities()
 
@@ -29,44 +23,6 @@ export function SecuritiesPage() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [addMenuOpen])
-
-  const excelUploadMutation = useMutation({
-    mutationFn: (file: File) => addNewSecurityFromExcel(file),
-    onSuccess: async (symbol) => {
-      setUploadStatus({ text: `"${symbol}" imported successfully.`, status: 'success' })
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.securities })
-      const fresh = await queryClient.fetchQuery({
-        queryKey: QUERY_KEYS.securities,
-        queryFn: () => fetchSecurities(),
-      })
-      const match = fresh.find((s) => s.security_id === symbol)
-      if (match) {
-        navigate(`/security/${match.id}`, { state: { from: 'securities' } })
-      } else {
-        setUploadStatus({ text: `"${symbol}" imported. Find it in the securities list.`, status: 'success' })
-      }
-    },
-    onError: (err) => {
-      const msg = err instanceof Error ? err.message : String(err)
-      setUploadStatus({ text: msg.trim() || 'Could not import that Excel file.', status: 'error' })
-    },
-  })
-
-  const bulkFundUploadMutation = useMutation({
-    mutationFn: (file: File) => bulkUploadFundsFromExcel(file),
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.securities })
-      const clean = result.failed === 0 && result.errors.length === 0
-      const msg = clean
-        ? `Bulk upload complete — ${result.succeeded} fund${result.succeeded !== 1 ? 's' : ''} upserted${result.relatedLinked > 0 ? `, ${result.relatedLinked} related links` : ''}.`
-        : `Bulk upload: ${result.succeeded} succeeded, ${result.failed} failed. ${result.errors[0] ?? ''}`
-      setUploadStatus({ text: msg, status: clean ? 'success' : 'error' })
-    },
-    onError: (err) => {
-      const msg = err instanceof Error ? err.message : String(err)
-      setUploadStatus({ text: msg.trim() || 'Bulk upload failed.', status: 'error' })
-    },
-  })
 
   // Split into stocks vs. ETFs & funds (by the displayed badge type)
   const stocks = securities.filter((s) => getSecurityDisplayType(s) === 'Stock')
@@ -164,53 +120,11 @@ export function SecuritiesPage() {
                   </svg>
                   Add by symbol
                 </button>
-                <label className="flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  {excelUploadMutation.isPending ? 'Importing…' : 'Upload Excel (single)'}
-                  <input
-                    type="file"
-                    className="sr-only"
-                    accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                    disabled={excelUploadMutation.isPending}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      e.target.value = ''
-                      setAddMenuOpen(false)
-                      if (f) excelUploadMutation.mutate(f)
-                    }}
-                  />
-                </label>
-                <label className="flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  {bulkFundUploadMutation.isPending ? 'Uploading…' : 'Bulk upload funds'}
-                  <input
-                    type="file"
-                    className="sr-only"
-                    accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                    disabled={bulkFundUploadMutation.isPending}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      e.target.value = ''
-                      setAddMenuOpen(false)
-                      if (f) bulkFundUploadMutation.mutate(f)
-                    }}
-                  />
-                </label>
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {uploadStatus && (
-        <div className={`mt-4 rounded-md p-3 text-sm ${uploadStatus.status === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-          {uploadStatus.text}
-        </div>
-      )}
 
       {isLoading ? (
         <div className="mt-8 flex items-center justify-center py-8">

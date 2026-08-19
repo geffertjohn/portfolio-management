@@ -1,18 +1,12 @@
-import React, { useRef, useState } from 'react'
+import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { fetchPortfolios } from '@/lib/portfolio'
-import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 function fmtPct(v: number | null) {
   if (v == null) return '—'
   return `${(v * 100).toFixed(2)}%`
-}
-
-function fmtNum(v: number | null) {
-  if (v == null) return '—'
-  return v.toFixed(2)
 }
 
 const SUFFIX_ORDER = [
@@ -32,28 +26,10 @@ const GROUPS = [
 
 export function PortfolioPage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploadStatus, setUploadStatus] = useState<{ text: string; ok: boolean } | null>(null)
 
   const { data: portfolios = [], isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.portfolios,
     queryFn: fetchPortfolios,
-  })
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => bulkUploadPortfoliosFromExcel(file),
-    onSuccess: ({ succeeded, failed, errors }) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolios })
-      const msg = failed === 0
-        ? `${succeeded} portfolio${succeeded !== 1 ? 's' : ''} updated.`
-        : `${succeeded} updated, ${failed} failed. ${errors[0] ?? ''}`
-      setUploadStatus({ text: msg, ok: failed === 0 })
-      window.setTimeout(() => setUploadStatus(null), 5000)
-    },
-    onError: (err) => {
-      setUploadStatus({ text: err instanceof Error ? err.message : 'Upload failed.', ok: false })
-    },
   })
 
   if (isLoading) {
@@ -96,32 +72,6 @@ export function PortfolioPage() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Portfolios</h1>
-        <div className="flex flex-col items-end gap-1">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="sr-only"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) uploadMutation.mutate(f)
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            disabled={uploadMutation.isPending}
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            {uploadMutation.isPending ? 'Uploading…' : 'Upload'}
-          </button>
-          {uploadStatus && (
-            <p className={`text-xs ${uploadStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
-              {uploadStatus.text}
-            </p>
-          )}
-        </div>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -129,18 +79,19 @@ export function PortfolioPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Name</th>
-              <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 sm:table-cell">ID</th>
-              <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 sm:table-cell">Strategy</th>
+              <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 sm:table-cell">Dividend Yield</th>
+              <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 md:table-cell">1M Return</th>
+              <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 md:table-cell">3M Return</th>
               <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 md:table-cell">1Y Return</th>
-              <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 md:table-cell">Sharpe 1Y</th>
-              <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 md:table-cell">Sortino 1Y</th>
+              <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 md:table-cell">Std Dev</th>
+              <th className="hidden px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 md:table-cell">Max Drawdown</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {grouped.map(({ label, items }) => (
               <React.Fragment key={label}>
                 <tr className="bg-gray-50">
-                  <td colSpan={6} className="px-4 py-2">
+                  <td colSpan={7} className="px-4 py-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                       {label}
                     </span>
@@ -153,18 +104,23 @@ export function PortfolioPage() {
                     onClick={() => navigate(`/portfolio/${encodeURIComponent(p.name)}`)}
                   >
                     <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-gray-400 sm:table-cell">{p.security_id ?? '—'}</td>
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-gray-500 sm:table-cell">
-                      {p.portfolio_strategy || '—'}
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-600 sm:table-cell">
+                      {fmtPct(p.dividend_yield)}
+                    </td>
+                    <td className={`hidden whitespace-nowrap px-4 py-3 text-right tabular-nums md:table-cell ${p.one_month_total_return == null ? 'text-gray-400' : p.one_month_total_return >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      {fmtPct(p.one_month_total_return)}
+                    </td>
+                    <td className={`hidden whitespace-nowrap px-4 py-3 text-right tabular-nums md:table-cell ${p.three_month_total_return == null ? 'text-gray-400' : p.three_month_total_return >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      {fmtPct(p.three_month_total_return)}
                     </td>
                     <td className={`hidden whitespace-nowrap px-4 py-3 text-right tabular-nums md:table-cell ${p.one_year_total_return == null ? 'text-gray-400' : p.one_year_total_return >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                       {fmtPct(p.one_year_total_return)}
                     </td>
                     <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-600 md:table-cell">
-                      {fmtNum(p.historical_sharpe_1y)}
+                      {fmtPct(p.monthly_standard_deviation_annualized_all)}
                     </td>
                     <td className="hidden whitespace-nowrap px-4 py-3 text-right tabular-nums text-gray-600 md:table-cell">
-                      {fmtNum(p.historical_sortino_1y)}
+                      {fmtPct(p.max_drawdown_all)}
                     </td>
                   </tr>
                 ))}

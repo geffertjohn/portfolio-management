@@ -582,6 +582,14 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 
 ## Excel Import
 
+**Settings → Import / Export is the ONLY place the app accepts a spreadsheet.** All six data imports live there as `ImportCard`s (`pages/settings/ImportExportPage.tsx`): benchmarks, the New Fund Template, securities add/update-by-symbol, security-metrics-into-a-chosen-symbol, portfolios, and portfolio allocations. The last two take a picker (security / portfolio) since they target one entity. **Do not add an upload button to an entity page** — the Securities, Portfolios, Benchmarks, Security-detail, and Allocation-History pages had theirs removed deliberately (a stray "Upload manually" on the security header, filtered to `.xlsx`, was a persistent trap: it silently refused PDFs and looked like a document upload).
+
+The one exception is **file-storage uploads**, which are contextual by nature and stay where they are: `DocumentsFolderPanel` (security/portfolio Documents tabs, incl. the Raymond James research import), `PositionSizingCheck` (a step inside a review), and Settings → Documents. Those write to Storage, not to DB tables.
+
+`parseYchartsDynamic` lives in **`lib/portfolioAllocations.ts`** (moved out of `AllocationHistoryPanel` when the import consolidated) — it is a pure parser, so it belongs in lib alongside `importAllocationSnapshots`.
+
+
+
 Upload handlers live in `lib/*ExcelUpload.ts`. `securities2ExcelUpload.ts` validates columns against a `VALID_COLS` whitelist — unrecognized columns are silently skipped. Do not accept or write columns not in the whitelist without adding them explicitly.
 
 Identity fields (`security_name`, `long_description`, `morningstar_sector`, `morningstar_industry`) are **deliberately not writable from Excel** — their friendly headers map to `null` and the DB columns are in the `SKIP` set. They are sourced from FMP `/profile` only (see "Stock detail page reads FMP on-demand").

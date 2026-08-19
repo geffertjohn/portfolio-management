@@ -1,82 +1,17 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import * as XLSX from 'xlsx'
 import {
   fetchAllocationGrid, upsertAllocation, addSnapshotDate, deleteSnapshotDate,
-  importAllocationSnapshots, normalizeSymbol, type ParsedDynamicAllocations,
+  normalizeSymbol,
 } from '@/lib/portfolioAllocations'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-
-/**
- * Parse a YCharts dynamic source file. The export is the **long** format —
- * columns `Date · Symbol · Target Weight`, one row per holding per date (weights
- * in decimal, e.g. 0.075). Multiple rows share a date; we pivot to dated snapshots.
- */
-function parseYchartsDynamic(rows: unknown[][]): ParsedDynamicAllocations {
-  const asDate = (v: unknown): string | null => {
-    if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString().slice(0, 10)
-    if (typeof v === 'string') {
-      const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
-      if (m) return `${m[1]}-${m[2]}-${m[3]}`
-    }
-    return null
-  }
-  const looksTicker = (v: unknown) => typeof v === 'string' && /^[$:A-Za-z][A-Za-z0-9.:-]{0,9}$/.test(v.trim())
-  const cellEq = (v: unknown, re: RegExp) => typeof v === 'string' && re.test(v.trim())
-
-  // Header row: contains a "Symbol" cell and a "...Weight" cell.
-  let h = -1, dateCol = 0, symCol = -1, wCol = -1
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i] ?? []
-    const sc = r.findIndex((c) => cellEq(c, /^symbol$/i))
-    if (sc < 0) continue
-    const wc = r.findIndex((c, ci) => ci > sc && cellEq(c, /weight/i))
-    if (wc < 0) continue
-    const dc = r.findIndex((c) => cellEq(c, /^date$/i))
-    h = i; symCol = sc; wCol = wc; dateCol = dc >= 0 ? dc : 0
-    break
-  }
-  if (h < 0) throw new Error('Could not find a header row with Date / Symbol / Weight columns.')
-
-  const pct = (v: unknown): number | null => {
-    if (v == null || v === '') return null
-    const n = typeof v === 'number' ? v : Number(String(v).replace('%', '').trim())
-    if (!Number.isFinite(n)) return null
-    return Math.abs(n) <= 1 ? n * 100 : n // 0.075 → 7.5, or accept already-percent
-  }
-
-  // Collect (date, symbol) → weight.
-  const dateSet = new Set<string>()
-  const bySym = new Map<string, Map<string, number>>()
-  for (let r = h + 1; r < rows.length; r++) {
-    const row = rows[r] ?? []
-    const d = asDate(row[dateCol])
-    const sym = row[symCol]
-    const w = pct(row[wCol])
-    if (!d || !looksTicker(sym) || w == null) continue
-    dateSet.add(d)
-    const key = normalizeSymbol(String(sym))
-    let m = bySym.get(key); if (!m) { m = new Map(); bySym.set(key, m) }
-    m.set(d, w)
-  }
-  if (dateSet.size === 0 || bySym.size === 0) throw new Error('No dated holding rows parsed from the file.')
-
-  const dates = [...dateSet].sort()
-  const outRows = [...bySym.entries()].map(([security_id, m]) => ({
-    security_id,
-    weights: dates.map((d) => (m.has(d) ? m.get(d)! : null)),
-  }))
-  return { dates, rows: outRows }
-}
 
 const fmtW = (w: number) => (w === 0 ? '' : w.toFixed(2))
 
 export function AllocationHistoryPanel({ portfolioName }: { portfolioName: string }) {
   const queryClient = useQueryClient()
-  const fileRef = useRef<HTMLInputElement>(null)
   const [newDate, setNewDate] = useState('')
   const [newTicker, setNewTicker] = useState('')
-  const [importMsg, setImportMsg] = useState<string | null>(null)
 
   const { data: grid, isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.allocationGrid(portfolioName),
@@ -105,19 +40,6 @@ export function AllocationHistoryPanel({ portfolioName }: { portfolioName: strin
     mutationFn: (sym: string) => upsertAllocation(portfolioName, grid!.dates.at(-1)!, normalizeSymbol(sym), 0),
     onSuccess: () => { setNewTicker(''); invalidate() },
   })
-  const importMut = useMutation({
-    mutationFn: async (file: File) => {
-      const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf, { type: 'array', cellDates: true })
-      const sheet = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, blankrows: false })
-      const parsed = parseYchartsDynamic(rows)
-      return importAllocationSnapshots(portfolioName, parsed, true)
-    },
-    onSuccess: (res) => { setImportMsg(`Imported ${res.inserted} weights across ${res.dates} dates.`); invalidate() },
-    onError: (e) => setImportMsg(e instanceof Error ? e.message : 'Import failed'),
-  })
-
   if (isLoading) return <p className="mt-4 text-sm text-gray-500">Loading allocation history…</p>
   if (error) return <p className="mt-4 text-sm text-red-600">{error instanceof Error ? error.message : 'Failed to load allocations'}</p>
   if (!grid) return null
@@ -135,17 +57,11 @@ export function AllocationHistoryPanel({ portfolioName }: { portfolioName: strin
             className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500" />
           <button type="button" disabled={!newDate || addDateMut.isPending} onClick={() => addDateMut.mutate(newDate)}
             className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">+ Date</button>
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}
-            className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-            {importMut.isPending ? 'Importing…' : 'Import YCharts file'}</button>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = '' }} />
         </div>
       </div>
-      {importMsg && <p className="mb-2 text-xs text-gray-600">{importMsg}</p>}
 
       {dates.length === 0 ? (
-        <p className="text-sm text-gray-400">No allocation snapshots yet. Import a YCharts file or add a date.</p>
+        <p className="text-sm text-gray-400">No allocation snapshots yet. Import a YCharts file from Settings → Import / Export, or add a date.</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="min-w-full text-sm">

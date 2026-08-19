@@ -183,3 +183,65 @@ export async function importAllocationSnapshots(
   }
   return { inserted: inserts.length, dates: parsed.dates.length }
 }
+
+/**
+ * Parse a YCharts dynamic source file. The export is the **long** format —
+ * columns `Date · Symbol · Target Weight`, one row per holding per date (weights
+ * in decimal, e.g. 0.075). Multiple rows share a date; we pivot to dated snapshots.
+ */
+export function parseYchartsDynamic(rows: unknown[][]): ParsedDynamicAllocations {
+  const asDate = (v: unknown): string | null => {
+    if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString().slice(0, 10)
+    if (typeof v === 'string') {
+      const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`
+    }
+    return null
+  }
+  const looksTicker = (v: unknown) => typeof v === 'string' && /^[$:A-Za-z][A-Za-z0-9.:-]{0,9}$/.test(v.trim())
+  const cellEq = (v: unknown, re: RegExp) => typeof v === 'string' && re.test(v.trim())
+
+  // Header row: contains a "Symbol" cell and a "...Weight" cell.
+  let h = -1, dateCol = 0, symCol = -1, wCol = -1
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] ?? []
+    const sc = r.findIndex((c) => cellEq(c, /^symbol$/i))
+    if (sc < 0) continue
+    const wc = r.findIndex((c, ci) => ci > sc && cellEq(c, /weight/i))
+    if (wc < 0) continue
+    const dc = r.findIndex((c) => cellEq(c, /^date$/i))
+    h = i; symCol = sc; wCol = wc; dateCol = dc >= 0 ? dc : 0
+    break
+  }
+  if (h < 0) throw new Error('Could not find a header row with Date / Symbol / Weight columns.')
+
+  const pct = (v: unknown): number | null => {
+    if (v == null || v === '') return null
+    const n = typeof v === 'number' ? v : Number(String(v).replace('%', '').trim())
+    if (!Number.isFinite(n)) return null
+    return Math.abs(n) <= 1 ? n * 100 : n // 0.075 → 7.5, or accept already-percent
+  }
+
+  // Collect (date, symbol) → weight.
+  const dateSet = new Set<string>()
+  const bySym = new Map<string, Map<string, number>>()
+  for (let r = h + 1; r < rows.length; r++) {
+    const row = rows[r] ?? []
+    const d = asDate(row[dateCol])
+    const sym = row[symCol]
+    const w = pct(row[wCol])
+    if (!d || !looksTicker(sym) || w == null) continue
+    dateSet.add(d)
+    const key = normalizeSymbol(String(sym))
+    let m = bySym.get(key); if (!m) { m = new Map(); bySym.set(key, m) }
+    m.set(d, w)
+  }
+  if (dateSet.size === 0 || bySym.size === 0) throw new Error('No dated holding rows parsed from the file.')
+
+  const dates = [...dateSet].sort()
+  const outRows = [...bySym.entries()].map(([security_id, m]) => ({
+    security_id,
+    weights: dates.map((d) => (m.has(d) ? m.get(d)! : null)),
+  }))
+  return { dates, rows: outRows }
+}

@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import {
   fetchRelatedSecurities,
   getThesisText,
@@ -32,7 +32,6 @@ import { fetchPortfoliosHoldingSecurity } from '@/lib/positions'
 import { useSecurityDetail } from '@/hooks/useSecurityDetail'
 import { useSecurityBackLink } from '@/hooks/useSecurityBackLink'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import { uploadSecurities2FromExcel } from '@/lib/securities2ExcelUpload'
 import { useLatestTranscript } from '@/hooks/useTranscript'
 import { fetchKeyExecutives } from '@/lib/fmpTranscripts'
 import { fetchEarningsDates, fetchProfile } from '@/lib/fmpMarket'
@@ -84,8 +83,6 @@ export function SecurityDetailPage() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'monitor' | 'documents'>('overview')
   const [financialsOpen, setFinancialsOpen] = useState(false)
-  const [excelStatus, setExcelStatus] = useState<{ text: string; ok: boolean } | null>(null)
-  const excelInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
   const { data: security, isLoading, error } = useSecurityDetail(id)
@@ -207,18 +204,6 @@ export function SecurityDetailPage() {
     },
   })
 
-  const excelUploadMutation = useMutation({
-    mutationFn: (file: File) => uploadSecurities2FromExcel(security!.security_id, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.security(id) })
-      setExcelStatus({ text: 'Upload complete.', ok: true })
-      window.setTimeout(() => setExcelStatus(null), 4000)
-    },
-    onError: (err) => {
-      setExcelStatus({ text: err instanceof Error ? err.message : 'Upload failed.', ok: false })
-    },
-  })
-
   const invalidId = Number.isNaN(id) || !Number.isInteger(id) || id <= 0
   if (invalidId || isLoading || error || !security) {
     return (
@@ -335,39 +320,9 @@ export function SecurityDetailPage() {
 
             </div>
 
-            {/* Excel fallback — stocks only */}
-            {!isFundOrEtfSecurity(security) && (
-              <>
-                <input
-                  ref={excelInputRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) excelUploadMutation.mutate(file)
-                    e.target.value = ''
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => excelInputRef.current?.click()}
-                  disabled={excelUploadMutation.isPending}
-                  className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                >
-                  {excelUploadMutation.isPending ? 'Uploading…' : 'Upload manually'}
-                </button>
-              </>
-            )}
-
             <p className="text-xs text-gray-400">
               Last updated {security.updated_at ? new Date(security.updated_at).toLocaleDateString() : '—'}
             </p>
-            {excelStatus && (
-              <p className={`max-w-xs text-right text-xs ${excelStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
-                {excelStatus.text}
-              </p>
-            )}
           </div>
         </div>
 
