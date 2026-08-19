@@ -279,6 +279,75 @@ export function netUpgrades(s: Pick<TipRanksSummary, 'actions'>): number {
   return s.actions.upgraded - s.actions.downgraded
 }
 
+export interface StreetConsensus {
+  analysts: number
+  buy: number
+  hold: number
+  sell: number
+  /** Strong Buy / Moderate Buy / Hold / Moderate Sell / Strong Sell. */
+  label: string
+}
+
+/**
+ * Consensus across analysts' CURRENT standing calls — pass the output of
+ * `latestByAnalyst`, not the raw history, or every analyst is counted once per
+ * call they have ever made.
+ *
+ * Note this is deliberately different from `TipRanksSummary.buy/hold/sell`,
+ * which counts *recommendations* over the trailing window (AAPL: 275/129/33 =
+ * 437 calls from 49 analysts). Head-count is the right basis for a consensus
+ * badge; the summary counts are the right basis for activity and momentum.
+ *
+ * The label thresholds are our own approximation — TipRanks does not publish
+ * its formula — chosen so a 75% buy share reads "Moderate Buy", matching how
+ * their own page scores a 24/6/2 split.
+ */
+export function consensusFromRatings(latest: TipRanksRating[]): StreetConsensus {
+  let buy = 0, hold = 0, sell = 0
+  for (const r of latest) {
+    const v = r.recommendation?.toLowerCase()
+    if (v === 'buy') buy++
+    else if (v === 'sell') sell++
+    else if (v === 'hold') hold++
+  }
+  const total = buy + hold + sell
+  let label = 'No consensus'
+  if (total > 0) {
+    const buyShare = buy / total
+    const sellShare = sell / total
+    if (buyShare >= 0.85) label = 'Strong Buy'
+    else if (buyShare >= 0.55) label = 'Moderate Buy'
+    else if (sellShare >= 0.85) label = 'Strong Sell'
+    else if (sellShare >= 0.55) label = 'Moderate Sell'
+    else label = 'Hold'
+  }
+  return { analysts: total, buy, hold, sell, label }
+}
+
+export interface StreetTargets {
+  /** How many of the standing calls carry a price target. */
+  count: number
+  average: number | null
+  high: number | null
+  low: number | null
+}
+
+/**
+ * Price-target range across the standing calls. Derived from the same rows the
+ * analyst table shows, so the headline and the detail can never disagree —
+ * which they would if this came from FMP's separate consensus endpoint.
+ */
+export function targetsFromRatings(latest: TipRanksRating[]): StreetTargets {
+  const t = latest.map((r) => r.priceTarget).filter((v): v is number => v != null && v > 0)
+  if (t.length === 0) return { count: 0, average: null, high: null, low: null }
+  return {
+    count: t.length,
+    average: t.reduce((a, b) => a + b, 0) / t.length,
+    high: Math.max(...t),
+    low: Math.min(...t),
+  }
+}
+
 /**
  * Reduce a rating history to the current standing call per analyst, newest
  * first, so a panel shows each analyst once.
