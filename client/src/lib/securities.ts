@@ -627,6 +627,38 @@ export async function refreshSecurityFromFMP(symbol: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Refresh the FMP-owned columns for many symbols, a few at a time.
+ *
+ * Used by the Review Calendar to top up stock rows whose stored
+ * `next_earnings_release` has gone stale — those rows drive review scheduling
+ * and the calendar cannot fetch per row while rendering. Concurrency is capped
+ * so a full calendar does not burst dozens of FMP requests at once, and a
+ * per-symbol failure is swallowed so one bad ticker cannot stall the rest.
+ *
+ * Returns the number of symbols successfully refreshed.
+ */
+export async function refreshSecuritiesFromFMP(symbols: string[], concurrency = 4): Promise<number> {
+  const queue = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))]
+  let refreshed = 0
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const sym = queue.shift()
+      if (!sym) return
+      try {
+        await refreshSecurityFromFMP(sym)
+        refreshed++
+      } catch {
+        // One symbol failing must not stop the batch.
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, worker))
+  return refreshed
+}
+
 /** Minimal row shape for the global ticker-search box. */
 export interface SecuritySearchResult {
   id: number

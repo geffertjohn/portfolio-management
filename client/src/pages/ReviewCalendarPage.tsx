@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { fetchReviewSchedules, isOverdue, isDueSoon, type ReviewCadence } from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { isFundOrEtfSecurity, refreshSecuritiesFromFMP } from '@/lib/securities'
 import { MarkReviewedModal } from '@/components/MarkReviewedModal'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatDate } from '@/lib/fundFormat'
@@ -17,10 +18,38 @@ export function ReviewCalendarPage() {
     lastEarnings: string | null; nextEarnings: string | null
   } | null>(null)
 
+  const queryClient = useQueryClient()
   const { data: schedules = [], isLoading } = useQuery({
     queryKey: QUERY_KEYS.reviewSchedules,
     queryFn: fetchReviewSchedules,
   })
+
+  // Stock review dates are earnings-driven, and this page reads the STORED
+  // earnings columns (it cannot fetch per row while rendering). Top up any that
+  // have gone stale, once per mount, then refetch so the dates shown are right.
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshedCount, setRefreshedCount] = useState<number | null>(null)
+  const didRefresh = useRef(false)
+
+  useEffect(() => {
+    if (didRefresh.current || schedules.length === 0) return
+    const today = new Date().toISOString().slice(0, 10)
+    const stale = schedules
+      .filter((s) => s.symbol && !isFundOrEtfSecurity(s))
+      .filter((s) => s.next_earnings_release == null || s.next_earnings_release < today)
+      .map((s) => s.symbol)
+    if (stale.length === 0) { didRefresh.current = true; return }
+
+    didRefresh.current = true
+    setRefreshing(true)
+    void refreshSecuritiesFromFMP(stale)
+      .then(async (n) => {
+        setRefreshedCount(n)
+        if (n > 0) await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedules })
+      })
+      .catch(() => {})
+      .finally(() => setRefreshing(false))
+  }, [schedules, queryClient])
 
   const filtered = schedules.filter((s) => {
     if (filter === 'overdue') return isOverdue(s.next_review_at)
@@ -46,6 +75,14 @@ export function ReviewCalendarPage() {
             Complete quarterly, semi-annual, and annual security reviews.{' '}
             <a href="/actions" className="text-blue-600 hover:underline">See all actions →</a>
           </p>
+          {refreshing && (
+            <p className="mt-1 text-xs text-gray-400">Refreshing stock earnings dates from FMP…</p>
+          )}
+          {!refreshing && refreshedCount != null && refreshedCount > 0 && (
+            <p className="mt-1 text-xs text-gray-400">
+              Updated earnings dates for {refreshedCount} stock{refreshedCount === 1 ? '' : 's'}.
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           {(['all', 'overdue', 'due_soon'] as Filter[]).map((f) => (

@@ -29,6 +29,12 @@ export interface ReviewScheduleWithSecurity extends ReviewSchedule {
   security_numeric_id: number | null
   last_earnings_release: string | null
   next_earnings_release: string | null
+  /** Classifier inputs, so callers can use `isFundOrEtfSecurity` rather than guessing. */
+  detailed_security_type: string | null
+  peer_group_name: string | null
+  fund_company_name: string | null
+  fund_family: string | null
+  expense_ratio_generic: number | null
 }
 
 function calcNextReview(cadence: ReviewCadence, from = new Date()): string {
@@ -42,7 +48,7 @@ function calcNextReview(cadence: ReviewCadence, from = new Date()): string {
 export async function fetchReviewSchedules(): Promise<ReviewScheduleWithSecurity[]> {
   const { data, error } = await supabase
     .from('review_schedules')
-    .select('*, securities2(id, security_id, security_name, broad_asset_class, last_earnings_release, next_earnings_release)')
+    .select('*, securities2(id, security_id, security_name, broad_asset_class, last_earnings_release, next_earnings_release, detailed_security_type, peer_group_name, fund_company_name, fund_family, expense_ratio_generic)')
     .order('next_review_at', { ascending: true })
   if (error) throw error
   // DB stores cadence as text; domain type narrows it
@@ -54,6 +60,11 @@ export async function fetchReviewSchedules(): Promise<ReviewScheduleWithSecurity
     security_numeric_id: row.securities2?.id ?? null,
     last_earnings_release: row.securities2?.last_earnings_release ?? null,
     next_earnings_release: row.securities2?.next_earnings_release ?? null,
+    detailed_security_type: row.securities2?.detailed_security_type ?? null,
+    peer_group_name: row.securities2?.peer_group_name ?? null,
+    fund_company_name: row.securities2?.fund_company_name ?? null,
+    fund_family: row.securities2?.fund_family ?? null,
+    expense_ratio_generic: row.securities2?.expense_ratio_generic ?? null,
   })) as ReviewScheduleWithSecurity[]
 }
 
