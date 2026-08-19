@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   beatRate, fetchTipRanksRatings, fetchTipRanksSymbolSummary, latestByAnalyst, netUpgrades,
-  MIN_RATINGS_FOR_ACCURACY, type TipRanksRating,
+  MIN_RATINGS_FOR_ACCURACY, stockHitRate, type TipRanksRating,
 } from '@/lib/fmpTipranks'
 import { TipRanksAnalystModal } from '@/components/TipRanksAnalystModal'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -81,7 +81,7 @@ export function TipRanksPanel({ securityId }: { securityId: string }) {
     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <h2 className="text-base font-semibold text-gray-900">Street Coverage</h2>
       <p className="mt-1 text-xs text-gray-400">
-        Every covering analyst via TipRanks, with their hit rate on this stock. Select an analyst for their record.
+        Every covering analyst via TipRanks, with their hit rate on this stock as of their latest call. Select an analyst for their full record.
       </p>
 
       {sumLoading || ratLoading ? (
@@ -136,7 +136,7 @@ export function TipRanksPanel({ securityId }: { securityId: string }) {
                     <th className="px-3 py-2 text-left font-semibold">Firm</th>
                     <th className="px-3 py-2 text-left font-semibold">Rating</th>
                     <th className="px-3 py-2 text-right font-semibold">Target</th>
-                    <th className="px-3 py-2 text-right font-semibold">Hit rate here</th>
+                    <th className="px-3 py-2 text-right font-semibold" title="This analyst's hit rate on this stock, as of their latest call. Blank when TipRanks reports none.">Hit rate here</th>
                     <th className="px-3 py-2 text-right font-semibold">Dated</th>
                   </tr>
                 </thead>
@@ -163,7 +163,7 @@ export function TipRanksPanel({ securityId }: { securityId: string }) {
                         {r.priceTarget != null ? fmtUsd(r.priceTarget) : EMPTY}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-gray-700">
-                        {r.stockSuccessRate != null ? fmtDecimalPct(r.stockSuccessRate) : EMPTY}
+                        {stockHitRate(r) != null ? fmtDecimalPct(stockHitRate(r)) : EMPTY}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-right text-gray-500">
                         {formatDate(r.recommendationDate ?? r.date)}

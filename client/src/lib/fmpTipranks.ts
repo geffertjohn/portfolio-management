@@ -255,6 +255,25 @@ export function beatRate(s: Pick<TipRanksSummary, 'beats' | 'misses'>): number |
   return s.beats / resolved
 }
 
+/**
+ * The analyst's hit rate on this symbol, as of THIS rating's date — or null when
+ * TipRanks has not computed one.
+ *
+ * Two things the raw field gets wrong if used directly:
+ *   1. **It is point-in-time, not current.** The same analyst carries different
+ *      values across their own calls (Wamsi Mohan on AAPL: .800 → .758 → .773
+ *      over a year), so it reads "as of that call", not "today".
+ *   2. **Zero is a missing-data sentinel, not a real zero.** Across AAPL / AMD /
+ *      NVDA / MSFT, 65 rows report 0 — and 9 of those are calls that BEAT their
+ *      own target, which no literal 0% can explain. 15 are the analyst's only
+ *      call on the name, where no rate is computable. Rendering those as "0.00%"
+ *      makes an analyst look wrong when the data is simply absent.
+ */
+export function stockHitRate(r: Pick<TipRanksRating, 'stockSuccessRate'>): number | null {
+  const v = r.stockSuccessRate
+  return v == null || v === 0 ? null : v
+}
+
 /** Net rating momentum over the window — upgrades minus downgrades. */
 export function netUpgrades(s: Pick<TipRanksSummary, 'actions'>): number {
   return s.actions.upgraded - s.actions.downgraded
