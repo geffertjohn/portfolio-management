@@ -13,6 +13,8 @@ export interface Portfolio {
   historical_sharpe_1y: number | null
   historical_sortino_1y: number | null
   historical_treynor_measure_1y: number | null
+  monthly_standard_deviation_annualized_all: number | null
+  max_drawdown_all: number | null
   one_month_total_return: number | null
   three_month_total_return: number | null
   ytd_total_return: number | null
