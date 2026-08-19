@@ -41,6 +41,7 @@ import { FinancialsSection } from '@/components/FinancialsSection'
 import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
 import { SecurityResearchPanel } from '@/components/SecurityResearchPanel'
 import { ExternalResearchPanel } from '@/components/ExternalResearchPanel'
+import { TipRanksPanel } from '@/components/TipRanksPanel'
 import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
 
@@ -783,6 +784,9 @@ export function SecurityDetailPage() {
 
           {/* Sell-side research uploaded on the Documents tab */}
           <ExternalResearchPanel securityId={security.security_id} />
+
+          {/* Whole-street coverage, weighted by analyst track record */}
+          <TipRanksPanel securityId={security.security_id} />
 
           {/* AI research reports + pre-earnings briefs */}
           <SecurityResearchPanel securityId={security.security_id} />

@@ -89,6 +89,12 @@ export const QUERY_KEYS = {
   revenueSegments: (symbol: string, kind: string, period: string) =>
     ['revenue_segments', 'v1', symbol, kind, period] as const,
   analystData: (symbol: string) => ['analyst_data', 'v4', symbol] as const,
+  tipranksSummary: (symbol: string) => ['tipranks_summary', symbol] as const,
+  tipranksRatings: (symbol: string) => ['tipranks_ratings', symbol] as const,
+  tipranksFirm: (firmName: string) => ['tipranks_firm', firmName] as const,
+  tipranksAnalystSummary: (uid: string) => ['tipranks_analyst_summary', uid] as const,
+  tipranksAnalystRatings: (uid: string) => ['tipranks_analyst_ratings', uid] as const,
+  tipranksAnalyst: (name: string) => ['tipranks_analyst', name] as const,
   keyExecutives: (symbol: string) => ['key_executives', symbol] as const,
   ratiosTTM: (symbol: string) => ['ratios_ttm', symbol] as const,
   ratiosAnnual: (symbol: string) => ['ratios_annual', 'v2', symbol] as const,
