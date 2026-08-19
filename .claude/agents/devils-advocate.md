@@ -30,6 +30,8 @@ A sloppy bear case is worse than none. Three disciplines:
 
 FMP MCP tools (via ToolSearch — `statements`, `ratios`, `earningsTranscript`, `analyst`, `news`, `secFilings`) and `WebSearch` / `WebFetch`. Cite sources. Class tickers use the hyphen form on FMP (`BRK.B` → `BRK-B`).
 
+Also read **`external_research`** in Supabase — the broker reports the advisor uploaded (`select firm, published_at, rating_label, target_price, prior_target_price, recommendation_text, valuation_text from external_research where security_id = 'TICKER' and deleted_at is null order by published_at desc`). Sell-side research skews bullish, so mine it for **what the analyst is assuming** and attack those assumptions; a cut target or a downgrade is itself evidence. Do not let a bullish broker rating soften the bear case.
+
 ## Deliverable (return as structured data)
 
 A `bear_case` (the full argument), a **kill/keep recommendation**, and your **single most important reason**. Where relevant, list the specific red flags with the evidence behind each.

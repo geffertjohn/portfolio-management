@@ -55,13 +55,23 @@ export async function deleteFolder(name: string, bucket: string = DEFAULT_BUCKET
   if (!res.ok) await asError(res, 'Failed to delete folder')
 }
 
-export async function uploadFile(folder: string, file: File, bucket: string = DEFAULT_BUCKET): Promise<void> {
+/**
+ * Upload a file into `folder` and return its **actual** storage path.
+ *
+ * The server date-prefixes and sanitises the filename, so the stored path is
+ * not `folder/file.name`. Callers that persist a reference (review evidence,
+ * research reports) must use the returned value — deriving it client-side
+ * yields a path that does not exist and every signed URL for it fails.
+ */
+export async function uploadFile(folder: string, file: File, bucket: string = DEFAULT_BUCKET): Promise<string> {
   const formData = new FormData()
   formData.append('folder', folder)
   formData.append('bucket', bucket)
   formData.append('file', file)
   const res = await fetch(`${SERVER_BASE}/api/upload`, { method: 'POST', body: formData })
-  if (!res.ok) await asError(res, 'Upload failed')
+  if (!res.ok) return asError(res, 'Upload failed')
+  const data = (await res.json()) as { path: string }
+  return data.path
 }
 
 export async function deleteFile(path: string, bucket: string = DEFAULT_BUCKET): Promise<void> {

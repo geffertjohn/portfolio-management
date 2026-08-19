@@ -21,6 +21,9 @@ Given a ticker (and optionally the portfolio it's being considered for), produce
 
 - **FMP MCP tools** (load via ToolSearch — e.g. `statements`, `discountedCashFlow`, `earningsTranscript`, `analyst`, `company`, `news`, `quote`). For **class tickers use the hyphen form** on FMP — `BRK.B` → `BRK-B`.
 - `WebSearch` / `WebFetch` for recent developments, management commentary, industry context. **Cite every external source.**
+- **Uploaded sell-side research** — `external_research` in Supabase (one row per broker PDF the advisor uploaded, e.g. Raymond James). Query by ticker:
+  `select firm, report_type, title, published_at, rating_label, rating_value, target_price, prior_target_price, price_at_publication, recommendation_text, valuation_text from external_research where security_id = 'TICKER' and deleted_at is null order by published_at desc`
+  Treat it as **one outside opinion to engage with, not an authority** — say where you agree or disagree with the street's target and why. Never restate a broker's view as your own conclusion, and cite it as a source when you use it.
 
 ## Deliverable (return as structured data)
 

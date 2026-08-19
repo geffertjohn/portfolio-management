@@ -649,6 +649,84 @@ export type Database = {
           },
         ]
       }
+      external_research: {
+        Row: {
+          analysts: Json | null
+          created_at: string
+          deleted_at: string | null
+          doc_path: string | null
+          firm: string
+          id: number
+          market_data: Json | null
+          parse_status: string
+          price_at_publication: number | null
+          prior_rating_label: string | null
+          prior_target_price: number | null
+          published_at: string | null
+          rating_label: string | null
+          rating_value: number | null
+          raw_header: string | null
+          recommendation_text: string | null
+          report_type: string | null
+          security_id: string
+          source_filename: string | null
+          suitability: string | null
+          target_price: number | null
+          title: string | null
+          valuation_text: string | null
+        }
+        Insert: {
+          analysts?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          doc_path?: string | null
+          firm?: string
+          id?: never
+          market_data?: Json | null
+          parse_status?: string
+          price_at_publication?: number | null
+          prior_rating_label?: string | null
+          prior_target_price?: number | null
+          published_at?: string | null
+          rating_label?: string | null
+          rating_value?: number | null
+          raw_header?: string | null
+          recommendation_text?: string | null
+          report_type?: string | null
+          security_id: string
+          source_filename?: string | null
+          suitability?: string | null
+          target_price?: number | null
+          title?: string | null
+          valuation_text?: string | null
+        }
+        Update: {
+          analysts?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          doc_path?: string | null
+          firm?: string
+          id?: never
+          market_data?: Json | null
+          parse_status?: string
+          price_at_publication?: number | null
+          prior_rating_label?: string | null
+          prior_target_price?: number | null
+          published_at?: string | null
+          rating_label?: string | null
+          rating_value?: number | null
+          raw_header?: string | null
+          recommendation_text?: string | null
+          report_type?: string | null
+          security_id?: string
+          source_filename?: string | null
+          suitability?: string | null
+          target_price?: number | null
+          title?: string | null
+          valuation_text?: string | null
+        }
+        Relationships: []
+      }
       firm_compliance_rules: {
         Row: {
           id: number

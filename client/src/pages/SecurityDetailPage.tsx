@@ -40,6 +40,7 @@ import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { FinancialsSection } from '@/components/FinancialsSection'
 import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
 import { SecurityResearchPanel } from '@/components/SecurityResearchPanel'
+import { ExternalResearchPanel } from '@/components/ExternalResearchPanel'
 import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
 
@@ -601,6 +602,11 @@ export function SecurityDetailPage() {
         </div>
       )}
 
+      {/* ── Fund/ETF: sell-side research imported from the Documents section ─── */}
+      {isFundOrEtfSecurity(security) && (
+        <ExternalResearchPanel securityId={security.security_id} />
+      )}
+
       {/* ── Fund/ETF: Documents (review-evidence PDFs + uploads) ─────────────── */}
       {isFundOrEtfSecurity(security) && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -609,6 +615,7 @@ export function SecurityDetailPage() {
             folder={security.security_id}
             scopeLabel={security.security_id}
             emptyHint="Review-evidence PDFs are saved here automatically when you mark a review complete."
+            researchSecurityId={security.security_id}
           />
         </div>
       )}
@@ -806,6 +813,9 @@ export function SecurityDetailPage() {
           {/* Alternatives comparison tables */}
           <AlternativesPanel security={security} />
 
+          {/* Sell-side research uploaded on the Documents tab */}
+          <ExternalResearchPanel securityId={security.security_id} />
+
           {/* AI research reports + pre-earnings briefs */}
           <SecurityResearchPanel securityId={security.security_id} />
 
@@ -862,7 +872,8 @@ export function SecurityDetailPage() {
             bucket={SECURITY_DOCS_BUCKET}
             folder={security.security_id}
             scopeLabel={security.security_id}
-            emptyHint="Upload research notes, filings, and other files for this security here."
+            emptyHint="Upload a Raymond James PDF and it is parsed into Street Research on the Monitor tab."
+            researchSecurityId={security.security_id}
           />
         </div>
       )}

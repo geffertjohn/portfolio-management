@@ -253,8 +253,8 @@ export function MarkReviewedModal({
       peerGroupBenchmark: peerGroupBenchmark ?? null,
     })
     const file = new File([blob], filename, { type: 'application/pdf' })
-    await uploadFile(securitySymbol, file, SECURITY_DOCS_BUCKET)
-    return `${securitySymbol}/${filename}`
+    // Use the path the server actually stored it at — it adds a date prefix.
+    return uploadFile(securitySymbol, file, SECURITY_DOCS_BUCKET)
   }
 
   const reviewMutation = useMutation({
