@@ -507,52 +507,6 @@ ALTER SEQUENCE "public"."compliance_rules_id_seq" OWNED BY "public"."compliance_
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."external_research" (
-    "id" bigint NOT NULL,
-    "security_id" "text" NOT NULL,
-    "firm" "text" DEFAULT 'Raymond James'::"text" NOT NULL,
-    "report_type" "text",
-    "title" "text",
-    "published_at" timestamp with time zone,
-    "rating_label" "text",
-    "rating_value" smallint,
-    "prior_rating_label" "text",
-    "target_price" numeric,
-    "prior_target_price" numeric,
-    "price_at_publication" numeric,
-    "suitability" "text",
-    "recommendation_text" "text",
-    "valuation_text" "text",
-    "analysts" "jsonb",
-    "market_data" "jsonb",
-    "doc_path" "text",
-    "source_filename" "text",
-    "parse_status" "text" DEFAULT 'parsed'::"text" NOT NULL,
-    "raw_header" "text",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "deleted_at" timestamp with time zone,
-    CONSTRAINT "external_research_parse_status_chk" CHECK (("parse_status" = ANY (ARRAY['parsed'::"text", 'manual'::"text", 'partial'::"text"]))),
-    CONSTRAINT "external_research_rating_value_chk" CHECK ((("rating_value" IS NULL) OR (("rating_value" >= 1) AND ("rating_value" <= 5))))
-);
-
-
-ALTER TABLE "public"."external_research" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."external_research" IS 'Sell-side research reports uploaded by the advisor (Raymond James etc.), parsed from PDF. Display + AI-committee input only; never drives trades.';
-
-
-ALTER TABLE "public"."external_research" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME "public"."external_research_id_seq"
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
-
 CREATE TABLE IF NOT EXISTS "public"."firm_compliance_rules" (
     "id" integer NOT NULL,
     "rule_type" "text" NOT NULL,
@@ -2296,11 +2250,6 @@ ALTER TABLE ONLY "public"."rebalance_log"
 
 
 
-ALTER TABLE ONLY "public"."external_research"
-    ADD CONSTRAINT "external_research_pkey" PRIMARY KEY ("id");
-
-
-
 ALTER TABLE ONLY "public"."research_reports"
     ADD CONSTRAINT "research_reports_pkey" PRIMARY KEY ("id");
 
@@ -2517,18 +2466,6 @@ CREATE INDEX "portfolio_review_log_portfolio_name_idx" ON "public"."portfolio_re
 
 
 CREATE INDEX "prospects_active_idx" ON "public"."prospects" USING "btree" ("date_added" DESC) WHERE ("removed_at" IS NULL);
-
-
-
-CREATE INDEX "external_research_active_idx" ON "public"."external_research" USING "btree" ("security_id") WHERE ("deleted_at" IS NULL);
-
-
-
-CREATE UNIQUE INDEX "external_research_doc_path_key" ON "public"."external_research" USING "btree" ("doc_path") WHERE ("doc_path" IS NOT NULL);
-
-
-
-CREATE INDEX "external_research_security_idx" ON "public"."external_research" USING "btree" ("security_id", "published_at" DESC);
 
 
 
@@ -3393,10 +3330,6 @@ CREATE POLICY "anon rw" ON "public"."ic_memos" TO "anon" USING (true) WITH CHECK
 
 
 
-CREATE POLICY "external_research anon all" ON "public"."external_research" TO "anon" USING (true) WITH CHECK (true);
-
-
-
 CREATE POLICY "anon rw" ON "public"."research_reports" TO "anon" USING (true) WITH CHECK (true);
 
 
@@ -3432,10 +3365,6 @@ CREATE POLICY "audit_log_select" ON "public"."audit_log" FOR SELECT USING (true)
 
 
 CREATE POLICY "auth rw" ON "public"."ic_memos" TO "authenticated" USING (true) WITH CHECK (true);
-
-
-
-CREATE POLICY "external_research authenticated all" ON "public"."external_research" TO "authenticated" USING (true) WITH CHECK (true);
 
 
 
@@ -3519,9 +3448,6 @@ ALTER TABLE "public"."prospects" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."rebalance_log" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."external_research" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."research_reports" ENABLE ROW LEVEL SECURITY;
@@ -3887,12 +3813,6 @@ GRANT ALL ON TABLE "public"."firm_compliance_rules" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."firm_compliance_rules_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."firm_compliance_rules_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."firm_compliance_rules_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."external_research" TO "anon";
-GRANT ALL ON TABLE "public"."external_research" TO "authenticated";
-GRANT ALL ON TABLE "public"."external_research" TO "service_role";
 
 
 

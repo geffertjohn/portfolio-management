@@ -53,15 +53,6 @@ const FMP_NOTE =
   'earningsTranscript, analyst, company, news, quote) and WebSearch/WebFetch. Cite external sources. ' +
   'For class tickers use the hyphen form on FMP (BRK.B -> BRK-B). These are GAAP figures.'
 
-// Broker research the advisor uploaded (parsed from PDF into `external_research`).
-// Kept in sync with .claude/agents/{research-analyst,devils-advocate}.md.
-const STREET_NOTE =
-  ' Also read the uploaded sell-side research in Supabase: select firm, report_type, title, published_at, ' +
-  'rating_label, rating_value, target_price, prior_target_price, price_at_publication, recommendation_text, ' +
-  "valuation_text from external_research where security_id = '" + ticker + "' and deleted_at is null " +
-  'order by published_at desc. It is ONE outside opinion to engage with, never an authority: say where you ' +
-  'agree or disagree with the street target and why, and cite it as a source when you use it.'
-
 // TipRanks whole-street coverage (paid FMP add-on). Kept in sync with
 // .claude/agents/{research-analyst,devils-advocate}.md.
 const TIPRANKS_NOTE =
@@ -79,12 +70,6 @@ const BEAR_TIPRANKS_NOTE =
   'undercuts any bull case resting on "analysts see upside". Weight by stockSuccessRate and ignore ' +
   'accuracy figures with fewer than 10 resolved targets.'
 
-const BEAR_STREET_NOTE =
-  ' Also read external_research in Supabase for this ticker (firm, published_at, rating_label, target_price, ' +
-  'prior_target_price, recommendation_text, valuation_text, deleted_at is null). Sell-side research skews ' +
-  'bullish: mine it for WHAT THE ANALYST IS ASSUMING and attack those assumptions. A cut target or a ' +
-  'downgrade is itself evidence. Never let a bullish broker rating soften the bear case.'
-
 const ANALYST_ROLE =
   'You are a sector-aware equity RESEARCH ANALYST on an AI investment team; the human CIO makes the final ' +
   'call. Determine whether the business should be owned: identify the company/segments, assess fundamentals ' +
@@ -94,7 +79,7 @@ const ANALYST_ROLE =
   'state what must be true for the thesis to work plus the single biggest risk. For fit with an income ' +
   'strategy, do not treat a below-benchmark per-security yield as disqualifying — note which Investment ' +
   'Philosophy criteria the name checks and leave the portfolio-level allocation call to the PM. ' +
-  'Recommend-only: never trade or modify positions. ' + FMP_NOTE + STREET_NOTE + TIPRANKS_NOTE
+  'Recommend-only: never trade or modify positions. ' + FMP_NOTE + TIPRANKS_NOTE
 
 const BEAR_ROLE =
   'You are the RED TEAM / devil\'s advocate on an AI investment team. Build the strongest possible case ' +
@@ -110,7 +95,7 @@ const BEAR_ROLE =
   '(fabless/asset-light converts most revenue to FCF). VERIFY dividend/payout/FCF facts from primary data ' +
   'before asserting — a bear case built on a wrong number is worse than none. ' +
   'Default toward KILL when the evidence is ambiguous, but build only the strongest REAL bear ' +
-  'case — if it is genuinely weak, say so. Recommend-only: never trade. ' + FMP_NOTE + BEAR_STREET_NOTE + BEAR_TIPRANKS_NOTE
+  'case — if it is genuinely weak, say so. Recommend-only: never trade. ' + FMP_NOTE + BEAR_TIPRANKS_NOTE
 
 const QUANT_ROLE =
   'You are the QUANTITATIVE ANALYST on an AI investment team — the systematic, data-first lens that ' +

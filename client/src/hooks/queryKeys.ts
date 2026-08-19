@@ -63,7 +63,6 @@ export const QUERY_KEYS = {
   icMemos: (portfolioName: string) => ['ic_memos', portfolioName] as const,
   icMemo: (id: number) => ['ic_memo', id] as const,
   icMemosForAddition: (additionId: number) => ['ic_memos', 'addition', additionId] as const,
-  externalResearch: (securityId: string) => ['external_research', securityId] as const,
   documentsFiles: (bucket: string) => ['documents-files', bucket] as const,
   modelPortfolios: ['model_portfolios'] as const,
   modelPortfolioByObjective: (objective: string) => ['model_portfolio_by_objective', objective] as const,

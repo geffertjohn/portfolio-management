@@ -32,7 +32,6 @@ FMP MCP tools (via ToolSearch — `statements`, `ratios`, `earningsTranscript`, 
 
 Also load the `tipranks` tool (ToolSearch) for the whole street: `tipranks-symbol-summary` and `tipranks-pit-by-symbol`. Two things to mine — **downgrades** (`analystAction.downgraded`) are other people already changing their minds, and a **low target beat rate or negative average return** means the street's targets on this name have historically not landed, which undercuts any bull case built on "analysts see upside." Weight by `stockSuccessRate`, and ignore accuracy figures with fewer than 10 resolved targets.
 
-Also read **`external_research`** in Supabase — the broker reports the advisor uploaded (`select firm, published_at, rating_label, target_price, prior_target_price, recommendation_text, valuation_text from external_research where security_id = 'TICKER' and deleted_at is null order by published_at desc`). Sell-side research skews bullish, so mine it for **what the analyst is assuming** and attack those assumptions; a cut target or a downgrade is itself evidence. Do not let a bullish broker rating soften the bear case.
 
 ## Deliverable (return as structured data)
 

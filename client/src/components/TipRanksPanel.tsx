@@ -50,10 +50,9 @@ const actionTone = (a: string | null): string =>
 /**
  * Whole-street coverage for one stock from TipRanks, weighted by track record.
  *
- * Complements the two research panels either side of it: `ExternalResearchPanel`
- * is the one broker whose PDFs are uploaded, `SecurityResearchPanel` is the AI
- * team's own view, and this is everyone else — with each analyst's hit rate on
- * THIS name, so opinions can be weighed rather than counted.
+ * Sits above `SecurityResearchPanel` (the AI team's own view) — this is the
+ * outside world, with each analyst's hit rate on THIS name, so opinions can be
+ * weighed rather than counted.
  *
  * Read-only and on demand (two calls, 1h cache); nothing is persisted.
  */
