@@ -6,6 +6,7 @@ import {
   getThesisText,
   isFundOrEtfSecurity,
   updateSecurityThesis,
+  refreshSecurityFromFMP,
 } from '@/lib/securities'
 import {
   addToAtRisk,
@@ -123,6 +124,18 @@ export function SecurityDetailPage() {
   })
   const lastEarnings = isStock ? (earningsDates?.lastEarnings ?? null) : (security?.last_earnings_release ?? null)
   const nextEarnings = isStock ? (earningsDates?.nextEarnings ?? null) : (security?.next_earnings_release ?? null)
+
+  // Write-through: the cross-security lists (Review Calendar, review schedules)
+  // read the STORED earnings dates and cannot fetch per row, so persist what we
+  // just fetched live whenever it differs. Fire-and-forget — a failed write must
+  // never disturb the page.
+  useEffect(() => {
+    if (!isStock || !security?.security_id || !earningsDates) return
+    const stale =
+      earningsDates.lastEarnings !== security.last_earnings_release ||
+      earningsDates.nextEarnings !== security.next_earnings_release
+    if (stale) void refreshSecurityFromFMP(security.security_id).catch(() => {})
+  }, [isStock, security?.security_id, security?.last_earnings_release, security?.next_earnings_release, earningsDates])
   const consensusLabel = analystData?.grades?.consensus ?? null
 
   // Company identity — live from FMP /profile for stocks (so new positions aren't

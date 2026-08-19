@@ -524,11 +524,6 @@ const EXCEL_HEADER_TO_SECURITIES2: Record<string, string | null> = {
   'monthly standard deviation annualized 5 yr': 'monthly_standard_deviation_annualized_5y',
 
   // ── Stock — earnings & 52-week dates ─────────────────────────────────────
-  'last earnings release': 'last_earnings_release',
-  'last earnings release date': 'last_earnings_release',
-  'next earnings release': 'next_earnings_release',
-  'next earnings release date': 'next_earnings_release',
-  'next earnings date': 'next_earnings_release',
   '52 week high': 'year_high',
   '52-week high': 'year_high',
   'year high': 'year_high',
@@ -565,8 +560,6 @@ const EXCEL_HEADER_TO_SECURITIES2: Record<string, string | null> = {
 
 const DATE_COLS = new Set([
   'inception_date',
-  'last_earnings_release',
-  'next_earnings_release',
   'year_high_date',
   'year_low_date',
 ])
@@ -847,6 +840,8 @@ function buildPatchFromSchemaDirect(
     'long_description',  // read-only / user-managed
     // Identity now sourced from FMP only — never written from Excel
     'security_name',
+    'last_earnings_release',   // FMP-owned — see refreshSecurityFromFMP
+    'next_earnings_release',   // FMP-owned — see refreshSecurityFromFMP
     'morningstar_sector',
     'morningstar_industry',
     'roic',

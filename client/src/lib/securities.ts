@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { fetchEarningsDates, fetchProfile } from './fmpMarket'
 
 /**
  * List row from `securities2` — fields shown in the securities list view.
@@ -564,6 +565,18 @@ export async function fetchFundComparison(securityId: string): Promise<FundCompa
   return parentRow ? [parentRow, ...altRows] : altRows
 }
 
+/**
+ * Create a security by ticker, seeding its FMP-sourced fields.
+ *
+ * Identity (`security_name`, sector, industry, description) and the earnings
+ * dates come from FMP and ONLY from FMP — Excel is blocked from writing them.
+ * They are written here, at creation, because the cross-security list views
+ * (Securities, At-Risk, Watchlist, positions, Review Calendar) read the stored
+ * columns and cannot fire a per-row FMP request the way the detail page does.
+ *
+ * The FMP leg is best-effort: a profile/earnings failure must not stop the row
+ * from being created, and `refreshSecurityFromFMP` re-fills it later.
+ */
 export async function createSecurityBySymbol(symbol: string): Promise<void> {
   const sym = symbol.trim().toUpperCase()
   if (!sym) throw new Error('Symbol is required')
@@ -572,7 +585,45 @@ export async function createSecurityBySymbol(symbol: string): Promise<void> {
     { security_id: sym },
     { onConflict: 'security_id', ignoreDuplicates: true },
   )
+  if (error) throw error
 
+  await refreshSecurityFromFMP(sym).catch(() => {})
+}
+
+/**
+ * Write the FMP-owned columns for one symbol: identity + last/next earnings.
+ *
+ * Called at creation and as a write-through from the stock detail page, which
+ * already fetches both live — so simply opening a stock keeps the dates the
+ * Review Calendar reads from going stale. Only non-empty values are written, so
+ * a partial FMP response never blanks a good stored value.
+ */
+export async function refreshSecurityFromFMP(symbol: string): Promise<void> {
+  const sym = symbol.trim().toUpperCase()
+  if (!sym) return
+
+  const [profileRes, earningsRes] = await Promise.allSettled([
+    fetchProfile(sym),
+    fetchEarningsDates(sym),
+  ])
+
+  const patch: Record<string, string> = {}
+  const set = (col: string, v: string | null | undefined) => {
+    if (typeof v === 'string' && v.trim() !== '') patch[col] = v
+  }
+  if (profileRes.status === 'fulfilled') {
+    set('security_name', profileRes.value.companyName)
+    set('morningstar_sector', profileRes.value.sector)
+    set('morningstar_industry', profileRes.value.industry)
+    set('long_description', profileRes.value.description)
+  }
+  if (earningsRes.status === 'fulfilled') {
+    set('last_earnings_release', earningsRes.value.lastEarnings)
+    set('next_earnings_release', earningsRes.value.nextEarnings)
+  }
+  if (Object.keys(patch).length === 0) return
+
+  const { error } = await supabase.from('securities2').update(patch).eq('security_id', sym)
   if (error) throw error
 }
 

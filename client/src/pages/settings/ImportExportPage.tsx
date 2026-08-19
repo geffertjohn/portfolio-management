@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchSecurities, isFundOrEtfSecurity, type Security } from '@/lib/securities'
+import { fetchSecurities } from '@/lib/securities'
 import { fetchPortfolios } from '@/lib/portfolio'
 import { fetchPositionsByPortfolioId } from '@/lib/positions'
 import { fetchActiveAtRisk } from '@/lib/atRisk'
 import { fetchActionItems } from '@/lib/actionItems'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import { syncStockFromFMP } from '@/lib/fmpSync'
 import { uploadYchartBenchmarks } from '@/lib/ychartBenchmarksUpload'
 import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
@@ -221,9 +220,6 @@ export function ImportExportPage() {
         </div>
       </div>
 
-      {/* ── FMP Sync ─────────────────────────────────────── */}
-      <FmpBulkSync securities={securities} secLoading={secLoading} />
-
       {/* ── Import ──────────────────────────────────────── */}
       <div className="mt-10">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Import</h2>
@@ -416,118 +412,4 @@ async function firstSheetRows(file: File): Promise<unknown[][]> {
   const wb = XLSX.read(buf, { type: 'array', cellDates: true })
   const sheet = wb.Sheets[wb.SheetNames[0]]
   return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, blankrows: false })
-}
-
-// ── FMP bulk sync component ──────────────────────────────────────────────────
-
-interface FmpBulkSyncProps {
-  securities: Security[]
-  secLoading: boolean
-}
-
-function FmpBulkSync({ securities, secLoading }: FmpBulkSyncProps) {
-  const [running, setRunning] = useState(false)
-  const [done, setDone] = useState(0)
-  const [total, setTotal] = useState(0)
-  const [errors, setErrors] = useState<string[]>([])
-  const [finished, setFinished] = useState(false)
-
-  const stocks = securities.filter(s => !isFundOrEtfSecurity(s))
-
-  async function handleBulkSync() {
-    if (running) return
-    setRunning(true)
-    setFinished(false)
-    setErrors([])
-    setDone(0)
-    setTotal(stocks.length)
-
-    const errs: string[] = []
-    for (const s of stocks) {
-      try {
-        await syncStockFromFMP(s.security_id)
-      } catch (e) {
-        errs.push(`${s.security_id}: ${e instanceof Error ? e.message : String(e)}`)
-      }
-      setDone(prev => prev + 1)
-    }
-
-    setErrors(errs)
-    setRunning(false)
-    setFinished(true)
-  }
-
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0
-
-  return (
-    <div className="mt-10">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">FMP Data Sync</h2>
-      <div className="mt-3">
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900">Sync all stocks from FMP</p>
-              <p className="mt-0.5 text-xs text-gray-500">
-                Fetches price, fundamentals, risk metrics, and analyst data for all{' '}
-                {secLoading ? '…' : stocks.length} non-fund securities. Runs sequentially (~5–10 s per symbol).
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={secLoading || running}
-              onClick={handleBulkSync}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {running ? (
-                <>
-                  <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16v-4l-3 3 3 3v-4a8 8 0 01-8-8z" />
-                  </svg>
-                  Syncing…
-                </>
-              ) : 'Sync All'}
-            </button>
-          </div>
-
-          {/* Progress bar */}
-          {(running || finished) && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>{done} / {total}</span>
-                <span>{pct}%</span>
-              </div>
-              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              {finished && (
-                <p className={`mt-2 text-xs font-medium ${errors.length === 0 ? 'text-green-600' : 'text-amber-600'}`}>
-                  {errors.length === 0
-                    ? `All ${total} stocks synced successfully.`
-                    : `${total - errors.length} synced, ${errors.length} failed.`}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Error list */}
-          {finished && errors.length > 0 && (
-            <details className="mt-3">
-              <summary className="cursor-pointer text-xs text-red-600 hover:underline">
-                Show {errors.length} error{errors.length > 1 ? 's' : ''}
-              </summary>
-              <ul className="mt-2 max-h-40 overflow-y-auto rounded border border-red-100 bg-red-50 p-2 text-xs text-red-700">
-                {errors.map((e, i) => (
-                  <li key={i} className="py-0.5 font-mono">{e}</li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
-      </div>
-    </div>
-  )
 }
