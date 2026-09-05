@@ -252,8 +252,8 @@ export function ImportExportPage() {
           />
 
           <ImportCard
-            title="Funds — New Fund Template"
-            desc="Loads the Securities sheet of the YCharts workbook into securities2."
+            title="Funds — YCharts workbook"
+            desc="Loads the Securities sheet into securities2."
             source="ycharts_funds"
             run={async (file) => {
               const r = await bulkUploadFundsFromExcel(file)
