@@ -1,14 +1,5 @@
 import * as XLSX from 'xlsx'
 
-export function normalizeHeader(h: string): string {
-  return h
-    .replace(/^\uFEFF/, '')
-    .trim()
-    .replace(/\u00a0/g, ' ')
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-}
-
 export function isValidCalendarDateString(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
   const y = parseInt(s.slice(0, 4), 10)
@@ -99,156 +90,31 @@ export function formatSupabaseUpdateError(err: {
   return err.code && !base.includes(err.code) ? `${base} (${err.code})` : base
 }
 
-export function parseVerticalKeyValueSheet(sheet: XLSX.WorkSheet): Record<string, unknown> {
-  const ref = sheet['!ref']
-  if (!ref) return {}
-  const range = XLSX.utils.decode_range(ref)
-  if (range.e.c < 1) return {}
-
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    raw: false,
-    defval: null,
-  })
-
-  // Support both A/B layout (keys in col 0, values in col 1) and
-  // B/C layout (col 0 empty, keys in col 1, values in col 2).
-  const col0HasContent = rows.some(
-    (r) => Array.isArray(r) && r[0] != null && String(r[0]).trim() !== '',
-  )
-  const keyCol = col0HasContent ? 0 : 1
-  const valCol = keyCol + 1
-
-  const out: Record<string, unknown> = {}
-  for (const row of rows) {
-    if (!Array.isArray(row) || row.length <= keyCol) continue
-    const keyCell = row[keyCol]
-    if (keyCell == null || String(keyCell).trim() === '') continue
-    const key = String(keyCell).trim()
-    const val = row.length <= valCol ? null : row[valCol]
-    out[key] = val
-  }
-  return out
-}
-
-const TICKER_HEADER_NORMALIZED = new Set([
-  'ticker',
-  'symbol',
-  'ticker symbol',
-  'fund ticker',
-  'stock ticker',
-  'etf ticker',
-  'mutual fund ticker',
-  'investment ticker',
-  'underlying ticker',
-])
-
-export function isTickerColumnHeader(header: string): boolean {
-  const n = normalizeHeader(header)
-  if (TICKER_HEADER_NORMALIZED.has(n)) return true
-  if (n.endsWith(' ticker') || n.endsWith(' symbol')) return true
-  return false
-}
-
-export function getTickerFromRow(row: Record<string, unknown>): string | null {
-  for (const [k, v] of Object.entries(row)) {
-    if (!isTickerColumnHeader(k)) continue
-    if (v == null || v === '') continue
-    let s = String(v).trim()
-    // Strip exchange prefix (e.g. "M:APDFX" → "APDFX", "N:VOO" → "VOO")
-    const colonIdx = s.indexOf(':')
-    if (colonIdx !== -1) s = s.slice(colonIdx + 1).trim()
-    if (s !== '') return s
-  }
-  return null
-}
-
-export function verifySymbolInKv(row: Record<string, unknown>, symbol: string): void {
-  const sym = symbol.trim().toUpperCase()
-  const v = getTickerFromRow(row)
-  if (v == null || String(v).trim() === '') return
-  if (String(v).trim().toUpperCase() !== sym) {
-    throw new Error(
-      `Excel Symbol is "${String(v).trim()}" but this page is "${symbol}". Use the correct file or symbol.`,
-    )
+/**
+ * Rejects anything that isn't an Excel workbook. `.xlsm` is accepted because the
+ * consolidated YCharts workbook is macro-enabled — its Workbook_Open macro drives
+ * the unattended refresh, so the file it produces can only be `.xlsm`.
+ */
+export function assertExcelFile(file: File): void {
+  if (!/\.xls[xm]?$/.test(file.name.toLowerCase())) {
+    throw new Error('Please choose an Excel file (.xlsx, .xlsm, or .xls).')
   }
 }
 
-export function objectsFromHeaderRow(
-  data: unknown[][],
-  headerRowIndex: number,
-): Record<string, unknown>[] {
-  const headerRow = data[headerRowIndex]
-  if (!Array.isArray(headerRow)) return []
-  const headers = headerRow.map((c) => String(c ?? '').trim())
-  const result: Record<string, unknown>[] = []
-  for (let r = headerRowIndex + 1; r < data.length; r++) {
-    const row = data[r]
-    if (!Array.isArray(row)) continue
-    const obj: Record<string, unknown> = {}
-    let hasAny = false
-    headers.forEach((h, i) => {
-      if (h === '') return
-      const v = row[i] ?? null
-      obj[h] = v
-      if (v != null && String(v).trim() !== '') hasAny = true
-    })
-    if (hasAny) result.push(obj)
-  }
-  return result
-}
-
-export function findRowForSymbol(
-  rows: Record<string, unknown>[],
-  symbol: string,
-): Record<string, unknown> {
-  const sym = symbol.trim().toUpperCase()
-
-  // First: recognized ticker/symbol column header
-  const match = rows.find((r) => {
-    const t = getTickerFromRow(r)
-    return t != null && t.toUpperCase() === sym
-  })
+/**
+ * Resolves a worksheet by name, falling back to the first sheet.
+ *
+ * Single-purpose workbooks put their data on sheet 0; the consolidated YCharts
+ * workbook keeps every dataset in one file, so sheet 0 is whatever tab happens to
+ * be leftmost. Matching by name first keeps both layouts working. Comparison is
+ * trimmed and case-insensitive — the fund tab is literally named "Securities "
+ * with a trailing space.
+ */
+export function pickSheetName(wb: XLSX.WorkBook, names: string[]): string {
+  const wanted = names.map((n) => n.trim().toLowerCase())
+  const match = wb.SheetNames.find((n) => wanted.includes(n.trim().toLowerCase()))
   if (match) return match
-
-  // Single-row sheet — use it unconditionally
-  if (rows.length === 1) return rows[0]
-
-  // Fallback: any cell in the row contains exactly the symbol string
-  const cellMatch = rows.find((r) =>
-    Object.values(r).some(
-      (v) => v != null && typeof v === 'string' && v.trim().toUpperCase() === sym,
-    ),
-  )
-  if (cellMatch) return cellMatch
-
-  throw new Error(
-    `No row with Ticker/Symbol matching "${symbol}". Add a Ticker column or use a one-row sheet.`,
-  )
-}
-
-export function pickWideTableRows(sheet: XLSX.WorkSheet): Record<string, unknown>[] {
-  const defaultRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: null,
-    raw: true,
-  })
-  const data = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    raw: true,
-    defval: null,
-  })
-  if (!data.length) return defaultRows
-
-  const candidates: Record<string, unknown>[][] = [defaultRows]
-  for (let h = 1; h <= 4 && h < data.length; h++) {
-    const objs = objectsFromHeaderRow(data, h)
-    if (objs.length > 0) candidates.push(objs)
-  }
-
-  for (const rows of candidates) {
-    if (rows.length === 0) continue
-    const first = rows[0]
-    if (Object.keys(first).some((k) => isTickerColumnHeader(k))) return rows
-  }
-  return defaultRows
+  const first = wb.SheetNames[0]
+  if (!first) throw new Error('The workbook has no sheets.')
+  return first
 }

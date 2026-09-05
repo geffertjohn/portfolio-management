@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
-import { coerceDate, coerceNumber, isValidCalendarDateString } from '@/lib/excelImportShared'
+import {
+  assertExcelFile, coerceDate, coerceNumber, isValidCalendarDateString, pickSheetName,
+} from '@/lib/excelImportShared'
 
 const TEXT_COLS = new Set([
   'security_id',
@@ -32,7 +34,11 @@ function looksLikeDbColumn(v: unknown): boolean {
   return s.length > 1 && /^[a-z0-9][a-z0-9_+]*$/.test(s) && /[a-z_]/.test(s)
 }
 
-// ── Bulk horizontal upload (Portfolio.xlsx: row 0 = headers, rows 1+ = data) ──
+// ── Bulk horizontal upload ───────────────────────────────────────────────────
+//
+// Reads the "Model Portfolios" sheet (row 0 = headers, rows 1+ = data), falling
+// back to sheet 0 for the older single-purpose workbook. "Model Returns" is the
+// tab's previous name and is still accepted.
 
 function buildPatchFromRow(
   headers: string[],
@@ -62,14 +68,11 @@ function buildPatchFromRow(
 export async function bulkUploadPortfoliosFromExcel(
   file: File,
 ): Promise<{ succeeded: number; failed: number; errors: string[] }> {
-  const lower = file.name.toLowerCase()
-  if (!lower.endsWith('.xlsx') && !lower.endsWith('.xls')) {
-    throw new Error('Please choose an Excel file (.xlsx or .xls).')
-  }
+  assertExcelFile(file)
 
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(buf, { type: 'array', cellDates: true })
-  const sheet = wb.Sheets[wb.SheetNames[0]]
+  const sheet = wb.Sheets[pickSheetName(wb, ['Model Portfolios', 'Model Returns'])]
   const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     raw: true,

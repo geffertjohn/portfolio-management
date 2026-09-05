@@ -299,9 +299,6 @@ export interface SecurityDetail extends Security {
   thesis: string | null
   as_of_date: string | null
 
-  // ── Top holdings (parsed from Excel "Top 25 Holdings" section) ────────────
-  top_holdings: Array<{ symbol: string; weight: number }> | null
-
   // ── Stock — classification ────────────────────────────────────────────────
   morningstar_sector: string | null
   morningstar_industry: string | null
@@ -509,60 +506,6 @@ export async function upsertRelatedSecurities(securityId: string, relatedIds: st
   const rows = relatedIds.map((related_id, i) => ({ security_id: securityId, related_id, sort_order: i }))
   const { error } = await supabase.from('security_related_securities').insert(rows)
   if (error) throw error
-}
-
-export interface FundComparisonRow {
-  security_id: string
-  security_name: string | null
-  expense_ratio_generic: number | null
-  historical_sharpe_3y: number | null
-  historical_sortino_3y: number | null
-  quarterly_standard_deviation_annualized_3y: number | null
-  max_drawdown_3y: number | null
-  one_month_total_return_nav: number | null
-  three_month_total_return_nav: number | null
-  ytd_total_return_nav: number | null
-  one_year_total_return_nav: number | null
-  annualized_three_year_total_return_nav: number | null
-  annualized_five_year_total_return_nav: number | null
-}
-
-/** Comparison-metric columns shared by securities2 (the parent fund) and fund_alternatives. */
-const FUND_COMPARISON_METRIC_COLS =
-  'expense_ratio_generic, historical_sharpe_3y, historical_sortino_3y, ' +
-  'quarterly_standard_deviation_annualized_3y, max_drawdown_3y, one_month_total_return_nav, ' +
-  'three_month_total_return_nav, ytd_total_return_nav, one_year_total_return_nav, ' +
-  'annualized_three_year_total_return_nav, annualized_five_year_total_return_nav'
-
-/**
- * The fund itself plus its related/alternative funds, each with the stored
- * metrics shown in the fund comparison tables. Row [0] is the fund (from
- * securities2); the rest come from `fund_alternatives` (in sort order).
- * Comparison funds live ONLY in fund_alternatives — never in securities2.
- * Returns [] when the fund has no alternatives.
- */
-export async function fetchFundComparison(securityId: string): Promise<FundComparisonRow[]> {
-  const { data: alts, error: altErr } = await supabase
-    .from('fund_alternatives')
-    .select(`related_security_id, security_name, ${FUND_COMPARISON_METRIC_COLS}`)
-    .eq('parent_security_id', securityId)
-    .order('sort_order', { ascending: true })
-  if (altErr) throw altErr
-  if (!alts || alts.length === 0) return []
-
-  const { data: parent, error: parentErr } = await supabase
-    .from('securities2')
-    .select(`security_id, security_name, ${FUND_COMPARISON_METRIC_COLS}`)
-    .eq('security_id', securityId)
-    .maybeSingle()
-  if (parentErr) throw parentErr
-
-  const parentRow = parent ? (parent as unknown as FundComparisonRow) : null
-  const altRows = (alts as unknown as Array<Record<string, unknown>>).map((a) => ({
-    ...(a as unknown as FundComparisonRow),
-    security_id: a.related_security_id as string,
-  }))
-  return parentRow ? [parentRow, ...altRows] : altRows
 }
 
 /**

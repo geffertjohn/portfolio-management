@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchBenchmarkTable } from '@/lib/benchmarks'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { DataAsOf } from '@/components/DataAsOf'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,7 @@ export function BenchmarksPage() {
           <p className="mt-1 text-gray-600">
             Index and benchmark metrics sourced from YCharts. Refresh them from Settings → Import / Export.
           </p>
+          <DataAsOf sources={['ycharts_benchmarks']} className="mt-1 block" />
         </div>
       </div>
 

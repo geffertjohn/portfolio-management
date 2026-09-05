@@ -4,6 +4,7 @@ import { fmtDecimalPct, fmtInt, stripTotalReturn } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { BenchmarkPickerModal } from './BenchmarkPickerModal'
 import { fetchBenchmarkOptions, type BenchmarkOption } from '@/lib/benchmarks'
+import { DataAsOf } from '@/components/DataAsOf'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 // ── Period column definitions ─────────────────────────────────────────────────
@@ -168,9 +169,12 @@ export function FundReturnTable({ security }: { security: SecurityDetail }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-600">
-        Total Performance
-      </h3>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+          Total Performance
+        </h3>
+        <DataAsOf sources={['ycharts_funds', 'ycharts_benchmarks']} />
+      </div>
 
       {empty ? (
         <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4 text-sm text-gray-600">

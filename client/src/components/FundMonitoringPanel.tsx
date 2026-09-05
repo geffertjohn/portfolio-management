@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fmtNum, fmtDecimalPct, fmtInt, fmtText, EMPTY } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { fetchCategoryBenchmark, fetchPeerGroupBenchmark } from '@/lib/benchmarks'
+import { DataAsOf } from '@/components/DataAsOf'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { MetricCard } from './MonitoringPanelShared'
 import { ReturnRanksTable } from './ReturnRanksTable'
@@ -95,7 +96,7 @@ export function FundMonitoringPanel({
   return (
     <section className="space-y-4">
 
-      <div className="flex items-center">
+      <div className="flex items-center justify-between gap-3">
         <div className="inline-flex rounded-md border border-gray-200 bg-gray-100 p-0.5 text-xs font-medium">
           <button
             type="button"
@@ -118,6 +119,7 @@ export function FundMonitoringPanel({
             )}
           </button>
         </div>
+        <DataAsOf sources={['ycharts_funds', 'ycharts_benchmarks']} />
       </div>
 
       {/* Cohort reference — name + benchmark index for each side (modal only) */}

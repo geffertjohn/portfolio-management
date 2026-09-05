@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -676,74 +676,6 @@ export type Database = {
         }
         Relationships: []
       }
-      fund_alternatives: {
-        Row: {
-          annualized_five_year_total_return_nav: number | null
-          annualized_three_year_total_return_nav: number | null
-          created_at: string
-          expense_ratio_generic: number | null
-          historical_sharpe_3y: number | null
-          historical_sortino_3y: number | null
-          id: number
-          max_drawdown_3y: number | null
-          one_month_total_return_nav: number | null
-          one_year_total_return_nav: number | null
-          parent_security_id: string
-          quarterly_standard_deviation_annualized_3y: number | null
-          related_security_id: string
-          security_name: string | null
-          sort_order: number
-          three_month_total_return_nav: number | null
-          ytd_total_return_nav: number | null
-        }
-        Insert: {
-          annualized_five_year_total_return_nav?: number | null
-          annualized_three_year_total_return_nav?: number | null
-          created_at?: string
-          expense_ratio_generic?: number | null
-          historical_sharpe_3y?: number | null
-          historical_sortino_3y?: number | null
-          id?: number
-          max_drawdown_3y?: number | null
-          one_month_total_return_nav?: number | null
-          one_year_total_return_nav?: number | null
-          parent_security_id: string
-          quarterly_standard_deviation_annualized_3y?: number | null
-          related_security_id: string
-          security_name?: string | null
-          sort_order?: number
-          three_month_total_return_nav?: number | null
-          ytd_total_return_nav?: number | null
-        }
-        Update: {
-          annualized_five_year_total_return_nav?: number | null
-          annualized_three_year_total_return_nav?: number | null
-          created_at?: string
-          expense_ratio_generic?: number | null
-          historical_sharpe_3y?: number | null
-          historical_sortino_3y?: number | null
-          id?: number
-          max_drawdown_3y?: number | null
-          one_month_total_return_nav?: number | null
-          one_year_total_return_nav?: number | null
-          parent_security_id?: string
-          quarterly_standard_deviation_annualized_3y?: number | null
-          related_security_id?: string
-          security_name?: string | null
-          sort_order?: number
-          three_month_total_return_nav?: number | null
-          ytd_total_return_nav?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fund_alternatives_parent_security_id_fkey"
-            columns: ["parent_security_id"]
-            isOneToOne: false
-            referencedRelation: "securities2"
-            referencedColumns: ["security_id"]
-          },
-        ]
-      }
       holding_reviews: {
         Row: {
           action: string | null
@@ -979,6 +911,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      import_runs: {
+        Row: {
+          errors: string[]
+          file_name: string | null
+          id: number
+          imported_at: string
+          rows_written: number
+          source: string
+        }
+        Insert: {
+          errors?: string[]
+          file_name?: string | null
+          id?: never
+          imported_at?: string
+          rows_written?: number
+          source: string
+        }
+        Update: {
+          errors?: string[]
+          file_name?: string | null
+          id?: never
+          imported_at?: string
+          rows_written?: number
+          source?: string
+        }
+        Relationships: []
       }
       investment_policy_statements: {
         Row: {
@@ -3872,12 +3831,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3901,11 +3860,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3926,11 +3885,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3951,11 +3910,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3968,11 +3927,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

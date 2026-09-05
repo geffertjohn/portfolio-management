@@ -17,7 +17,6 @@ import { FundHeaderMetricsRow } from '@/components/FundHeaderMetricsRow'
 import { DetailPageState } from '@/components/DetailPageState'
 import { StockReturnTable } from '@/components/StockReturnTable'
 import { FundReturnTable } from '@/components/FundReturnTable'
-import { FundComparisonPanel } from '@/components/FundComparisonPanel'
 import { FundMonitoringPanel } from '@/components/FundMonitoringPanel'
 import { StockScorecardPanels } from '@/components/StockScorecardPanels'
 import { AnalystCoveragePanel } from '@/components/AnalystCoveragePanel'
@@ -469,11 +468,6 @@ export function SecurityDetailPage() {
       {/* ── Fund/ETF: Total Performance (unchanged) ─────────────────────────── */}
       {isFundOrEtfSecurity(security) && (
         <FundReturnTable security={security} />
-      )}
-
-      {/* ── Fund/ETF: Alternatives comparison ───────────────────────────────── */}
-      {isFundOrEtfSecurity(security) && (
-        <FundComparisonPanel security={security} />
       )}
 
       {/* ── Fund/ETF: Thesis (unchanged) ────────────────────────────────────── */}

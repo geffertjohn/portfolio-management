@@ -1,8 +1,9 @@
 /**
  * ychartBenchmarksUpload.ts
  *
- * Parses the multi-sheet "Benchmark Upload Template.xlsx" and replaces all
- * rows in the four benchmark tables:
+ * Parses the four benchmark sheets of the YCharts workbook and upserts them into
+ * the four benchmark tables. Sheets are matched by name, so extra tabs in the
+ * consolidated workbook (Securities, Model Portfolios) are simply ignored:
  *   - category_benchmarks
  *   - peer_group_benchmarks
  *   - sector_benchmarks
@@ -24,6 +25,7 @@
 import * as XLSX from 'xlsx'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { assertExcelFile } from './excelImportShared'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,12 +44,12 @@ type TableConfig = {
   /** Header name of the column used to detect whether a row has data (after rename) */
   keyCol: string
   /**
-   * When set, use upsert (conflict on this column) instead of delete+insert.
-   * Use for tables that have manually-managed columns not present in the Excel
-   * export — upsert will update only the columns in the payload and leave the
-   * rest untouched.
+   * Conflict target for the upsert — a column (or comma-separated composite)
+   * with a matching UNIQUE constraint. Upsert rather than delete+insert because
+   * every one of these tables has manually-managed columns absent from the Excel
+   * export; upsert updates only the columns in the payload and leaves the rest.
    */
-  upsertOn?: string
+  upsertOn: string
 }
 
 // ── Per-table configuration ───────────────────────────────────────────────────
@@ -67,8 +69,8 @@ const TABLE_CONFIGS: TableConfig[] = [
     columnRenames: {},
     textCols: new Set(['peer_group_ticker', 'peer_group_benchmark', 'peer_group_category']),
     keyCol: 'peer_group_ticker',
-    // Use upsert: the Excel omits peer_group_benchmark for most rows (it's set
-    // manually in the DB). Upsert preserves that value and only updates metrics.
+    // The Excel omits peer_group_benchmark for most rows (it's set manually in
+    // the DB); upsert preserves that value and only updates metrics.
     upsertOn: 'peer_group_ticker,peer_group_category',
   },
   {
@@ -84,14 +86,13 @@ const TABLE_CONFIGS: TableConfig[] = [
       annualized_daily_one_year_total_return:   'one_year_total_return',
       annualized_daily_three_year_total_return: 'annualized_three_year_total_return',
       annualized_daily_five_year_total_return:  'annualized_five_year_total_return',
-      // Excel uses "bond_exposure" name; DB + AllocationComparison use "total_exposure"
+      // Excel says "bond_exposure"; the DB column is "total_exposure"
       north_america_bond_exposure_generic:      'north_america_total_exposure_generic',
     },
     textCols: new Set(['security_id', 'security_name']),
     keyCol: 'security_id',
-    // Use upsert so manually-managed columns (name, investment_objective) are
-    // preserved across uploads — only the columns present in the Excel payload
-    // are updated.
+    // Manually-managed columns (name, investment_objective) are preserved across
+    // uploads — only the columns present in the Excel payload are updated.
     upsertOn: 'security_id',
   },
 ]
@@ -188,9 +189,9 @@ function parseSheet(
   return records
 }
 
-// ── Table replacement ─────────────────────────────────────────────────────────
+// ── Table upsert ──────────────────────────────────────────────────────────────
 
-async function replaceTable(
+async function upsertTable(
   config: TableConfig,
   records: Record<string, unknown>[],
 ): Promise<{ inserted: number; errors: string[] }> {
@@ -201,37 +202,11 @@ async function replaceTable(
   const BATCH = 100
   let inserted = 0
 
-  if (config.upsertOn) {
-    // Upsert: update existing rows (preserves columns not in payload) and
-    // insert new ones. Used for tables with manually-managed columns.
-    for (let i = 0; i < records.length; i += BATCH) {
-      const batch = records.slice(i, i + BATCH)
-      const { error } = await (supabase as SupabaseClient)
-        .from(config.tableName)
-        .upsert(batch, { onConflict: config.upsertOn })
-      if (error) {
-        errors.push(`${config.tableName} batch ${Math.floor(i / BATCH) + 1}: ${error.message}`)
-      } else {
-        inserted += batch.length
-      }
-    }
-    return { inserted, errors }
-  }
-
-  // Default: delete all rows then re-insert (full replacement)
-  const { error: delError } = await (supabase as SupabaseClient)
-    .from(config.tableName)
-    .delete()
-    .not(config.keyCol, 'is', null)
-
-  if (delError) {
-    errors.push(`${config.tableName} delete: ${delError.message}`)
-    return { inserted: 0, errors }
-  }
-
   for (let i = 0; i < records.length; i += BATCH) {
     const batch = records.slice(i, i + BATCH)
-    const { error } = await (supabase as SupabaseClient).from(config.tableName).insert(batch)
+    const { error } = await (supabase as SupabaseClient)
+      .from(config.tableName)
+      .upsert(batch, { onConflict: config.upsertOn })
     if (error) {
       errors.push(`${config.tableName} batch ${Math.floor(i / BATCH) + 1}: ${error.message}`)
     } else {
@@ -245,14 +220,15 @@ async function replaceTable(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Parse the multi-sheet Benchmark Upload Template (.xlsx) and replace all
- * rows in the four benchmark tables. Any ticker present in the previous data
- * but absent from the new file is removed.
+ * Parse the four benchmark sheets of the YCharts workbook and upsert them into
+ * the four benchmark tables.
+ *
+ * Every table config sets `upsertOn`, so this only ever inserts or updates —
+ * a ticker present in the previous data but absent from the new file is left in
+ * place, not removed.
  */
 export async function uploadYchartBenchmarks(file: File): Promise<UploadResult> {
-  if (!file.name.toLowerCase().match(/\.xlsx?$/)) {
-    throw new Error('Please choose an Excel file (.xlsx or .xls).')
-  }
+  assertExcelFile(file)
 
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(buf, { type: 'array', cellDates: true })
@@ -279,7 +255,7 @@ export async function uploadYchartBenchmarks(file: File): Promise<UploadResult> 
       continue
     }
 
-    const { inserted, errors } = await replaceTable(config, records)
+    const { inserted, errors } = await upsertTable(config, records)
     totalInserted += inserted
     allErrors.push(...errors)
   }

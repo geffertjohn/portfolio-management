@@ -1,10 +1,15 @@
 /**
  * fundBulkUpload.ts
  *
- * Bulk-upserts ETF / mutual fund rows from the New Fund Template Excel file
- * into `securities2`.
+ * Bulk-upserts ETF / mutual fund rows from the YCharts fund template into
+ * `securities2`.
  *
- * Template layout:
+ * Reads the "Securities" sheet, falling back to sheet 0 for the older
+ * single-purpose workbook whose only data tab was leftmost. The workbook's other
+ * tabs are ignored — the benchmark and model-portfolio sheets have their own
+ * importers.
+ *
+ * Sheet layout:
  *   Row 0  – group-header labels  (disregarded)
  *   Row 1  – DB column names      (schema row)
  *   Row 2+ – one fund per row     (data rows)
@@ -17,22 +22,9 @@
 
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
-import { coerceDate, coerceNumber, isValidCalendarDateString } from '@/lib/excelImportShared'
-
-/** Comparison-metric columns stored on fund_alternatives (subset of the fund schema). */
-const COMPARISON_METRIC_KEYS = [
-  'expense_ratio_generic', 'historical_sharpe_3y', 'historical_sortino_3y',
-  'quarterly_standard_deviation_annualized_3y', 'max_drawdown_3y',
-  'one_month_total_return_nav', 'three_month_total_return_nav', 'ytd_total_return_nav',
-  'one_year_total_return_nav', 'annualized_three_year_total_return_nav',
-  'annualized_five_year_total_return_nav',
-] as const
-
-function pickComparisonMetrics(rec: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const k of COMPARISON_METRIC_KEYS) if (rec[k] != null) out[k] = rec[k]
-  return out
-}
+import {
+  assertExcelFile, coerceDate, coerceNumber, isValidCalendarDateString, pickSheetName,
+} from '@/lib/excelImportShared'
 
 // ── Column classification ─────────────────────────────────────────────────────
 
@@ -129,21 +121,16 @@ export type BulkUploadResult = {
   succeeded: number
   failed: number
   errors: string[]
-  /** parent→related links written from the optional "Related" sheet */
-  relatedLinked: number
 }
 
 const BATCH_SIZE = 50
 
 export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadResult> {
-  if (!file.name.toLowerCase().match(/\.xlsx?$/)) {
-    throw new Error('Please choose an Excel file (.xlsx or .xls).')
-  }
+  assertExcelFile(file)
 
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(buf, { type: 'array', cellDates: true })
-  const sheetName = wb.SheetNames[0]
-  if (!sheetName) throw new Error('The workbook has no sheets.')
+  const sheetName = pickSheetName(wb, ['Securities'])
 
   const rawRows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], {
     header: 1,
@@ -232,57 +219,5 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
     }
   }
 
-  // ── Step 4: optional "Related" sheet → fund_alternatives ─────────────────────
-  // Layout: Col A non-empty marks a parent's security_id; the rows below it are
-  // that parent's related/alternative funds (Col B = ticker, Col C+ = the same
-  // metrics as the Securities sheet, so we reuse `colNames`). Each (parent,
-  // related) row — link + comparison metrics inline — is written to the dedicated
-  // fund_alternatives table. Comparison funds NEVER enter securities2 (which is
-  // reserved for model-portfolio securities).
-  let relatedLinked = 0
-  const relatedSheetName = wb.SheetNames.find((n) => n.trim().toLowerCase() === 'related')
-  if (relatedSheetName) {
-    const relatedRaw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[relatedSheetName], {
-      header: 1, raw: true, defval: null,
-    })
-
-    // parent → ordered list of fund_alternatives rows
-    const altsByParent = new Map<string, Record<string, unknown>[]>()
-
-    let currentParent: string | null = null
-    for (const row of relatedRaw) {
-      const values = row as unknown[]
-      if (!values || values.every((v) => v == null || v === '')) continue
-      const colA = values[0]
-      if (colA != null && String(colA).trim() !== '') {
-        currentParent = stripYChartsPrefix(String(colA).trim())
-        if (!altsByParent.has(currentParent)) altsByParent.set(currentParent, [])
-        continue // parent-marker row (also carries the header literals on the first block)
-      }
-      if (!currentParent) continue
-      const rec = buildRecord(colNames, values)
-      if (!rec) continue
-      const list = altsByParent.get(currentParent)!
-      list.push({
-        parent_security_id: currentParent,
-        related_security_id: rec.security_id,
-        sort_order: list.length,
-        security_name: rec.security_name ?? null,
-        ...pickComparisonMetrics(rec),
-      })
-    }
-
-    // Replace each parent's alternatives (delete + insert) so a re-upload refreshes cleanly.
-    for (const [parent, alts] of altsByParent) {
-      if (alts.length === 0) continue
-      const { error: delErr } = await supabase
-        .from('fund_alternatives').delete().eq('parent_security_id', parent)
-      if (delErr) { errors.push(`${parent} alts clear: ${delErr.message}`); continue }
-      const { error: insErr } = await supabase.from('fund_alternatives').insert(alts as never)
-      if (insErr) errors.push(`${parent} alts: ${insErr.message}`)
-      else relatedLinked += alts.length
-    }
-  }
-
-  return { total: records.length, succeeded, failed, errors, relatedLinked }
+  return { total: records.length, succeeded, failed, errors }
 }

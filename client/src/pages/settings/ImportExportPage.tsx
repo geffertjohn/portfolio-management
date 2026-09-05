@@ -11,6 +11,9 @@ import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
 import { addNewSecurityFromExcel, uploadSecurities2FromExcel } from '@/lib/securities2ExcelUpload'
 import { importAllocationSnapshots, parseYchartsDynamic } from '@/lib/portfolioAllocations'
+import {
+  fetchLatestImportRuns, fmtImportDate, recordImportRun, type ImportSource,
+} from '@/lib/importRuns'
 import * as XLSX from 'xlsx'
 import type { Portfolio } from '@/types/portfolio'
 
@@ -230,6 +233,7 @@ export function ImportExportPage() {
           <ImportCard
             title="Benchmarks — YCharts template"
             desc="Refreshes category, peer group, sector, and model-portfolio benchmark metrics from the Benchmark Upload Template."
+            source="ycharts_benchmarks"
             run={async (file) => {
               const r = await uploadYchartBenchmarks(file)
               for (const k of [QUERY_KEYS.categoryBenchmarksTable, QUERY_KEYS.peerGroupBenchmarksTable,
@@ -237,31 +241,41 @@ export function ImportExportPage() {
                                QUERY_KEYS.benchmarks, QUERY_KEYS.sectorBenchmarks]) {
                 await queryClient.invalidateQueries({ queryKey: k })
               }
-              return r.errors.length === 0
-                ? `${r.inserted} rows upserted across the four benchmark tables.`
-                : `${r.inserted} rows upserted, ${r.errors.length} error(s): ${r.errors[0]}`
+              return {
+                rows: r.inserted,
+                errors: r.errors,
+                message: r.errors.length === 0
+                  ? `${r.inserted} rows upserted across the four benchmark tables.`
+                  : `${r.inserted} rows upserted, ${r.errors.length} error(s): ${r.errors[0]}`,
+              }
             }}
           />
 
           <ImportCard
             title="Funds — New Fund Template"
-            desc="Loads the Securities sheet into securities2, plus the optional Related sheet into fund_alternatives."
+            desc="Loads the Securities sheet of the YCharts workbook into securities2."
+            source="ycharts_funds"
             run={async (file) => {
               const r = await bulkUploadFundsFromExcel(file)
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.securities })
-              return r.failed === 0 && r.errors.length === 0
-                ? `${r.succeeded} fund${r.succeeded !== 1 ? 's' : ''} imported.`
-                : `${r.succeeded} imported, ${r.failed} failed. ${r.errors[0] ?? ''}`
+              return {
+                rows: r.succeeded,
+                errors: r.errors,
+                message: r.failed === 0 && r.errors.length === 0
+                  ? `${r.succeeded} fund${r.succeeded !== 1 ? 's' : ''} imported.`
+                  : `${r.succeeded} imported, ${r.failed} failed. ${r.errors[0] ?? ''}`,
+              }
             }}
           />
 
           <ImportCard
             title="Securities — add or update by symbol"
             desc="Reads the ticker from the file and upserts that security into securities2."
+            source="ycharts_security"
             run={async (file) => {
               const symbol = await addNewSecurityFromExcel(file)
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.securities })
-              return `"${symbol}" imported.`
+              return { rows: 1, message: `"${symbol}" imported.` }
             }}
           />
 
@@ -279,29 +293,35 @@ export function ImportExportPage() {
                 ))}
               </select>
             }
+            source="ycharts_security_metrics"
             run={async (file) => {
               await uploadSecurities2FromExcel(targetSymbol, file)
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.securities })
-              return `${targetSymbol} updated.`
+              return { rows: 1, message: `${targetSymbol} updated.` }
             }}
           />
 
           <ImportCard
             title="Portfolios — Excel"
             desc="Bulk-updates portfolio metrics (name, strategy, risk profile, benchmark, returns)."
+            source="ycharts_portfolios"
             run={async (file) => {
               const { succeeded, failed, errors } = await bulkUploadPortfoliosFromExcel(file)
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolios })
-              return failed === 0
-                ? `${succeeded} portfolio${succeeded !== 1 ? 's' : ''} updated.`
-                : `${succeeded} updated, ${failed} failed. ${errors[0] ?? ''}`
+              return {
+                rows: succeeded,
+                errors,
+                message: failed === 0
+                  ? `${succeeded} portfolio${succeeded !== 1 ? 's' : ''} updated.`
+                  : `${succeeded} updated, ${failed} failed. ${errors[0] ?? ''}`,
+              }
             }}
           />
 
           <ImportCard
             title="Portfolio allocations — YCharts dynamic file"
             desc="Long format (Date · Symbol · Target Weight) pivoted into dated allocation snapshots."
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.xlsm,.xls,.csv"
             disabled={!targetPortfolio}
             picker={
               <select value={targetPortfolio} onChange={(e) => setTargetPortfolio(e.target.value)} className={SELECT_CLS}>
@@ -311,21 +331,17 @@ export function ImportExportPage() {
                 ))}
               </select>
             }
+            source="ycharts_allocations"
             run={async (file) => {
               const parsed = parseYchartsDynamic(await firstSheetRows(file))
               const r = await importAllocationSnapshots(targetPortfolio, parsed, true)
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allocationGrid(targetPortfolio) })
-              return `Imported ${r.inserted} weights across ${r.dates} dates into ${targetPortfolio}.`
+              return {
+                rows: r.inserted,
+                message: `Imported ${r.inserted} weights across ${r.dates} dates into ${targetPortfolio}.`,
+              }
             }}
           />
-
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-5">
-            <p className="text-sm font-semibold text-gray-700">Bulk position import — coming soon</p>
-            <p className="mt-1 text-xs text-gray-500">
-              Upload a CSV of <code className="rounded bg-gray-100 px-1">portfolio_id, symbol, weight</code> to
-              replace or merge positions across multiple portfolios at once.
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -335,13 +351,23 @@ export function ImportExportPage() {
 // ── Import cards ─────────────────────────────────────────────────────────────
 
 const EXCEL_ACCEPT =
-  '.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel'
+  '.xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,' +
+  'application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel'
+
+/** What an import reports back: what to show, and what to log to `import_runs`. */
+interface ImportOutcome {
+  message: string
+  rows: number
+  errors?: string[]
+}
 
 interface ImportCardProps {
   title: string
   desc: React.ReactNode
-  /** Runs the import and returns the success summary to display. */
-  run: (file: File) => Promise<string>
+  /** Which dataset this card loads — the `import_runs.source` it stamps. */
+  source: ImportSource
+  /** Runs the import and reports the summary plus what to log. */
+  run: (file: File) => Promise<ImportOutcome>
   accept?: string
   /** Optional target selector (e.g. which portfolio / security to import into). */
   picker?: React.ReactNode
@@ -353,17 +379,30 @@ interface ImportCardProps {
  * One data import. Owns its own file input, busy state, and result banner so the
  * page stays a flat list of cards — this is the single place the app accepts a
  * spreadsheet; entity pages no longer carry upload buttons.
+ *
+ * It also stamps `import_runs` on success and shows the previous run's date, so
+ * the page answers "when was this last refreshed?" without the user guessing.
  */
-function ImportCard({ title, desc, run, accept = EXCEL_ACCEPT, picker, disabled }: ImportCardProps) {
+function ImportCard({ title, desc, source, run, accept = EXCEL_ACCEPT, picker, disabled }: ImportCardProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [ok, setOk] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
+  const { data: runs } = useQuery({
+    queryKey: QUERY_KEYS.importRuns,
+    queryFn: fetchLatestImportRuns,
+  })
+  const lastRun = runs?.get(source)
+
   async function handle(file: File) {
     setBusy(true); setOk(null); setErr(null)
     try {
-      setOk(await run(file))
+      const outcome = await run(file)
+      await recordImportRun(source, file, outcome.rows, outcome.errors ?? [])
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.importRuns })
+      setOk(outcome.message)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Import failed.')
     } finally {
@@ -377,6 +416,11 @@ function ImportCard({ title, desc, run, accept = EXCEL_ACCEPT, picker, disabled 
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900">{title}</p>
           <p className="mt-0.5 text-xs text-gray-500">{desc}</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {lastRun
+              ? `Last imported ${fmtImportDate(lastRun)}${lastRun.file_name ? ` from ${lastRun.file_name}` : ''}`
+              : 'Never imported'}
+          </p>
           {picker && <div className="mt-2">{picker}</div>}
         </div>
         <div className="shrink-0">
