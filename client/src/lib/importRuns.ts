@@ -15,8 +15,6 @@ import { supabase } from './supabase'
 export type ImportSource =
   | 'ycharts_benchmarks'
   | 'ycharts_funds'
-  | 'ycharts_security'
-  | 'ycharts_security_metrics'
   | 'ycharts_portfolios'
   | 'ycharts_allocations'
 
@@ -29,23 +27,35 @@ export interface ImportRun {
   errors: string[]
 }
 
+/** One dataset's result within a single upload. */
+export interface ImportRunInput {
+  source: ImportSource
+  rows: number
+  errors?: string[]
+}
+
 /**
- * Log one import. Never throws — the data is already committed by the time this
- * runs, so a logging failure would report a successful import as failed.
+ * Log the datasets one uploaded file wrote. A single workbook feeds three of
+ * them, so this takes a list — each gets its own row, keeping per-dataset
+ * provenance even though they share a file and a timestamp.
+ *
+ * Never throws: the data is already committed by the time this runs, so a
+ * logging failure would report a successful import as failed.
  */
-export async function recordImportRun(
-  source: ImportSource,
+export async function recordImportRuns(
+  runs: ImportRunInput[],
   file: File,
-  rowsWritten: number,
-  errors: string[] = [],
 ): Promise<void> {
-  const { error } = await supabase.from('import_runs').insert({
-    source,
-    file_name: file.name,
-    rows_written: rowsWritten,
-    errors,
-  })
-  if (error) console.warn(`import_runs: could not log ${source} run —`, error.message)
+  if (runs.length === 0) return
+  const { error } = await supabase.from('import_runs').insert(
+    runs.map((r) => ({
+      source: r.source,
+      file_name: file.name,
+      rows_written: r.rows,
+      errors: r.errors ?? [],
+    })),
+  )
+  if (error) console.warn('import_runs: could not log this upload —', error.message)
 }
 
 /** Newest run per source, keyed by source. Sources never imported are absent. */

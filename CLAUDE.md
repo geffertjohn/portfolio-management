@@ -316,7 +316,7 @@ For **stocks** (not funds), the detail page pulls these live via `useQuery` rath
 - **`fmpSync.ts` and the bulk "Sync all stocks from FMP" button were DELETED (Aug 2026).** The Jun 2026 slim-down left `syncStockFromFMP` writing 27 columns, of which 21 (`*_total_return_nav` + the risk metrics) had no stock-side reader at all — every consumer (`FundReturnTable`, `FundMonitoringPanel`/`ReturnRanksTable`, `reviewEvidencePdf`) is gated behind `isFundOrEtfSecurity`, while the button filtered to non-funds. Its only irreplaceable job was seeding the four identity columns, which is now done at creation time. **Do not reintroduce a bulk sync**; use `refreshSecurityFromFMP` instead.
   - **`refreshSecurityFromFMP(symbol)` in `lib/securities.ts` is the single writer of the FMP-owned columns**: `security_name`, `morningstar_sector`, `morningstar_industry`, `long_description`, `last_earnings_release`, `next_earnings_release`. It runs (a) inside `createSecurityBySymbol`, so a security added by ticker is never nameless, and (b) as a **write-through on the stock detail page**, which already fetches profile + earnings live — so simply opening a stock refreshes the stored dates. Only non-empty values are written, so a partial FMP response never blanks a good value.
   - **The Review Calendar self-heals.** On mount, `ReviewCalendarPage` finds its **stock** rows (via `isFundOrEtfSecurity` — `fetchReviewSchedules` embeds the classifier columns for exactly this) whose stored `next_earnings_release` is null or in the past, and tops them up through `refreshSecuritiesFromFMP(symbols)` — a bounded-concurrency (4) batch wrapper around `refreshSecurityFromFMP` that swallows per-symbol failures. It runs **once per mount** (a `useRef` guard, not a dependency-driven effect) and invalidates `reviewSchedules` only when something actually changed, so it cannot loop.
-  - **Excel cannot write any of those six.** All are in the `SKIP` set of `securities2ExcelUpload.ts` (the two earnings columns were removed in Aug 2026). Earnings dates come from FMP only — they drive stock review scheduling, and the cross-security surfaces (`ReviewCalendarPage`, `fetchReviewSchedules`) read the STORED columns because they cannot fire a per-row FMP request the way the detail page does.
+  - **Excel cannot write any of those six.** Excel has had no path to them since `securities2ExcelUpload.ts` was deleted (Sep 2026); before that they were in its `SKIP` set. Earnings dates come from FMP only — they drive stock review scheduling, and the cross-security surfaces (`ReviewCalendarPage`, `fetchReviewSchedules`) read the STORED columns because they cannot fire a per-row FMP request the way the detail page does.
 - `fetchEarningsDates` derives last = most recent release ≤ today, next = soonest release > today, from `/stable/earnings` (which lists past + scheduled releases).
 
 ### Stock detail tab layout
@@ -575,7 +575,7 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 
 ## Excel Import
 
-**Settings → Import / Export is the ONLY place the app accepts a spreadsheet.** All six data imports live there as `ImportCard`s (`pages/settings/ImportExportPage.tsx`): benchmarks, funds, securities add/update-by-symbol, security-metrics-into-a-chosen-symbol, portfolios, and portfolio allocations. The last two take a picker (security / portfolio) since they target one entity. **Do not add an upload button to an entity page** — the Securities, Portfolios, Benchmarks, Security-detail, and Allocation-History pages had theirs removed deliberately (a stray "Upload manually" on the security header, filtered to `.xlsx`, was a persistent trap: it silently refused PDFs and looked like a document upload).
+**Settings → Import / Export is the ONLY place the app accepts a spreadsheet.** **There are exactly two `ImportCard`s** (`pages/settings/ImportExportPage.tsx`), and Import sits **above** Exports because refreshing data is why the page gets opened: (1) **YCharts workbook** — one file, three datasets (benchmarks, funds, model portfolios); (2) **Portfolio allocations** — the long-format export, which takes a portfolio picker since it targets one entity. Six cards collapsed to two in Sep 2026: three read the identical file, and the two single-security-template cards were retired unused. **Do not add an upload button to an entity page** — the Securities, Portfolios, Benchmarks, Security-detail, and Allocation-History pages had theirs removed deliberately (a stray "Upload manually" on the security header, filtered to `.xlsx`, was a persistent trap: it silently refused PDFs and looked like a document upload).
 
 The one exception is **file-storage uploads**, which are contextual by nature and stay where they are: `DocumentsFolderPanel` (security/portfolio Documents tabs), `PositionSizingCheck` (a step inside a review), and Settings → Documents. Those write to Storage, not to DB tables.
 
@@ -607,13 +607,18 @@ renders identically to a fresh one. Every import logs a row: `source` (one of si
 CHECK-constrained), `file_name`, `imported_at`, `rows_written`, `errors`. The
 newest run per source is that dataset's stamp.
 
-- Data layer `lib/importRuns.ts`. **`recordImportRun` never throws** — the data is
+- Data layer `lib/importRuns.ts`. **`recordImportRuns` never throws** — the data is
   already committed by the time it runs, so a logging failure must not report a
-  successful import as failed; it warns instead.
-- `ImportCard` owns the write: its `run` callback returns
-  `{ message, rows, errors? }` rather than a bare string, so logging lives in one
-  place instead of in each of the six callbacks. Each card shows its own
-  "Last imported …" line.
+  successful import as failed; it warns instead. It takes a **list**: the workbook
+  card writes three rows (one per dataset) from a single upload, so per-dataset
+  provenance survives the consolidation.
+- `ImportCard` owns the write: its `run` callback returns `{ message, runs }`
+  rather than a bare string, so logging lives in one place. A card declares the
+  `sources` it loads and shows the **OLDEST** of their stamps — it is only as
+  current as its stalest dataset. **The workbook card runs its three importers
+  independently** (each in its own `try`), so a benchmark column mismatch cannot
+  stop the funds and portfolios in the same file from loading; failures are
+  reported in the banner, not thrown.
 - **`components/DataAsOf.tsx`** renders the stamp on the fund detail page
   (`FundReturnTable`, `FundMonitoringPanel`) and Settings → Benchmarks, ambering
   past 45 days. It takes a **`sources` prop** and shows the OLDEST of them —
@@ -624,11 +629,11 @@ newest run per source is that dataset's stamp.
 
 
 
-Upload handlers live in `lib/*ExcelUpload.ts`. **There is no column whitelist anywhere** — every importer maps sheet columns straight to DB columns. `securities2ExcelUpload.ts` strips the names in **`NON_SECURITIES2_COLS`** (columns retired from `securities2`, plus names that only ever existed on other tables) and retries on PGRST204 as a backstop, dropping whatever the DB rejects — but each retry costs a round-trip and it gives up after 10, so a known-absent column belongs in that set.
+Upload handlers live in `lib/*ExcelUpload.ts`. **There is no column whitelist anywhere** — every importer maps sheet columns straight to DB columns, so a spreadsheet column with no matching DB column fails the write. `ALTER TABLE` before adding one to a sheet.
 
-Identity fields (`security_name`, `long_description`, `morningstar_sector`, `morningstar_industry`) are **deliberately not writable from Excel** — their friendly headers map to `null` and the DB columns are in the `SKIP` set. They are sourced from FMP `/profile` only (see "Stock detail page reads FMP on-demand").
+Identity fields (`security_name`, `long_description`, `morningstar_sector`, `morningstar_industry`) are **not writable from Excel at all** — no importer maps them. They are sourced from FMP `/profile` only (see "Stock detail page reads FMP on-demand").
 
-Removed columns (`pe_5`, `ps_ratio_3y_mean`, `revenue_per_share_ttm`) are explicitly listed in the skip list in `securities2ExcelUpload.ts` and silently dropped.
+**`securities2ExcelUpload.ts` was DELETED (Sep 2026)** with the two single-security cards — that per-ticker template is no longer used and nothing else consumed the module. Its removal orphaned `upsertRelatedSecurities`, so **`security_related_securities` now has no writer**: its 170 rows (all 34 parents are stocks) still render on the At-Risk page through `SubstitutionsList`, but can only be changed in the DB. `fetchRelatedSecurities` stays. Securities are created by ticker via `AddSecurityModal` → `createSecurityBySymbol` (+ FMP), or as a side effect of the workbook's Securities sheet.
 
 **Benchmark uploads (`ychartBenchmarksUpload.ts`) have NO whitelist** — every Excel header is mapped directly to a DB column (with a few renames). So a column present in the spreadsheet but **missing from the DB table fails the entire upsert batch** (`column does not exist`). Before adding a column to the benchmark workbook, `ALTER TABLE` to add it. All four tables **upsert** (`upsertOn` is a required field on `TableConfig`), so rows absent from the new file are preserved rather than deleted — there is no full-replacement path.
 

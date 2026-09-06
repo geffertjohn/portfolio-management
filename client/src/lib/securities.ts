@@ -496,18 +496,6 @@ export async function fetchRelatedSecurities(securityId: string): Promise<Relate
   }))
 }
 
-export async function upsertRelatedSecurities(securityId: string, relatedIds: string[]): Promise<void> {
-  const { error: delError } = await supabase
-    .from('security_related_securities')
-    .delete()
-    .eq('security_id', securityId)
-  if (delError) throw delError
-  if (relatedIds.length === 0) return
-  const rows = relatedIds.map((related_id, i) => ({ security_id: securityId, related_id, sort_order: i }))
-  const { error } = await supabase.from('security_related_securities').insert(rows)
-  if (error) throw error
-}
-
 /**
  * Create a security by ticker, seeding its FMP-sourced fields.
  *

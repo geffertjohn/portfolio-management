@@ -175,8 +175,11 @@ Uploads are handled by the `lib/*ExcelUpload.ts` modules. Two helpers in
 
 There is **no column whitelist**. Each importer maps sheet columns straight to DB
 columns, so a spreadsheet column with no matching DB column is a real failure
-mode — `ALTER TABLE` first. `securities2ExcelUpload.ts` additionally strips the
-names in `NON_SECURITIES2_COLS` and retries on PGRST204 as a backstop.
+mode — `ALTER TABLE` first.
+
+The page carries **two cards**: the workbook (which runs all three importers above
+in one pass, each independently, so one failure does not block the others) and the
+allocations file.
 
 Every import writes an `import_runs` row (source, file name, timestamp, rows,
 errors). The newest run per source is the provenance stamp the `DataAsOf`

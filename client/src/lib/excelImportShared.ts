@@ -76,20 +76,6 @@ function parseScaledNumberSuffix(s: string): number | null {
   return base * mult
 }
 
-export function formatSupabaseUpdateError(err: {
-  message: string
-  details?: string
-  hint?: string
-  code?: string
-}): string {
-  const parts = [err.message, err.details, err.hint].filter(
-    (p) => typeof p === 'string' && p.trim() !== '',
-  )
-  const base = parts.join(' — ')
-  if (!base) return err.code ? `Database error (${err.code})` : 'Update failed'
-  return err.code && !base.includes(err.code) ? `${base} (${err.code})` : base
-}
-
 /**
  * Rejects anything that isn't an Excel workbook. `.xlsm` is accepted because the
  * consolidated YCharts workbook is macro-enabled — its Workbook_Open macro drives
