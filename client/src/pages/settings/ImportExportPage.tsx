@@ -231,8 +231,8 @@ export function ImportExportPage() {
         </p>
         <div className="mt-3 space-y-3">
           <ImportCard
-            title="Benchmarks — YCharts template"
-            desc="Refreshes category, peer group, sector, and model-portfolio benchmark metrics from the Benchmark Upload Template."
+            title="Benchmarks — YCharts workbook"
+            desc="Refreshes the category, peer group, sector, and model-portfolio benchmark tables from their four sheets."
             source="ycharts_benchmarks"
             run={async (file) => {
               const r = await uploadYchartBenchmarks(file)

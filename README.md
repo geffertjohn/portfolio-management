@@ -148,14 +148,40 @@ The `portfolio_model_map` table is the authoritative mapping for all portfolio t
 
 ## Data Import
 
-Excel upload templates are included in the repo root:
+**Settings → Import / Export is the only place the app accepts a spreadsheet.**
+Entity pages carry no upload buttons.
 
-- **`Portfolio Upload Template.xlsx`** — Bulk update portfolio metrics and returns
-- **`ETF & Mutual Fund Upload Template.xlsx`** — Securities data upload
-- **`Stock Upload Template.xlsx`** — Stock securities upload
-- **`Model Weights.xlsx`** — Model portfolio weights import
+Nearly everything now comes from a single macro-enabled workbook,
+`YCharts/Ycharts.xlsm`, whose sheets each feed a different importer:
 
-Uploads are handled by the `lib/*ExcelUpload.ts` modules which validate columns against a whitelist before writing to Supabase.
+| Sheet | Importer | Destination |
+|---|---|---|
+| `category_benchmarks`, `peer_group_benchmarks`, `sector_benchmarks`, `model_portfolio_benchmarks` | `ychartBenchmarksUpload.ts` | the four benchmark tables |
+| `Securities ` | `fundBulkUpload.ts` | `securities2` |
+| `Model Portfolios` | `portfolioExcelUpload.ts` | `portfolio` |
+
+Two files stay separate because they are a different shape — the long-format
+`Date · Symbol · Target Weight` allocation exports (`YCharts/*Portfolio
+Holdings.xlsx`), which `parseYchartsDynamic` pivots into `portfolio_allocations`.
+
+Uploads are handled by the `lib/*ExcelUpload.ts` modules. Two helpers in
+`lib/excelImportShared.ts` are shared by all of them:
+
+- `assertExcelFile()` — accepts `.xlsx`, `.xlsm` and `.xls`. Macro-enabled
+  matters: the unattended refresh macro can only produce an `.xlsm`.
+- `pickSheetName()` — resolves a sheet by name, falling back to sheet 0 for
+  older single-purpose workbooks. Matching is trimmed; the fund tab is named
+  `"Securities "`, with a trailing space.
+
+There is **no column whitelist**. Each importer maps sheet columns straight to DB
+columns, so a spreadsheet column with no matching DB column is a real failure
+mode — `ALTER TABLE` first. `securities2ExcelUpload.ts` additionally strips the
+names in `NON_SECURITIES2_COLS` and retries on PGRST204 as a backstop.
+
+Every import writes an `import_runs` row (source, file name, timestamp, rows,
+errors). The newest run per source is the provenance stamp the `DataAsOf`
+component shows beside stored YCharts figures — those numbers carry no as-of date
+of their own, so without it a months-old figure renders identically to a fresh one.
 
 ## Asset Class Structure
 
@@ -174,4 +200,4 @@ Each asset class stores `lower_limit`, `target`, and `upper_limit` for drift-bas
 - All Supabase queries go through the singleton client in `lib/supabase.ts`
 - Server state is managed exclusively through TanStack Query; cache keys are centralized in `hooks/queryKeys.ts`
 - The `lib/` directory contains one module per domain — no business logic in components
-- Excel column validation uses a `VALID_COLS` whitelist set to silently skip unrecognized columns on upload
+- Excel importers map sheet columns directly to DB columns — there is no whitelist, so add the DB column before adding one to a workbook

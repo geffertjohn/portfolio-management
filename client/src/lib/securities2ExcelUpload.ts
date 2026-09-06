@@ -79,7 +79,7 @@ const TEXT_COLS = new Set([
 
 // ── Schema-direct layout helpers ─────────────────────────────────────────────
 //
-// The ETF/MF and Stock upload templates use the following column layout:
+// The YCharts security template uses the following column layout:
 //   Col A: DB column name (securities2 field)
 //   Col B: human-readable label (displayed in the UI; ignored on upload)
 //   Col C: value — populated by YCharts formula =IFERROR(_xll.YCI($F$1,"code"),"")
@@ -353,7 +353,7 @@ export async function uploadSecurities2FromExcel(symbol: string, file: File): Pr
 
   throw new Error(
     `Upload failed after stripping ${droppedCols.length} unrecognized column(s): ${droppedCols.join(', ')}. ` +
-    'Update the Stock Upload Template to remove these fields.',
+    'Remove them from the template, or add them to NON_SECURITIES2_COLS if they belong to another table.',
   )
 }
 

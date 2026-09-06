@@ -68,7 +68,6 @@ The legacy `securities` table is retired. Always use `securities2`.
 | `portfolio_allocations` | `security_id` | `TEXT` — **no DB FK** (stages import symbols not yet in securities2); dated allocation snapshots |
 | `holdings_change_log` | `security_id` | `TEXT → securities2.security_id` (legacy; not used for performance) |
 | `security_related_securities` | `security_id` | `TEXT → securities2.security_id` |
-| `fund_alternatives` | `parent_security_id` | `TEXT → securities2.security_id` (related funds live here, NOT in securities2) |
 
 When querying any of these tables by security, pass `security.security_id` (the text ticker), not `security.id`.
 
@@ -314,10 +313,10 @@ For **stocks** (not funds), the detail page pulls these live via `useQuery` rath
 - **There is no "Sync from FMP" button on the stock page** — it was removed. All stock-page data is on-demand `useQuery` (gated on `isStock`); identity/returns/price/earnings/consensus/scorecard all refresh on load (≤ `staleTime`) with no manual sync.
 - Identity uses `(isStock ? profile.x : null) ?? security.x` — live FMP for stocks (so new positions aren't blank), stored `securities2` value as fallback and for funds. **Excel can no longer write these four** (mapped to `null` / in the `SKIP` set in `securities2ExcelUpload.ts`).
 - The **benchmark return rows** (Total Performance on Overview *and* the Monitor Alternatives "Trailing Returns" table) are **live FMP total return via a representative ETF**, not the YCharts return columns. FMP serves none of the TR index symbols (`^SPXTR`, `^RLGTR`, the `^SP15…STR` sector indices — all confirmed *not found*); the price-return symbols it *does* serve (`^RUI`, `^RLG`, `^RLV`) understate total return by ~0.5–2.5%/yr and are deliberately unused. **`resolveEtfProxy(bench)` in `lib/benchmarks.ts` is the single resolver: it reads the benchmark row's own `etf_proxy` column (source of truth, loaded from the benchmark workbook — 41/41 category + 10/10 sector rows populated) and falls back to the hardcoded `BENCHMARK_ETF_PROXY` map only when the row has none.** Never call `benchmarkEtfProxy(ticker)` directly from a component — the map is partial (17 tickers) and was the cause of mid/small-cap-value, fixed-income and international benchmarks silently reverting to stored YCharts columns with `—` in the 5D column. The ETF's dividend-adjusted returns come from the same `fetchStockReturns` used by the security row, so all periods (incl. 5D) populate. Benchmarks with no proxy from either source still fall back to the stored YCharts columns. The Total Performance benchmark label shows a `· <ETF>` proxy tag. (Stocks only — funds keep their stored comparison.) **Adding a column to a benchmark option select requires bumping `QUERY_KEYS.benchmarks` / `sectorBenchmarks`.**
-- **`fmpSync.ts` and the bulk "Sync all stocks from FMP" button were DELETED (Aug 2026).** The Jun 2026 slim-down left `syncStockFromFMP` writing 27 columns, of which 21 (`*_total_return_nav` + the risk metrics) had no stock-side reader at all — every consumer (`FundReturnTable`, `FundComparisonPanel`, `FundMonitoringPanel`/`ReturnRanksTable`, `reviewEvidencePdf`) is gated behind `isFundOrEtfSecurity`, while the button filtered to non-funds. Its only irreplaceable job was seeding the four identity columns, which is now done at creation time. **Do not reintroduce a bulk sync**; use `refreshSecurityFromFMP` instead.
+- **`fmpSync.ts` and the bulk "Sync all stocks from FMP" button were DELETED (Aug 2026).** The Jun 2026 slim-down left `syncStockFromFMP` writing 27 columns, of which 21 (`*_total_return_nav` + the risk metrics) had no stock-side reader at all — every consumer (`FundReturnTable`, `FundMonitoringPanel`/`ReturnRanksTable`, `reviewEvidencePdf`) is gated behind `isFundOrEtfSecurity`, while the button filtered to non-funds. Its only irreplaceable job was seeding the four identity columns, which is now done at creation time. **Do not reintroduce a bulk sync**; use `refreshSecurityFromFMP` instead.
   - **`refreshSecurityFromFMP(symbol)` in `lib/securities.ts` is the single writer of the FMP-owned columns**: `security_name`, `morningstar_sector`, `morningstar_industry`, `long_description`, `last_earnings_release`, `next_earnings_release`. It runs (a) inside `createSecurityBySymbol`, so a security added by ticker is never nameless, and (b) as a **write-through on the stock detail page**, which already fetches profile + earnings live — so simply opening a stock refreshes the stored dates. Only non-empty values are written, so a partial FMP response never blanks a good value.
   - **The Review Calendar self-heals.** On mount, `ReviewCalendarPage` finds its **stock** rows (via `isFundOrEtfSecurity` — `fetchReviewSchedules` embeds the classifier columns for exactly this) whose stored `next_earnings_release` is null or in the past, and tops them up through `refreshSecuritiesFromFMP(symbols)` — a bounded-concurrency (4) batch wrapper around `refreshSecurityFromFMP` that swallows per-symbol failures. It runs **once per mount** (a `useRef` guard, not a dependency-driven effect) and invalidates `reviewSchedules` only when something actually changed, so it cannot loop.
-  - **Excel cannot write any of those six.** All are in the `SKIP` set of `securities2ExcelUpload.ts` (the two earnings columns were removed from the header map and `VALID_COLS` in Aug 2026). Earnings dates come from FMP only — they drive stock review scheduling, and the cross-security surfaces (`ReviewCalendarPage`, `fetchReviewSchedules`) read the STORED columns because they cannot fire a per-row FMP request the way the detail page does.
+  - **Excel cannot write any of those six.** All are in the `SKIP` set of `securities2ExcelUpload.ts` (the two earnings columns were removed in Aug 2026). Earnings dates come from FMP only — they drive stock review scheduling, and the cross-security surfaces (`ReviewCalendarPage`, `fetchReviewSchedules`) read the STORED columns because they cannot fire a per-row FMP request the way the detail page does.
 - `fetchEarningsDates` derives last = most recent release ≤ today, next = soonest release > today, from `/stable/earnings` (which lists past + scheduled releases).
 
 ### Stock detail tab layout
@@ -336,14 +335,6 @@ Rendered on the **Monitor tab** below the scorecard: two tables (Scorecard metri
 - The shared table is rendered via a **plain inline function, not a JSX component** — defining it as a `<Component/>` would remount the subtree each render and the Alt `<input>` would lose focus on every keystroke.
 - The state-reset `useEffect` depends on **`[security.id]` only** — NOT the alt columns. Including query-backed fields would let `refetchOnWindowFocus` (fires when the user tabs back from looking up a ticker) clobber in-progress edits.
 - Benchmark scorecard cells: growth columns map to the YCharts `*_generic` fields (1-yr generic for the TTM columns, 3-yr for 3Y); margin columns show `—` (benchmarks have no margin data). Returns map to the benchmark return columns.
-
-### Fund alternatives (`FundComparisonPanel.tsx`)
-
-Funds get the same "alternatives" idea, but the data model is different because **funds have no on-demand source** (FMP is stocks-only). The comparison funds' metrics are **stored**, sourced from the YCharts fund template's **"Related" sheet**.
-
-- **Dedicated `fund_alternatives` table** — `securities2` is reserved for model-portfolio securities, so comparison funds do **NOT** go there. Each row is one `(parent_security_id → securities2, related_security_id, sort_order)` link with the related fund's comparison metrics inline (`security_name`, expense ratio, Sharpe/Sortino/StdDev/MaxDrawdown 3Y, the six `*_total_return_nav`). Unique on `(parent_security_id, related_security_id)`; `ON DELETE CASCADE` from the parent. (This replaced an earlier approach that put comparison funds in `securities2` behind an `is_comparison_only` flag — that flag and its filters are gone.)
-- **Upload:** `fundBulkUpload.ts` parses the "Related" sheet — Col A non-empty marks a parent's `security_id`; rows below are its related funds (Col B = ticker, Col C+ = same metrics as the Securities sheet, so it reuses the Securities `colNames`). `pickComparisonMetrics()` selects the stored subset; each parent's alternatives are delete+insert (a re-upload refreshes cleanly).
-- **UI:** `FundComparisonPanel` (fund detail page, below Total Performance) renders two tables (Risk & Ratios + Trailing Returns) via `fetchFundComparison` — row [0] is the parent fund (from `securities2`), the rest from `fund_alternatives`. Renders nothing when the fund has no alternatives. (Contrast stocks: `AlternativesPanel`, user-typed `alt_1/2/3`, on-demand FMP.)
 
 ### News & Alerts (`NewsAlertsPanel.tsx` + `lib/fmpNews.ts`)
 
@@ -584,23 +575,64 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 
 ## Excel Import
 
-**Settings → Import / Export is the ONLY place the app accepts a spreadsheet.** All six data imports live there as `ImportCard`s (`pages/settings/ImportExportPage.tsx`): benchmarks, the New Fund Template, securities add/update-by-symbol, security-metrics-into-a-chosen-symbol, portfolios, and portfolio allocations. The last two take a picker (security / portfolio) since they target one entity. **Do not add an upload button to an entity page** — the Securities, Portfolios, Benchmarks, Security-detail, and Allocation-History pages had theirs removed deliberately (a stray "Upload manually" on the security header, filtered to `.xlsx`, was a persistent trap: it silently refused PDFs and looked like a document upload).
+**Settings → Import / Export is the ONLY place the app accepts a spreadsheet.** All six data imports live there as `ImportCard`s (`pages/settings/ImportExportPage.tsx`): benchmarks, funds, securities add/update-by-symbol, security-metrics-into-a-chosen-symbol, portfolios, and portfolio allocations. The last two take a picker (security / portfolio) since they target one entity. **Do not add an upload button to an entity page** — the Securities, Portfolios, Benchmarks, Security-detail, and Allocation-History pages had theirs removed deliberately (a stray "Upload manually" on the security header, filtered to `.xlsx`, was a persistent trap: it silently refused PDFs and looked like a document upload).
 
 The one exception is **file-storage uploads**, which are contextual by nature and stay where they are: `DocumentsFolderPanel` (security/portfolio Documents tabs), `PositionSizingCheck` (a step inside a review), and Settings → Documents. Those write to Storage, not to DB tables.
+
+### One workbook, many sheets (Sep 2026)
+
+`YCharts/Ycharts.xlsm` consolidates what used to be three files — the benchmark
+sheets, the fund Securities sheet, and the model-portfolio sheet — into one
+**macro-enabled** workbook. Two shared helpers in `lib/excelImportShared.ts` make
+that work, and every importer uses both:
+
+- **`assertExcelFile(file)`** — the single extension gate, replacing four
+  divergent checks. It accepts **`.xlsm`**, which is not optional: the unattended
+  refresh macro can only produce a macro-enabled workbook. `EXCEL_ACCEPT` on the
+  page carries the matching MIME type.
+- **`pickSheetName(wb, names)`** — resolves a sheet **by name**, falling back to
+  sheet 0. The fund and portfolio importers used to read `SheetNames[0]`, which
+  in the consolidated workbook is `category_benchmarks`. Matching is trimmed and
+  case-insensitive — the fund tab is literally named `"Securities "` with a
+  trailing space. The fallback keeps older single-purpose workbooks working.
+  **Never go back to `SheetNames[0]` in an importer.**
+
+Sheets the four benchmark configs don't name are simply ignored, so extra tabs in
+the workbook cost nothing.
+
+### Import provenance — `import_runs`
+
+YCharts figures carry **no as-of date of their own**, so a months-old number
+renders identically to a fresh one. Every import logs a row: `source` (one of six,
+CHECK-constrained), `file_name`, `imported_at`, `rows_written`, `errors`. The
+newest run per source is that dataset's stamp.
+
+- Data layer `lib/importRuns.ts`. **`recordImportRun` never throws** — the data is
+  already committed by the time it runs, so a logging failure must not report a
+  successful import as failed; it warns instead.
+- `ImportCard` owns the write: its `run` callback returns
+  `{ message, rows, errors? }` rather than a bare string, so logging lives in one
+  place instead of in each of the six callbacks. Each card shows its own
+  "Last imported …" line.
+- **`components/DataAsOf.tsx`** renders the stamp on the fund detail page
+  (`FundReturnTable`, `FundMonitoringPanel`) and Settings → Benchmarks, ambering
+  past 45 days. It takes a **`sources` prop** and shows the OLDEST of them —
+  pass the sources a surface actually reads, or an unrelated stale import will
+  understate freshness (a fund page must not report the portfolio import's date).
 
 `parseYchartsDynamic` lives in **`lib/portfolioAllocations.ts`** (moved out of `AllocationHistoryPanel` when the import consolidated) — it is a pure parser, so it belongs in lib alongside `importAllocationSnapshots`.
 
 
 
-Upload handlers live in `lib/*ExcelUpload.ts`. `securities2ExcelUpload.ts` validates columns against a `VALID_COLS` whitelist — unrecognized columns are silently skipped. Do not accept or write columns not in the whitelist without adding them explicitly.
+Upload handlers live in `lib/*ExcelUpload.ts`. **There is no column whitelist anywhere** — every importer maps sheet columns straight to DB columns. `securities2ExcelUpload.ts` strips the names in **`NON_SECURITIES2_COLS`** (columns retired from `securities2`, plus names that only ever existed on other tables) and retries on PGRST204 as a backstop, dropping whatever the DB rejects — but each retry costs a round-trip and it gives up after 10, so a known-absent column belongs in that set.
 
 Identity fields (`security_name`, `long_description`, `morningstar_sector`, `morningstar_industry`) are **deliberately not writable from Excel** — their friendly headers map to `null` and the DB columns are in the `SKIP` set. They are sourced from FMP `/profile` only (see "Stock detail page reads FMP on-demand").
 
 Removed columns (`pe_5`, `ps_ratio_3y_mean`, `revenue_per_share_ttm`) are explicitly listed in the skip list in `securities2ExcelUpload.ts` and silently dropped.
 
-**Benchmark uploads (`ychartBenchmarksUpload.ts`) have NO whitelist** — every Excel header is mapped directly to a DB column (with a few renames). So a column present in the spreadsheet but **missing from the DB table fails the entire upsert batch** (`column does not exist`). Before adding a column to the benchmark workbook, `ALTER TABLE` to add it. `category_benchmarks` / `peer_group_benchmarks` use upsert (not delete+insert), so rows absent from the new file are preserved.
+**Benchmark uploads (`ychartBenchmarksUpload.ts`) have NO whitelist** — every Excel header is mapped directly to a DB column (with a few renames). So a column present in the spreadsheet but **missing from the DB table fails the entire upsert batch** (`column does not exist`). Before adding a column to the benchmark workbook, `ALTER TABLE` to add it. All four tables **upsert** (`upsertOn` is a required field on `TableConfig`), so rows absent from the new file are preserved rather than deleted — there is no full-replacement path.
 
-**Fund bulk upload (`fundBulkUpload.ts`)** reads the New Fund Template: sheet 0 ("Securities") row 1 = DB column names, rows 2+ = one fund each → `securities2`. The optional **"Related" sheet** loads each fund's alternative funds (see "Fund alternatives"): Col A non-empty = a parent `security_id`, rows below = its related funds sharing the Securities-sheet schema, so the same `colNames` parse both. Related funds are written to the dedicated **`fund_alternatives`** table (not `securities2`), delete+insert per parent.
+**Fund bulk upload (`fundBulkUpload.ts`)** reads the workbook's **"Securities"** sheet (resolved by name via `pickSheetName`, falling back to sheet 0): row 1 = DB column names, rows 2+ = one fund each → `securities2`. It has no strip list, so every column on that sheet must exist on `securities2`. The old **"Related" sheet** and the `fund_alternatives` table it fed were **removed (Sep 2026)** along with `FundComparisonPanel` — the consolidated workbook no longer carries the sheet, and the loader had never written a row (it applied the Securities sheet's column offsets to a sheet whose used range starts one column earlier, so every child row was silently dropped). Do not reintroduce it without fixing that offset.
 
 ---
 
