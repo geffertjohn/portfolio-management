@@ -185,46 +185,11 @@ export function ImportExportPage() {
     <div>
       <div>
         <h1 className="text-2xl font-semibold text-gray-900 sm:text-3xl">Import / Export</h1>
-        <p className="mt-1 text-gray-600">Download your data as CSV for reporting or backup.</p>
-      </div>
-
-      {/* ── Exports ─────────────────────────────────────── */}
-      <div className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Exports</h2>
-        <div className="mt-3 space-y-3">
-          <ExportCard
-            title="Securities"
-            desc={`All ${securities.length} securities — symbol, name, type, asset class, expense ratio.`}
-            disabled={isLoading}
-            onExport={exportSecurities}
-          />
-          <ExportCard
-            title="Portfolios"
-            desc={`All ${portfolios.length} portfolios — name, strategy, risk profile, benchmark.`}
-            disabled={isLoading}
-            onExport={exportPortfolios}
-          />
-          <ExportCard
-            title="All Positions"
-            desc="Every position across all portfolios — ticker, weight, last updated."
-            disabled={isLoading}
-            onExport={exportAllPositions}
-          />
-          <ExportCard
-            title="At-Risk"
-            desc={`${atRisk.length} active at-risk entries — symbol, date added, flagged metrics.`}
-            onExport={exportAtRisk}
-          />
-          <ExportCard
-            title="Action Items"
-            desc={`All ${actionItems.length} action items — title, linked security/portfolio, priority, status.`}
-            onExport={exportActionItems}
-          />
-        </div>
+        <p className="mt-1 text-gray-600">Load spreadsheet data in, or download it as CSV for reporting and backup.</p>
       </div>
 
       {/* ── Import ──────────────────────────────────────── */}
-      <div className="mt-10">
+      <div className="mt-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Import</h2>
         <p className="mt-1 text-xs text-gray-500">
           Every spreadsheet import lives here — entity pages no longer carry upload buttons.
@@ -344,6 +309,41 @@ export function ImportExportPage() {
           />
         </div>
       </div>
+      {/* ── Exports ─────────────────────────────────────── */}
+      <div className="mt-10">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Exports</h2>
+        <div className="mt-3 space-y-3">
+          <ExportCard
+            title="Securities"
+            desc={`All ${securities.length} securities — symbol, name, type, asset class, expense ratio.`}
+            disabled={isLoading}
+            onExport={exportSecurities}
+          />
+          <ExportCard
+            title="Portfolios"
+            desc={`All ${portfolios.length} portfolios — name, strategy, risk profile, benchmark.`}
+            disabled={isLoading}
+            onExport={exportPortfolios}
+          />
+          <ExportCard
+            title="All Positions"
+            desc="Every position across all portfolios — ticker, weight, last updated."
+            disabled={isLoading}
+            onExport={exportAllPositions}
+          />
+          <ExportCard
+            title="At-Risk"
+            desc={`${atRisk.length} active at-risk entries — symbol, date added, flagged metrics.`}
+            onExport={exportAtRisk}
+          />
+          <ExportCard
+            title="Action Items"
+            desc={`All ${actionItems.length} action items — title, linked security/portfolio, priority, status.`}
+            onExport={exportActionItems}
+          />
+        </div>
+      </div>
+
     </div>
   )
 }
