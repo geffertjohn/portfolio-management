@@ -211,7 +211,9 @@ export function ImportExportPage() {
                 parts.push(`${r.inserted} benchmark rows`)
                 if (r.errors.length > 0) parts.push(`${r.errors.length} benchmark error(s): ${r.errors[0]}`)
               } catch (e) {
-                parts.push(`benchmarks failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+                const msg = e instanceof Error ? e.message : 'unknown error'
+                runs.push({ source: 'ycharts_benchmarks', rows: 0, errors: [msg], status: 'failed' })
+                parts.push(`benchmarks failed: ${msg}`)
               }
 
               try {
@@ -220,7 +222,9 @@ export function ImportExportPage() {
                 parts.push(`${r.succeeded} fund${r.succeeded !== 1 ? 's' : ''}`)
                 if (r.failed > 0) parts.push(`${r.failed} fund(s) failed: ${r.errors[0] ?? ''}`)
               } catch (e) {
-                parts.push(`funds failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+                const msg = e instanceof Error ? e.message : 'unknown error'
+                runs.push({ source: 'ycharts_funds', rows: 0, errors: [msg], status: 'failed' })
+                parts.push(`funds failed: ${msg}`)
               }
 
               try {
@@ -229,7 +233,9 @@ export function ImportExportPage() {
                 parts.push(`${r.succeeded} portfolio${r.succeeded !== 1 ? 's' : ''}`)
                 if (r.failed > 0) parts.push(`${r.failed} portfolio(s) failed: ${r.errors[0] ?? ''}`)
               } catch (e) {
-                parts.push(`portfolios failed: ${e instanceof Error ? e.message : 'unknown error'}`)
+                const msg = e instanceof Error ? e.message : 'unknown error'
+                runs.push({ source: 'ycharts_portfolios', rows: 0, errors: [msg], status: 'failed' })
+                parts.push(`portfolios failed: ${msg}`)
               }
 
               for (const k of [QUERY_KEYS.categoryBenchmarksTable, QUERY_KEYS.peerGroupBenchmarksTable,
@@ -239,7 +245,12 @@ export function ImportExportPage() {
                 await queryClient.invalidateQueries({ queryKey: k })
               }
 
-              if (runs.length === 0) throw new Error(parts.join(' · '))
+              // Every branch records a run now, so a total failure is logged (and
+              // surfaces in the Actions hub) rather than vanishing into a thrown error.
+              if (runs.every((r) => r.status === 'failed')) {
+                await recordImportRuns(runs, file)
+                throw new Error(parts.join(' · '))
+              }
               return { runs, message: `Imported ${parts.join(' · ')}.` }
             }}
           />

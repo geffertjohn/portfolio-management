@@ -663,7 +663,9 @@ CREATE TABLE IF NOT EXISTS "public"."import_runs" (
     "imported_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "rows_written" integer DEFAULT 0 NOT NULL,
     "errors" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
-    CONSTRAINT "import_runs_source_check" CHECK (("source" = ANY (ARRAY['ycharts_benchmarks'::"text", 'ycharts_funds'::"text", 'ycharts_portfolios'::"text", 'ycharts_allocations'::"text"])))
+    "status" "text" DEFAULT 'success'::"text" NOT NULL,
+    CONSTRAINT "import_runs_source_check" CHECK (("source" = ANY (ARRAY['ycharts_benchmarks'::"text", 'ycharts_funds'::"text", 'ycharts_portfolios'::"text", 'ycharts_allocations'::"text"]))),
+    CONSTRAINT "import_runs_status_check" CHECK (("status" = ANY (ARRAY['success'::"text", 'partial'::"text", 'failed'::"text"])))
 );
 
 
@@ -671,6 +673,10 @@ ALTER TABLE "public"."import_runs" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."import_runs" IS 'Audit/provenance log of spreadsheet imports. Newest row per source = that dataset''s as-of stamp.';
+
+
+
+COMMENT ON COLUMN "public"."import_runs"."status" IS 'success = clean; partial = wrote rows but reported errors; failed = wrote nothing.';
 
 
 

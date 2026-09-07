@@ -8,7 +8,7 @@
  * here, and the newest run per source is the freshness stamp the UI shows.
  *
  * Writes are best-effort: a failed log must never fail the import that produced
- * the data (see `recordImportRun`).
+ * the data (see `recordImportRuns`).
  */
 import { supabase } from './supabase'
 
@@ -18,6 +18,13 @@ export type ImportSource =
   | 'ycharts_portfolios'
   | 'ycharts_allocations'
 
+/**
+ * `partial` = wrote rows but reported errors; `failed` = wrote nothing. Recorded
+ * rather than inferred from `rows_written`, because the workbook runs its three
+ * importers independently and can genuinely half-succeed.
+ */
+export type ImportStatus = 'success' | 'partial' | 'failed'
+
 export interface ImportRun {
   id: number
   source: ImportSource
@@ -25,6 +32,7 @@ export interface ImportRun {
   imported_at: string
   rows_written: number
   errors: string[]
+  status: ImportStatus
 }
 
 /** One dataset's result within a single upload. */
@@ -32,6 +40,8 @@ export interface ImportRunInput {
   source: ImportSource
   rows: number
   errors?: string[]
+  /** Defaults to `partial` when errors are present, otherwise `success`. */
+  status?: ImportStatus
 }
 
 /**
@@ -53,6 +63,7 @@ export async function recordImportRuns(
       file_name: file.name,
       rows_written: r.rows,
       errors: r.errors ?? [],
+      status: r.status ?? ((r.errors?.length ?? 0) > 0 ? 'partial' : 'success'),
     })),
   )
   if (error) console.warn('import_runs: could not log this upload —', error.message)
@@ -62,7 +73,7 @@ export async function recordImportRuns(
 export async function fetchLatestImportRuns(): Promise<Map<ImportSource, ImportRun>> {
   const { data, error } = await supabase
     .from('import_runs')
-    .select('id, source, file_name, imported_at, rows_written, errors')
+    .select('id, source, file_name, imported_at, rows_written, errors, status')
     .order('imported_at', { ascending: false })
   if (error) throw error
 
@@ -92,7 +103,9 @@ export function ychartsAsOf(
   runs: Map<ImportSource, ImportRun>,
   sources: ImportSource[] = YCHARTS_DATA_SOURCES,
 ): ImportRun | null {
-  const present = sources.map((s) => runs.get(s)).filter((r): r is ImportRun => r != null)
+  const present = sources
+    .map((s) => runs.get(s))
+    .filter((r): r is ImportRun => r != null && r.status !== 'failed')
   if (present.length === 0) return null
   return present.reduce((oldest, r) => (r.imported_at < oldest.imported_at ? r : oldest))
 }

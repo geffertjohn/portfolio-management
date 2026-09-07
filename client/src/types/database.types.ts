@@ -920,6 +920,7 @@ export type Database = {
           imported_at: string
           rows_written: number
           source: string
+          status: string
         }
         Insert: {
           errors?: string[]
@@ -928,6 +929,7 @@ export type Database = {
           imported_at?: string
           rows_written?: number
           source: string
+          status?: string
         }
         Update: {
           errors?: string[]
@@ -936,6 +938,7 @@ export type Database = {
           imported_at?: string
           rows_written?: number
           source?: string
+          status?: string
         }
         Relationships: []
       }

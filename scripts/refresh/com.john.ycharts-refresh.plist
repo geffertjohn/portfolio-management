@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the scheduled YCharts refresh.
+
+  An AGENT, not a Daemon: Parallels needs the logged-in GUI session to run a VM,
+  and a daemon has none. Install to ~/Library/LaunchAgents/ on the mini.
+
+  Weekdays only (Monday=1 … Friday=5) at 05:30 — before the day starts, after
+  YCharts has posted the previous close. RunAtLoad is false so installing it
+  does not immediately fire a run.
+
+  If the mini is asleep at 05:30 the job is skipped, not deferred — but the box
+  is configured never to sleep, and `pmset autorestart` brings it back after a
+  power cut, so a missed run means something is actually wrong. That is exactly
+  what the stale-data action in the app is there to surface.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.john.ycharts-refresh</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/johnauxcomp/portfolio-management/scripts/refresh/refresh.sh</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- launchd's own capture, for failures that happen before refresh.sh can log. -->
+  <key>StandardOutPath</key>
+  <string>/Users/johnauxcomp/portfolio-refresh/logs/launchd.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/johnauxcomp/portfolio-refresh/logs/launchd.err</string>
+
+  <!-- prlctl lives in /usr/local/bin; launchd's default PATH does not include it. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>

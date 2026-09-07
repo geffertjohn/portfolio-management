@@ -37,3 +37,6 @@ supabase/.temp/
 
 # Claude local settings
 .claude/settings.local.json
+
+# Built by scripts/refresh/build.sh — rebuild rather than commit a stale bundle
+scripts/refresh/import-workbook.cjs

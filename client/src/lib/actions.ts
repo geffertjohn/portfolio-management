@@ -19,6 +19,9 @@ import { fetchReviewSchedules, isOverdue, isDueSoon } from './reviewSchedules'
 import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReviews'
 import { fetchUnacknowledgedAlerts } from './alertRules'
 import { fetchActiveAtRisk } from './atRisk'
+import {
+  daysSince, fetchLatestImportRuns, YCHARTS_DATA_SOURCES, ychartsAsOf,
+} from './importRuns'
 
 export type ActionSource =
   | 'manual'
@@ -29,6 +32,7 @@ export type ActionSource =
   | 'alert'
   | 'at_risk'
   | 'drift'
+  | 'data_refresh'
 
 export const SOURCE_LABELS: Record<ActionSource, string> = {
   manual: 'Manual',
@@ -39,6 +43,7 @@ export const SOURCE_LABELS: Record<ActionSource, string> = {
   alert: 'Alert',
   at_risk: 'At-Risk',
   drift: 'Drift',
+  data_refresh: 'Data',
 }
 
 export interface UnifiedAction {
@@ -168,9 +173,63 @@ async function fetchDriftActions(): Promise<UnifiedAction[]> {
   }))
 }
 
+/**
+ * The scheduled YCharts refresh, surfaced as an action.
+ *
+ * The refresh runs unattended on the mini before anyone is looking, so a failure
+ * is otherwise invisible: stale numbers render exactly like fresh ones. Reports
+ * whichever is true — a run that failed, or data that has simply gone stale —
+ * as ONE action, never both, so a broken job doesn't spam the hub.
+ */
+const REFRESH_STALE_AFTER_DAYS = 3
+
+async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
+  const runs = await fetchLatestImportRuns()
+
+  const broken = YCHARTS_DATA_SOURCES
+    .map((src) => runs.get(src))
+    .filter((r) => r != null && r.status !== 'success')
+  if (broken.length > 0) {
+    const failed = broken.filter((r) => r!.status === 'failed').length
+    return [{
+      key: 'refresh:failed',
+      category: 'operational',
+      source: 'data_refresh',
+      title: 'YCharts refresh needs attention',
+      subtitle: failed > 0
+        ? `${failed} dataset${failed > 1 ? 's' : ''} wrote nothing on the last run — ${broken[0]!.errors[0] ?? 'no error recorded'}`
+        : `Last run reported errors — ${broken[0]!.errors[0] ?? 'see the import log'}`,
+      linkedLabel: null,
+      route: '/settings/import-export',
+      dueDate: null,
+      priority: 'high',
+      isManual: false,
+    }]
+  }
+
+  // Nothing broke — has the schedule simply stopped delivering?
+  const oldest = ychartsAsOf(runs)
+  if (oldest == null) return []
+  const age = daysSince(oldest)
+  if (age < REFRESH_STALE_AFTER_DAYS) return []
+
+  return [{
+    key: 'refresh:stale',
+    category: 'operational',
+    source: 'data_refresh',
+    title: `YCharts data is ${age} days old`,
+    subtitle: 'The scheduled refresh has not landed — import the workbook or check the job',
+    linkedLabel: null,
+    route: '/settings/import-export',
+    dueDate: null,
+    priority: 'medium',
+    isManual: false,
+  }]
+}
+
 // ── Assemble everything ─────────────────────────────────────────────────────
 export async function fetchAllActions(): Promise<UnifiedAction[]> {
-  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift] = await Promise.all([
+  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh] = await Promise.all([
     fetchActionItems(),
     fetchReviewSchedules(),
     fetchPortfolioReviewSchedules(),
@@ -179,6 +238,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     fetchIcActions(),
     fetchCandidateActions(),
     fetchDriftActions(),
+    fetchDataRefreshActions(),
   ])
 
   // Include closed manual items too; the Actions page decides what to show.
@@ -248,6 +308,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     ...alertActions,
     ...atRiskActions,
     ...drift,
+    ...dataRefresh,
   ]
 }
 
