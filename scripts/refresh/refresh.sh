@@ -6,13 +6,14 @@
 # The VM is a short-lived worker: started, used, suspended. It is never left
 # running, because Windows wants ~4GB of an 8GB machine.
 #
-# Deliberately NOT using Windows Task Scheduler. Driving Excel through
-# `prlctl exec` keeps scheduling in one place (launchd) instead of two that can
-# disagree, and removes a component that needs its own logged-in-user setting.
+# Excel is launched by dropping a TRIGGER FILE the guest is watching for, not by
+# `prlctl exec` — that command is Parallels Pro/Business only. See
+# watch-trigger.cmd. The Mac still owns the schedule; it just asks rather than
+# tells.
 #
-# Completion is detected by the OUTPUT FILE APPEARING, not by the Excel process
-# exiting — `prlctl exec` does not reliably block, and a hung Excel would
-# otherwise wedge the run until the timeout.
+# Completion is detected by the OUTPUT FILE APPEARING. Nothing on this side can
+# see the Excel process at all, so the file is the only completion signal — and
+# it is the right one, since a hung Excel would otherwise wedge the run.
 set -uo pipefail
 
 REPO="${REPO:-$HOME/portfolio-management}"
@@ -27,9 +28,14 @@ LOCK="$BASE/.lock"
 
 OUTPUT="$INBOX/Ycharts-refreshed.xlsx"
 VM_ERROR="$INBOX/refresh-error.txt"          # written by the macro's abort path
-WORKBOOK='C:\portfolio\Ycharts.xlsm'
+TRIGGER="$INBOX/REFRESH-NOW"                 # watch-trigger.cmd polls for this
 
-WAIT_SECS="${WAIT_SECS:-1200}"               # 20 min: recalc + fetch, generously
+# The guest sees the Mac home as Z:, so $INBOX is Z:\portfolio-refresh\inbox.
+# Parallels' "Shared Profile" already provides that — no extra shared folder.
+
+# The guest polls every 2 min, and a first open takes a few minutes while the
+# add-in fetches every data point, so allow generously.
+WAIT_SECS="${WAIT_SECS:-1500}"               # 25 min
 POLL_SECS=10
 KEEP_DAYS=30
 
@@ -73,12 +79,11 @@ if [ "$STATE" != "running" ]; then
 fi
 
 # ── Clear last run's artefacts so a stale file can never be mistaken for new ──
-rm -f "$OUTPUT" "$VM_ERROR"
+rm -f "$OUTPUT" "$VM_ERROR" "$TRIGGER"
 
-# ── Drive Excel; the Workbook_Open macro does the rest ──────────────────────
-log "launching Excel on $WORKBOOK"
-prlctl exec "$VM" cmd.exe /c start "" "$WORKBOOK" >>"$LOG" 2>&1 \
-  || log "WARN: prlctl exec returned non-zero (Excel may still have launched)"
+# ── Ask the guest to open the workbook ──────────────────────────────────────
+log "dropping trigger for the guest watcher"
+date '+%Y-%m-%d %H:%M:%S' > "$TRIGGER"
 
 # ── Wait for the macro to produce the file ──────────────────────────────────
 waited=0

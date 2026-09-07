@@ -7,7 +7,8 @@ same importers the app's Import page uses.
 launchd (weekdays 05:30)
   └─ refresh.sh
        prlctl start "Windows 11"          resume the suspended VM
-       prlctl exec  → Excel opens C:\portfolio\Ycharts.xlsm
+       drop Z:\portfolio-refresh\inbox\REFRESH-NOW
+       └─ watch-trigger.cmd (guest, every 2 min) opens C:\portfolio\Ycharts.xlsm
             Workbook_Open (Ycharts.bas):
               AutoUpdate streams values in — no Refresh click needed
               wait until nothing says "Loading" AND values stop changing
@@ -39,8 +40,25 @@ it is resumed, used, and suspended. Suspending (not shutting down) preserves the
 logged-in Windows session, so auto-login inside Windows is only the recovery path
 for a cold start — a host power cut or a Parallels update.
 
-**No Windows Task Scheduler.** Driving Excel through `prlctl exec` keeps
-scheduling in one place instead of two that can drift apart.
+**The Mac asks; it cannot tell.** `prlctl exec` — the obvious way to launch Excel
+in the guest — is **Parallels Pro/Business only**, and this is a standard licence:
+
+```
+$ prlctl exec "Windows 11" cmd.exe /c ...
+The command is available only in Parallels Desktop for Mac Pro or Business Edition.
+```
+
+So the Mac drops a trigger file in the shared folder and `watch-trigger.cmd`, run
+by Task Scheduler every 2 minutes, picks it up. This beats scheduling the refresh
+on Windows' own clock, because the Mac controls when the VM is actually awake —
+and unlike a logon-triggered task, a polled one still fires after a resume.
+
+**A minimum wait before "settled".** `Workbook_Open` can fire *before* the add-in
+starts fetching, and in that lull the cells hold the previous run's values, which
+are perfectly stable. Without a floor the macro would see three quiet polls,
+declare victory after 30 seconds, and save yesterday's numbers stamped with
+today's time — passing every downstream freshness check. A first open takes a few
+minutes in practice, so stability is not even considered for four.
 
 **Completion is the file appearing, not Excel exiting.** `prlctl exec` does not
 reliably block, and a hung Excel would otherwise wedge the run.
@@ -79,28 +97,47 @@ the structure changes, never from the job.
 
 ## Install on the mini
 
-1. `git clone` the repo to `~/portfolio-management`, then `npm install`.
-2. Copy `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` into `~/portfolio-management/.env`.
-   The anon key is enough — RLS is open on these tables, so this is no more
-   privileged than the browser bundle. No service-role key.
-3. `sh scripts/refresh/build.sh` to produce `import-workbook.cjs`.
-4. `mkdir -p ~/portfolio-refresh/{inbox,processed,failed,logs}`
-5. In Parallels: share `~/portfolio-refresh` into Windows so the inbox is
-   reachable as `Z:\portfolio-refresh\inbox\`.
-6. In Windows: put the workbook at `C:\portfolio\Ycharts.xlsm`, add
-   `C:\portfolio` as a Trusted Location, and paste `Ycharts.bas` into
-   **ThisWorkbook** (not a Module — `Workbook_Open` only fires from there).
-7. Windows power + recovery: never sleep, `powercfg /h off`, auto-login via
-   `netplwiz`, and set Windows Update active hours outside 05:00–07:00.
-8. **Set the Windows VM to the same timezone as the mini.** The macro stamps
-   local time and the importer parses local time; a mismatch shifts every
-   freshness check by the offset. The importer refuses a stamp more than 2h in
-   the future to make that mistake loud rather than silent.
-9. Install the agent:
+### On the mini (macOS)
+
+1. **Install Node** — the mini has git but no node or npm.
+   `brew install node`, or the installer from nodejs.org.
+2. `git clone` the repo to `~/portfolio-management`, then `npm install`.
+3. Copy `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` into
+   `~/portfolio-management/.env`. The anon key is enough — RLS is open on these
+   tables, so this is no more privileged than the browser bundle. **No
+   service-role key.**
+4. `sh scripts/refresh/build.sh` to produce `import-workbook.cjs`.
+5. `mkdir -p ~/portfolio-refresh/{inbox,processed,failed,logs}`
+   No Parallels config needed: "Shared Profile" already maps the Mac home to
+   `Z:`, so this becomes `Z:\portfolio-refresh\inbox\` automatically.
+6. Install the agent:
    ```
    cp scripts/refresh/com.john.ycharts-refresh.plist ~/Library/LaunchAgents/
    launchctl load ~/Library/LaunchAgents/com.john.ycharts-refresh.plist
    ```
+
+### In the Windows VM
+
+7. **Move the workbook to `C:\portfolio\Ycharts.xlsm`.** It currently lives at
+   `~/Desktop/Ycharts.xlsm` on the Mac, reached over `Z:` — so every recalc
+   crosses SMB, Trusted Locations needs the extra *"Allow Trusted Locations on my
+   network"* box, and the file sits in a folder that gets tidied. Add
+   `C:\portfolio` as a Trusted Location once moved.
+8. Paste `Ycharts.bas` into **ThisWorkbook** — not a Module. `Workbook_Open`
+   only fires from there.
+9. Copy `watch-trigger.cmd` to `C:\portfolio\` and create a Task Scheduler task:
+   trigger *at logon*, **repeat every 2 minutes indefinitely**, action
+   `C:\portfolio\watch-trigger.cmd`, and **"Run only when user is logged on"**
+   so Excel gets a desktop to open into.
+10. Power and recovery: never sleep, `powercfg /h off`, auto-login via
+    `netplwiz`, and Windows Update active hours outside 05:00–07:00.
+11. **Same timezone as the mini.** The macro stamps local time and the importer
+    parses local time; a mismatch shifts every freshness check by the offset.
+    The importer refuses a stamp more than 2h in the future so the mistake is
+    loud rather than silent. (They already match.)
+
+Windows activation is **not** required — the watermark is cosmetic and nothing
+here depends on personalization or on an activated licence.
 
 ## Running it by hand
 

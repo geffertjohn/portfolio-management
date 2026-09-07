@@ -17,8 +17,11 @@
 ' HOW WE KNOW IT FINISHED
 ' Two signals, because AutoUpdate streams in rather than announcing completion:
 '   1. no cell still shows a "Loading" placeholder, and
-'   2. the values have stopped changing for STABLE_POLLS consecutive polls.
-' Waiting on (1) alone would save mid-stream on a sheet that had not started.
+'   2. the values have stopped changing for STABLE_POLLS consecutive polls,
+' neither accepted before MIN_WAIT_SECS have passed. Waiting on (1) alone would
+' save mid-stream on a sheet that had not started; accepting (2) immediately
+' would save the previous run's cached values in the lull before the fetch
+' begins, which is the same failure wearing a disguise.
 
 Option Explicit
 
@@ -37,6 +40,16 @@ Private Const STAMP_CELL   As String = "A1"
 Private Const POLL_SECS    As Long = 10      ' between checks
 Private Const STABLE_POLLS As Long = 3       ' unchanged this many times = settled
 Private Const LOAD_TIMEOUT As Long = 900     ' give up after 15 minutes
+
+' Do not even consider the values settled before this long.
+'
+' THIS IS NOT A COURTESY DELAY — it prevents a silent corruption. Workbook_Open
+' can fire BEFORE the add-in starts fetching, and in that window the cells still
+' hold last run's cached values, which are perfectly stable. Without a floor the
+' macro would see three quiet polls, conclude "settled" after 30 seconds, and
+' save yesterday's numbers stamped with today's time — passing every downstream
+' freshness check. A first open takes a few minutes in practice, so wait.
+Private Const MIN_WAIT_SECS As Long = 240
 
 ' Refuse to save if more than this share of populated cells are errors. A healthy
 ' file sits near 12% (bond and maturity columns are legitimately absent for
@@ -73,7 +86,7 @@ Private Sub Workbook_Open()
             lastPrint = thisPrint
         End If
 
-        If stableCount >= STABLE_POLLS Then Exit Do
+        If stableCount >= STABLE_POLLS And (Timer - startTime) >= MIN_WAIT_SECS Then Exit Do
     Loop While (Timer - startTime) < LOAD_TIMEOUT
 
     If stableCount < STABLE_POLLS Then
