@@ -1,5 +1,35 @@
 # Scheduled YCharts refresh
 
+> **STATUS: PAUSED — Sep 2026. Not wired up; nothing runs on a schedule yet.**
+>
+> Paused while YCharts/Excel issues are sorted out. Two things below are already
+> out of date and must be fixed before following them:
+>
+> - **The host is the Mac Studio, not the mini.** The mini was evaluated and
+>   dropped: 8GB with a Windows VM was tight, but the deciding factor was that
+>   the Studio already has Parallels, the repo, Node, the `.env` and the
+>   scheduled-task setup, so a second machine meant duplicating and then
+>   syncing all of it. The Studio sleeps, which `sudo pmset repeat
+>   wakeorpoweron MTWRF 05:25:00` solves. The install steps below still say
+>   "mini" and reference `johnauxcomp` paths.
+> - **`watch-trigger.cmd` and the trigger-file handshake are no longer needed.**
+>   They exist because the mini's Parallels licence refuses `prlctl exec`. The
+>   **Studio's licence allows it** (verified against a running VM), so the Mac
+>   can launch Excel directly and both can be deleted.
+>
+> **Already done on the Studio and its VM:** `C:\portfolio\Ycharts.xlsm` in
+> place, `C:\portfolio\` added as an Excel Trusted Location, guest timezone
+> corrected from SA Western (no DST) to Eastern, `~/portfolio-refresh/{inbox,
+> processed,failed,logs}` created, and the guest→Mac UNC write path verified.
+>
+> **Next step when resuming:** paste `Ycharts.bas` into ThisWorkbook (manual —
+> programmatic VBA import needs "Trust access to the VBA project object model"),
+> then do one timed run to replace the guessed `MIN_WAIT_SECS` (240s) and the
+> 25-minute outer timeout with real numbers.
+>
+> The app-side half — `import_runs`, the `data_refresh` action, the headless
+> importer — **is finished, tested and live.** Only the VM half is unbuilt.
+
 Unattended daily refresh of the YCharts workbook on the Mac mini, feeding the
 same importers the app's Import page uses.
 

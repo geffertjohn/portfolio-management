@@ -25,8 +25,13 @@
 
 Option Explicit
 
-' Where the Mac-side inbox is mounted in Windows. Z: is the Parallels share.
-Private Const OUTPUT_DIR   As String = "Z:\portfolio-refresh\inbox\"
+' Where the Mac-side inbox is reached from Windows.
+'
+' A UNC path, not a drive letter: Parallels' letters are not stable between
+' machines (the mini mapped Z: to the Mac home; the Studio maps Y: to Home and
+' Z: to AllFiles), and mapped drives are per-session, so they are invisible to
+' anything not running in the interactive logon.
+Private Const OUTPUT_DIR   As String = "\\Mac\Home\portfolio-refresh\inbox\"
 Private Const OUTPUT_NAME  As String = "Ycharts-refreshed.xlsx"
 
 ' Cell that carries the refresh timestamp, read back by the importer.
