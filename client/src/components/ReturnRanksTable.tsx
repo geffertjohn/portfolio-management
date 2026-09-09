@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { fmtInt, fmtDecimalPct } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import {
-  fetchCategoryBenchmarkById, fetchCategoryBenchmarkRow, type BenchmarkOption,
+  fetchCategoryBenchmarkById, fetchCategoryBenchmarkRow, fetchPeerGroupBenchmarkRow,
+  type BenchmarkOption,
 } from '@/lib/benchmarks'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
@@ -11,7 +12,6 @@ const PERIODS = [
     label:      '1 M',
     fundReturn: 'one_month_total_return_nav',
     benchReturn:'one_month_total_return',
-    pgReturn:   'peer_group_one_month_total_return',
     catRank:    'one_month_total_return_rank_nav',
     catSize:    'one_month_total_return_rank_category_size_nav',
     pgRank:     'one_month_total_return_peer_group_rank_nav',
@@ -21,7 +21,6 @@ const PERIODS = [
     label:      '3 M',
     fundReturn: 'three_month_total_return_nav',
     benchReturn:'three_month_total_return',
-    pgReturn:   'peer_group_three_month_total_return',
     catRank:    'three_month_total_return_rank_nav',
     catSize:    'three_month_total_return_rank_category_size_nav',
     pgRank:     'three_month_total_return_peer_group_rank_nav',
@@ -31,7 +30,6 @@ const PERIODS = [
     label:      'YTD',
     fundReturn: 'ytd_total_return_nav',
     benchReturn:'ytd_total_return',
-    pgReturn:   'peer_group_ytd_total_return',
     catRank:    'ytd_total_return_rank_nav',
     catSize:    'ytd_total_return_rank_category_size_nav',
     pgRank:     'ytd_total_return_peer_group_rank_nav',
@@ -41,7 +39,6 @@ const PERIODS = [
     label:      '1 Y',
     fundReturn: 'one_year_total_return_nav',
     benchReturn:'annualized_daily_one_year_total_return',
-    pgReturn:   'peer_group_one_year_total_return',
     catRank:    'one_year_total_return_rank_nav',
     catSize:    'one_year_total_return_rank_category_size_nav',
     pgRank:     'one_year_total_return_peer_group_rank_nav',
@@ -51,7 +48,6 @@ const PERIODS = [
     label:      '3 Y',
     fundReturn: 'annualized_three_year_total_return_nav',
     benchReturn:'annualized_daily_three_year_return',
-    pgReturn:   'peer_group_three_year_total_return',
     catRank:    'three_year_total_return_rank_nav',
     catSize:    'three_year_total_return_rank_category_size_nav',
     pgRank:     'three_year_total_return_peer_group_rank_nav',
@@ -61,7 +57,6 @@ const PERIODS = [
     label:      '5 Y',
     fundReturn: 'annualized_five_year_total_return_nav',
     benchReturn:'annualized_daily_five_year_total_return',
-    pgReturn:   'peer_group_five_year_total_return',
     catRank:    'five_year_total_return_rank_nav',
     catSize:    'five_year_total_return_rank_category_size_nav',
     pgRank:     'five_year_total_return_peer_group_rank_nav',
@@ -82,7 +77,6 @@ function benchNum(b: BenchmarkOption, key: typeof PERIODS[number]['benchReturn']
 function RankTable({
   title,
   security,
-  returnKey = undefined,
   rankKey,
   sizeKey,
   returnLabel,
@@ -92,26 +86,19 @@ function RankTable({
 }: {
   title: string
   security: SecurityDetail
-  /**
-   * Stored per-security column supplying the cohort row. The PEER table uses it
-   * (peer_group_*_total_return). The CATEGORY table does not: its cohort is the
-   * benchmark, so it passes `benchmarkOverride` instead and shows a dash when
-   * none resolves, rather than quietly substituting a peer average under the
-   * same label.
-   */
-  returnKey?: keyof typeof PERIODS[number]
   rankKey: keyof typeof PERIODS[number]
   sizeKey: keyof typeof PERIODS[number]
   returnLabel: string
   rankLabel: string
   sizeLabel: string
   /**
-   * When set, the cohort-return row shows THIS benchmark's returns instead of
-   * the stored category average. The LABEL is unchanged — the row still reads
-   * "Category return" either way, so which source is in play is not visible on
-   * screen; it is determined by whether the fund has preferred_benchmark1_id set.
+   * The cohort's benchmark row, supplying the cohort-return figures. Both tables
+   * derive it (category from `ycharts_benchmark_category`, peer group from
+   * `peer_group_name`) rather than reading the stored per-security averages, so
+   * a fund whose cohort resolves to no benchmark row shows a dash instead of
+   * quietly substituting a different number under the same label.
    */
-  benchmarkOverride?: BenchmarkOption | null
+  benchmarkOverride: BenchmarkOption | null
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 flex-1 min-w-0">
@@ -151,11 +138,7 @@ function RankTable({
                 {returnLabel}
               </th>
               {PERIODS.map((p) => {
-                const v = benchmarkOverride
-                  ? benchNum(benchmarkOverride, p.benchReturn)
-                  : returnKey
-                    ? num(security, p[returnKey] as keyof SecurityDetail)
-                    : null
+                const v = benchmarkOverride ? benchNum(benchmarkOverride, p.benchReturn) : null
                 return (
                   <td key={p.label} className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs text-gray-900">
                     {fmtDecimalPct(v)}
@@ -213,6 +196,17 @@ export function ReturnRanksTable({ security, mode }: { security: SecurityDetail;
 
   const preferred = preferredBench ?? categoryBench
 
+  // Same derivation on the peer-group side: peer_group_name ("Multi-Cap Growth
+  // Funds") matches peer_group_benchmarks.peer_group_category, and that row's
+  // benchmark supplies the cohort return. No per-fund override exists here —
+  // preferred_benchmark1_id points at category_benchmarks.
+  const peerGroupName = security.peer_group_name
+  const { data: peerBench = null } = useQuery({
+    queryKey: QUERY_KEYS.peerGroupBenchmarkRow(peerGroupName ?? ''),
+    queryFn: () => fetchPeerGroupBenchmarkRow(peerGroupName!),
+    enabled: !!peerGroupName,
+  })
+
   if (mode === 'cat') {
     return (
       <RankTable
@@ -231,7 +225,7 @@ export function ReturnRanksTable({ security, mode }: { security: SecurityDetail;
     <RankTable
       title="Rank in Peer Group"
       security={security}
-      returnKey="pgReturn"
+      benchmarkOverride={peerBench}
       rankKey="pgRank"
       sizeKey="pgSize"
       returnLabel="Peer group return"

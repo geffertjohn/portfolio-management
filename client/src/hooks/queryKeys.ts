@@ -46,6 +46,7 @@ export const QUERY_KEYS = {
   sectorBenchmarks: ['sector_benchmarks', 'v3'] as const,
   categoryBenchmarkById: (id: number) => ['category_benchmark_by_id', id] as const,
   categoryBenchmarkRow: (category: string) => ['category_benchmark_row', category] as const,
+  peerGroupBenchmarkRow: (name: string) => ['peer_group_benchmark_row', name] as const,
   relatedSecurities: (securityId: string) => ['related_securities', securityId] as const,
   ips: (clientId: number) => ['ips', clientId] as const,
   ipsModelCompatibility: (clientId: number) => ['ips_model_compatibility', clientId] as const,

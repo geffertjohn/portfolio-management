@@ -119,6 +119,44 @@ export async function fetchCategoryBenchmarkRow(category: string): Promise<Bench
 }
 
 /**
+ * The whole peer_group_benchmarks ROW for a security's `peer_group_name` — the
+ * peer-group twin of `fetchCategoryBenchmarkRow`, returning the metrics rather
+ * than just the name.
+ *
+ * The six trailing-return columns are named identically in both benchmark
+ * tables, so a `BenchmarkOption` built from either one is readable through the
+ * same keys. The columns peer groups DON'T have (etf_proxy, the 3-yr growth
+ * pair) are null-filled; `peer_group_benchmark`/`peer_group_category` fill the
+ * `category_benchmark`/`category` slots, which is what the shared shape calls
+ * the benchmark's name and cohort.
+ */
+export async function fetchPeerGroupBenchmarkRow(
+  peerGroupName: string,
+): Promise<BenchmarkOption | null> {
+  const { data, error } = await supabase
+    .from('peer_group_benchmarks')
+    .select(`id, peer_group_ticker, peer_group_benchmark, peer_group_category, ${PEER_GROUP_RETURN_COLS}`)
+    .in('peer_group_category', hyphenVariants(peerGroupName))
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const { peer_group_ticker, peer_group_benchmark, peer_group_category, ...rest } =
+    data as Record<string, unknown>
+  return {
+    sector_benchmarks: null,
+    sector: null,
+    etf_proxy: null,
+    sales_growth_3_yr_generic: null,
+    eps_growth_3_yr_generic: null,
+    ticker: (peer_group_ticker as string) ?? '',
+    category_benchmark: (peer_group_benchmark as string) ?? null,
+    category: (peer_group_category as string) ?? null,
+    ...rest,
+  } as BenchmarkOption
+}
+
+/**
  * Looks up the peer_group_benchmark from peer_group_benchmarks where peer_group_category
  * matches the security's peer_group_name value. Matches with or without hyphens.
  */
@@ -203,6 +241,10 @@ export async function fetchBenchmarkAll(name: string): Promise<AnyRow | null> {
 
 // category_benchmarks carries full monthly + annual returns and risk ratios
 const CATEGORY_RETURN_COLS = 'one_month_total_return, three_month_total_return, ytd_total_return, annualized_daily_one_year_total_return, annualized_daily_three_year_return, annualized_daily_five_year_total_return, historical_sharpe_1y, historical_sortino_1y, historical_sharpe_3y, historical_sortino_3y, eps_growth_1_yr_generic, sales_growth_1_yr_generic, eps_growth_3_yr_generic, sales_growth_3_yr_generic'
+
+// peer_group_benchmarks shares the six return column names with category_benchmarks,
+// but has no 3-yr growth pair — those are null-filled into BenchmarkOption.
+const PEER_GROUP_RETURN_COLS = 'one_month_total_return, three_month_total_return, ytd_total_return, annualized_daily_one_year_total_return, annualized_daily_three_year_return, annualized_daily_five_year_total_return, historical_sharpe_1y, historical_sortino_1y, historical_sharpe_3y, historical_sortino_3y, eps_growth_1_yr_generic, sales_growth_1_yr_generic'
 
 // Sector benchmarks are ETFs — full monthly/annual set + equity growth metrics
 const SECTOR_RETURN_COLS = 'one_month_total_return, three_month_total_return, ytd_total_return, annualized_daily_one_year_total_return, annualized_daily_three_year_return, annualized_daily_five_year_total_return, sales_growth_1_yr_generic, eps_growth_1_yr_generic, sales_growth_3_yr_generic, eps_growth_3_yr_generic, historical_sharpe_1y, historical_sortino_1y'
