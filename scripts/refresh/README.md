@@ -214,10 +214,23 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
    `C:\portfolio` as a Trusted Location once moved.
 8. Paste `Ycharts.bas` into **ThisWorkbook** — not a Module. `Workbook_Open`
    only fires from there.
-9. Copy `watch-trigger.cmd` to `C:\portfolio\` and create a Task Scheduler task:
-   trigger *at logon*, **repeat every 2 minutes indefinitely**, action
-   `C:\portfolio\watch-trigger.cmd`, and **"Run only when user is logged on"**
-   so Excel gets a desktop to open into.
+9. Copy `watch-trigger.cmd` to `C:\portfolio\` and register the Task Scheduler
+   task **"YCharts Refresh Watcher"** from XML — only XML expresses
+   `StartWhenAvailable`. Weekly Mon–Fri, `StartBoundary` **05:25**, repeating
+   every 2 minutes for a **1-hour duration**; action
+   `C:\portfolio\watch-trigger.cmd`; principal `InteractiveToken` and **"Run
+   only when user is logged on"** so Excel gets a desktop to open into.
+
+   > **The watcher only polls 05:25–06:25.** That bound is deliberate — an
+   > indefinite 2-minute repetition fired 720 times a day — but it means
+   > **`refresh.sh` run by hand at any other time always ends in
+   > `FATAL: no output after 1500s`.** The Mac drops the trigger and nothing is
+   > awake to read it. To run off-schedule, start `refresh.sh`, wait for it to
+   > log "dropping trigger", then kick the watcher yourself:
+   >
+   > ```
+   > prlctl exec "Windows 11" schtasks.exe /run /tn "\YCharts Refresh Watcher"
+   > ```
 10. Power and recovery: never sleep, `powercfg /h off`, auto-login via
     `netplwiz`, and Windows Update active hours outside 05:00–07:00.
 11. **Same timezone as the mini.** The macro stamps local time and the importer
