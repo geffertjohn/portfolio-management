@@ -58,8 +58,10 @@ launchd (weekdays 05:30)
   └─ refresh.sh
        prlctl start "Windows 11"          resume the suspended VM
        drop Z:\portfolio-refresh\inbox\REFRESH-NOW
-       └─ watch-trigger.cmd (guest, every 2 min) opens C:\portfolio\Ycharts.xlsm
+       └─ watch-trigger.cmd (guest, every 2 min)
+            drop inbox\UNATTENDED, then open C:\portfolio\Ycharts.xlsm
             Workbook_Open (Ycharts.bas):
+              claim inbox\UNATTENDED, or exit and stay open for the human
               AutoUpdate streams values in — no Refresh click needed
               wait until nothing says "Loading" AND values stop changing
               abort if >50% of populated cells are errors
@@ -102,6 +104,16 @@ So the Mac drops a trigger file in the shared folder and `watch-trigger.cmd`, ru
 by Task Scheduler every 2 minutes, picks it up. This beats scheduling the refresh
 on Windows' own clock, because the Mac controls when the VM is actually awake —
 and unlike a logon-triggered task, a polled one still fires after a resume.
+
+**The workbook has to stay openable by hand.** `Workbook_Open` fires identically
+whether the scheduler opened the file or a person double-clicked it, and the
+unattended path ends in `Application.Quit` — so before the gate existed, opening
+the workbook by hand meant a four-minute wait and then Excel closing itself,
+with no way in short of holding Shift to suppress the event. `watch-trigger.cmd`
+now drops an `UNATTENDED` flag before launching Excel and `ClaimUnattendedRun`
+consumes it; no flag means a human, and the macro returns immediately. It fails
+closed — a flag that stops being written costs a refresh and gets logged as "no
+output", which is the right way round.
 
 **A minimum wait before "settled".** `Workbook_Open` can fire *before* the add-in
 starts fetching, and in that lull the cells hold the previous run's values, which

@@ -25,12 +25,19 @@ REM VBScript, which Windows 11 has begun retiring.
 REM UNC, not a drive letter: Parallels letters differ per machine and mapped
 REM drives are per-session.
 set TRIGGER=\\Mac\Home\portfolio-refresh\inbox\REFRESH-NOW
+set FLAG=\\Mac\Home\portfolio-refresh\inbox\UNATTENDED
 set WORKBOOK=C:\portfolio\Ycharts.xlsm
 
 if not exist "%TRIGGER%" goto :eof
 
 REM Delete first: if Excel wedges, the next tick must not launch a second copy.
 del /f /q "%TRIGGER%"
+
+REM Tell the macro that THIS open is the scheduled one. Workbook_Open returns
+REM immediately without the flag, which is what lets a person open the workbook
+REM normally — by hand it would otherwise wait four minutes and quit Excel.
+REM Written before the launch; the macro deletes it as its first action.
+echo %DATE% %TIME%> "%FLAG%"
 
 REM File association rather than a hardcoded EXCEL.EXE path, which moves between
 REM Office builds. Workbook_Open in Ycharts.bas does the rest and quits Excel.

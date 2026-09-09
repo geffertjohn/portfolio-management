@@ -29,6 +29,7 @@ LOCK="$BASE/.lock"
 OUTPUT="$INBOX/Ycharts-refreshed.xlsx"
 VM_ERROR="$INBOX/refresh-error.txt"          # written by the macro's abort path
 TRIGGER="$INBOX/REFRESH-NOW"                 # watch-trigger.cmd polls for this
+UNATTENDED="$INBOX/UNATTENDED"               # guest-side gate; see ClaimUnattendedRun
 
 # The guest reaches $INBOX as \\Mac\Home\portfolio-refresh\inbox — a UNC path,
 # because Parallels' drive letters differ per machine (the Studio maps Y: to Home,
@@ -81,7 +82,7 @@ if [ "$STATE" != "running" ]; then
 fi
 
 # ── Clear last run's artefacts so a stale file can never be mistaken for new ──
-rm -f "$OUTPUT" "$VM_ERROR" "$TRIGGER"
+rm -f "$OUTPUT" "$VM_ERROR" "$TRIGGER" "$UNATTENDED"
 
 # ── Ask the guest to open the workbook ──────────────────────────────────────
 log "dropping trigger for the guest watcher"

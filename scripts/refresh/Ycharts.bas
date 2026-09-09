@@ -39,6 +39,17 @@ Option Explicit
 Private Const OUTPUT_DIR   As String = "\\Mac\Home\portfolio-refresh\inbox\"
 Private Const OUTPUT_NAME  As String = "Ycharts-refreshed.xlsx"
 
+' Dropped by watch-trigger.cmd immediately before it launches Excel, and
+' consumed here as the macro's first action.
+'
+' THIS IS WHAT MAKES THE WORKBOOK OPENABLE BY A PERSON. Workbook_Open fires the
+' same way whether the scheduler opened the file or someone double-clicked it,
+' and the unattended path ends in Application.Quit — so without a gate, opening
+' the workbook by hand meant waiting four minutes and then watching Excel close
+' itself. There is no interactive path to fall back to, so the two have to be
+' told apart, and the scheduler is the only side that can announce itself.
+Private Const UNATTENDED_FLAG As String = "\\Mac\Home\portfolio-refresh\inbox\UNATTENDED"
+
 ' Cell that carries the refresh timestamp, read back by the importer.
 '
 ' A dedicated sheet on purpose: the three importers select sheets BY NAME, so a
@@ -71,6 +82,10 @@ Private Sub Workbook_Open()
     Dim lastPrint As String, thisPrint As String
     Dim stableCount As Long
     Dim ratio As Double
+
+    ' Everything below this line is the scheduled run. A person who opens the
+    ' workbook gets a workbook.
+    If Not ClaimUnattendedRun() Then Exit Sub
 
     Application.DisplayAlerts = False
     Application.ScreenUpdating = False
@@ -124,6 +139,26 @@ Private Sub Workbook_Open()
     ThisWorkbook.Saved = True
     Application.Quit
 End Sub
+
+' True exactly once per scheduled run: the flag watch-trigger.cmd dropped is
+' there, and this consumes it.
+'
+' Deleted BEFORE the long wait rather than after the save, so an Excel that
+' crashes or is killed mid-run cannot leave the flag behind for the next person
+' who opens the file.
+'
+' Fails CLOSED on purpose. No flag means "a person opened this", so if the flag
+' ever stops being written the scheduled run produces nothing and refresh.sh
+' reports "no output after 1500s" — a loud failure, rather than a silent save of
+' whatever happened to be on screen. An unreachable share errors out of Dir$ and
+' lands in the same place, which is also why opening the Mac-side copy in Excel
+' for Mac stays interactive.
+Private Function ClaimUnattendedRun() As Boolean
+    On Error Resume Next
+    If Len(Dir$(UNATTENDED_FLAG)) = 0 Then Exit Function
+    Kill UNATTENDED_FLAG
+    ClaimUnattendedRun = True
+End Function
 
 ' True while any sheet still shows a YCharts loading placeholder.
 Private Function AnyStillLoading() As Boolean
