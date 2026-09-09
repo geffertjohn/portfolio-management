@@ -12,15 +12,35 @@
 >   syncing all of it. The Studio sleeps, which `sudo pmset repeat
 >   wakeorpoweron MTWRF 05:25:00` solves. The install steps below still say
 >   "mini" and reference `johnauxcomp` paths.
-> - **`watch-trigger.cmd` and the trigger-file handshake are no longer needed.**
->   They exist because the mini's Parallels licence refuses `prlctl exec`. The
->   **Studio's licence allows it** (verified against a running VM), so the Mac
->   can launch Excel directly and both can be deleted.
+> - **`watch-trigger.cmd` and the trigger-file handshake ARE still needed** — I
+>   was wrong to say otherwise. The Studio's Parallels licence does allow
+>   `prlctl exec`, but that command runs as **NT AUTHORITY\SYSTEM in session 0**,
+>   a profile with no YCharts add-in and no `ycharts.key`. Excel launched that
+>   way cannot resolve a single `YCP()`, so every run would abort on the
+>   error-ratio guard. Excel must be started by the **interactive logged-on
+>   user**, which is exactly what the trigger file plus a Task Scheduler task
+>   achieves. Keep both.
 >
 > **Already done on the Studio and its VM:** `C:\portfolio\Ycharts.xlsm` in
-> place, `C:\portfolio\` added as an Excel Trusted Location, guest timezone
-> corrected from SA Western (no DST) to Eastern, `~/portfolio-refresh/{inbox,
-> processed,failed,logs}` created, and the guest→Mac UNC write path verified.
+> place **with the macro installed**, `C:\portfolio\` added as an Excel Trusted
+> Location, guest timezone corrected from SA Western (no DST) to Eastern,
+> `~/portfolio-refresh/{inbox,processed,failed,logs}` created, and the
+> guest→Mac UNC write path verified.
+>
+> **A full manual run has succeeded end to end:** Excel started 13:30:46, stamped
+> and saved 13:35:15 (**4m 29s**), and the headless importer read it and wrote 102
+> benchmark rows, 42 funds and 18 portfolios. `MIN_WAIT_SECS` at 240s is
+> therefore well calibrated — the run exited 29s past the floor, which is the
+> three stability polls, meaning the data had already settled inside 4 minutes.
+>
+> **Two hazards found while installing the macro, both worth knowing:**
+> the driver had to move OFF the `\\Mac\Home\...` share to `C:\portfolio`
+> because Excel would not honour a network Trusted Location (macros stayed
+> blocked); and **any Excel that opens this workbook without the YCharts add-in
+> recalculates every `YCP()` into `#NAME?`**, so saving from such a session
+> destroys the cached values. Automation that touches the workbook must open it
+> with `Application.Calculation` already manual — which needs a throwaway
+> workbook open first, since the property cannot be set with none.
 >
 > **Next step when resuming:** paste `Ycharts.bas` into ThisWorkbook (manual —
 > programmatic VBA import needs "Trust access to the VBA project object model"),

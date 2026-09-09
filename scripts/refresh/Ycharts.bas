@@ -1,8 +1,13 @@
 ' Ycharts.bas — the driver macro for the unattended YCharts refresh.
 '
 ' Versioned here as text so it is diffable; the workbook itself is binary. Paste
-' into ThisWorkbook (NOT a Module — Workbook_Open only fires from there) in
-' C:\portfolio\Ycharts.xlsm inside the Parallels VM.
+' into ThisWorkbook (NOT a Module — Workbook_Open only fires from there) in the
+' driver workbook, which lives on the Mac at ~/Documents/Ycharts/Ycharts.xlsm and
+' is opened from the VM as \\Mac\Home\Documents\Ycharts\Ycharts.xlsm.
+'
+' That is a NETWORK path to Excel, so it only runs if the folder is a Trusted
+' Location AND "Allow Trusted Locations on my network" is enabled. Without both,
+' Workbook_Open never fires and the run silently produces nothing.
 '
 ' HOW THE REFRESH ACTUALLY HAPPENS
 ' The YCharts add-in has AutoUpdate enabled, so opening the workbook is itself
@@ -109,8 +114,14 @@ Private Sub Workbook_Open()
     StampRefreshTime
     SaveOutputAtomically
 
-    Application.DisplayAlerts = True
-    ThisWorkbook.Close SaveChanges:=True
+    ' Save, then quit — and do NOT call ThisWorkbook.Close first.
+    '
+    ' Closing the workbook unloads the VBA project that is running this very
+    ' procedure, so execution stops there and Application.Quit never runs. That
+    ' left EXCEL.EXE alive after an otherwise perfect run. Setting .Saved marks
+    ' the book clean so Quit cannot stop on a save prompt with nobody watching.
+    ThisWorkbook.Save
+    ThisWorkbook.Saved = True
     Application.Quit
 End Sub
 
@@ -248,7 +259,8 @@ Private Sub LogAndQuit(ByVal msg As String)
     Close #f
     On Error GoTo 0
 
-    Application.DisplayAlerts = True
-    ThisWorkbook.Close SaveChanges:=False
+    ' Same reason as above: never Close before Quit. Marking the book saved
+    ' WITHOUT saving discards the aborted state instead of persisting it.
+    ThisWorkbook.Saved = True
     Application.Quit
 End Sub
