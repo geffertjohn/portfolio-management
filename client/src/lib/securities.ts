@@ -35,7 +35,6 @@ export interface SecurityDetail extends Security {
   turnover_ratio: number | null
   expense_ratio_generic: number | null
   assets_under_management: number | null
-  number_of_holdings: number | null
 
   // ── Fund total returns ────────────────────────────────────────────────────
   one_month_total_return_nav: number | null
@@ -44,7 +43,6 @@ export interface SecurityDetail extends Security {
   one_year_total_return_nav: number | null
   annualized_three_year_total_return_nav: number | null
   annualized_five_year_total_return_nav: number | null
-  annualized_ten_year_total_return_nav: number | null
 
   // ── Category returns ──────────────────────────────────────────────────────
   category_one_month_total_return: number | null
@@ -53,7 +51,6 @@ export interface SecurityDetail extends Security {
   category_one_year_total_return: number | null
   category_three_year_total_return: number | null
   category_five_year_total_return: number | null
-  category_ten_year_total_return: number | null
 
   // ── Peer group returns ────────────────────────────────────────────────────
   peer_group_one_month_total_return: number | null
@@ -62,55 +59,14 @@ export interface SecurityDetail extends Security {
   peer_group_one_year_total_return: number | null
   peer_group_three_year_total_return: number | null
   peer_group_five_year_total_return: number | null
-  peer_group_ten_year_total_return: number | null
-
-  // ── Equity style box ──────────────────────────────────────────────────────
-  equity_stylebox_large_cap_value_exposure: number | null
-  equity_stylebox_large_cap_blend_exposure: number | null
-  equity_stylebox_large_cap_growth_exposure: number | null
-  equity_stylebox_mid_cap_value_exposure: number | null
-  equity_stylebox_mid_cap_blend_exposure: number | null
-  equity_stylebox_mid_cap_growth_exposure: number | null
-  equity_stylebox_small_cap_value_exposure: number | null
-  equity_stylebox_small_cap_blend_exposure: number | null
-  equity_stylebox_small_cap_growth_exposure: number | null
-
-  // ── Credit quality exposure ───────────────────────────────────────────────
-  aaa_bond_exposure_generic: number | null
-  aa_bond_exposure_generic: number | null
-  a_bond_exposure_generic: number | null
-  bbb_bond_exposure_generic: number | null
-  bb_bond_exposure_generic: number | null
-  b_bond_exposure_generic: number | null
-  below_b_bond_exposure_generic: number | null
-  effective_duration: number | null
-
-  // ── Calmar ratio ─────────────────────────────────────────────────────────
-  calmar_ratio_1y: number | null
-  calmar_ratio_3y: number | null
-  calmar_ratio_5y: number | null
-
-  // ── Max drawdown ──────────────────────────────────────────────────────────
-  max_drawdown_1y: number | null
-  max_drawdown_3y: number | null
-  max_drawdown_5y: number | null
 
   // ── Alpha (category) ──────────────────────────────────────────────────────
-  alpha_1y_vs_category: number | null
   alpha_3y_vs_category: number | null
-  alpha_5y_vs_category: number | null
   alpha_rank: number | null
 
   // ── Alpha (peer group) ───────────────────────────────────────────────────
-  market_alpha_1y_vs_pg: number | null
   market_alpha_3y_vs_pg: number | null
-  market_alpha_5y_vs_pg: number | null
   alpha_peer_group_rank: number | null
-
-  // ── Alpha (enhanced market) ───────────────────────────────────────────────
-  enhanced_market_alpha_12_month: number | null
-  enhanced_market_alpha_36_month: number | null
-  enhanced_market_alpha_60_month: number | null
 
   // ── Expense ratio ranks ───────────────────────────────────────────────────
   expense_ratio_rank: number | null
@@ -124,73 +80,24 @@ export interface SecurityDetail extends Security {
   sharpe_rank: number | null
   sharpe_peer_group_rank: number | null
 
-  // ── Beta (category) ───────────────────────────────────────────────────────
-  beta_1y_vs_category: number | null
-  beta_3y_vs_category: number | null
-  beta_5y_vs_category: number | null
-
-  // ── Beta (peer group) ────────────────────────────────────────────────────
-  market_beta_1y_vs_pg: number | null
-  market_beta_3y_vs_pg: number | null
-  market_beta_5y_vs_pg: number | null
-
-  // ── Beta (enhanced market) ────────────────────────────────────────────────
-  enhanced_market_beta_12_month: number | null
-  enhanced_market_beta_36_month: number | null
-
   // ── Sharpe ratio ──────────────────────────────────────────────────────────
   historical_sharpe_1y: number | null
   historical_sharpe_3y: number | null
-  historical_sharpe_5y: number | null
-
-  // ── Standard deviation ────────────────────────────────────────────────────
-  monthly_standard_deviation_annualized_1y: number | null
-  quarterly_standard_deviation_annualized_3y: number | null
-  quarterly_standard_deviation_annualized_5y: number | null
 
   // ── Sortino ratio ─────────────────────────────────────────────────────────
   historical_sortino_1y: number | null
   historical_sortino_3y: number | null
-  historical_sortino_5y: number | null
 
   // ── R-squared ─────────────────────────────────────────────────────────────
-  rsquared_1y_vs_category: number | null
   rsquared_3y_vs_category: number | null
-  rsquared_5y_vs_category: number | null
-  rsquared_1y_vs_pg: number | null
   rsquared_3y_vs_pg: number | null
-  rsquared_5y_vs_pg: number | null
-
-  // ── Treynor measure ───────────────────────────────────────────────────────
-  historical_treynor_measure_1y_vs_category: number | null
-  historical_treynor_measure_3y_vs_category: number | null
-  historical_treynor_measure_5y_vs_category: number | null
-  historical_treynor_measure_1y_vs_pg: number | null
-  historical_treynor_measure_3y_vs_pg: number | null
-  historical_treynor_measure_5y_vs_pg: number | null
-
-  // ── Tracking error ────────────────────────────────────────────────────────
-  tracking_error_1y_vs_category: number | null
-  tracking_error_3y_vs_category: number | null
-  tracking_error_5y_vs_category: number | null
-  tracking_error_1y_vs_pg: number | null
-  tracking_error_3y_vs_pg: number | null
-  tracking_error_5y_vs_pg: number | null
 
   // ── Information ratio ─────────────────────────────────────────────────────
-  information_ratio_1y_vs_category: number | null
   information_ratio_3y_vs_category: number | null
-  information_ratio_5y_vs_category: number | null
-  information_ratio_1y_vs_pg: number | null
   information_ratio_3y_vs_pg: number | null
-  information_ratio_5y_vs_pg: number | null
 
   // ── Upside / downside capture ─────────────────────────────────────────────
-  upside_downside_1y_vs_category: number | null
-  upside_downside_3y_vs_category: number | null
   upside_downside_5y_vs_category: number | null
-  upside_downside_1y_vs_pg: number | null
-  upside_downside_3y_vs_pg: number | null
   upside_downside_5y_vs_pg: number | null
 
   // ── Category return ranks ─────────────────────────────────────────────────
@@ -200,7 +107,6 @@ export interface SecurityDetail extends Security {
   one_year_total_return_rank_nav: number | null
   three_year_total_return_rank_nav: number | null
   five_year_total_return_rank_nav: number | null
-  ten_year_total_return_rank_nav: number | null
 
   // ── Category return sizes ─────────────────────────────────────────────────
   one_month_total_return_rank_category_size_nav: number | null
@@ -209,7 +115,6 @@ export interface SecurityDetail extends Security {
   one_year_total_return_rank_category_size_nav: number | null
   three_year_total_return_rank_category_size_nav: number | null
   five_year_total_return_rank_category_size_nav: number | null
-  ten_year_total_return_rank_category_size_nav: number | null
 
   // ── Peer group return ranks ───────────────────────────────────────────────
   one_month_total_return_peer_group_rank_nav: number | null
@@ -218,7 +123,6 @@ export interface SecurityDetail extends Security {
   one_year_total_return_peer_group_rank_nav: number | null
   three_year_total_return_peer_group_rank_nav: number | null
   five_year_total_return_peer_group_rank_nav: number | null
-  ten_year_total_return_peer_group_rank_nav: number | null
 
   // ── Peer group return sizes ───────────────────────────────────────────────
   one_month_total_return_peer_group_size_nav: number | null
@@ -227,7 +131,6 @@ export interface SecurityDetail extends Security {
   one_year_total_return_peer_group_size_nav: number | null
   three_year_total_return_peer_group_size_nav: number | null
   five_year_total_return_peer_group_size_nav: number | null
-  ten_year_total_return_peer_group_size_nav: number | null
 
   // ── Manager tenure ────────────────────────────────────────────────────────
   max_manager_tenure: number | null
@@ -240,56 +143,14 @@ export interface SecurityDetail extends Security {
   '3_month_fund_level_flows': number | null
   '1_year_fund_level_flows': number | null
   ytd_fund_level_flows: number | null
-  one_year_tax_cost_ratio_generic: number | null
-  three_year_tax_cost_ratio_generic: number | null
-  five_year_tax_cost_ratio_generic: number | null
 
   // ── Geographic exposure ───────────────────────────────────────────────────
   north_america_total_exposure_generic: number | null
-  latin_america_total_exposure_generic: number | null
-  united_kingdom_total_exposure_generic: number | null
-  europe_developed_total_exposure_generic: number | null
-  europe_emerging_total_exposure: number | null
-  africa_middle_east_total_exposure: number | null
-  asia_developed_total_exposure_generic: number | null
-  asia_emerging_total_exposure: number | null
-
-  // ── Sector exposure ───────────────────────────────────────────────────────
-  basic_materials_exposure_generic: number | null
-  communication_services_exposure_generic: number | null
-  consumer_cyclical_exposure_generic: number | null
-  consumer_defensive_exposure_generic: number | null
-  energy_exposure_generic: number | null
-  financial_services_exposure_generic: number | null
-  healthcare_exposure_generic: number | null
-  industrials_exposure_generic: number | null
-  real_estate_exposure_generic: number | null
-  technology_exposure_generic: number | null
-  utilities_exposure_generic: number | null
-
-  // ── Fixed income type exposure ────────────────────────────────────────────
-  government_fixed_income_exposure_generic: number | null
-  corporate_fixed_income_exposure_generic: number | null
-  securitized_fixed_income_exposure_generic: number | null
-  municipal_fixed_income_exposure_generic: number | null
-  other_fixed_income_exposure_generic: number | null
 
   // ── Asset allocation (net) ────────────────────────────────────────────────
   cash_net: number | null
   stock_net: number | null
   bond_net: number | null
-  convertible_net: number | null
-  preferred_net: number | null
-  other_net: number | null
-
-  // ── Maturity distribution ─────────────────────────────────────────────────
-  maturity_less_than_1_year_generic: number | null
-  '1_to_3_years_maturity_bond_exposure': number | null
-  '3_to_5_years_maturity_bond_exposure': number | null
-  maturity_5_to_10_years_generic: number | null
-  maturity_10_to_20_years_generic: number | null
-  maturity_20_to_30_years_generic: number | null
-  over_30_years_maturity_bond_exposure: number | null
 
   // ── Bond analytics ────────────────────────────────────────────────────────
   average_credit_quality_score: string | null
@@ -315,10 +176,7 @@ export interface SecurityDetail extends Security {
 
   // ── Stock — generic growth (YCharts) ──────────────────────────────────────
   sales_growth_1_yr_generic: number | null
-  dividend_growth_ttm: number | null
-  eps_growth_qoq: number | null
   eps_growth_1_yr_generic: number | null
-  forward_peg_ratio_1y: number | null
 
   // ── Stock — total returns (non-NAV) ──────────────────────────────────────
   one_month_total_return: number | null
@@ -327,7 +185,6 @@ export interface SecurityDetail extends Security {
   annualized_daily_one_year_total_return: number | null
   annualized_daily_three_year_return: number | null
   annualized_daily_five_year_total_return: number | null
-  annualized_daily_ten_year_total_return: number | null
 
   // ── Stock — earnings dates (drive review schedule) ───────────────────────
   last_earnings_release: string | null

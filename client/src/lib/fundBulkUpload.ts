@@ -52,12 +52,30 @@ const DATE_COLS = new Set([
   'inception_date',
 ])
 
-/** Columns that must not be sent to Supabase (system / identity / unrelated). */
+/**
+ * Columns that must not be sent to Supabase.
+ *
+ * This importer has no whitelist — it maps sheet headers straight to DB columns —
+ * so a header with no matching column fails the row's update outright. The
+ * ten-year family is still produced by the Securities sheet but was dropped from
+ * `securities2` (Sep 2026): nothing displayed it, since the return tables and
+ * scorecards stop at 5Y. Skipping it here keeps the scheduled import working
+ * until those columns are removed from the workbook; once they are, these
+ * entries become harmless no-ops rather than a trap.
+ */
 const SKIP_COLS = new Set([
   '',           // blank col 0
   'id',
   'created_at',
   'updated_at',
+  // Dropped from securities2 — still in the sheet, read by nothing.
+  'annualized_ten_year_total_return_nav',
+  'category_ten_year_total_return',
+  'peer_group_ten_year_total_return',
+  'ten_year_total_return_rank_nav',
+  'ten_year_total_return_rank_category_size_nav',
+  'ten_year_total_return_peer_group_rank_nav',
+  'ten_year_total_return_peer_group_size_nav',
 ])
 
 // ── Row-level parsing ─────────────────────────────────────────────────────────

@@ -2910,15 +2910,7 @@ export type Database = {
       }
       securities2: {
         Row: {
-          "1_to_3_years_maturity_bond_exposure": number | null
-          "3_to_5_years_maturity_bond_exposure": number | null
-          a_bond_exposure_generic: number | null
-          aa_bond_exposure_generic: number | null
-          aaa_bond_exposure_generic: number | null
-          africa_middle_east_total_exposure: number | null
-          alpha_1y_vs_category: number | null
           alpha_3y_vs_category: number | null
-          alpha_5y_vs_category: number | null
           alpha_peer_group_rank: number | null
           alpha_rank: number | null
           alt_1: string | null
@@ -2926,185 +2918,84 @@ export type Database = {
           alt_3: string | null
           annualized_daily_five_year_total_return: number | null
           annualized_daily_one_year_total_return: number | null
-          annualized_daily_ten_year_total_return: number | null
           annualized_daily_three_year_return: number | null
           annualized_five_year_total_return_nav: number | null
-          annualized_ten_year_total_return_nav: number | null
           annualized_three_year_total_return_nav: number | null
-          asia_developed_total_exposure_generic: number | null
-          asia_emerging_total_exposure: number | null
           assets_under_management: number | null
-          b_bond_exposure_generic: number | null
-          basic_materials_exposure_generic: number | null
-          bb_bond_exposure_generic: number | null
-          bbb_bond_exposure_generic: number | null
-          below_b_bond_exposure_generic: number | null
-          beta_1y_vs_category: number | null
-          beta_3y_vs_category: number | null
-          beta_5y_vs_category: number | null
           bond_net: number | null
           broad_asset_class: string | null
           broad_category_group: string | null
-          calmar_ratio_1y: number | null
-          calmar_ratio_3y: number | null
-          calmar_ratio_5y: number | null
           cash_net: number | null
           category_five_year_total_return: number | null
-          category_group_style_five_year_total_return: number | null
-          category_group_style_one_month_total_return: number | null
-          category_group_style_one_year_total_return: number | null
-          category_group_style_ten_year_total_return: number | null
-          category_group_style_three_month_total_return: number | null
-          category_group_style_three_year_total_return: number | null
-          category_group_style_ytd_total_return: number | null
           category_index: string | null
           category_name: string | null
           category_one_month_total_return: number | null
           category_one_year_total_return: number | null
-          category_ten_year_total_return: number | null
           category_three_month_total_return: number | null
           category_three_year_total_return: number | null
           category_ytd_total_return: number | null
-          communication_services_exposure_generic: number | null
-          consumer_cyclical_exposure_generic: number | null
-          consumer_defensive_exposure_generic: number | null
-          convertible_net: number | null
-          corporate_fixed_income_exposure_generic: number | null
           created_at: string
           deleted_at: string | null
           detailed_security_type: string | null
           discount_or_premium_to_nav: number | null
-          dividend_growth_ttm: number | null
-          effective_duration: number | null
-          energy_exposure_generic: number | null
-          enhanced_market_alpha_12_month: number | null
-          enhanced_market_alpha_36_month: number | null
-          enhanced_market_alpha_60_month: number | null
-          enhanced_market_beta_12_month: number | null
-          enhanced_market_beta_36_month: number | null
           eps_growth_1_yr_generic: number | null
-          eps_growth_qoq: number | null
           equity_style_internal: string | null
-          equity_stylebox_large_cap_blend_exposure: number | null
-          equity_stylebox_large_cap_growth_exposure: number | null
-          equity_stylebox_large_cap_value_exposure: number | null
-          equity_stylebox_mid_cap_blend_exposure: number | null
-          equity_stylebox_mid_cap_growth_exposure: number | null
-          equity_stylebox_mid_cap_value_exposure: number | null
-          equity_stylebox_small_cap_blend_exposure: number | null
-          equity_stylebox_small_cap_growth_exposure: number | null
-          equity_stylebox_small_cap_value_exposure: number | null
-          europe_developed_total_exposure_generic: number | null
-          europe_emerging_total_exposure: number | null
           expense_ratio_generic: number | null
           expense_ratio_peer_group_rank: number | null
           expense_ratio_rank: number | null
-          financial_services_exposure_generic: number | null
-          five_year_tax_cost_ratio_generic: number | null
           five_year_total_return_peer_group_rank_nav: number | null
           five_year_total_return_peer_group_size_nav: number | null
           five_year_total_return_rank_category_size_nav: number | null
           five_year_total_return_rank_nav: number | null
-          forward_peg_ratio_1y: number | null
           fund_company_name: string | null
           fund_family: string | null
-          government_fixed_income_exposure_generic: number | null
-          healthcare_exposure_generic: number | null
           historical_sharpe_1y: number | null
           historical_sharpe_3y: number | null
-          historical_sharpe_5y: number | null
           historical_sortino_1y: number | null
           historical_sortino_3y: number | null
-          historical_sortino_5y: number | null
-          historical_treynor_measure_1y_vs_category: number | null
-          historical_treynor_measure_1y_vs_pg: number | null
-          historical_treynor_measure_3y_vs_category: number | null
-          historical_treynor_measure_3y_vs_pg: number | null
-          historical_treynor_measure_5y_vs_category: number | null
-          historical_treynor_measure_5y_vs_pg: number | null
           id: number
           inception_date: string | null
-          industrials_exposure_generic: number | null
-          information_ratio_1y_vs_category: number | null
-          information_ratio_1y_vs_pg: number | null
           information_ratio_3y_vs_category: number | null
           information_ratio_3y_vs_pg: number | null
-          information_ratio_5y_vs_category: number | null
-          information_ratio_5y_vs_pg: number | null
           information_ratio_peer_group_rank: number | null
           information_ratio_rank: number | null
           investment_strategy: string | null
           last_earnings_release: string | null
-          latin_america_total_exposure_generic: number | null
           long_description: string | null
-          market_alpha_1y_vs_pg: number | null
           market_alpha_3y_vs_pg: number | null
-          market_alpha_5y_vs_pg: number | null
-          market_beta_1y_vs_pg: number | null
-          market_beta_3y_vs_pg: number | null
-          market_beta_5y_vs_pg: number | null
-          maturity_10_to_20_years_generic: number | null
-          maturity_20_to_30_years_generic: number | null
-          maturity_5_to_10_years_generic: number | null
-          maturity_less_than_1_year_generic: number | null
-          max_drawdown_1y: number | null
-          max_drawdown_3y: number | null
-          max_drawdown_5y: number | null
           max_manager_tenure: number | null
-          monthly_standard_deviation_annualized_1y: number | null
           morningstar_industry: string | null
           morningstar_sector: string | null
-          municipal_fixed_income_exposure_generic: number | null
           next_earnings_release: string | null
           north_america_total_exposure_generic: number | null
-          number_of_holdings: number | null
           one_month_total_return: number | null
           one_month_total_return_nav: number | null
           one_month_total_return_peer_group_rank_nav: number | null
           one_month_total_return_peer_group_size_nav: number | null
           one_month_total_return_rank_category_size_nav: number | null
           one_month_total_return_rank_nav: number | null
-          one_year_tax_cost_ratio_generic: number | null
           one_year_total_return_nav: number | null
           one_year_total_return_peer_group_rank_nav: number | null
           one_year_total_return_peer_group_size_nav: number | null
           one_year_total_return_rank_category_size_nav: number | null
           one_year_total_return_rank_nav: number | null
-          other_fixed_income_exposure_generic: number | null
-          other_net: number | null
-          over_30_years_maturity_bond_exposure: number | null
           peer_group_five_year_total_return: number | null
           peer_group_name: string | null
           peer_group_one_month_total_return: number | null
           peer_group_one_year_total_return: number | null
-          peer_group_ten_year_total_return: number | null
           peer_group_three_month_total_return: number | null
           peer_group_three_year_total_return: number | null
           peer_group_ytd_total_return: number | null
           preferred_benchmark1_id: number | null
           preferred_benchmark2_id: number | null
-          preferred_net: number | null
-          quarterly_standard_deviation_annualized_3y: number | null
-          quarterly_standard_deviation_annualized_5y: number | null
-          real_estate_exposure_generic: number | null
-          rsquared_1y_vs_category: number | null
-          rsquared_1y_vs_pg: number | null
           rsquared_3y_vs_category: number | null
           rsquared_3y_vs_pg: number | null
-          rsquared_5y_vs_category: number | null
-          rsquared_5y_vs_pg: number | null
           sales_growth_1_yr_generic: number | null
-          securitized_fixed_income_exposure_generic: number | null
           security_id: string
           security_name: string | null
           sharpe_peer_group_rank: number | null
           sharpe_rank: number | null
           stock_net: number | null
-          technology_exposure_generic: number | null
-          ten_year_total_return_peer_group_rank_nav: number | null
-          ten_year_total_return_peer_group_size_nav: number | null
-          ten_year_total_return_rank_category_size_nav: number | null
-          ten_year_total_return_rank_nav: number | null
           thesis: string | null
           three_month_total_return: number | null
           three_month_total_return_nav: number | null
@@ -3112,26 +3003,13 @@ export type Database = {
           three_month_total_return_peer_group_size_nav: number | null
           three_month_total_return_rank_category_size_nav: number | null
           three_month_total_return_rank_nav: number | null
-          three_year_tax_cost_ratio_generic: number | null
           three_year_total_return_peer_group_rank_nav: number | null
           three_year_total_return_peer_group_size_nav: number | null
           three_year_total_return_rank_category_size_nav: number | null
           three_year_total_return_rank_nav: number | null
-          tracking_error_1y_vs_category: number | null
-          tracking_error_1y_vs_pg: number | null
-          tracking_error_3y_vs_category: number | null
-          tracking_error_3y_vs_pg: number | null
-          tracking_error_5y_vs_category: number | null
-          tracking_error_5y_vs_pg: number | null
-          united_kingdom_total_exposure_generic: number | null
           updated_at: string
-          upside_downside_1y_vs_category: number | null
-          upside_downside_1y_vs_pg: number | null
-          upside_downside_3y_vs_category: number | null
-          upside_downside_3y_vs_pg: number | null
           upside_downside_5y_vs_category: number | null
           upside_downside_5y_vs_pg: number | null
-          utilities_exposure_generic: number | null
           ycharts_benchmark_category: string | null
           ytd_total_return: number | null
           ytd_total_return_nav: number | null
@@ -3141,15 +3019,7 @@ export type Database = {
           ytd_total_return_rank_nav: number | null
         }
         Insert: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
-          africa_middle_east_total_exposure?: number | null
-          alpha_1y_vs_category?: number | null
           alpha_3y_vs_category?: number | null
-          alpha_5y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
           alpha_rank?: number | null
           alt_1?: string | null
@@ -3157,185 +3027,84 @@ export type Database = {
           alt_3?: string | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
-          annualized_daily_ten_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
           annualized_five_year_total_return_nav?: number | null
-          annualized_ten_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
-          asia_developed_total_exposure_generic?: number | null
-          asia_emerging_total_exposure?: number | null
           assets_under_management?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure_generic?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          beta_1y_vs_category?: number | null
-          beta_3y_vs_category?: number | null
-          beta_5y_vs_category?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
-          calmar_ratio_1y?: number | null
-          calmar_ratio_3y?: number | null
-          calmar_ratio_5y?: number | null
           cash_net?: number | null
           category_five_year_total_return?: number | null
-          category_group_style_five_year_total_return?: number | null
-          category_group_style_one_month_total_return?: number | null
-          category_group_style_one_year_total_return?: number | null
-          category_group_style_ten_year_total_return?: number | null
-          category_group_style_three_month_total_return?: number | null
-          category_group_style_three_year_total_return?: number | null
-          category_group_style_ytd_total_return?: number | null
           category_index?: string | null
           category_name?: string | null
           category_one_month_total_return?: number | null
           category_one_year_total_return?: number | null
-          category_ten_year_total_return?: number | null
           category_three_month_total_return?: number | null
           category_three_year_total_return?: number | null
           category_ytd_total_return?: number | null
-          communication_services_exposure_generic?: number | null
-          consumer_cyclical_exposure_generic?: number | null
-          consumer_defensive_exposure_generic?: number | null
-          convertible_net?: number | null
-          corporate_fixed_income_exposure_generic?: number | null
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
           discount_or_premium_to_nav?: number | null
-          dividend_growth_ttm?: number | null
-          effective_duration?: number | null
-          energy_exposure_generic?: number | null
-          enhanced_market_alpha_12_month?: number | null
-          enhanced_market_alpha_36_month?: number | null
-          enhanced_market_alpha_60_month?: number | null
-          enhanced_market_beta_12_month?: number | null
-          enhanced_market_beta_36_month?: number | null
           eps_growth_1_yr_generic?: number | null
-          eps_growth_qoq?: number | null
           equity_style_internal?: string | null
-          equity_stylebox_large_cap_blend_exposure?: number | null
-          equity_stylebox_large_cap_growth_exposure?: number | null
-          equity_stylebox_large_cap_value_exposure?: number | null
-          equity_stylebox_mid_cap_blend_exposure?: number | null
-          equity_stylebox_mid_cap_growth_exposure?: number | null
-          equity_stylebox_mid_cap_value_exposure?: number | null
-          equity_stylebox_small_cap_blend_exposure?: number | null
-          equity_stylebox_small_cap_growth_exposure?: number | null
-          equity_stylebox_small_cap_value_exposure?: number | null
-          europe_developed_total_exposure_generic?: number | null
-          europe_emerging_total_exposure?: number | null
           expense_ratio_generic?: number | null
           expense_ratio_peer_group_rank?: number | null
           expense_ratio_rank?: number | null
-          financial_services_exposure_generic?: number | null
-          five_year_tax_cost_ratio_generic?: number | null
           five_year_total_return_peer_group_rank_nav?: number | null
           five_year_total_return_peer_group_size_nav?: number | null
           five_year_total_return_rank_category_size_nav?: number | null
           five_year_total_return_rank_nav?: number | null
-          forward_peg_ratio_1y?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
-          government_fixed_income_exposure_generic?: number | null
-          healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
-          historical_sharpe_5y?: number | null
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
-          historical_sortino_5y?: number | null
-          historical_treynor_measure_1y_vs_category?: number | null
-          historical_treynor_measure_1y_vs_pg?: number | null
-          historical_treynor_measure_3y_vs_category?: number | null
-          historical_treynor_measure_3y_vs_pg?: number | null
-          historical_treynor_measure_5y_vs_category?: number | null
-          historical_treynor_measure_5y_vs_pg?: number | null
           id?: number
           inception_date?: string | null
-          industrials_exposure_generic?: number | null
-          information_ratio_1y_vs_category?: number | null
-          information_ratio_1y_vs_pg?: number | null
           information_ratio_3y_vs_category?: number | null
           information_ratio_3y_vs_pg?: number | null
-          information_ratio_5y_vs_category?: number | null
-          information_ratio_5y_vs_pg?: number | null
           information_ratio_peer_group_rank?: number | null
           information_ratio_rank?: number | null
           investment_strategy?: string | null
           last_earnings_release?: string | null
-          latin_america_total_exposure_generic?: number | null
           long_description?: string | null
-          market_alpha_1y_vs_pg?: number | null
           market_alpha_3y_vs_pg?: number | null
-          market_alpha_5y_vs_pg?: number | null
-          market_beta_1y_vs_pg?: number | null
-          market_beta_3y_vs_pg?: number | null
-          market_beta_5y_vs_pg?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
-          max_drawdown_1y?: number | null
-          max_drawdown_3y?: number | null
-          max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
-          monthly_standard_deviation_annualized_1y?: number | null
           morningstar_industry?: string | null
           morningstar_sector?: string | null
-          municipal_fixed_income_exposure_generic?: number | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
-          number_of_holdings?: number | null
           one_month_total_return?: number | null
           one_month_total_return_nav?: number | null
           one_month_total_return_peer_group_rank_nav?: number | null
           one_month_total_return_peer_group_size_nav?: number | null
           one_month_total_return_rank_category_size_nav?: number | null
           one_month_total_return_rank_nav?: number | null
-          one_year_tax_cost_ratio_generic?: number | null
           one_year_total_return_nav?: number | null
           one_year_total_return_peer_group_rank_nav?: number | null
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
-          other_fixed_income_exposure_generic?: number | null
-          other_net?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           peer_group_five_year_total_return?: number | null
           peer_group_name?: string | null
           peer_group_one_month_total_return?: number | null
           peer_group_one_year_total_return?: number | null
-          peer_group_ten_year_total_return?: number | null
           peer_group_three_month_total_return?: number | null
           peer_group_three_year_total_return?: number | null
           peer_group_ytd_total_return?: number | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
-          preferred_net?: number | null
-          quarterly_standard_deviation_annualized_3y?: number | null
-          quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure_generic?: number | null
-          rsquared_1y_vs_category?: number | null
-          rsquared_1y_vs_pg?: number | null
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
-          rsquared_5y_vs_category?: number | null
-          rsquared_5y_vs_pg?: number | null
           sales_growth_1_yr_generic?: number | null
-          securitized_fixed_income_exposure_generic?: number | null
           security_id: string
           security_name?: string | null
           sharpe_peer_group_rank?: number | null
           sharpe_rank?: number | null
           stock_net?: number | null
-          technology_exposure_generic?: number | null
-          ten_year_total_return_peer_group_rank_nav?: number | null
-          ten_year_total_return_peer_group_size_nav?: number | null
-          ten_year_total_return_rank_category_size_nav?: number | null
-          ten_year_total_return_rank_nav?: number | null
           thesis?: string | null
           three_month_total_return?: number | null
           three_month_total_return_nav?: number | null
@@ -3343,26 +3112,13 @@ export type Database = {
           three_month_total_return_peer_group_size_nav?: number | null
           three_month_total_return_rank_category_size_nav?: number | null
           three_month_total_return_rank_nav?: number | null
-          three_year_tax_cost_ratio_generic?: number | null
           three_year_total_return_peer_group_rank_nav?: number | null
           three_year_total_return_peer_group_size_nav?: number | null
           three_year_total_return_rank_category_size_nav?: number | null
           three_year_total_return_rank_nav?: number | null
-          tracking_error_1y_vs_category?: number | null
-          tracking_error_1y_vs_pg?: number | null
-          tracking_error_3y_vs_category?: number | null
-          tracking_error_3y_vs_pg?: number | null
-          tracking_error_5y_vs_category?: number | null
-          tracking_error_5y_vs_pg?: number | null
-          united_kingdom_total_exposure_generic?: number | null
           updated_at?: string
-          upside_downside_1y_vs_category?: number | null
-          upside_downside_1y_vs_pg?: number | null
-          upside_downside_3y_vs_category?: number | null
-          upside_downside_3y_vs_pg?: number | null
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
-          utilities_exposure_generic?: number | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null
@@ -3372,15 +3128,7 @@ export type Database = {
           ytd_total_return_rank_nav?: number | null
         }
         Update: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
-          africa_middle_east_total_exposure?: number | null
-          alpha_1y_vs_category?: number | null
           alpha_3y_vs_category?: number | null
-          alpha_5y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
           alpha_rank?: number | null
           alt_1?: string | null
@@ -3388,185 +3136,84 @@ export type Database = {
           alt_3?: string | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
-          annualized_daily_ten_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
           annualized_five_year_total_return_nav?: number | null
-          annualized_ten_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
-          asia_developed_total_exposure_generic?: number | null
-          asia_emerging_total_exposure?: number | null
           assets_under_management?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure_generic?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          beta_1y_vs_category?: number | null
-          beta_3y_vs_category?: number | null
-          beta_5y_vs_category?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
-          calmar_ratio_1y?: number | null
-          calmar_ratio_3y?: number | null
-          calmar_ratio_5y?: number | null
           cash_net?: number | null
           category_five_year_total_return?: number | null
-          category_group_style_five_year_total_return?: number | null
-          category_group_style_one_month_total_return?: number | null
-          category_group_style_one_year_total_return?: number | null
-          category_group_style_ten_year_total_return?: number | null
-          category_group_style_three_month_total_return?: number | null
-          category_group_style_three_year_total_return?: number | null
-          category_group_style_ytd_total_return?: number | null
           category_index?: string | null
           category_name?: string | null
           category_one_month_total_return?: number | null
           category_one_year_total_return?: number | null
-          category_ten_year_total_return?: number | null
           category_three_month_total_return?: number | null
           category_three_year_total_return?: number | null
           category_ytd_total_return?: number | null
-          communication_services_exposure_generic?: number | null
-          consumer_cyclical_exposure_generic?: number | null
-          consumer_defensive_exposure_generic?: number | null
-          convertible_net?: number | null
-          corporate_fixed_income_exposure_generic?: number | null
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
           discount_or_premium_to_nav?: number | null
-          dividend_growth_ttm?: number | null
-          effective_duration?: number | null
-          energy_exposure_generic?: number | null
-          enhanced_market_alpha_12_month?: number | null
-          enhanced_market_alpha_36_month?: number | null
-          enhanced_market_alpha_60_month?: number | null
-          enhanced_market_beta_12_month?: number | null
-          enhanced_market_beta_36_month?: number | null
           eps_growth_1_yr_generic?: number | null
-          eps_growth_qoq?: number | null
           equity_style_internal?: string | null
-          equity_stylebox_large_cap_blend_exposure?: number | null
-          equity_stylebox_large_cap_growth_exposure?: number | null
-          equity_stylebox_large_cap_value_exposure?: number | null
-          equity_stylebox_mid_cap_blend_exposure?: number | null
-          equity_stylebox_mid_cap_growth_exposure?: number | null
-          equity_stylebox_mid_cap_value_exposure?: number | null
-          equity_stylebox_small_cap_blend_exposure?: number | null
-          equity_stylebox_small_cap_growth_exposure?: number | null
-          equity_stylebox_small_cap_value_exposure?: number | null
-          europe_developed_total_exposure_generic?: number | null
-          europe_emerging_total_exposure?: number | null
           expense_ratio_generic?: number | null
           expense_ratio_peer_group_rank?: number | null
           expense_ratio_rank?: number | null
-          financial_services_exposure_generic?: number | null
-          five_year_tax_cost_ratio_generic?: number | null
           five_year_total_return_peer_group_rank_nav?: number | null
           five_year_total_return_peer_group_size_nav?: number | null
           five_year_total_return_rank_category_size_nav?: number | null
           five_year_total_return_rank_nav?: number | null
-          forward_peg_ratio_1y?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
-          government_fixed_income_exposure_generic?: number | null
-          healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
-          historical_sharpe_5y?: number | null
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
-          historical_sortino_5y?: number | null
-          historical_treynor_measure_1y_vs_category?: number | null
-          historical_treynor_measure_1y_vs_pg?: number | null
-          historical_treynor_measure_3y_vs_category?: number | null
-          historical_treynor_measure_3y_vs_pg?: number | null
-          historical_treynor_measure_5y_vs_category?: number | null
-          historical_treynor_measure_5y_vs_pg?: number | null
           id?: number
           inception_date?: string | null
-          industrials_exposure_generic?: number | null
-          information_ratio_1y_vs_category?: number | null
-          information_ratio_1y_vs_pg?: number | null
           information_ratio_3y_vs_category?: number | null
           information_ratio_3y_vs_pg?: number | null
-          information_ratio_5y_vs_category?: number | null
-          information_ratio_5y_vs_pg?: number | null
           information_ratio_peer_group_rank?: number | null
           information_ratio_rank?: number | null
           investment_strategy?: string | null
           last_earnings_release?: string | null
-          latin_america_total_exposure_generic?: number | null
           long_description?: string | null
-          market_alpha_1y_vs_pg?: number | null
           market_alpha_3y_vs_pg?: number | null
-          market_alpha_5y_vs_pg?: number | null
-          market_beta_1y_vs_pg?: number | null
-          market_beta_3y_vs_pg?: number | null
-          market_beta_5y_vs_pg?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
-          max_drawdown_1y?: number | null
-          max_drawdown_3y?: number | null
-          max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
-          monthly_standard_deviation_annualized_1y?: number | null
           morningstar_industry?: string | null
           morningstar_sector?: string | null
-          municipal_fixed_income_exposure_generic?: number | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
-          number_of_holdings?: number | null
           one_month_total_return?: number | null
           one_month_total_return_nav?: number | null
           one_month_total_return_peer_group_rank_nav?: number | null
           one_month_total_return_peer_group_size_nav?: number | null
           one_month_total_return_rank_category_size_nav?: number | null
           one_month_total_return_rank_nav?: number | null
-          one_year_tax_cost_ratio_generic?: number | null
           one_year_total_return_nav?: number | null
           one_year_total_return_peer_group_rank_nav?: number | null
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
-          other_fixed_income_exposure_generic?: number | null
-          other_net?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           peer_group_five_year_total_return?: number | null
           peer_group_name?: string | null
           peer_group_one_month_total_return?: number | null
           peer_group_one_year_total_return?: number | null
-          peer_group_ten_year_total_return?: number | null
           peer_group_three_month_total_return?: number | null
           peer_group_three_year_total_return?: number | null
           peer_group_ytd_total_return?: number | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
-          preferred_net?: number | null
-          quarterly_standard_deviation_annualized_3y?: number | null
-          quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure_generic?: number | null
-          rsquared_1y_vs_category?: number | null
-          rsquared_1y_vs_pg?: number | null
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
-          rsquared_5y_vs_category?: number | null
-          rsquared_5y_vs_pg?: number | null
           sales_growth_1_yr_generic?: number | null
-          securitized_fixed_income_exposure_generic?: number | null
           security_id?: string
           security_name?: string | null
           sharpe_peer_group_rank?: number | null
           sharpe_rank?: number | null
           stock_net?: number | null
-          technology_exposure_generic?: number | null
-          ten_year_total_return_peer_group_rank_nav?: number | null
-          ten_year_total_return_peer_group_size_nav?: number | null
-          ten_year_total_return_rank_category_size_nav?: number | null
-          ten_year_total_return_rank_nav?: number | null
           thesis?: string | null
           three_month_total_return?: number | null
           three_month_total_return_nav?: number | null
@@ -3574,26 +3221,13 @@ export type Database = {
           three_month_total_return_peer_group_size_nav?: number | null
           three_month_total_return_rank_category_size_nav?: number | null
           three_month_total_return_rank_nav?: number | null
-          three_year_tax_cost_ratio_generic?: number | null
           three_year_total_return_peer_group_rank_nav?: number | null
           three_year_total_return_peer_group_size_nav?: number | null
           three_year_total_return_rank_category_size_nav?: number | null
           three_year_total_return_rank_nav?: number | null
-          tracking_error_1y_vs_category?: number | null
-          tracking_error_1y_vs_pg?: number | null
-          tracking_error_3y_vs_category?: number | null
-          tracking_error_3y_vs_pg?: number | null
-          tracking_error_5y_vs_category?: number | null
-          tracking_error_5y_vs_pg?: number | null
-          united_kingdom_total_exposure_generic?: number | null
           updated_at?: string
-          upside_downside_1y_vs_category?: number | null
-          upside_downside_1y_vs_pg?: number | null
-          upside_downside_3y_vs_category?: number | null
-          upside_downside_3y_vs_pg?: number | null
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
-          utilities_exposure_generic?: number | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null
