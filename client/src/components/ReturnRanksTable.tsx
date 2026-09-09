@@ -5,6 +5,8 @@ const PERIODS = [
   {
     label:      '1 M',
     fundReturn: 'one_month_total_return_nav',
+    catReturn:  'category_one_month_total_return',
+    pgReturn:   'peer_group_one_month_total_return',
     catRank:    'one_month_total_return_rank_nav',
     catSize:    'one_month_total_return_rank_category_size_nav',
     pgRank:     'one_month_total_return_peer_group_rank_nav',
@@ -13,6 +15,8 @@ const PERIODS = [
   {
     label:      '3 M',
     fundReturn: 'three_month_total_return_nav',
+    catReturn:  'category_three_month_total_return',
+    pgReturn:   'peer_group_three_month_total_return',
     catRank:    'three_month_total_return_rank_nav',
     catSize:    'three_month_total_return_rank_category_size_nav',
     pgRank:     'three_month_total_return_peer_group_rank_nav',
@@ -21,6 +25,8 @@ const PERIODS = [
   {
     label:      'YTD',
     fundReturn: 'ytd_total_return_nav',
+    catReturn:  'category_ytd_total_return',
+    pgReturn:   'peer_group_ytd_total_return',
     catRank:    'ytd_total_return_rank_nav',
     catSize:    'ytd_total_return_rank_category_size_nav',
     pgRank:     'ytd_total_return_peer_group_rank_nav',
@@ -29,6 +35,8 @@ const PERIODS = [
   {
     label:      '1 Y',
     fundReturn: 'one_year_total_return_nav',
+    catReturn:  'category_one_year_total_return',
+    pgReturn:   'peer_group_one_year_total_return',
     catRank:    'one_year_total_return_rank_nav',
     catSize:    'one_year_total_return_rank_category_size_nav',
     pgRank:     'one_year_total_return_peer_group_rank_nav',
@@ -37,6 +45,8 @@ const PERIODS = [
   {
     label:      '3 Y',
     fundReturn: 'annualized_three_year_total_return_nav',
+    catReturn:  'category_three_year_total_return',
+    pgReturn:   'peer_group_three_year_total_return',
     catRank:    'three_year_total_return_rank_nav',
     catSize:    'three_year_total_return_rank_category_size_nav',
     pgRank:     'three_year_total_return_peer_group_rank_nav',
@@ -45,6 +55,8 @@ const PERIODS = [
   {
     label:      '5 Y',
     fundReturn: 'annualized_five_year_total_return_nav',
+    catReturn:  'category_five_year_total_return',
+    pgReturn:   'peer_group_five_year_total_return',
     catRank:    'five_year_total_return_rank_nav',
     catSize:    'five_year_total_return_rank_category_size_nav',
     pgRank:     'five_year_total_return_peer_group_rank_nav',
@@ -60,15 +72,19 @@ function num(s: SecurityDetail, key: keyof SecurityDetail): number | null {
 function RankTable({
   title,
   security,
+  returnKey,
   rankKey,
   sizeKey,
+  returnLabel,
   rankLabel,
   sizeLabel,
 }: {
   title: string
   security: SecurityDetail
+  returnKey: keyof typeof PERIODS[number]
   rankKey: keyof typeof PERIODS[number]
   sizeKey: keyof typeof PERIODS[number]
+  returnLabel: string
   rankLabel: string
   sizeLabel: string
 }) {
@@ -99,6 +115,19 @@ function RankTable({
               {PERIODS.map((p) => (
                 <td key={p.label} className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs font-medium text-gray-900">
                   {fmtDecimalPct(num(security, p.fundReturn as keyof SecurityDetail))}
+                </td>
+              ))}
+            </tr>
+            {/* The cohort's own return, so the rank above it has something to be a
+                rank OF. A rank of 8 means nothing without knowing whether the
+                cohort made 3% or 30%. */}
+            <tr className="bg-white">
+              <th scope="row" className="max-w-[12rem] py-2 pl-3 pr-4 text-left text-xs font-medium text-gray-700">
+                {returnLabel}
+              </th>
+              {PERIODS.map((p) => (
+                <td key={p.label} className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs text-gray-900">
+                  {fmtDecimalPct(num(security, p[returnKey] as keyof SecurityDetail))}
                 </td>
               ))}
             </tr>
@@ -135,8 +164,10 @@ export function ReturnRanksTable({ security, mode }: { security: SecurityDetail;
       <RankTable
         title="Rank in Category"
         security={security}
+        returnKey="catReturn"
         rankKey="catRank"
         sizeKey="catSize"
+        returnLabel="Category return"
         rankLabel="Category rank"
         sizeLabel="Category size"
       />
@@ -146,8 +177,10 @@ export function ReturnRanksTable({ security, mode }: { security: SecurityDetail;
     <RankTable
       title="Rank in Peer Group"
       security={security}
+      returnKey="pgReturn"
       rankKey="pgRank"
       sizeKey="pgSize"
+      returnLabel="Peer group return"
       rankLabel="Peer group rank"
       sizeLabel="Peer group size"
     />
