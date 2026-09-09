@@ -92,6 +92,33 @@ export async function fetchCategoryBenchmark(category: string): Promise<string |
 }
 
 /**
+ * The whole category_benchmarks ROW for a security's `ycharts_benchmark_category`
+ * — the same match `fetchCategoryBenchmark` makes, but returning the metrics
+ * rather than just the name.
+ *
+ * This is the benchmark the fund page already names in its header, so reading its
+ * returns from here keeps the header and the Category-return row describing the
+ * same index. Matches with or without hyphens, like its sibling.
+ */
+export async function fetchCategoryBenchmarkRow(category: string): Promise<BenchmarkOption | null> {
+  const { data, error } = await supabase
+    .from('category_benchmarks')
+    .select(`id, category_ticker, category_benchmark, category, etf_proxy, ${CATEGORY_RETURN_COLS}`)
+    .in('category', hyphenVariants(category))
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const { category_ticker, ...rest } = data as Record<string, unknown>
+  return {
+    sector_benchmarks: null,
+    sector: null,
+    ticker: (category_ticker as string) ?? '',
+    ...rest,
+  } as BenchmarkOption
+}
+
+/**
  * Looks up the peer_group_benchmark from peer_group_benchmarks where peer_group_category
  * matches the security's peer_group_name value. Matches with or without hyphens.
  */

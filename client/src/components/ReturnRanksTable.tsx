@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { fmtInt, fmtDecimalPct } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
-import { fetchCategoryBenchmarkById, type BenchmarkOption } from '@/lib/benchmarks'
+import {
+  fetchCategoryBenchmarkById, fetchCategoryBenchmarkRow, type BenchmarkOption,
+} from '@/lib/benchmarks'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 const PERIODS = [
@@ -186,16 +188,27 @@ function RankTable({
 }
 
 export function ReturnRanksTable({ security, mode }: { security: SecurityDetail; mode: 'cat' | 'pg' }) {
-  // preferred_benchmark1_id is an FK into category_benchmarks. Fetched BY ID
-  // rather than found in fetchBenchmarkOptions(), whose list is deduplicated by
-  // ticker — FPX points at id 676 (^RLGTR / US Multi-Cap Growth) and dedup keeps
-  // id 288 (^RLGTR / US Large Cap Growth), so the lookup would find nothing.
+  // The category benchmark is derived, not configured: ycharts_benchmark_category
+  // ("US Multi-Cap Growth") matches category_benchmarks.category, and that row's
+  // returns are the ones shown. It is the SAME row the page header already names,
+  // so header and table describe one index instead of two things.
+  const categoryName = security.ycharts_benchmark_category
+  const { data: categoryBench = null } = useQuery({
+    queryKey: QUERY_KEYS.categoryBenchmarkRow(categoryName ?? ''),
+    queryFn: () => fetchCategoryBenchmarkRow(categoryName!),
+    enabled: !!categoryName,
+  })
+
+  // Explicit per-fund override, and the only route for the 9 funds whose
+  // ycharts_benchmark_category matches no benchmark row. Wins when set.
   const benchId = security.preferred_benchmark1_id
-  const { data: preferred = null } = useQuery({
+  const { data: preferredBench = null } = useQuery({
     queryKey: QUERY_KEYS.categoryBenchmarkById(benchId ?? 0),
     queryFn: () => fetchCategoryBenchmarkById(benchId!),
     enabled: benchId != null,
   })
+
+  const preferred = preferredBench ?? categoryBench
 
   if (mode === 'cat') {
     return (
