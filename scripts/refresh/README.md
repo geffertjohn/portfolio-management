@@ -145,7 +145,34 @@ that can silently reset), and every recalc would otherwise cross SMB.
 The repo's `YCharts/Ycharts.xlsm` is the **template of record** — commit it when
 the structure changes, never from the job.
 
-## Install on the mini
+## Registry gotcha: prlctl exec writes to the WRONG hive
+
+`prlctl exec` runs as **NT AUTHORITY\SYSTEM**, so `HKCU:` inside it resolves to
+SYSTEM's hive (`HKEY_USERS\S-1-5-18`), **not** the interactive user's. Excel
+settings written that way are invisible to the user who actually runs Excel, and
+they fail silently — the listing looks right, and nothing works.
+
+Reach the real user explicitly:
+
+```powershell
+$sid = (New-Object System.Security.Principal.NTAccount('johngeffert')).Translate(
+        [System.Security.Principal.SecurityIdentifier]).Value
+$sec = "Registry::HKEY_USERS\$sid\Software\Microsoft\Office\16.0\Excel\Security"
+```
+
+The tell is `Trusted Locations` listing `C:\WINDOWS\system32\config\systemprofile\...`
+paths — that is SYSTEM's Excel, not yours.
+
+## Why macros actually run
+
+`VBAWarnings = 1` ("enable all macros") is set in the user's hive. That, not any
+trusted location, is what lets `Workbook_Open` fire unattended. It is broader
+than this job needs — a dedicated single-purpose VM makes it defensible, but it
+is worth knowing it is the load-bearing setting. `C:\portfolio\` is also
+registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
+("disable with notification") later will not break the scheduled run.
+
+## Install on the Mac Studio
 
 ### On the mini (macOS)
 

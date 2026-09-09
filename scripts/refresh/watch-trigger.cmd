@@ -14,10 +14,17 @@ REM clock, because the Mac controls when the VM is actually awake. It also
 REM survives suspend/resume — the scheduler comes back with the OS, whereas a
 REM logon-triggered task never re-fires on resume.
 REM
+REM It must run as the INTERACTIVE logged-on user. `prlctl exec` runs as
+REM NT AUTHORITY\SYSTEM in session 0, a profile with no YCharts add-in and no
+REM ycharts.key, so Excel started that way resolves no YCP() at all and the
+REM macro aborts on its error-ratio guard. Only the console session works.
+REM
 REM Deliberately a .cmd: no PowerShell execution policy to satisfy, and no
 REM VBScript, which Windows 11 has begun retiring.
 
-set TRIGGER=Z:\portfolio-refresh\inbox\REFRESH-NOW
+REM UNC, not a drive letter: Parallels letters differ per machine and mapped
+REM drives are per-session.
+set TRIGGER=\\Mac\Home\portfolio-refresh\inbox\REFRESH-NOW
 set WORKBOOK=C:\portfolio\Ycharts.xlsm
 
 if not exist "%TRIGGER%" goto :eof

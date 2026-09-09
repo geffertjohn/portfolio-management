@@ -16,7 +16,7 @@
 # it is the right one, since a hung Excel would otherwise wedge the run.
 set -uo pipefail
 
-REPO="${REPO:-$HOME/portfolio-management}"
+REPO="${REPO:-$HOME/Desktop/Portfolio Management}"
 VM="${VM_NAME:-Windows 11}"
 BASE="${REFRESH_HOME:-$HOME/portfolio-refresh}"
 
@@ -30,8 +30,10 @@ OUTPUT="$INBOX/Ycharts-refreshed.xlsx"
 VM_ERROR="$INBOX/refresh-error.txt"          # written by the macro's abort path
 TRIGGER="$INBOX/REFRESH-NOW"                 # watch-trigger.cmd polls for this
 
-# The guest sees the Mac home as Z:, so $INBOX is Z:\portfolio-refresh\inbox.
-# Parallels' "Shared Profile" already provides that — no extra shared folder.
+# The guest reaches $INBOX as \\Mac\Home\portfolio-refresh\inbox — a UNC path,
+# because Parallels' drive letters differ per machine (the Studio maps Y: to Home,
+# Z: to AllFiles) and mapped letters are invisible outside the interactive logon.
+# Parallels' "Shared Profile" provides the share; no extra folder to configure.
 
 # The guest polls every 2 min, and a first open takes a few minutes while the
 # add-in fetches every data point, so allow generously.
@@ -101,6 +103,23 @@ while [ ! -f "$OUTPUT" ]; do
   sleep "$POLL_SECS"; waited=$((waited + POLL_SECS))
 done
 log "output appeared after ${waited}s"
+
+# ── Make sure Excel actually exited before suspending ───────────────────────
+# The macro quits itself, but a botched quit used to leave EXCEL.EXE alive at
+# ~500MB, and suspending would freeze it there for the next run to trip over.
+# Give it a grace period, then force it and clear the lock file it leaves behind
+# — a stale ~$ lock makes the next open read-only, which would break the run
+# silently.
+excel_gone() { ! prlctl exec "$VM" tasklist.exe 2>/dev/null | grep -qi '^EXCEL.EXE'; }
+grace=0
+until excel_gone || [ "$grace" -ge 60 ]; do sleep 5; grace=$((grace + 5)); done
+if excel_gone; then
+  log "Excel exited on its own after ${grace}s"
+else
+  log "WARN: Excel still running after ${grace}s — forcing it"
+  prlctl exec "$VM" taskkill.exe /IM EXCEL.EXE /F >>"$LOG" 2>&1
+  prlctl exec "$VM" cmd.exe /c 'del /f /q "C:\portfolio\~$Ycharts.xlsm"' >>"$LOG" 2>&1
+fi
 
 # ── Give the RAM back before importing ──────────────────────────────────────
 prlctl suspend "$VM" >>"$LOG" 2>&1 && log "VM suspended" || log "WARN: suspend failed"

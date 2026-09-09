@@ -3,16 +3,21 @@
   LaunchAgent for the scheduled YCharts refresh.
 
   An AGENT, not a Daemon: Parallels needs the logged-in GUI session to run a VM,
-  and a daemon has none. Install to ~/Library/LaunchAgents/ on the mini.
+  and a daemon has none. Install to ~/Library/LaunchAgents/ on the Mac Studio.
 
   Weekdays only (Monday=1 … Friday=5) at 05:30 — before the day starts, after
   YCharts has posted the previous close. RunAtLoad is false so installing it
   does not immediately fire a run.
 
-  If the mini is asleep at 05:30 the job is skipped, not deferred — but the box
-  is configured never to sleep, and `pmset autorestart` brings it back after a
-  power cut, so a missed run means something is actually wrong. That is exactly
-  what the stale-data action in the app is there to surface.
+  launchd does NOT wake a sleeping Mac, so the Studio is woken separately by
+  `sudo pmset repeat wakeorpoweron MTWRF 05:25:00` — five minutes ahead. With
+  `autorestart 1` it also comes back after a power cut.
+
+  The one hole left is a reboot: FileVault is on, so the Studio stops at the
+  unlock screen with no user session, and no LaunchAgent runs until someone logs
+  in. Disabling FileVault on a primary workstation to fix a 5am job is the wrong
+  trade, so this is accepted — the stale-data action in the app is what surfaces
+  the missed days.
 -->
 <plist version="1.0">
 <dict>
@@ -22,7 +27,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/johnauxcomp/portfolio-management/scripts/refresh/refresh.sh</string>
+    <string>/Users/johngeffert/Desktop/Portfolio Management/scripts/refresh/refresh.sh</string>
   </array>
 
   <key>StartCalendarInterval</key>
@@ -39,9 +44,9 @@
 
   <!-- launchd's own capture, for failures that happen before refresh.sh can log. -->
   <key>StandardOutPath</key>
-  <string>/Users/johnauxcomp/portfolio-refresh/logs/launchd.out</string>
+  <string>/Users/johngeffert/portfolio-refresh/logs/launchd.out</string>
   <key>StandardErrorPath</key>
-  <string>/Users/johnauxcomp/portfolio-refresh/logs/launchd.err</string>
+  <string>/Users/johngeffert/portfolio-refresh/logs/launchd.err</string>
 
   <!-- prlctl lives in /usr/local/bin; launchd's default PATH does not include it. -->
   <key>EnvironmentVariables</key>
