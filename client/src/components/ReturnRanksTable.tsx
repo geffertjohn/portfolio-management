@@ -1,10 +1,14 @@
+import { useQuery } from '@tanstack/react-query'
 import { fmtInt, fmtDecimalPct } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
+import { fetchCategoryBenchmarkById, type BenchmarkOption } from '@/lib/benchmarks'
+import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 const PERIODS = [
   {
     label:      '1 M',
     fundReturn: 'one_month_total_return_nav',
+    benchReturn:'one_month_total_return',
     catReturn:  'category_one_month_total_return',
     pgReturn:   'peer_group_one_month_total_return',
     catRank:    'one_month_total_return_rank_nav',
@@ -15,6 +19,7 @@ const PERIODS = [
   {
     label:      '3 M',
     fundReturn: 'three_month_total_return_nav',
+    benchReturn:'three_month_total_return',
     catReturn:  'category_three_month_total_return',
     pgReturn:   'peer_group_three_month_total_return',
     catRank:    'three_month_total_return_rank_nav',
@@ -25,6 +30,7 @@ const PERIODS = [
   {
     label:      'YTD',
     fundReturn: 'ytd_total_return_nav',
+    benchReturn:'ytd_total_return',
     catReturn:  'category_ytd_total_return',
     pgReturn:   'peer_group_ytd_total_return',
     catRank:    'ytd_total_return_rank_nav',
@@ -35,6 +41,7 @@ const PERIODS = [
   {
     label:      '1 Y',
     fundReturn: 'one_year_total_return_nav',
+    benchReturn:'annualized_daily_one_year_total_return',
     catReturn:  'category_one_year_total_return',
     pgReturn:   'peer_group_one_year_total_return',
     catRank:    'one_year_total_return_rank_nav',
@@ -45,6 +52,7 @@ const PERIODS = [
   {
     label:      '3 Y',
     fundReturn: 'annualized_three_year_total_return_nav',
+    benchReturn:'annualized_daily_three_year_return',
     catReturn:  'category_three_year_total_return',
     pgReturn:   'peer_group_three_year_total_return',
     catRank:    'three_year_total_return_rank_nav',
@@ -55,6 +63,7 @@ const PERIODS = [
   {
     label:      '5 Y',
     fundReturn: 'annualized_five_year_total_return_nav',
+    benchReturn:'annualized_daily_five_year_total_return',
     catReturn:  'category_five_year_total_return',
     pgReturn:   'peer_group_five_year_total_return',
     catRank:    'five_year_total_return_rank_nav',
@@ -69,6 +78,11 @@ function num(s: SecurityDetail, key: keyof SecurityDetail): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
+function benchNum(b: BenchmarkOption, key: typeof PERIODS[number]['benchReturn']): number | null {
+  const v = b[key]
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
 function RankTable({
   title,
   security,
@@ -78,6 +92,7 @@ function RankTable({
   returnLabel,
   rankLabel,
   sizeLabel,
+  benchmarkOverride = null,
 }: {
   title: string
   security: SecurityDetail
@@ -87,6 +102,13 @@ function RankTable({
   returnLabel: string
   rankLabel: string
   sizeLabel: string
+  /**
+   * When set, the cohort-return row shows THIS benchmark's returns instead of
+   * the stored category average. The two answer different questions — the
+   * average is "how did comparable funds do", the benchmark is "how did the
+   * index do" — so the row is relabelled to say which one is on screen.
+   */
+  benchmarkOverride?: BenchmarkOption | null
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 flex-1 min-w-0">
@@ -123,13 +145,20 @@ function RankTable({
                 cohort made 3% or 30%. */}
             <tr className="bg-white">
               <th scope="row" className="max-w-[12rem] py-2 pl-3 pr-4 text-left text-xs font-medium text-gray-700">
-                {returnLabel}
+                {benchmarkOverride
+                  ? benchmarkOverride.category_benchmark ?? benchmarkOverride.ticker
+                  : returnLabel}
               </th>
-              {PERIODS.map((p) => (
-                <td key={p.label} className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs text-gray-900">
-                  {fmtDecimalPct(num(security, p[returnKey] as keyof SecurityDetail))}
-                </td>
-              ))}
+              {PERIODS.map((p) => {
+                const v = benchmarkOverride
+                  ? benchNum(benchmarkOverride, p.benchReturn)
+                  : num(security, p[returnKey] as keyof SecurityDetail)
+                return (
+                  <td key={p.label} className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs text-gray-900">
+                    {fmtDecimalPct(v)}
+                  </td>
+                )
+              })}
             </tr>
             <tr className="bg-gray-50/80">
               <th scope="row" className="max-w-[12rem] py-2 pl-3 pr-4 text-left text-xs font-medium text-gray-500">
@@ -159,11 +188,23 @@ function RankTable({
 }
 
 export function ReturnRanksTable({ security, mode }: { security: SecurityDetail; mode: 'cat' | 'pg' }) {
+  // preferred_benchmark1_id is an FK into category_benchmarks. Fetched BY ID
+  // rather than found in fetchBenchmarkOptions(), whose list is deduplicated by
+  // ticker — FPX points at id 676 (^RLGTR / US Multi-Cap Growth) and dedup keeps
+  // id 288 (^RLGTR / US Large Cap Growth), so the lookup would find nothing.
+  const benchId = security.preferred_benchmark1_id
+  const { data: preferred = null } = useQuery({
+    queryKey: QUERY_KEYS.categoryBenchmarkById(benchId ?? 0),
+    queryFn: () => fetchCategoryBenchmarkById(benchId!),
+    enabled: benchId != null,
+  })
+
   if (mode === 'cat') {
     return (
       <RankTable
         title="Rank in Category"
         security={security}
+        benchmarkOverride={preferred}
         returnKey="catReturn"
         rankKey="catRank"
         sizeKey="catSize"

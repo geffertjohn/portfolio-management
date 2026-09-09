@@ -44,6 +44,7 @@ export const QUERY_KEYS = {
   benchmarks: ['benchmarks', 'v5'] as const,
   importRuns: ['import_runs'] as const,
   sectorBenchmarks: ['sector_benchmarks', 'v3'] as const,
+  categoryBenchmarkById: (id: number) => ['category_benchmark_by_id', id] as const,
   relatedSecurities: (securityId: string) => ['related_securities', securityId] as const,
   ips: (clientId: number) => ['ips', clientId] as const,
   ipsModelCompatibility: (clientId: number) => ['ips_model_compatibility', clientId] as const,

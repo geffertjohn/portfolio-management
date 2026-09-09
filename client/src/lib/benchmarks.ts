@@ -246,6 +246,32 @@ export async function fetchBenchmarkOptions(): Promise<BenchmarkOption[]> {
   return dedupByTicker(rows)
 }
 
+/**
+ * One category benchmark by its primary key.
+ *
+ * NOT a lookup into `fetchBenchmarkOptions()` — that list is deduplicated by
+ * ticker, and a ticker can legitimately serve several categories (^RLGTR is both
+ * "US Large Cap Growth" id 288 and "US Multi-Cap Growth" id 676). Dedup keeps the
+ * lowest id, so finding a `preferred_benchmark1_id` in that list silently misses
+ * every row that lost the dedup.
+ */
+export async function fetchCategoryBenchmarkById(id: number): Promise<BenchmarkOption | null> {
+  const { data, error } = await supabase
+    .from('category_benchmarks')
+    .select(`id, category_ticker, category_benchmark, category, etf_proxy, ${CATEGORY_RETURN_COLS}`)
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const { category_ticker, ...rest } = data as Record<string, unknown>
+  return {
+    sector_benchmarks: null,
+    sector: null,
+    ticker: (category_ticker as string) ?? '',
+    ...rest,
+  } as BenchmarkOption
+}
+
 export async function fetchSectorBenchmarkOptions(): Promise<BenchmarkOption[]> {
   const { data, error } = await supabase
     .from('sector_benchmarks')
