@@ -104,9 +104,9 @@ function RankTable({
   sizeLabel: string
   /**
    * When set, the cohort-return row shows THIS benchmark's returns instead of
-   * the stored category average. The two answer different questions — the
-   * average is "how did comparable funds do", the benchmark is "how did the
-   * index do" — so the row is relabelled to say which one is on screen.
+   * the stored category average. The LABEL is unchanged — the row still reads
+   * "Category return" either way, so which source is in play is not visible on
+   * screen; it is determined by whether the fund has preferred_benchmark1_id set.
    */
   benchmarkOverride?: BenchmarkOption | null
 }) {
@@ -145,9 +145,7 @@ function RankTable({
                 cohort made 3% or 30%. */}
             <tr className="bg-white">
               <th scope="row" className="max-w-[12rem] py-2 pl-3 pr-4 text-left text-xs font-medium text-gray-700">
-                {benchmarkOverride
-                  ? benchmarkOverride.category_benchmark ?? benchmarkOverride.ticker
-                  : returnLabel}
+                {returnLabel}
               </th>
               {PERIODS.map((p) => {
                 const v = benchmarkOverride
