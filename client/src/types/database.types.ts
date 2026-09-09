@@ -2921,7 +2921,6 @@ export type Database = {
           annualized_daily_three_year_return: number | null
           annualized_five_year_total_return_nav: number | null
           annualized_three_year_total_return_nav: number | null
-          assets_under_management: number | null
           bond_net: number | null
           broad_asset_class: string | null
           broad_category_group: string | null
@@ -2937,7 +2936,6 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           detailed_security_type: string | null
-          discount_or_premium_to_nav: number | null
           eps_growth_1_yr_generic: number | null
           equity_style_internal: string | null
           expense_ratio_generic: number | null
@@ -3030,7 +3028,6 @@ export type Database = {
           annualized_daily_three_year_return?: number | null
           annualized_five_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
-          assets_under_management?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
@@ -3046,7 +3043,6 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
-          discount_or_premium_to_nav?: number | null
           eps_growth_1_yr_generic?: number | null
           equity_style_internal?: string | null
           expense_ratio_generic?: number | null
@@ -3139,7 +3135,6 @@ export type Database = {
           annualized_daily_three_year_return?: number | null
           annualized_five_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
-          assets_under_management?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
@@ -3155,7 +3150,6 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
-          discount_or_premium_to_nav?: number | null
           eps_growth_1_yr_generic?: number | null
           equity_style_internal?: string | null
           expense_ratio_generic?: number | null

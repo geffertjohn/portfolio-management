@@ -34,7 +34,6 @@ export interface SecurityDetail extends Security {
   inception_date: string | null
   turnover_ratio: number | null
   expense_ratio_generic: number | null
-  assets_under_management: number | null
 
   // ── Fund total returns ────────────────────────────────────────────────────
   one_month_total_return_nav: number | null
@@ -138,7 +137,6 @@ export interface SecurityDetail extends Security {
   // ── Fund — additional YCharts fields ─────────────────────────────────────
   investment_strategy: string | null
   distribution_yield: number | null
-  discount_or_premium_to_nav: number | null
   '1_month_fund_level_flows': number | null
   '3_month_fund_level_flows': number | null
   '1_year_fund_level_flows': number | null

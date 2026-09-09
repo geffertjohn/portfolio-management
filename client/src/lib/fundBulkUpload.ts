@@ -69,6 +69,8 @@ const SKIP_COLS = new Set([
   'created_at',
   'updated_at',
   // Dropped from securities2 — still in the sheet, read by nothing.
+  'assets_under_management',
+  'discount_or_premium_to_nav',
   'annualized_ten_year_total_return_nav',
   'category_ten_year_total_return',
   'peer_group_ten_year_total_return',
