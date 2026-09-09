@@ -11,7 +11,6 @@ const PERIODS = [
     label:      '1 M',
     fundReturn: 'one_month_total_return_nav',
     benchReturn:'one_month_total_return',
-    catReturn:  'category_one_month_total_return',
     pgReturn:   'peer_group_one_month_total_return',
     catRank:    'one_month_total_return_rank_nav',
     catSize:    'one_month_total_return_rank_category_size_nav',
@@ -22,7 +21,6 @@ const PERIODS = [
     label:      '3 M',
     fundReturn: 'three_month_total_return_nav',
     benchReturn:'three_month_total_return',
-    catReturn:  'category_three_month_total_return',
     pgReturn:   'peer_group_three_month_total_return',
     catRank:    'three_month_total_return_rank_nav',
     catSize:    'three_month_total_return_rank_category_size_nav',
@@ -33,7 +31,6 @@ const PERIODS = [
     label:      'YTD',
     fundReturn: 'ytd_total_return_nav',
     benchReturn:'ytd_total_return',
-    catReturn:  'category_ytd_total_return',
     pgReturn:   'peer_group_ytd_total_return',
     catRank:    'ytd_total_return_rank_nav',
     catSize:    'ytd_total_return_rank_category_size_nav',
@@ -44,7 +41,6 @@ const PERIODS = [
     label:      '1 Y',
     fundReturn: 'one_year_total_return_nav',
     benchReturn:'annualized_daily_one_year_total_return',
-    catReturn:  'category_one_year_total_return',
     pgReturn:   'peer_group_one_year_total_return',
     catRank:    'one_year_total_return_rank_nav',
     catSize:    'one_year_total_return_rank_category_size_nav',
@@ -55,7 +51,6 @@ const PERIODS = [
     label:      '3 Y',
     fundReturn: 'annualized_three_year_total_return_nav',
     benchReturn:'annualized_daily_three_year_return',
-    catReturn:  'category_three_year_total_return',
     pgReturn:   'peer_group_three_year_total_return',
     catRank:    'three_year_total_return_rank_nav',
     catSize:    'three_year_total_return_rank_category_size_nav',
@@ -66,7 +61,6 @@ const PERIODS = [
     label:      '5 Y',
     fundReturn: 'annualized_five_year_total_return_nav',
     benchReturn:'annualized_daily_five_year_total_return',
-    catReturn:  'category_five_year_total_return',
     pgReturn:   'peer_group_five_year_total_return',
     catRank:    'five_year_total_return_rank_nav',
     catSize:    'five_year_total_return_rank_category_size_nav',
@@ -88,7 +82,7 @@ function benchNum(b: BenchmarkOption, key: typeof PERIODS[number]['benchReturn']
 function RankTable({
   title,
   security,
-  returnKey,
+  returnKey = undefined,
   rankKey,
   sizeKey,
   returnLabel,
@@ -98,7 +92,14 @@ function RankTable({
 }: {
   title: string
   security: SecurityDetail
-  returnKey: keyof typeof PERIODS[number]
+  /**
+   * Stored per-security column supplying the cohort row. The PEER table uses it
+   * (peer_group_*_total_return). The CATEGORY table does not: its cohort is the
+   * benchmark, so it passes `benchmarkOverride` instead and shows a dash when
+   * none resolves, rather than quietly substituting a peer average under the
+   * same label.
+   */
+  returnKey?: keyof typeof PERIODS[number]
   rankKey: keyof typeof PERIODS[number]
   sizeKey: keyof typeof PERIODS[number]
   returnLabel: string
@@ -152,7 +153,9 @@ function RankTable({
               {PERIODS.map((p) => {
                 const v = benchmarkOverride
                   ? benchNum(benchmarkOverride, p.benchReturn)
-                  : num(security, p[returnKey] as keyof SecurityDetail)
+                  : returnKey
+                    ? num(security, p[returnKey] as keyof SecurityDetail)
+                    : null
                 return (
                   <td key={p.label} className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs text-gray-900">
                     {fmtDecimalPct(v)}
@@ -216,7 +219,6 @@ export function ReturnRanksTable({ security, mode }: { security: SecurityDetail;
         title="Rank in Category"
         security={security}
         benchmarkOverride={preferred}
-        returnKey="catReturn"
         rankKey="catRank"
         sizeKey="catSize"
         returnLabel="Category return"
