@@ -395,7 +395,7 @@ export function SecurityDetailPage() {
             >
               {isFundOrEtfSecurity(security) ? (
                 <FundHeaderMetricsRow
-                  assetClass={security.broad_asset_class ?? null}
+                  msCategory={security.category_name ?? null}
                   category={security.ycharts_benchmark_category ?? null}
                   peerGroupName={security.peer_group_name ?? null}
                 />

@@ -4,14 +4,15 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fmtText } from '@/lib/formatters'
 
 type Props = {
-  assetClass: string | null
+  /** category_name from securities2 — the Morningstar category */
+  msCategory: string | null
   /** ycharts_benchmark_category from securities2 */
   category: string | null
   /** peer_group_name from securities2 */
   peerGroupName: string | null
 }
 
-export function FundHeaderMetricsRow({ assetClass, category, peerGroupName }: Props) {
+export function FundHeaderMetricsRow({ msCategory, category, peerGroupName }: Props) {
   const { data: categoryBenchmark } = useQuery({
     queryKey: QUERY_KEYS.categoryBenchmark(category ?? ''),
     queryFn: () => fetchCategoryBenchmark(category!),
@@ -27,8 +28,8 @@ export function FundHeaderMetricsRow({ assetClass, category, peerGroupName }: Pr
   return (
     <>
       <div className="min-w-0">
-        <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">Asset class</dt>
-        <dd className="mt-1 text-sm text-gray-900">{fmtText(assetClass)}</dd>
+        <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">MS category</dt>
+        <dd className="mt-1 text-sm text-gray-900">{fmtText(msCategory)}</dd>
       </div>
       <div className="min-w-0">
         <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">Category</dt>
