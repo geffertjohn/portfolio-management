@@ -52,20 +52,8 @@ export interface SecurityDetail extends Security {
   annualized_five_year_total_return_nav: number | null
 
   // ── Category returns ──────────────────────────────────────────────────────
-  category_one_month_total_return: number | null
-  category_three_month_total_return: number | null
-  category_ytd_total_return: number | null
-  category_one_year_total_return: number | null
-  category_three_year_total_return: number | null
-  category_five_year_total_return: number | null
 
   // ── Peer group returns ────────────────────────────────────────────────────
-  peer_group_one_month_total_return: number | null
-  peer_group_three_month_total_return: number | null
-  peer_group_ytd_total_return: number | null
-  peer_group_one_year_total_return: number | null
-  peer_group_three_year_total_return: number | null
-  peer_group_five_year_total_return: number | null
 
   // ── Alpha (category) ──────────────────────────────────────────────────────
   alpha_3y_vs_category: number | null

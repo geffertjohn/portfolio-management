@@ -78,6 +78,21 @@ const SKIP_COLS = new Set([
   'ten_year_total_return_rank_category_size_nav',
   'ten_year_total_return_peer_group_rank_nav',
   'ten_year_total_return_peer_group_size_nav',
+  // The category and peer-group AVERAGE returns. Dropped Sep 2026 with the
+  // fund Total Performance block, which was their last reader — the rank
+  // tables show the cohort's BENCHMARK instead, which is a different figure.
+  'category_one_month_total_return',
+  'category_three_month_total_return',
+  'category_ytd_total_return',
+  'category_one_year_total_return',
+  'category_three_year_total_return',
+  'category_five_year_total_return',
+  'peer_group_one_month_total_return',
+  'peer_group_three_month_total_return',
+  'peer_group_ytd_total_return',
+  'peer_group_one_year_total_return',
+  'peer_group_three_year_total_return',
+  'peer_group_five_year_total_return',
 ])
 
 // ── Row-level parsing ─────────────────────────────────────────────────────────
