@@ -10,6 +10,14 @@
  * anyway, and without them the row gives no sense of what the choice implies.
  * The decision itself should rest on which cohort is the fair comparison — the
  * category and peer group NAMES — not on which one scores better.
+ *
+ * MS category (`category_name`) is shown as REFERENCE only, greyed and marked
+ * "(ref)": it is Morningstar's own grouping and nothing ranks against it. The
+ * scorecard ranks against `ycharts_benchmark_category`, which is a different and
+ * usually broader bucket — three core bond funds can share one MS category and
+ * one YCharts category while sitting in three different peer groups. It earns a
+ * column because it is often the clearest description of what a fund actually
+ * does, which is the question the cohort choice turns on.
  */
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -143,6 +151,9 @@ export function ReviewCohortsPage() {
             <thead>
               <tr className="border-b border-gray-200 bg-gray-100 text-xs font-semibold uppercase tracking-wide text-gray-600">
                 <th scope="col" className="whitespace-nowrap py-2.5 pl-4 pr-3 text-left">Fund</th>
+                <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-left">
+                  MS category <span className="font-normal normal-case text-gray-400">(ref)</span>
+                </th>
                 <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-left">Category</th>
                 <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-right">Score</th>
                 <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-left">Peer group</th>
@@ -152,10 +163,10 @@ export function ReviewCohortsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading && (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">Loading funds…</td></tr>
+                <tr><td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">Loading funds…</td></tr>
               )}
               {!isLoading && visible.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">
+                <tr><td colSpan={7} className="px-4 py-6 text-center text-sm text-gray-500">
                   {unsetOnly ? 'Every fund has a cohort set.' : 'No funds found.'}
                 </td></tr>
               )}
@@ -166,6 +177,9 @@ export function ReviewCohortsPage() {
                     <div className="max-w-[18rem] truncate text-xs text-gray-500" title={fund.security_name ?? ''}>
                       {fmtText(fund.security_name)}
                     </div>
+                  </td>
+                  <td className="max-w-[12rem] truncate px-3 py-2 text-xs italic text-gray-400" title={fund.category_name ?? ''}>
+                    {fmtText(fund.category_name)}
                   </td>
                   <td className="max-w-[14rem] truncate px-3 py-2 text-xs text-gray-600" title={fund.ycharts_benchmark_category ?? ''}>
                     {fmtText(fund.ycharts_benchmark_category)}
