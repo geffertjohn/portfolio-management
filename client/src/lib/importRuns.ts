@@ -110,6 +110,74 @@ export function ychartsAsOf(
   return present.reduce((oldest, r) => (r.imported_at < oldest.imported_at ? r : oldest))
 }
 
+// ── Did the scheduled refresh actually run? ─────────────────────────────────
+//
+// The stamp above answers "how old is this data". It cannot answer "did this
+// morning's job fire", and those come apart badly for a job that runs every
+// weekday: age-based thresholds (45 days on the stamp, 3 in the Actions hub)
+// stay quiet for a week or more while a broken schedule delivers nothing. The
+// refresh silently never ran from launchd at all until 2026-09-10, and nothing
+// in the app said so.
+//
+// A missed run leaves NO import_runs row, so absence is the only evidence. That
+// makes it readable only against when a run was DUE.
+
+/** Weekdays at 05:30 local (the launchd agent), VM + Excel leg takes ~5 min. */
+const REFRESH_HOUR = 5
+const REFRESH_MINUTE = 30
+/** How long a due run gets to land before it counts as missed. */
+const REFRESH_GRACE_MINS = 90
+
+/**
+ * The most recent scheduled refresh that should ALREADY have landed.
+ *
+ * Steps back a day while today's run is still within its grace window, then
+ * back over the weekend — so Monday at 06:00 expects FRIDAY's run, not a
+ * Saturday one that was never scheduled, and 05:35 on a weekday does not report
+ * a miss for a job that is still mid-flight.
+ */
+export function lastExpectedRefresh(now: Date = new Date()): Date {
+  const due = new Date(now)
+  due.setHours(REFRESH_HOUR, REFRESH_MINUTE, 0, 0)
+  if (now.getTime() < due.getTime() + REFRESH_GRACE_MINS * 60_000) {
+    due.setDate(due.getDate() - 1)
+  }
+  while (due.getDay() === 0 || due.getDay() === 6) due.setDate(due.getDate() - 1)
+  return due
+}
+
+/**
+ * When the scheduled refresh has not delivered, the run it should have made.
+ * Null when the data is current, nothing has ever been imported, or `sources`
+ * names nothing the scheduled job writes.
+ *
+ * Only the three workbook datasets count: `ycharts_allocations` is a manual
+ * upload on its own cadence, so judging the 05:30 job by it would report a miss
+ * every single day.
+ */
+export function missedScheduledRefresh(
+  runs: Map<ImportSource, ImportRun>,
+  sources: ImportSource[] = YCHARTS_DATA_SOURCES,
+  now: Date = new Date(),
+): Date | null {
+  const scheduled = sources.filter((s) => YCHARTS_DATA_SOURCES.includes(s))
+  if (scheduled.length === 0) return null
+  const latest = ychartsAsOf(runs, scheduled)
+  if (!latest) return null
+  const due = lastExpectedRefresh(now)
+  return new Date(latest.imported_at).getTime() < due.getTime() ? due : null
+}
+
+/** "today" / "Friday" — how to refer to a due run in a one-line stamp. */
+export function refreshDueLabel(due: Date, now: Date = new Date()): string {
+  const sameDay = due.toDateString() === now.toDateString()
+  if (sameDay) return 'today'
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (due.toDateString() === yesterday.toDateString()) return 'yesterday'
+  return due.toLocaleDateString(undefined, { weekday: 'long' })
+}
+
 /** Whole days since the run. */
 export function daysSince(run: ImportRun): number {
   return Math.floor((Date.now() - new Date(run.imported_at).getTime()) / 86_400_000)

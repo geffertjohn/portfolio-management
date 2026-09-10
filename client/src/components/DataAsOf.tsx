@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import {
-  daysSince, fetchLatestImportRuns, fmtImportDate, ychartsAsOf,
-  YCHARTS_DATA_SOURCES, type ImportSource,
+  daysSince, fetchLatestImportRuns, fmtImportDate, missedScheduledRefresh,
+  refreshDueLabel, ychartsAsOf, YCHARTS_DATA_SOURCES, type ImportSource,
 } from '@/lib/importRuns'
 
 /** Past this many days the stamp turns amber — a quarter-end refresh has been missed. */
@@ -39,13 +39,21 @@ export function DataAsOf({
   const days = daysSince(run)
   const stale = days >= STALE_AFTER_DAYS
 
+  // A missed run is reported ahead of plain age: on the morning the schedule
+  // first fails the data is still a day old, so the age thresholds say nothing
+  // while the thing the user actually wants to know -- did it fire -- is
+  // already answerable.
+  const missed = runs ? missedScheduledRefresh(runs, sources) : null
+
   return (
     <span
-      className={`text-xs ${stale ? 'text-amber-700' : 'text-gray-400'} ${className}`}
+      className={`text-xs ${missed || stale ? 'text-amber-700' : 'text-gray-400'} ${className}`}
       title={`Imported from ${run.file_name ?? 'an Excel file'} on ${fmtImportDate(run)}`}
     >
       YCharts data as of {fmtImportDate(run)}
-      {stale && ` · ${days} days old`}
+      {missed
+        ? ` · ${refreshDueLabel(missed)}'s refresh did not run`
+        : stale && ` · ${days} days old`}
     </span>
   )
 }

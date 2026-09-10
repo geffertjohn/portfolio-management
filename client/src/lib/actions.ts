@@ -20,7 +20,8 @@ import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReview
 import { fetchUnacknowledgedAlerts } from './alertRules'
 import { fetchActiveAtRisk } from './atRisk'
 import {
-  daysSince, fetchLatestImportRuns, YCHARTS_DATA_SOURCES, ychartsAsOf,
+  daysSince, fetchLatestImportRuns, fmtImportDate, missedScheduledRefresh,
+  refreshDueLabel, YCHARTS_DATA_SOURCES, ychartsAsOf,
 } from './importRuns'
 
 export type ActionSource =
@@ -207,22 +208,26 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
     }]
   }
 
-  // Nothing broke — has the schedule simply stopped delivering?
+  // Nothing broke — but did the job actually fire? Measured against when a run
+  // was DUE, not how old the data is: a weekday schedule that stops leaves no
+  // row at all, and pure age stays quiet for days while nothing is delivered.
   const oldest = ychartsAsOf(runs)
   if (oldest == null) return []
-  const age = daysSince(oldest)
-  if (age < REFRESH_STALE_AFTER_DAYS) return []
+  const missed = missedScheduledRefresh(runs)
+  if (missed == null) return []
 
+  const age = daysSince(oldest)
   return [{
-    key: 'refresh:stale',
+    key: 'refresh:missed',
     category: 'operational',
     source: 'data_refresh',
-    title: `YCharts data is ${age} days old`,
-    subtitle: 'The scheduled refresh has not landed — import the workbook or check the job',
+    title: `YCharts refresh did not run ${refreshDueLabel(missed)}`,
+    subtitle: `Last landed ${fmtImportDate(oldest)} — check the launchd agent, or import the workbook by hand`,
     linkedLabel: null,
     route: '/settings/import-export',
     dueDate: null,
-    priority: 'medium',
+    // One missed morning is often just a machine asleep; several is a break.
+    priority: age >= REFRESH_STALE_AFTER_DAYS ? 'high' : 'medium',
     isManual: false,
   }]
 }
