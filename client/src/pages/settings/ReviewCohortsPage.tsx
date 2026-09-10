@@ -24,6 +24,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fetchFundsForCohorts, setScorecardCohort, type SecurityDetail } from '@/lib/securities'
 import { scorecardScore, type ScorecardCohort } from '@/lib/fundScorecard'
+import {
+  fetchCategoryBenchmarkNames, fetchPeerGroupBenchmarkNames, lookupBenchmarkName,
+} from '@/lib/benchmarks'
 import { EMPTY, fmtText } from '@/lib/formatters'
 
 /** Matches the scorecard's own bands — see FundScorecard.tsx. */
@@ -74,6 +77,19 @@ export function ReviewCohortsPage() {
     queryFn: fetchFundsForCohorts,
   })
 
+  // One read per benchmark table, not one per fund. Both are small and change
+  // only on import, so they stay cached for the whole session.
+  const { data: catNames } = useQuery({
+    queryKey: QUERY_KEYS.categoryBenchmarkNames,
+    queryFn: fetchCategoryBenchmarkNames,
+    staleTime: 30 * 60 * 1000,
+  })
+  const { data: pgNames } = useQuery({
+    queryKey: QUERY_KEYS.peerGroupBenchmarkNames,
+    queryFn: fetchPeerGroupBenchmarkNames,
+    staleTime: 30 * 60 * 1000,
+  })
+
   const mutation = useMutation({
     mutationFn: ({ id, cohort }: { id: number; cohort: ScorecardCohort }) =>
       setScorecardCohort(id, cohort),
@@ -99,8 +115,10 @@ export function ReviewCohortsPage() {
       fund: f,
       catScore: scorecardScore(f, 'category'),
       pgScore: scorecardScore(f, 'peer'),
+      catIndex: lookupBenchmarkName(catNames, f.ycharts_benchmark_category),
+      pgIndex: lookupBenchmarkName(pgNames, f.peer_group_name),
     })),
-    [funds],
+    [funds, catNames, pgNames],
   )
 
   const setCount = rows.filter((r) => r.fund.scorecard_cohort != null).length
@@ -170,7 +188,7 @@ export function ReviewCohortsPage() {
                   {unsetOnly ? 'Every fund has a cohort set.' : 'No funds found.'}
                 </td></tr>
               )}
-              {visible.map(({ fund, catScore, pgScore }) => (
+              {visible.map(({ fund, catScore, pgScore, catIndex, pgIndex }) => (
                 <tr key={fund.id} className={fund.scorecard_cohort == null ? 'bg-amber-50/40' : 'bg-white'}>
                   <td className="py-2 pl-4 pr-3">
                     <div className="font-medium text-gray-900">{fund.security_id}</div>
@@ -181,16 +199,22 @@ export function ReviewCohortsPage() {
                   <td className="max-w-[12rem] truncate px-3 py-2 text-xs italic text-gray-400" title={fund.category_name ?? ''}>
                     {fmtText(fund.category_name)}
                   </td>
-                  <td className="max-w-[14rem] truncate px-3 py-2 text-xs text-gray-600" title={fund.ycharts_benchmark_category ?? ''}>
-                    {fmtText(fund.ycharts_benchmark_category)}
+                  <td className="max-w-[14rem] px-3 py-2 text-xs">
+                    <div className="truncate text-gray-600" title={fund.ycharts_benchmark_category ?? ''}>
+                      {fmtText(fund.ycharts_benchmark_category)}
+                    </div>
+                    <div className="truncate text-gray-400" title={catIndex ?? ''}>{catIndex ?? EMPTY}</div>
                   </td>
-                  <td className={`whitespace-nowrap px-3 py-2 text-right text-xs font-semibold tabular-nums ${scoreClass(catScore)}`}>
+                  <td className={`whitespace-nowrap px-3 py-2 align-top text-right text-xs font-semibold tabular-nums ${scoreClass(catScore)}`}>
                     {fmtScore(catScore)}
                   </td>
-                  <td className="max-w-[14rem] truncate px-3 py-2 text-xs text-gray-600" title={fund.peer_group_name ?? ''}>
-                    {fmtText(fund.peer_group_name)}
+                  <td className="max-w-[14rem] px-3 py-2 text-xs">
+                    <div className="truncate text-gray-600" title={fund.peer_group_name ?? ''}>
+                      {fmtText(fund.peer_group_name)}
+                    </div>
+                    <div className="truncate text-gray-400" title={pgIndex ?? ''}>{pgIndex ?? EMPTY}</div>
                   </td>
-                  <td className={`whitespace-nowrap px-3 py-2 text-right text-xs font-semibold tabular-nums ${scoreClass(pgScore)}`}>
+                  <td className={`whitespace-nowrap px-3 py-2 align-top text-right text-xs font-semibold tabular-nums ${scoreClass(pgScore)}`}>
                     {fmtScore(pgScore)}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">

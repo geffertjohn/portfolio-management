@@ -156,6 +156,64 @@ export async function fetchPeerGroupBenchmarkRow(
   } as BenchmarkOption
 }
 
+// ── Bulk cohort → index-name lookups ────────────────────────────────────────
+//
+// The single-row fetchers above are right for one fund; a list of 42 would fire
+// 84 round trips. These read each benchmark table once and return a lookup.
+
+/**
+ * Shared key for matching a fund's cohort name against a benchmark table's own.
+ * The two sides come from different sheets of the same workbook and disagree
+ * about hyphens, which is what `hyphenVariants` papers over for single lookups.
+ * Normalising BOTH sides is the map equivalent — slightly more permissive, since
+ * it also matches a hyphenated fund value to an unhyphenated benchmark row.
+ */
+function cohortKey(s: string): string {
+  return s.replace(/-/g, ' ').trim()
+}
+
+/** category → category_benchmark, for every category that names one. */
+export async function fetchCategoryBenchmarkNames(): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from('category_benchmarks')
+    .select('category, category_benchmark')
+    .not('category_benchmark', 'is', null)
+  if (error) throw error
+  const out: Record<string, string> = {}
+  for (const r of data ?? []) {
+    // First row wins, matching the single-row fetcher's .limit(1).
+    if (r.category && r.category_benchmark && !(cohortKey(r.category) in out)) {
+      out[cohortKey(r.category)] = r.category_benchmark
+    }
+  }
+  return out
+}
+
+/** peer_group_category → peer_group_benchmark, for every peer group that names one. */
+export async function fetchPeerGroupBenchmarkNames(): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from('peer_group_benchmarks')
+    .select('peer_group_category, peer_group_benchmark')
+    .not('peer_group_benchmark', 'is', null)
+  if (error) throw error
+  const out: Record<string, string> = {}
+  for (const r of data ?? []) {
+    if (r.peer_group_category && r.peer_group_benchmark && !(cohortKey(r.peer_group_category) in out)) {
+      out[cohortKey(r.peer_group_category)] = r.peer_group_benchmark
+    }
+  }
+  return out
+}
+
+/** Resolve one cohort name against a lookup built above. */
+export function lookupBenchmarkName(
+  names: Record<string, string> | undefined,
+  cohortName: string | null | undefined,
+): string | null {
+  if (!names || !cohortName) return null
+  return names[cohortKey(cohortName)] ?? null
+}
+
 /**
  * Looks up the peer_group_benchmark from peer_group_benchmarks where peer_group_category
  * matches the security's peer_group_name value. Matches with or without hyphens.
