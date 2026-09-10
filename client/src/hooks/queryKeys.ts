@@ -1,5 +1,6 @@
 export const QUERY_KEYS = {
   securities: ['securities2'] as const,
+  fundCohorts: ['fund_cohorts'] as const,
   security: (id: number) => ['security', id] as const,
   securityEquityModelPortfolios: (id: number) =>
     ['security-equity-model-portfolios', id] as const,
