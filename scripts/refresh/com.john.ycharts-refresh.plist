@@ -24,10 +24,17 @@
   <key>Label</key>
   <string>com.john.ycharts-refresh</string>
 
+  <!--
+    The repo must live OUTSIDE ~/Desktop, ~/Documents and ~/Downloads. Those are
+    TCC-protected, and a LaunchAgent holds no grant for them: bash could not read
+    refresh.sh at all, exiting 126 with "Operation not permitted" before the
+    script could log anything. Manual runs hid it, because Terminal already has
+    Desktop access. StandardErrorPath below is what made it visible.
+  -->
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/johngeffert/Desktop/Portfolio Management/scripts/refresh/refresh.sh</string>
+    <string>/Users/johngeffert/Developer/Portfolio Management/scripts/refresh/refresh.sh</string>
   </array>
 
   <key>StartCalendarInterval</key>

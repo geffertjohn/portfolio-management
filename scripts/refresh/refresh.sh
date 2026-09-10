@@ -16,7 +16,16 @@
 # it is the right one, since a hung Excel would otherwise wedge the run.
 set -uo pipefail
 
-REPO="${REPO:-$HOME/Desktop/Portfolio Management}"
+# NOT ~/Desktop, and not ~/Documents or ~/Downloads either.
+#
+# Those are TCC-protected on modern macOS. A LaunchAgent has no grant for them,
+# so bash could not even READ this script there: launchd fired correctly at
+# 05:30, got "Operation not permitted" on the open(), and exited 126 before a
+# single line ran -- which is why nothing appeared in this log. Interactive runs
+# were unaffected, because Terminal already holds Desktop access, so the job
+# looked healthy every time it was tested by hand. Keep the repo outside those
+# three folders.
+REPO="${REPO:-$HOME/Developer/Portfolio Management}"
 VM="${VM_NAME:-Windows 11}"
 BASE="${REFRESH_HOME:-$HOME/portfolio-refresh}"
 
