@@ -24,7 +24,6 @@ const AuditLogPage = lazy(() => import('@/pages/AuditLogPage').then((m) => ({ de
 const DocumentsPage = lazy(() => import('@/pages/settings/DocumentsPage').then((m) => ({ default: m.DocumentsPage })))
 const ImportExportPage = lazy(() => import('@/pages/settings/ImportExportPage').then((m) => ({ default: m.ImportExportPage })))
 const BenchmarksPage = lazy(() => import('@/pages/settings/BenchmarksPage').then((m) => ({ default: m.BenchmarksPage })))
-const ReviewCohortsPage = lazy(() => import('@/pages/settings/ReviewCohortsPage').then((m) => ({ default: m.ReviewCohortsPage })))
 const NotificationsPage = lazy(() => import('@/pages/settings/NotificationsPage').then((m) => ({ default: m.NotificationsPage })))
 const ModelPortfoliosPage = lazy(() => import('@/pages/settings/ModelPortfoliosPage').then((m) => ({ default: m.ModelPortfoliosPage })))
 const EditModelPortfolioPage = lazy(() => import('@/pages/settings/EditModelPortfolioPage').then((m) => ({ default: m.EditModelPortfolioPage })))
@@ -64,7 +63,6 @@ function App() {
           <Route path="settings/documents" element={<Page><DocumentsPage /></Page>} />
           <Route path="settings/import-export" element={<Page><ImportExportPage /></Page>} />
           <Route path="settings/benchmarks" element={<Page><BenchmarksPage /></Page>} />
-          <Route path="settings/review-cohorts" element={<Page><ReviewCohortsPage /></Page>} />
           <Route path="settings/notifications" element={<Page><NotificationsPage /></Page>} />
           <Route path="settings/model-portfolios" element={<Page><ModelPortfoliosPage /></Page>} />
           <Route path="settings/model-portfolios/:id/edit" element={<Page><EditModelPortfolioPage /></Page>} />

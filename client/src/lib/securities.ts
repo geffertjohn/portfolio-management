@@ -291,25 +291,6 @@ export async function fetchSecurities(): Promise<Security[]> {
   return (data ?? []) as Security[]
 }
 
-/**
- * Every fund/ETF as a full detail row, for the bulk review-cohort screen.
- *
- * Selects `*` because the scorecard needs ~20 rank/size columns per cohort and
- * listing them would drift from `fundScorecard.ts`. Classification is done here
- * rather than in SQL so it goes through `isFundOrEtfSecurity`, the single source
- * of truth — a `detailed_security_type` filter would silently miss the rows that
- * classify on fund-only signals instead.
- */
-export async function fetchFundsForCohorts(): Promise<SecurityDetail[]> {
-  const { data, error } = await supabase
-    .from('securities2')
-    .select('*')
-    .neq('security_id', '$Cash')
-    .order('security_id', { ascending: true })
-  if (error) throw error
-  return ((data ?? []) as unknown as SecurityDetail[]).filter(isFundOrEtfSecurity)
-}
-
 export async function fetchSecurityById(id: number): Promise<SecurityDetail | null> {
   const { data, error } = await supabase.from('securities2').select('*').eq('id', id).single()
 
