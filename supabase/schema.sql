@@ -1698,7 +1698,9 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "alt_1" "text",
     "alt_2" "text",
     "alt_3" "text",
-    "thesis" "text"
+    "thesis" "text",
+    "scorecard_cohort" "text",
+    CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
 
@@ -1706,6 +1708,10 @@ ALTER TABLE "public"."securities2" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."securities2" IS 'Extended fund metrics snapshot (securities); parallel to securities for migration or richer imports.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."scorecard_cohort" IS 'Cohort the fund/ETF is reviewed against: category | peer. NULL = not yet chosen; review automation must skip and report these. App-managed only — the YCharts import never writes it.';
 
 
 

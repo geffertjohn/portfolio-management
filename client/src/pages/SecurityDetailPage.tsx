@@ -7,7 +7,9 @@ import {
   isFundOrEtfSecurity,
   updateSecurityThesis,
   refreshSecurityFromFMP,
+  setScorecardCohort,
 } from '@/lib/securities'
+import type { ScorecardCohort } from '@/lib/fundScorecard'
 import {
   addToAtRisk,
   fetchAtRiskBySecurity,
@@ -155,6 +157,15 @@ export function SecurityDetailPage() {
     if (!security) return
     setThesisDraft(getThesisText(security))
   }, [security])
+
+  // The cohort a fund is REVIEWED against. Deliberately separate from the
+  // Category / Peer group tabs below it: those switch what you are looking at,
+  // and the whole point is to be able to read both without changing which one
+  // the review judges the fund by.
+  const cohortMutation = useMutation({
+    mutationFn: (cohort: ScorecardCohort) => setScorecardCohort(id, cohort),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: QUERY_KEYS.security(id) }) },
+  })
 
   const thesisMutation = useMutation({
     mutationFn: () => updateSecurityThesis(id, thesisDraft),
@@ -465,6 +476,37 @@ export function SecurityDetailPage() {
       {isFundOrEtfSecurity(security) && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-gray-900">Monitoring</h2>
+
+          {/* Review cohort — the stored setting, not the view tabs. */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Cohort</span>
+            <div className="inline-flex rounded-md border border-gray-200 bg-gray-100 p-0.5 text-xs font-medium">
+              {([['category', 'Category'], ['peer', 'Peer group']] as [ScorecardCohort, string][]).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={cohortMutation.isPending || security.scorecard_cohort === value}
+                  onClick={() => cohortMutation.mutate(value)}
+                  className={`rounded px-3 py-1 transition-colors disabled:cursor-default ${
+                    security.scorecard_cohort === value
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {security.scorecard_cohort == null && (
+              <span className="text-xs text-amber-700">
+                Not set — reviews can&rsquo;t be automated for this fund until a cohort is chosen
+              </span>
+            )}
+            {cohortMutation.isError && (
+              <span className="text-xs text-red-600">Could not save — try again</span>
+            )}
+          </div>
+
           <div className="mt-6 space-y-6">
             {(getBroadAssetClass(security) === 'equity' ||
               getBroadAssetClass(security) === 'fixed income') && (

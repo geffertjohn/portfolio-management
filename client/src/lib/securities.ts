@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { fetchEarningsDates, fetchProfile } from './fmpMarket'
+import type { ScorecardCohort } from './fundScorecard'
 
 /**
  * List row from `securities2` — fields shown in the securities list view.
@@ -11,6 +12,13 @@ export interface Security {
   security_name: string | null
   detailed_security_type: string | null
   peer_group_name: string | null
+  /**
+   * Which cohort this fund/ETF is judged against at review — 'category' | 'peer'.
+   * NULL until chosen; the review automation must skip and report those rather
+   * than default to one. Set in the app only: the YCharts import issues a partial
+   * update carrying just the Securities sheet's columns, so it never writes this.
+   */
+  scorecard_cohort: ScorecardCohort | null
   fund_company_name: string | null
   // Peer-group source for stocks (same chain the detail-page header uses)
   category_name: string | null
@@ -306,6 +314,18 @@ export async function saveSecurityBenchmarks(
 }
 
 /** Saves the three Alternatives-tab comparison tickers (uppercased; '' → null). */
+/** Set (or clear) the cohort a fund/ETF is reviewed against. */
+export async function setScorecardCohort(
+  id: number,
+  cohort: ScorecardCohort | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('securities2')
+    .update({ scorecard_cohort: cohort })
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function saveAlternatives(
   id: number,
   alts: [string | null, string | null, string | null],

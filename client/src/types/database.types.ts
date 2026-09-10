@@ -2989,6 +2989,7 @@ export type Database = {
           rsquared_3y_vs_category: number | null
           rsquared_3y_vs_pg: number | null
           sales_growth_1_yr_generic: number | null
+          scorecard_cohort: string | null
           security_id: string
           security_name: string | null
           sharpe_peer_group_rank: number | null
@@ -3096,6 +3097,7 @@ export type Database = {
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
           sales_growth_1_yr_generic?: number | null
+          scorecard_cohort?: string | null
           security_id: string
           security_name?: string | null
           sharpe_peer_group_rank?: number | null
@@ -3203,6 +3205,7 @@ export type Database = {
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
           sales_growth_1_yr_generic?: number | null
+          scorecard_cohort?: string | null
           security_id?: string
           security_name?: string | null
           sharpe_peer_group_rank?: number | null
