@@ -210,6 +210,9 @@ export function ImportExportPage() {
                 runs.push({ source: 'ycharts_benchmarks', rows: r.inserted, errors: r.errors })
                 parts.push(`${r.inserted} benchmark rows`)
                 if (r.errors.length > 0) parts.push(`${r.errors.length} benchmark error(s): ${r.errors[0]}`)
+                // Not an error -- the rows landed -- but an abandoned benchmark
+                // row never refreshes again and nothing else would say so.
+                for (const w of r.warnings) parts.push(w)
               } catch (e) {
                 const msg = e instanceof Error ? e.message : 'unknown error'
                 runs.push({ source: 'ycharts_benchmarks', rows: 0, errors: [msg], status: 'failed' })

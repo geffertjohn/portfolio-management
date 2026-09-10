@@ -32,6 +32,11 @@ import { assertExcelFile } from './excelImportShared'
 export type UploadResult = {
   inserted: number
   errors: string[]
+  /**
+   * Rows the workbook no longer accounts for. NOT errors — the import itself
+   * succeeded — but they will never refresh again, so they need a human.
+   */
+  warnings: string[]
 }
 
 type TableConfig = {
@@ -217,6 +222,56 @@ async function upsertTable(
   return { inserted, errors }
 }
 
+// ── Orphan detection ──────────────────────────────────────────────────────────
+
+/**
+ * Rows in the table that this import did not write.
+ *
+ * These tables upsert on a NATURAL key — (peer_group_ticker, peer_group_category)
+ * and friends — so editing either half of that key in the workbook does not
+ * update the row, it INSERTS a second one and abandons the first. Two such
+ * duplicates appeared on 2026-09-10 alone: a peer group renamed singular →
+ * plural, and a ticker corrected from ^BUHY2ICTR to ^BBUHY2ICTR.
+ *
+ * The failure is silent and nasty. The abandoned row keeps its old values
+ * forever, and `fetchPeerGroupBenchmark` picks with `.limit(1)` and no ordering,
+ * so a fund can bind to the stale copy while the page still shows a plausible
+ * index name. Nothing anywhere said so.
+ *
+ * Never throws and never fails the import: this is a diagnostic, and the data is
+ * already committed by the time it runs.
+ */
+async function findOrphans(
+  config: TableConfig,
+  records: Record<string, unknown>[],
+): Promise<string[]> {
+  const keys = config.upsertOn.split(',').map((c) => c.trim())
+  const SEP = '\u0000'
+  const keyOf = (row: Record<string, unknown>) =>
+    keys.map((k) => String(row[k] ?? '').trim()).join(SEP)
+
+  const { data, error } = await (supabase as SupabaseClient)
+    .from(config.tableName)
+    .select(keys.join(', '))
+  if (error) {
+    console.warn(`orphan check skipped for ${config.tableName} — ${error.message}`)
+    return []
+  }
+
+  const written = new Set(records.map(keyOf))
+  const orphans = (data ?? [])
+    .map((row) => keyOf(row as unknown as Record<string, unknown>))
+    .filter((k) => !written.has(k))
+    .map((k) => k.split(SEP).filter(Boolean).join(' / '))
+
+  if (orphans.length === 0) return []
+  return [
+    `${config.tableName}: ${orphans.length} row${orphans.length > 1 ? 's' : ''} ` +
+    `no longer in the workbook — ${orphans.join('; ')}. ` +
+    `These will never refresh again: delete them, or restore the ${keys.join(' + ')} to the sheet.`,
+  ]
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -225,7 +280,9 @@ async function upsertTable(
  *
  * Every table config sets `upsertOn`, so this only ever inserts or updates —
  * a ticker present in the previous data but absent from the new file is left in
- * place, not removed.
+ * place, not removed. That is deliberate (these tables carry hand-managed
+ * columns), but it means an edit to the natural key abandons a row rather than
+ * moving it, so anything left behind is reported in `warnings`.
  */
 export async function uploadYchartBenchmarks(file: File): Promise<UploadResult> {
   assertExcelFile(file)
@@ -235,6 +292,7 @@ export async function uploadYchartBenchmarks(file: File): Promise<UploadResult> 
 
   let totalInserted = 0
   const allErrors: string[] = []
+  const allWarnings: string[] = []
 
   for (const config of TABLE_CONFIGS) {
     const sheet = wb.Sheets[config.tableName]
@@ -258,7 +316,13 @@ export async function uploadYchartBenchmarks(file: File): Promise<UploadResult> 
     const { inserted, errors } = await upsertTable(config, records)
     totalInserted += inserted
     allErrors.push(...errors)
+
+    // Only worth checking when every batch landed — a partial write would
+    // report the rows it failed to write as orphans.
+    if (errors.length === 0) {
+      allWarnings.push(...await findOrphans(config, records))
+    }
   }
 
-  return { inserted: totalInserted, errors: allErrors }
+  return { inserted: totalInserted, errors: allErrors, warnings: allWarnings }
 }

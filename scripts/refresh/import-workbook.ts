@@ -107,6 +107,9 @@ async function main(): Promise<void> {
     }
     runs.push({ source: 'ycharts_benchmarks', rows: r.inserted, errors: r.errors })
     notes.push(`${r.inserted} benchmark rows`)
+    // Abandoned rows are not a failed import -- the data landed -- but they stop
+    // refreshing silently, so say so where the daily log will show it.
+    for (const w of r.warnings) console.warn(`WARN  ${w}`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     runs.push({ source: 'ycharts_benchmarks', rows: 0, errors: [msg], status: 'failed' })
