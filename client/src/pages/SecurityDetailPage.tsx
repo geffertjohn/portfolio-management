@@ -302,32 +302,41 @@ export function SecurityDetailPage() {
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => setProspectModalOpen(true)}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                title="Add to the buy-candidate watchlist"
-              >
-                + Watchlist
-              </button>
+              {/* Stocks only. A fund's header is just Review: its At-Risk path is
+                  the review modal's At-Risk outcome, so a separate button here
+                  is a second way to do the same thing, and Watchlist/Action are
+                  stock-workflow surfaces. The modals themselves stay — the
+                  stock header and the Watchlist/Actions pages still open them. */}
+              {isStock && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setProspectModalOpen(true)}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    title="Add to the buy-candidate watchlist"
+                  >
+                    + Watchlist
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => setAddActionOpen(true)}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                title="Create a follow-up action for this security"
-              >
-                + Action
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddActionOpen(true)}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    title="Create a follow-up action for this security"
+                  >
+                    + Action
+                  </button>
 
-              {!isAtRisk && (
-                <button
-                  type="button"
-                  onClick={() => setAtRiskModalOpen(true)}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Flag at-risk
-                </button>
+                  {!isAtRisk && (
+                    <button
+                      type="button"
+                      onClick={() => setAtRiskModalOpen(true)}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Flag at-risk
+                    </button>
+                  )}
+                </>
               )}
 
             </div>
