@@ -31,7 +31,12 @@ const TRAILING_PERIODS = [
   { label: '5Y',  ret: 'annualized_five_year_total_return_nav',  catRank: 'five_year_total_return_rank_nav',            catSize: 'five_year_total_return_rank_category_size_nav',   pgRank: 'five_year_total_return_peer_group_rank_nav',   pgSize: 'five_year_total_return_peer_group_size_nav' },
 ] as const
 
-// Headline metrics (the four MetricCards) — value differs by cohort where noted.
+// Headline metrics — value differs by cohort where noted.
+//
+// These four were the MetricCards at the top of FundMonitoringPanel until they
+// were removed from the UI. They are KEPT here deliberately: the archived
+// evidence is meant to be complete, so it is now broader than the screen it was
+// captured from. Do not "resync" the PDF to the panel by dropping them.
 const HEADLINE = [
   { label: 'Alpha 3Y',             catVal: 'alpha_3y_vs_category',            pgVal: 'market_alpha_3y_vs_pg',      catRank: 'alpha_rank',             pgRank: 'alpha_peer_group_rank',             fmt: 'num' },
   { label: 'Information Ratio 3Y', catVal: 'information_ratio_3y_vs_category', pgVal: 'information_ratio_3y_vs_pg', catRank: 'information_ratio_rank', pgRank: 'information_ratio_peer_group_rank', fmt: 'num' },
