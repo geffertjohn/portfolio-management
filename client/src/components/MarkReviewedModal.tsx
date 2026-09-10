@@ -70,8 +70,13 @@ function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
-type FundMainOutcome = 'maintain' | 'propose'
-type ProposeAction = 'add' | 'trim' | 'sell'
+/**
+ * Maintain is the only primary outcome; At-Risk combines with it. Propose was
+ * removed from the form. `flagged_for_action` is NOT retired — two historical
+ * reviews carry it, so the enum, its label and its badge stay so the review log
+ * keeps rendering them. Only the way to record a NEW one is gone.
+ */
+type FundMainOutcome = 'maintain'
 
 /** One label/value pair in the stock evidence-at-review grid. */
 function SnapRow({ label, value }: { label: string; value: string }) {
@@ -99,7 +104,6 @@ export function MarkReviewedModal({
   // Fund-specific outcome state
   const [fundMainOutcome, setFundMainOutcome] = useState<FundMainOutcome | null>(null)
   const [fundAtRisk, setFundAtRisk] = useState(false)
-  const [fundProposeAction, setFundProposeAction] = useState<ProposeAction | null>(null)
 
   // Reset fields when modal opens
   useEffect(() => {
@@ -111,7 +115,6 @@ export function MarkReviewedModal({
       setConviction('')
       setFundMainOutcome(null)
       setFundAtRisk(false)
-      setFundProposeAction(null)
       const cadenceMonths = CADENCE_OPTIONS.find((o) => o.value === currentCadence)?.months ?? 3
       setNextReviewOverride(toDateInputValue(addMonths(new Date(), cadenceMonths)))
     }
@@ -231,29 +234,14 @@ export function MarkReviewedModal({
   })
 
   function resolveFundOutcome(): ReviewOutcome {
-    if (fundMainOutcome === 'propose') return 'flagged_for_action'
     if (fundMainOutcome === 'maintain') return 'no_issues'
     return 'placed_on_watchlist'
   }
 
-  function resolveFundNotes(): string {
-    if (fundMainOutcome === 'propose' && fundProposeAction) {
-      const prefix = fundProposeAction.charAt(0).toUpperCase() + fundProposeAction.slice(1)
-      return notes.trim() ? `[${prefix}] ${notes}` : `[${prefix}]`
-    }
-    return notes
-  }
-
-  /** Human-readable outcome summary for the evidence PDF (e.g. "Propose (Trim) · At-Risk"). */
+  /** Human-readable outcome summary for the evidence PDF (e.g. "Maintain · At-Risk"). */
   function fundOutcomeLabel(): string {
     const parts: string[] = []
-    if (fundMainOutcome === 'propose') {
-      parts.push(fundProposeAction
-        ? `Propose (${fundProposeAction.charAt(0).toUpperCase() + fundProposeAction.slice(1)})`
-        : OUTCOME_LABELS.flagged_for_action)
-    } else if (fundMainOutcome === 'maintain') {
-      parts.push(OUTCOME_LABELS.no_issues)
-    }
+    if (fundMainOutcome === 'maintain') parts.push(OUTCOME_LABELS.no_issues)
     if (fundAtRisk) parts.push(OUTCOME_LABELS.placed_on_watchlist)
     return parts.join(' · ') || EMPTY
   }
@@ -271,7 +259,7 @@ export function MarkReviewedModal({
       fundName: security.security_name ?? null,
       reviewDate: reviewedOn,
       outcomeLabel: fundOutcomeLabel(),
-      notes: resolveFundNotes(),
+      notes,
       categoryBenchmark: categoryBenchmark ?? null,
       peerGroupBenchmark: peerGroupBenchmark ?? null,
     })
@@ -300,7 +288,7 @@ export function MarkReviewedModal({
       await markReviewed({
         securityId,
         cadence: isFund ? 'quarterly' : cadence,
-        notes: isFund ? resolveFundNotes() : notes,
+        notes,
         // Funds: keep editable review date + cadence-based next review.
         // Stocks: completion = today, scheduled = last earnings + 1, next = next earnings + 1.
         reviewedAt: isFund ? fundReviewedAt : dateReviewed,
@@ -345,10 +333,9 @@ export function MarkReviewedModal({
     activeMutation.mutate()
   }
 
-  // Fund outcome is ready when at least one selection is made, propose action is chosen if propose selected, and notes filled if propose selected
-  const fundOutcomeReady = (fundMainOutcome !== null || fundAtRisk) &&
-    (fundMainOutcome !== 'propose' || fundProposeAction !== null) &&
-    (fundMainOutcome !== 'propose' || notes.trim() !== '')
+  // Ready once either selection is made. Notes are optional for funds now that
+  // Propose -- the one outcome that required a written rationale -- is gone.
+  const fundOutcomeReady = fundMainOutcome !== null || fundAtRisk
   // Review mode is submittable only when required fields are filled.
   // Stocks require a recommendation and a written rationale.
   const stockReviewReady = !!recommendation && notes.trim() !== ''
@@ -491,7 +478,7 @@ export function MarkReviewedModal({
                 </label>
                 {isFund ? (
                   <div className="mt-2 space-y-2">
-                    {/* Primary: Maintain / Propose (mutually exclusive) + At-Risk (combinable) */}
+                    {/* Maintain (primary) + At-Risk (combinable) */}
                     <div className="flex gap-3">
                       <button
                         type="button"
@@ -506,21 +493,6 @@ export function MarkReviewedModal({
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          const next = fundMainOutcome === 'propose' ? null : 'propose'
-                          setFundMainOutcome(next)
-                          if (next === null) setFundProposeAction(null)
-                        }}
-                        className={`flex-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
-                          fundMainOutcome === 'propose'
-                            ? 'border-amber-400 bg-amber-50 text-amber-700'
-                            : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        Propose
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setFundAtRisk(!fundAtRisk)}
                         className={`flex-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
                           fundAtRisk
@@ -532,25 +504,6 @@ export function MarkReviewedModal({
                       </button>
                     </div>
 
-                    {/* Propose sub-actions: Add / Trim / Sell */}
-                    {fundMainOutcome === 'propose' && (
-                      <div className="flex gap-2">
-                        {(['add', 'trim', 'sell'] as ProposeAction[]).map((action) => (
-                          <button
-                            key={action}
-                            type="button"
-                            onClick={() => setFundProposeAction(fundProposeAction === action ? null : action)}
-                            className={`flex-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
-                              fundProposeAction === action
-                                ? 'border-amber-400 bg-amber-50 text-amber-700'
-                                : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                            }`}
-                          >
-                            {action.charAt(0).toUpperCase() + action.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="mt-2 space-y-2">
@@ -592,11 +545,11 @@ export function MarkReviewedModal({
                 )}
               </div>
 
-              {/* Notes (funds) / Rationale (stocks). Required for stocks and for fund Propose. */}
+              {/* Notes (funds) / Rationale (stocks). Required for stocks only. */}
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   {isFund ? 'Notes' : 'Rationale'}{' '}
-                  {!isFund || (isFund && fundMainOutcome === 'propose')
+                  {!isFund
                     ? <span className="text-red-500">*</span>
                     : <span className="text-gray-400">(optional)</span>
                   }
