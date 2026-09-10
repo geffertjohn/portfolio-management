@@ -5,21 +5,23 @@
  * Peer group scorecard/metrics as of the review date, uploaded to the Security
  * Documents bucket as audit evidence. Scorecard numbers come from the shared
  * `buildFundScorecard` so the PDF matches the on-page tables exactly.
+ *
+ * There is deliberately NO separate "Headline metrics" block. Alpha 3Y /
+ * Information Ratio 3Y / Sharpe 3Y / Expense Ratio were dropped from the fund UI
+ * and from here, so the document matches the screen it was captured from. They
+ * are not lost: all four remain scored rows in the scorecard tables below (57 of
+ * its 100 points), with their ranks and tiers. Only the standalone value block
+ * is gone.
  */
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { SecurityDetail } from './securities'
 import { buildFundScorecard, fmtScorecardValue } from './fundScorecard'
-import { fmtNum, fmtDecimalPct, fmtInt, EMPTY } from './formatters'
+import { fmtDecimalPct, fmtInt, EMPTY } from './formatters'
 
 function num(s: SecurityDetail, key: keyof SecurityDetail): number | null {
   const v = s[key]
   return typeof v === 'number' && Number.isFinite(v) ? v : null
-}
-
-function rankSize(rank: number | null, size: number | null): string {
-  if (rank == null) return EMPTY
-  return size != null ? `${fmtInt(rank)} / ${fmtInt(size)}` : fmtInt(rank)
 }
 
 const TRAILING_PERIODS = [
@@ -29,19 +31,6 @@ const TRAILING_PERIODS = [
   { label: '1Y',  ret: 'one_year_total_return_nav',             catRank: 'one_year_total_return_rank_nav',             catSize: 'one_year_total_return_rank_category_size_nav',    pgRank: 'one_year_total_return_peer_group_rank_nav',    pgSize: 'one_year_total_return_peer_group_size_nav' },
   { label: '3Y',  ret: 'annualized_three_year_total_return_nav', catRank: 'three_year_total_return_rank_nav',           catSize: 'three_year_total_return_rank_category_size_nav',  pgRank: 'three_year_total_return_peer_group_rank_nav',  pgSize: 'three_year_total_return_peer_group_size_nav' },
   { label: '5Y',  ret: 'annualized_five_year_total_return_nav',  catRank: 'five_year_total_return_rank_nav',            catSize: 'five_year_total_return_rank_category_size_nav',   pgRank: 'five_year_total_return_peer_group_rank_nav',   pgSize: 'five_year_total_return_peer_group_size_nav' },
-] as const
-
-// Headline metrics — value differs by cohort where noted.
-//
-// These four were the MetricCards at the top of FundMonitoringPanel until they
-// were removed from the UI. They are KEPT here deliberately: the archived
-// evidence is meant to be complete, so it is now broader than the screen it was
-// captured from. Do not "resync" the PDF to the panel by dropping them.
-const HEADLINE = [
-  { label: 'Alpha 3Y',             catVal: 'alpha_3y_vs_category',            pgVal: 'market_alpha_3y_vs_pg',      catRank: 'alpha_rank',             pgRank: 'alpha_peer_group_rank',             fmt: 'num' },
-  { label: 'Information Ratio 3Y', catVal: 'information_ratio_3y_vs_category', pgVal: 'information_ratio_3y_vs_pg', catRank: 'information_ratio_rank', pgRank: 'information_ratio_peer_group_rank', fmt: 'num' },
-  { label: 'Sharpe Ratio 3Y',      catVal: 'historical_sharpe_3y',            pgVal: 'historical_sharpe_3y',       catRank: 'sharpe_rank',            pgRank: 'sharpe_peer_group_rank',            fmt: 'num' },
-  { label: 'Expense Ratio 1Y',     catVal: 'expense_ratio_generic',           pgVal: 'expense_ratio_generic',      catRank: 'expense_ratio_rank',     pgRank: 'expense_ratio_peer_group_rank',     fmt: 'pct' },
 ] as const
 
 export interface FundReviewPdfInput {
@@ -73,9 +62,6 @@ export function buildFundReviewPdf(input: FundReviewPdfInput): FundReviewPdfResu
   const doc = new jsPDF({ unit: 'pt', format: 'letter' })
   const marginX = 40
   const pageW = doc.internal.pageSize.getWidth()
-
-  const catSize3y = num(security, 'three_year_total_return_rank_category_size_nav')
-  const pgSize3y = num(security, 'three_year_total_return_peer_group_size_nav')
 
   // ── Header ────────────────────────────────────────────────────────────────
   doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(17, 24, 39)
@@ -112,33 +98,8 @@ export function buildFundReviewPdf(input: FundReviewPdfInput): FundReviewPdfResu
     return y + 6
   }
 
-  // ── Headline metrics ───────────────────────────────────────────────────────
-  cursorY = sectionTitle('Headline metrics', cursorY + 8)
-  autoTable(doc, {
-    startY: cursorY,
-    margin: { left: marginX, right: marginX },
-    head: [['Metric', 'Category', 'Cat rank / size', 'Peer group', 'PG rank / size']],
-    body: HEADLINE.map((m) => {
-      const fmtV = (k: string) =>
-        m.fmt === 'pct' ? fmtDecimalPct(num(security, k as keyof SecurityDetail))
-                        : fmtNum(num(security, k as keyof SecurityDetail))
-      return [
-        m.label,
-        fmtV(m.catVal),
-        rankSize(num(security, m.catRank as keyof SecurityDetail), catSize3y),
-        fmtV(m.pgVal),
-        rankSize(num(security, m.pgRank as keyof SecurityDetail), pgSize3y),
-      ]
-    }),
-    theme: 'striped',
-    styles: { fontSize: 8, cellPadding: 3, textColor: [31, 41, 55] },
-    headStyles: { fillColor: [243, 244, 246], textColor: [55, 65, 81], fontStyle: 'bold' },
-    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
-  })
-  cursorY = afterTable()
-
   // ── Trailing returns & ranks ───────────────────────────────────────────────
-  cursorY = sectionTitle('Trailing returns & rank', cursorY + 16)
+  cursorY = sectionTitle('Trailing returns & rank', cursorY + 8)
   const periodCols = TRAILING_PERIODS.map((p) => p.label)
   autoTable(doc, {
     startY: cursorY,
