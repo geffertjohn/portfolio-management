@@ -193,9 +193,10 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
         )}
       </div>
 
-      {/* Total Returns — hidden for all-stock Equity portfolios (Core Growth, Equity Income),
-          whose stored YCharts return columns are obsolete; the computed Performance panel stands in. */}
-      {portfolio.portfolio_strategy !== 'Equity' && (
+      {/* Total Returns — every portfolio, Equity included. These are YCharts' own
+          model figures, refreshed daily by the workbook import. They were hidden
+          for Equity portfolios in favour of a locally computed Performance panel;
+          that engine zeroed a trading day per rebalance and has been removed. */}
       <div className="rounded-lg border border-gray-200 bg-white">
         <div className="border-b border-gray-200 px-4 py-3">
           <h3 className="text-sm font-semibold text-gray-900">Total Returns</h3>
@@ -273,7 +274,6 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
           </tbody>
         </table>
       </div>
-      )}
 
     </div>
   )
