@@ -2925,14 +2925,8 @@ export type Database = {
           broad_asset_class: string | null
           broad_category_group: string | null
           cash_net: number | null
-          category_five_year_total_return: number | null
           category_index: string | null
           category_name: string | null
-          category_one_month_total_return: number | null
-          category_one_year_total_return: number | null
-          category_three_month_total_return: number | null
-          category_three_year_total_return: number | null
-          category_ytd_total_return: number | null
           created_at: string
           deleted_at: string | null
           detailed_security_type: string | null
@@ -2977,13 +2971,7 @@ export type Database = {
           one_year_total_return_peer_group_size_nav: number | null
           one_year_total_return_rank_category_size_nav: number | null
           one_year_total_return_rank_nav: number | null
-          peer_group_five_year_total_return: number | null
           peer_group_name: string | null
-          peer_group_one_month_total_return: number | null
-          peer_group_one_year_total_return: number | null
-          peer_group_three_month_total_return: number | null
-          peer_group_three_year_total_return: number | null
-          peer_group_ytd_total_return: number | null
           preferred_benchmark1_id: number | null
           preferred_benchmark2_id: number | null
           rsquared_3y_vs_category: number | null
@@ -3033,14 +3021,8 @@ export type Database = {
           broad_asset_class?: string | null
           broad_category_group?: string | null
           cash_net?: number | null
-          category_five_year_total_return?: number | null
           category_index?: string | null
           category_name?: string | null
-          category_one_month_total_return?: number | null
-          category_one_year_total_return?: number | null
-          category_three_month_total_return?: number | null
-          category_three_year_total_return?: number | null
-          category_ytd_total_return?: number | null
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
@@ -3085,13 +3067,7 @@ export type Database = {
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
-          peer_group_five_year_total_return?: number | null
           peer_group_name?: string | null
-          peer_group_one_month_total_return?: number | null
-          peer_group_one_year_total_return?: number | null
-          peer_group_three_month_total_return?: number | null
-          peer_group_three_year_total_return?: number | null
-          peer_group_ytd_total_return?: number | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
           rsquared_3y_vs_category?: number | null
@@ -3141,14 +3117,8 @@ export type Database = {
           broad_asset_class?: string | null
           broad_category_group?: string | null
           cash_net?: number | null
-          category_five_year_total_return?: number | null
           category_index?: string | null
           category_name?: string | null
-          category_one_month_total_return?: number | null
-          category_one_year_total_return?: number | null
-          category_three_month_total_return?: number | null
-          category_three_year_total_return?: number | null
-          category_ytd_total_return?: number | null
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
@@ -3193,13 +3163,7 @@ export type Database = {
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
-          peer_group_five_year_total_return?: number | null
           peer_group_name?: string | null
-          peer_group_one_month_total_return?: number | null
-          peer_group_one_year_total_return?: number | null
-          peer_group_three_month_total_return?: number | null
-          peer_group_three_year_total_return?: number | null
-          peer_group_ytd_total_return?: number | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
           rsquared_3y_vs_category?: number | null
