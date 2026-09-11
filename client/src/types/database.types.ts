@@ -1010,6 +1010,47 @@ export type Database = {
           },
         ]
       }
+      model_portfolio_allocations: {
+        Row: {
+          asset_class: string
+          created_at: string
+          id: number
+          lower_limit: number | null
+          portfolio_name: string
+          target: number | null
+          updated_at: string
+          upper_limit: number | null
+        }
+        Insert: {
+          asset_class: string
+          created_at?: string
+          id?: never
+          lower_limit?: number | null
+          portfolio_name: string
+          target?: number | null
+          updated_at?: string
+          upper_limit?: number | null
+        }
+        Update: {
+          asset_class?: string
+          created_at?: string
+          id?: never
+          lower_limit?: number | null
+          portfolio_name?: string
+          target?: number | null
+          updated_at?: string
+          upper_limit?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_portfolio_allocations_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+        ]
+      }
       model_portfolio_benchmarks: {
         Row: {
           "1_to_3_years_maturity_bond_exposure": number | null

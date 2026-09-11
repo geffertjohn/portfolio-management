@@ -729,6 +729,36 @@ ALTER TABLE "public"."investment_policy_statements" ALTER COLUMN "id" ADD GENERA
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."model_portfolio_allocations" (
+    "id" bigint NOT NULL,
+    "portfolio_name" "text" NOT NULL,
+    "asset_class" "text" NOT NULL,
+    "target" numeric,
+    "lower_limit" numeric,
+    "upper_limit" numeric,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."model_portfolio_allocations" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."model_portfolio_allocations" IS 'Per-model-portfolio asset-class targets and bands. Replaces the 48 allocation columns on model_portfolio_data (the investment-objective layer). `cash` is one row, shown in both the Asset Allocation and Asset Class tables.';
+
+
+
+ALTER TABLE "public"."model_portfolio_allocations" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."model_portfolio_allocations_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."model_portfolio_benchmarks" (
     "id" bigint NOT NULL,
     "security_id" "text" NOT NULL,
@@ -2045,6 +2075,16 @@ ALTER TABLE ONLY "public"."investment_policy_statements"
 
 
 
+ALTER TABLE ONLY "public"."model_portfolio_allocations"
+    ADD CONSTRAINT "model_portfolio_allocations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."model_portfolio_allocations"
+    ADD CONSTRAINT "model_portfolio_allocations_unique" UNIQUE ("portfolio_name", "asset_class");
+
+
+
 ALTER TABLE ONLY "public"."model_portfolio_benchmarks"
     ADD CONSTRAINT "model_portfolio_benchmarks_pkey" PRIMARY KEY ("id");
 
@@ -2311,6 +2351,10 @@ CREATE INDEX "idx_securities2_active" ON "public"."securities2" USING "btree" ("
 
 
 CREATE INDEX "import_runs_source_imported_at_idx" ON "public"."import_runs" USING "btree" ("source", "imported_at" DESC);
+
+
+
+CREATE INDEX "model_portfolio_allocations_portfolio_idx" ON "public"."model_portfolio_allocations" USING "btree" ("portfolio_name");
 
 
 
@@ -2617,6 +2661,11 @@ ALTER TABLE ONLY "public"."ic_memos"
 
 ALTER TABLE ONLY "public"."investment_policy_statements"
     ADD CONSTRAINT "investment_policy_statements_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "public"."clients"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."model_portfolio_allocations"
+    ADD CONSTRAINT "model_portfolio_allocations_portfolio_name_fkey" FOREIGN KEY ("portfolio_name") REFERENCES "public"."portfolio"("name") ON DELETE CASCADE;
 
 
 
@@ -3281,6 +3330,25 @@ CREATE POLICY "import_runs are writable by anon" ON "public"."import_runs" FOR I
 ALTER TABLE "public"."investment_policy_statements" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."model_portfolio_allocations" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "model_portfolio_allocations_delete" ON "public"."model_portfolio_allocations" FOR DELETE TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "model_portfolio_allocations_insert" ON "public"."model_portfolio_allocations" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
+
+
+
+CREATE POLICY "model_portfolio_allocations_select" ON "public"."model_portfolio_allocations" FOR SELECT TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "model_portfolio_allocations_update" ON "public"."model_portfolio_allocations" FOR UPDATE TO "authenticated", "anon" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."model_portfolio_benchmarks" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3737,6 +3805,18 @@ GRANT ALL ON TABLE "public"."investment_policy_statements" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."investment_policy_statements_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."investment_policy_statements_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."investment_policy_statements_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."model_portfolio_allocations" TO "anon";
+GRANT ALL ON TABLE "public"."model_portfolio_allocations" TO "authenticated";
+GRANT ALL ON TABLE "public"."model_portfolio_allocations" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."model_portfolio_allocations_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."model_portfolio_allocations_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."model_portfolio_allocations_id_seq" TO "service_role";
 
 
 
