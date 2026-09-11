@@ -176,22 +176,38 @@ export async function fetchDirectModelPortfolioId(securityId: string): Promise<n
   return (data as { model_portfolio_id: number | null } | null)?.model_portfolio_id ?? null
 }
 
+/**
+ * Best-effort model lookup for a portfolio that has no `portfolio_model_map` row.
+ *
+ * An objective is NOT unique: "Aggressive Growth" is carried by the generic
+ * strategic model AND by each all-stock strategy model. So this must not use
+ * `maybeSingle()` — PostgREST answers a multi-row result with 406 / PGRST116
+ * ("cannot coerce the result to a single JSON object"), which throws and leaves
+ * the caller with no model at all rather than an imperfect one. Take the lowest
+ * id instead, so the generic strategic model wins over a strategy-specific one
+ * and the pick is stable across calls.
+ *
+ * `portfolio_model_map` is authoritative — map the portfolio there rather than
+ * leaning on this.
+ */
 export async function fetchModelPortfolioByObjective(objective: string): Promise<ModelPortfolio | null> {
   const { data: byObjective, error: e1 } = await supabase
     .from('model_portfolio_data')
     .select('*')
     .eq('investment_objective', objective)
-    .maybeSingle()
+    .order('id', { ascending: true })
+    .limit(1)
   if (e1) throw e1
-  if (byObjective) return byObjective as ModelPortfolio
+  if (byObjective && byObjective.length > 0) return byObjective[0] as ModelPortfolio
 
   const { data: byName, error: e2 } = await supabase
     .from('model_portfolio_data')
     .select('*')
     .eq('name', objective)
-    .maybeSingle()
+    .order('id', { ascending: true })
+    .limit(1)
   if (e2) throw e2
-  return byName as ModelPortfolio | null
+  return (byName && byName.length > 0 ? (byName[0] as ModelPortfolio) : null)
 }
 
 export async function fetchModelPortfolios(): Promise<ModelPortfolio[]> {
