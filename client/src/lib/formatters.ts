@@ -87,3 +87,17 @@ export function consensusColor(label: string | null | undefined): string {
   if (l.includes('sell')) return 'text-red-600'
   return 'text-gray-700'
 }
+
+/**
+ * Local calendar date as `YYYY-MM-DD`, for seeding `<input type="date">` and for
+ * any date that means "the day the user did this".
+ *
+ * NOT `toISOString().slice(0, 10)` — that is the UTC day, so west of UTC every
+ * evening rolls forward: a review recorded at 20:00 ET was stamped, filed, and
+ * named with tomorrow's date, and on the fund path the Review Date box is
+ * read-only so the advisor could not correct it. `en-CA` formats as ISO
+ * (`2026-09-14`) in the viewer's own zone.
+ */
+export function toLocalDateInputValue(date: Date): string {
+  return date.toLocaleDateString('en-CA')
+}

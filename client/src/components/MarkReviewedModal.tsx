@@ -11,7 +11,7 @@ import { fetchScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { beatRate, fetchTipRanksSymbolSummary } from '@/lib/fmpTipranks'
-import { fmtDecimalPct, fmtUsd, EMPTY } from '@/lib/formatters'
+import { fmtDecimalPct, fmtUsd, toLocalDateInputValue, EMPTY } from '@/lib/formatters'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { SecurityDetail } from '@/lib/securities'
 import { FundMonitoringPanel } from './FundMonitoringPanel'
@@ -67,7 +67,7 @@ function fmtLongDate(date: Date | null): string {
 }
 
 function toDateInputValue(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  return toLocalDateInputValue(date)
 }
 
 /**
@@ -233,7 +233,16 @@ export function MarkReviewedModal({
     onSuccess: () => { invalidateAll(); onClose() },
   })
 
+  /**
+   * The at-risk flag wins the enum. Maintain and At-Risk toggle independently,
+   * so "Maintain + At-Risk" is reachable -- and it used to store as a clean
+   * `no_issues` while `fundOutcomeLabel()` wrote "Maintain \u00b7 At-Risk" into the
+   * evidence PDF and an `at_risk` row was created. The frozen document then
+   * contradicted the database record of the same review, and anyone reading
+   * only the log saw no trace of the at-risk decision.
+   */
   function resolveFundOutcome(): ReviewOutcome {
+    if (fundAtRisk) return 'placed_on_watchlist'
     if (fundMainOutcome === 'maintain') return 'no_issues'
     return 'placed_on_watchlist'
   }

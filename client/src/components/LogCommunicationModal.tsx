@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createCommEntry, type CommType } from '@/lib/communicationLog'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { toLocalDateInputValue } from '@/lib/formatters'
 
 interface LogCommunicationModalProps {
   open: boolean
@@ -15,7 +16,7 @@ export function LogCommunicationModal({ open, onClose, clientId }: LogCommunicat
   const [type, setType] = useState<CommType>('meeting')
   const [subject, setSubject] = useState('')
   const [notes, setNotes] = useState('')
-  const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10))
+  const [occurredAt, setOccurredAt] = useState(toLocalDateInputValue(new Date()))
   const [followUpDue, setFollowUpDue] = useState('')
   const [followUpNotes, setFollowUpNotes] = useState('')
 
@@ -31,7 +32,11 @@ export function LogCommunicationModal({ open, onClose, clientId }: LogCommunicat
       type,
       subject,
       notes: notes || undefined,
-      occurred_at: new Date(occurredAt).toISOString(),
+      // Local NOON, not bare `new Date(occurredAt)`: a bare `YYYY-MM-DD` parses as
+      // UTC midnight, which the timeline then renders in the viewer's own zone --
+      // reading back one calendar day early everywhere west of UTC. Noon matches
+      // what `formatDate` already assumes for date-only strings.
+      occurred_at: new Date(occurredAt + 'T12:00:00').toISOString(),
       follow_up_due: followUpDue || null,
       follow_up_notes: followUpNotes || null,
     }),

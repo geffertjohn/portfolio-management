@@ -22,6 +22,7 @@ import { DeepReviewSection } from '@/components/DeepReviewSection'
 import { ConvictionRankingSection } from '@/components/ConvictionRankingSection'
 import { PortfolioConstructionSection } from '@/components/PortfolioConstructionSection'
 import { formatDate } from '@/lib/fundFormat'
+import { toLocalDateInputValue } from '@/lib/formatters'
 
 const SUMMARY = '__summary__'
 
@@ -90,7 +91,7 @@ export function PortfolioReviewWorkspace() {
   // ── Edit state (seeded from the draft) ──────────────────────────────────
   const [items, setItems] = useState<ReviewChecklistItem[]>([])
   const [notes, setNotes] = useState('')
-  const [reviewedDate, setReviewedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [reviewedDate, setReviewedDate] = useState(toLocalDateInputValue(new Date()))
   const [nextDate, setNextDate] = useState('')
   const [assessments, setAssessments] = useState<Record<string, HoldingAssessment>>({})
   const [active, setActive] = useState<string>('')
@@ -100,7 +101,7 @@ export function PortfolioReviewWorkspace() {
     if (!init || !cadence) return
     setItems(init.draft.checklist)
     setNotes(init.draft.notes ?? '')
-    const today = new Date().toISOString().slice(0, 10)
+    const today = toLocalDateInputValue(new Date())
     setReviewedDate(today)
     setNextDate(init.draft.nextReviewAt?.slice(0, 10) ?? nextReviewDateFor(cadence, new Date()).slice(0, 10))
     const map: Record<string, HoldingAssessment> = {}

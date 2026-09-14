@@ -30,6 +30,53 @@ function resolveBucket(v: unknown): string {
   return typeof v === 'string' && ALLOWED_BUCKETS.has(v) ? v : DEFAULT_BUCKET
 }
 
+/**
+ * Upload without ever overwriting an existing object.
+ *
+ * Storage paths are `<folder>/<YYYY-MM-DD>_<name>`, which is deterministic, and
+ * the fund review evidence filename is deterministic too
+ * (`<ticker>-review-<date>.pdf`). With `upsert: true` a second review of the
+ * same fund on the same review date silently destroyed the first review's
+ * frozen evidence, while BOTH review_log rows kept pointing at that one path --
+ * an audit record linked to evidence it was not recorded with.
+ *
+ * So: insert-only, and on a collision suffix the basename `-2`, `-3`, ... The
+ * first upload of a name is unchanged; later ones land beside it instead of on
+ * top of it. Callers persist the returned path, so the suffix carries through.
+ */
+const MAX_UPLOAD_NAME_ATTEMPTS = 50
+
+function isDuplicateObjectError(err: { message?: string; statusCode?: string } | null): boolean {
+  if (!err) return false
+  const status = String((err as { statusCode?: string }).statusCode ?? '')
+  return status === '409' || /already exists|duplicate/i.test(err.message ?? '')
+}
+
+async function uploadWithoutOverwriting(
+  bucket: string,
+  folder: string,
+  originalName: string,
+  body: Buffer,
+  contentType: string,
+): Promise<{ path: string | null; error: string | null }> {
+  const datePrefix = new Date().toISOString().slice(0, 10)
+  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const dot = safeName.lastIndexOf('.')
+  const stem = dot > 0 ? safeName.slice(0, dot) : safeName
+  const ext = dot > 0 ? safeName.slice(dot) : ''
+
+  for (let attempt = 1; attempt <= MAX_UPLOAD_NAME_ATTEMPTS; attempt++) {
+    const suffix = attempt === 1 ? '' : `-${attempt}`
+    const storagePath = `${folder}/${datePrefix}_${stem}${suffix}${ext}`
+    const { error } = await adminSupabase.storage
+      .from(bucket)
+      .upload(storagePath, body, { contentType, upsert: false })
+    if (!error) return { path: storagePath, error: null }
+    if (!isDuplicateObjectError(error)) return { path: null, error: error.message }
+  }
+  return { path: null, error: `Could not find a free name for ${safeName} after ${MAX_UPLOAD_NAME_ATTEMPTS} attempts` }
+}
+
 app.use(express.json())
 app.use((_req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -224,16 +271,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     return
   }
 
-  const datePrefix = new Date().toISOString().slice(0, 10)
-  const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const storagePath = `${folder}/${datePrefix}_${safeName}`
+  const { path: storagePath, error } = await uploadWithoutOverwriting(
+    bucket, folder, file.originalname, file.buffer, file.mimetype,
+  )
 
-  const { error } = await adminSupabase.storage
-    .from(bucket)
-    .upload(storagePath, file.buffer, { contentType: file.mimetype, upsert: true })
-
-  if (error) {
-    res.status(500).json({ error: error.message })
+  if (error || !storagePath) {
+    res.status(500).json({ error: error ?? 'Upload failed' })
     return
   }
 
@@ -253,16 +296,12 @@ app.post('/api/securities/:securityId/files', upload.single('file'), async (req,
     return
   }
 
-  const datePrefix = new Date().toISOString().slice(0, 10)
-  const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const storagePath = `${securityId}/${datePrefix}_${safeName}`
+  const { path: storagePath, error } = await uploadWithoutOverwriting(
+    bucket, securityId, file.originalname, file.buffer, file.mimetype,
+  )
 
-  const { error } = await adminSupabase.storage
-    .from(bucket)
-    .upload(storagePath, file.buffer, { contentType: file.mimetype, upsert: true })
-
-  if (error) {
-    res.status(500).json({ error: error.message })
+  if (error || !storagePath) {
+    res.status(500).json({ error: error ?? 'Upload failed' })
     return
   }
 
