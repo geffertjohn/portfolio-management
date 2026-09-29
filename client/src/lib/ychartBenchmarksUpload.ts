@@ -21,6 +21,9 @@
  *     annualized_daily_one_year_total_return    → one_year_total_return
  *     annualized_daily_three_year_total_return  → annualized_three_year_total_return
  *     annualized_daily_five_year_total_return   → annualized_five_year_total_return
+ *
+ * Columns dropped before inserting to DB:
+ *   category_benchmarks    : see CATEGORY_DROPPED_COLS
  */
 import * as XLSX from 'xlsx'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -46,6 +49,16 @@ type TableConfig = {
   columnRenames: Record<string, string>
   /** Columns that should stay as text strings (not coerced to number) */
   textCols: Set<string>
+  /**
+   * Headers to drop rather than send to Supabase.
+   *
+   * This importer has no whitelist — it maps sheet headers straight to DB
+   * columns — so a header with no matching column fails the whole upsert batch
+   * with `column does not exist`. Skipping a dropped column here keeps the
+   * import working whether or not the workbook has caught up; once the sheet
+   * loses the column too, the entry becomes a harmless no-op rather than a trap.
+   */
+  skipCols: Set<string>
   /** Header name of the column used to detect whether a row has data (after rename) */
   keyCol: string
   /**
@@ -59,12 +72,62 @@ type TableConfig = {
 
 // ── Per-table configuration ───────────────────────────────────────────────────
 
+/**
+ * Dropped from `category_benchmarks` (Sep 2026) — loaded by YCharts, read by
+ * nothing. The benchmark surfaces (picker, Total Performance, the Alternatives
+ * tables, the scorecard benchmark cells, Settings → Benchmarks) use only the
+ * six trailing returns, the four growth figures, the name/category/etf_proxy
+ * identity and sharpe/sortino 1Y+3Y. These 33 had no reader anywhere in the
+ * app: the risk ratios stopped at 3Y, and the exposure breakdowns were loaded
+ * for an allocation-comparison surface that was never built.
+ */
+const CATEGORY_DROPPED_COLS = new Set([
+  // Risk ratios beyond the 3-year pair the app reads
+  'historical_sharpe_5y',
+  'historical_sortino_5y',
+  'calmar_ratio_1y',
+  'calmar_ratio_3y',
+  'calmar_ratio_5y',
+  'monthly_standard_deviation_annualized_1y',
+  'quarterly_standard_deviation_annualized_3y',
+  'quarterly_standard_deviation_annualized_5y',
+  // Sector exposure breakdown
+  'consumer_cyclical_exposure',
+  'financial_services_exposure',
+  'basic_materials_exposure',
+  'real_estate_exposure',
+  'communication_services_exposure',
+  'energy_exposure',
+  'industrials_exposure',
+  'technology_exposure',
+  'consumer_defensive_exposure',
+  'healthcare_exposure',
+  'utilities_exposure',
+  // Credit-quality breakdown (only the 9 fixed-income rows ever carried these)
+  'aaa_bond_exposure_generic',
+  'aa_bond_exposure_generic',
+  'a_bond_exposure_generic',
+  'bbb_bond_exposure_generic',
+  'bb_bond_exposure_generic',
+  'b_bond_exposure_generic',
+  'below_b_bond_exposure_generic',
+  // Maturity breakdown (likewise fixed-income only)
+  'maturity_less_than_1_year_generic',
+  '1_to_3_years_maturity_bond_exposure',
+  '3_to_5_years_maturity_bond_exposure',
+  'maturity_5_to_10_years_generic',
+  'maturity_10_to_20_years_generic',
+  'maturity_20_to_30_years_generic',
+  'over_30_years_maturity_bond_exposure',
+])
+
 const TABLE_CONFIGS: TableConfig[] = [
   {
     tableName: 'category_benchmarks',
     // No rename — the DB column is category_ticker (matches the Excel header directly)
     columnRenames: {},
     textCols: new Set(['category_ticker', 'category_benchmark', 'category', 'etf_proxy']),
+    skipCols: CATEGORY_DROPPED_COLS,
     // A single ticker can serve multiple categories — (ticker, category) is the unique key
     keyCol: 'category_ticker',
     upsertOn: 'category_ticker,category',
@@ -73,6 +136,7 @@ const TABLE_CONFIGS: TableConfig[] = [
     tableName: 'peer_group_benchmarks',
     columnRenames: {},
     textCols: new Set(['peer_group_ticker', 'peer_group_benchmark', 'peer_group_category']),
+    skipCols: new Set(),
     keyCol: 'peer_group_ticker',
     // The Excel omits peer_group_benchmark for most rows (it's set manually in
     // the DB); upsert preserves that value and only updates metrics.
@@ -82,6 +146,7 @@ const TABLE_CONFIGS: TableConfig[] = [
     tableName: 'sector_benchmarks',
     columnRenames: { Sector_ticker: 'ticker' },
     textCols: new Set(['ticker', 'sector_benchmarks', 'sector', 'etf_proxy']),
+    skipCols: new Set(),
     keyCol: 'ticker',
     upsertOn: 'ticker',
   },
@@ -95,6 +160,7 @@ const TABLE_CONFIGS: TableConfig[] = [
       north_america_bond_exposure_generic:      'north_america_total_exposure_generic',
     },
     textCols: new Set(['security_id', 'security_name']),
+    skipCols: new Set(),
     keyCol: 'security_id',
     // Manually-managed columns (name, investment_objective) are preserved across
     // uploads — only the columns present in the Excel payload are updated.
@@ -163,6 +229,7 @@ function parseSheet(
     if (raw == null || raw === '') continue
     const excelName = String(raw).trim()
     const dbName = config.columnRenames[excelName] ?? excelName
+    if (config.skipCols.has(dbName)) continue
     colMap.set(i, dbName)
   }
 

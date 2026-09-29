@@ -292,168 +292,69 @@ export type Database = {
       }
       category_benchmarks: {
         Row: {
-          "1_to_3_years_maturity_bond_exposure": number | null
-          "3_to_5_years_maturity_bond_exposure": number | null
-          a_bond_exposure_generic: number | null
-          aa_bond_exposure_generic: number | null
-          aaa_bond_exposure_generic: number | null
           annualized_daily_five_year_total_return: number | null
           annualized_daily_one_year_total_return: number | null
           annualized_daily_three_year_return: number | null
-          b_bond_exposure_generic: number | null
-          basic_materials_exposure: number | null
-          bb_bond_exposure_generic: number | null
-          bbb_bond_exposure_generic: number | null
-          below_b_bond_exposure_generic: number | null
-          calmar_ratio_1y: number | null
-          calmar_ratio_3y: number | null
-          calmar_ratio_5y: number | null
           category: string | null
           category_benchmark: string | null
           category_ticker: string
-          communication_services_exposure: number | null
-          consumer_cyclical_exposure: number | null
-          consumer_defensive_exposure: number | null
-          energy_exposure: number | null
           eps_growth_1_yr_generic: number | null
           eps_growth_3_yr_generic: number | null
           etf_proxy: string | null
-          financial_services_exposure: number | null
-          healthcare_exposure: number | null
           historical_sharpe_1y: number | null
           historical_sharpe_3y: number | null
-          historical_sharpe_5y: number | null
           historical_sortino_1y: number | null
           historical_sortino_3y: number | null
-          historical_sortino_5y: number | null
           id: number
-          industrials_exposure: number | null
-          maturity_10_to_20_years_generic: number | null
-          maturity_20_to_30_years_generic: number | null
-          maturity_5_to_10_years_generic: number | null
-          maturity_less_than_1_year_generic: number | null
-          monthly_standard_deviation_annualized_1y: number | null
           one_month_total_return: number | null
-          over_30_years_maturity_bond_exposure: number | null
-          quarterly_standard_deviation_annualized_3y: number | null
-          quarterly_standard_deviation_annualized_5y: number | null
-          real_estate_exposure: number | null
           sales_growth_1_yr_generic: number | null
           sales_growth_3_yr_generic: number | null
-          technology_exposure: number | null
           three_month_total_return: number | null
           updated_at: string | null
-          utilities_exposure: number | null
           ytd_total_return: number | null
         }
         Insert: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          calmar_ratio_1y?: number | null
-          calmar_ratio_3y?: number | null
-          calmar_ratio_5y?: number | null
           category?: string | null
           category_benchmark?: string | null
           category_ticker: string
-          communication_services_exposure?: number | null
-          consumer_cyclical_exposure?: number | null
-          consumer_defensive_exposure?: number | null
-          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
           eps_growth_3_yr_generic?: number | null
           etf_proxy?: string | null
-          financial_services_exposure?: number | null
-          healthcare_exposure?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
-          historical_sharpe_5y?: number | null
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
-          historical_sortino_5y?: number | null
           id?: number
-          industrials_exposure?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
-          monthly_standard_deviation_annualized_1y?: number | null
           one_month_total_return?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
-          quarterly_standard_deviation_annualized_3y?: number | null
-          quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure?: number | null
           sales_growth_1_yr_generic?: number | null
           sales_growth_3_yr_generic?: number | null
-          technology_exposure?: number | null
           three_month_total_return?: number | null
           updated_at?: string | null
-          utilities_exposure?: number | null
           ytd_total_return?: number | null
         }
         Update: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          calmar_ratio_1y?: number | null
-          calmar_ratio_3y?: number | null
-          calmar_ratio_5y?: number | null
           category?: string | null
           category_benchmark?: string | null
           category_ticker?: string
-          communication_services_exposure?: number | null
-          consumer_cyclical_exposure?: number | null
-          consumer_defensive_exposure?: number | null
-          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
           eps_growth_3_yr_generic?: number | null
           etf_proxy?: string | null
-          financial_services_exposure?: number | null
-          healthcare_exposure?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
-          historical_sharpe_5y?: number | null
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
-          historical_sortino_5y?: number | null
           id?: number
-          industrials_exposure?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
-          monthly_standard_deviation_annualized_1y?: number | null
           one_month_total_return?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
-          quarterly_standard_deviation_annualized_3y?: number | null
-          quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure?: number | null
           sales_growth_1_yr_generic?: number | null
           sales_growth_3_yr_generic?: number | null
-          technology_exposure?: number | null
           three_month_total_return?: number | null
           updated_at?: string | null
-          utilities_exposure?: number | null
           ytd_total_return?: number | null
         }
         Relationships: []

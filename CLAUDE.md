@@ -284,6 +284,7 @@ There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`,
 - `sector_benchmarks` — sector ETF benchmarks; column is `ticker` (unique).
 - Benchmark **data access lives in `lib/benchmarks.ts`** (`fetchBenchmarkOptions`, `fetchSectorBenchmarkOptions`, `fetchBenchmarkByName`, `fetchBenchmarkAll`, `fetchCategoryBenchmark`, `fetchPeerGroupBenchmark`, `fetchBenchmarkTable`, plus the `BenchmarkOption` type and SELECT column lists). `BenchmarkPickerModal` is now just the picker UI and imports the fetchers from there (it no longer exports data fns). When adding a benchmark column, add it to the SELECT strings **and** the `BenchmarkOption` interface in `lib/benchmarks.ts`.
 - Growth columns are YCharts **annualized** figures: `sales_growth_1_yr_generic`, `eps_growth_1_yr_generic`, `sales_growth_3_yr_generic`, `eps_growth_3_yr_generic` (the 3-yr ones are annualized CAGRs, comparable to derived stock 3Y CAGRs).
+- **`category_benchmarks` was slimmed 53 → 20 columns (Sep 2026).** Dropped: the risk ratios beyond the 3-year pair (`historical_sharpe_5y`, `historical_sortino_5y`, the three `calmar_ratio_*`, the three standard-deviation columns) and every exposure breakdown (11 sector, 7 credit-quality, 7 maturity). All 33 were loaded by YCharts and read by **nothing** — the exposure columns were for an allocation-comparison surface that was never built. The table now holds exactly what the app selects, plus `updated_at`. They were removed from the workbook's `category_benchmarks` sheet in the same change; `CATEGORY_DROPPED_COLS` in `ychartBenchmarksUpload.ts` keeps the import safe if an older workbook still carries them. **Note the asymmetry:** `sector_benchmarks` and `peer_group_benchmarks` still have their own 5-year/std-dev columns — this drop was scoped to `category_benchmarks`.
 
 ### LocalStorage persistence for UI state
 
@@ -655,7 +656,7 @@ Identity fields (`security_name`, `long_description`, `morningstar_sector`, `mor
 
 6. **Annual financials silently showing one quarter** — In `fetchAnnualFinancialsData`, never substitute `/earnings` (quarterly) `revenueActual`/`epsActual` into annual rows; date-matching pulls the Q4 release and shows it as the full year. Use the annual income statement's own `revenue` / `epsDiluted`.
 
-7. **Adding a benchmark Excel column without the DB column** — `ychartBenchmarksUpload.ts` has no whitelist, so an unknown header fails the whole upsert batch. Add the column to the table first (see Excel Import).
+7. **Adding a benchmark Excel column without the DB column** — `ychartBenchmarksUpload.ts` has no whitelist, so an unknown header fails the whole upsert batch. Add the column to the table first (see Excel Import). Going the other way — dropping a DB column the sheet still has — is the same trap; add it to that table's `skipCols` so the import survives the gap between the DB change and the workbook catching up.
 
 8. **`upsert(..., { onConflict: 'col' })` needs a matching UNIQUE constraint** — PostgREST returns a 400 if `col` has no unique/exclusion constraint (a primary key or FK on it is not enough). This bit `review_schedules` (upsert on `security_id` with only a PK on `id`) and `category_benchmarks` (the composite `(category_ticker, category)` key). Add the constraint before relying on the conflict target.
 
