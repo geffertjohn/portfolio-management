@@ -422,7 +422,11 @@ export function MarkReviewedModal({
                 Evidence at review <span className="font-normal text-gray-400">(saved to Documents as a PDF)</span>
               </label>
               <div className="mt-2 max-h-[22rem] overflow-y-auto rounded-md border border-gray-200 bg-gray-50/60 p-3">
-                <FundMonitoringPanel security={security} showCohortReference />
+                <FundMonitoringPanel
+                  security={security}
+                  showCohortReference
+                  defaultCohort={security.scorecard_cohort}
+                />
               </div>
             </div>
           )}

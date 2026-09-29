@@ -7,7 +7,7 @@ import { DataAsOf } from '@/components/DataAsOf'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { ReturnRanksTable } from './ReturnRanksTable'
 import { CategoryScorecardTable, PeerGroupScorecardTable } from './FundScorecard'
-import { categoryScorecardScore, peerGroupScorecardScore } from '@/lib/fundScorecard'
+import { categoryScorecardScore, peerGroupScorecardScore, type ScorecardCohort } from '@/lib/fundScorecard'
 
 /**
  * Monitoring panel for funds/ETFs (both equity and fixed income). The equity and
@@ -16,6 +16,12 @@ import { categoryScorecardScore, peerGroupScorecardScore } from '@/lib/fundScore
  *
  * `showCohortReference` renders the Category/Peer group name + benchmark index
  * below the toggle — used in the review modal (which has no header identity block).
+ *
+ * `defaultCohort` picks which tab opens first. The review modal passes the fund's
+ * stored `scorecard_cohort` so the evidence block opens on the cohort the review
+ * is actually judged against; the detail page passes nothing and keeps the
+ * free-browsing default, which is deliberate (see the note on the Cohort toggle
+ * in `SecurityDetailPage`). It seeds `useState`, so switching tabs still sticks.
  *
  * The Alpha / Information Ratio / Sharpe / Expense Ratio headline cards were
  * REMOVED from the UI, here and therefore in the review modal that embeds this.
@@ -27,11 +33,15 @@ import { categoryScorecardScore, peerGroupScorecardScore } from '@/lib/fundScore
 export function FundMonitoringPanel({
   security,
   showCohortReference = false,
+  defaultCohort = null,
 }: {
   security: SecurityDetail
   showCohortReference?: boolean
+  defaultCohort?: ScorecardCohort | null
 }) {
-  const [rankMode, setRankMode] = useState<'pg' | 'cat'>('pg')
+  const [rankMode, setRankMode] = useState<'pg' | 'cat'>(
+    defaultCohort === 'category' ? 'cat' : 'pg',
+  )
 
   const categoryName = security.ycharts_benchmark_category ?? null
   const peerGroupName = security.peer_group_name ?? null
