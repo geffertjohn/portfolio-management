@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { ASSET_CLASS_ROWS, type ModelPortfolio } from '@/lib/modelPortfolios'
 import { fetchBenchmarkByName } from '@/lib/benchmarks'
 import { computeAllocationBands, type BandRow, type BandStatus } from '@/lib/allocationBands'
-import { useLatestActualAllocation } from '@/hooks/usePortfolio'
+import { useLatestActualAllocation, usePositions } from '@/hooks/usePortfolio'
 import { useSecurities } from '@/hooks/useSecurities'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { Portfolio } from '@/types/portfolio'
@@ -59,7 +59,7 @@ const STATUS_TITLE: Record<BandStatus, string> = {
 }
 
 /** One tier-1 / tier-2 table. Target is shown only where the model sets one. */
-function BandTable({ rows, showActual }: { rows: BandRow[]; showActual: boolean }) {
+function BandTable({ rows, holdingsLabel }: { rows: BandRow[]; holdingsLabel: string | null }) {
   return (
     <table className="w-full text-sm">
       <thead>
@@ -67,8 +67,8 @@ function BandTable({ rows, showActual }: { rows: BandRow[]; showActual: boolean 
           <th className="px-3 py-2 text-left font-semibold rounded-tl-md">Asset Class</th>
           <th className="w-20 px-3 py-2 text-center font-semibold">Lower</th>
           <th className="w-20 px-3 py-2 text-center font-semibold">Target</th>
-          <th className={`w-20 px-3 py-2 text-center font-semibold ${showActual ? '' : 'rounded-tr-md'}`}>Upper</th>
-          {showActual && <th className="w-20 px-3 py-2 text-center font-semibold rounded-tr-md">Actual</th>}
+          <th className={`w-20 px-3 py-2 text-center font-semibold ${holdingsLabel ? '' : 'rounded-tr-md'}`}>Upper</th>
+          {holdingsLabel && <th className="w-24 px-3 py-2 text-center font-semibold rounded-tr-md">{holdingsLabel}</th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
@@ -80,7 +80,7 @@ function BandTable({ rows, showActual }: { rows: BandRow[]; showActual: boolean 
                 would read as a breach against any real holding. */}
             <td className="px-3 py-2 text-center font-semibold text-gray-900">{fmtPct(r.target)}</td>
             <td className="px-3 py-2 text-center text-gray-600">{fmtPct(r.upper)}</td>
-            {showActual && (
+            {holdingsLabel && (
               <td className={`px-3 py-2 text-center tabular-nums ${STATUS_CLASS[r.status]}`} title={STATUS_TITLE[r.status]}>
                 {r.actual.toFixed(2)}%
               </td>
@@ -139,15 +139,33 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
       }).filter((d) => d.value > 0)
     : []
 
-  // ── Actual-vs-band (tiers 1 and 2) ────────────────────────────────────────
-  // Actual weights come from the most recent file in the portfolio's Documents
-  // folder. Only the all-stock portfolios get one; everywhere else this is null
-  // and the card falls back to showing the model's bands alone.
+  // ── Tiers 1 and 2 ─────────────────────────────────────────────────────────
+  //
+  // Two different comparisons, because the two portfolio families have different
+  // data. Both check the SAME model bands; only the left-hand side differs.
+  //
+  //   ACTUAL vs model  — the all-stock portfolios, which get a monthly allocation
+  //                      file. "Has the market moved me out of band?"
+  //   HOLDINGS vs model — the fund/ETF portfolios, which deliberately get no
+  //                      file. Position targets rolled up by asset class:
+  //                      "does my lineup still implement my stated allocation?"
+  //
+  // Labelled distinctly on purpose. "Core Growth is 5 points over on mid cap" and
+  // "this lineup no longer matches its model" call for different actions — trade
+  // the book versus fix the targets — and conflating them hides which one it is.
   const { data: actualAllocation } = useLatestActualAllocation(portfolio.name)
+  const { data: positions = [] } = usePositions(portfolio.name)
   const { data: securities = [] } = useSecurities()
-  const bands = actualAllocation
-    ? computeAllocationBands(actualAllocation.weights, securities, modelPortfolio ?? null)
+
+  const holdingWeights = actualAllocation
+    ? actualAllocation.weights
+    : positions.length > 0
+      ? new Map(positions.map((p) => [p.securityId.trim().toUpperCase(), p.weight]))
+      : null
+  const bands = holdingWeights
+    ? computeAllocationBands(holdingWeights, securities, modelPortfolio ?? null)
     : null
+  const holdingsLabel = actualAllocation ? 'Actual' : 'Holdings'
 
   const asOfDays = actualAllocation
     ? Math.floor((Date.now() - new Date(actualAllocation.asOf).getTime()) / 86_400_000)
@@ -181,12 +199,16 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
           <h3 className="text-sm font-semibold text-gray-900">Asset Class Allocation</h3>
           {actualAllocation ? (
             <p className={`text-xs ${asOfStale ? 'font-medium text-amber-600' : 'text-gray-400'}`}>
-              Actual as of {new Date(actualAllocation.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              Actual holdings as of {new Date(actualAllocation.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               {asOfStale && ` · ${asOfDays} days old`}
+            </p>
+          ) : bands ? (
+            <p className="text-xs text-gray-400">
+              Position targets rolled up — no allocation file for actual holdings
             </p>
           ) : (
             <p className="text-xs text-gray-400">
-              No allocation file uploaded — showing model bands only
+              No positions or allocation file — showing model bands only
             </p>
           )}
         </div>
@@ -214,7 +236,8 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                     </ResponsiveContainer>
                   </div>
                   {/* Legend doubles as tier 1: the pie is the model's targets,
-                      the second figure is actual with band status. */}
+                      the second figure is actual (or rolled-up holdings for a
+                      fund/ETF portfolio) with band status. */}
                   <ul className="space-y-1.5 min-w-0">
                     {pieData.map((item, i) => {
                       const t1 = bands?.tier1.find((r) => r.label === item.name)
@@ -226,7 +249,7 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                           {t1 && (
                             <span
                               className={`w-16 pl-2 text-right tabular-nums ${STATUS_CLASS[t1.status]}`}
-                              title={`Actual ${t1.actual.toFixed(2)}% · ${STATUS_TITLE[t1.status]}`}
+                              title={`${holdingsLabel} ${t1.actual.toFixed(2)}% · ${STATUS_TITLE[t1.status]}`}
                             >
                               {t1.actual.toFixed(2)}%
                             </span>
@@ -236,7 +259,9 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                     })}
                   </ul>
                   {bands && (
-                    <p className="sr-only">Second figure in each legend row is the actual allocation.</p>
+                    <p className="sr-only">
+                      First figure in each legend row is the model target, second is {holdingsLabel.toLowerCase()}.
+                    </p>
                   )}
                 </div>
               )}
@@ -253,7 +278,7 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                       key: r.label, label: r.label, target: r.target,
                       lower: r.lower, upper: r.upper, actual: 0, status: 'ok' as const,
                     }))}
-                showActual={!!bands}
+                holdingsLabel={bands ? holdingsLabel : null}
               />
               {bands && bands.unclassified.length > 0 && (
                 // Never silently dropped: unclassified weight is why the column
