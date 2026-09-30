@@ -82,7 +82,7 @@ function BandTable({ rows, showActual }: { rows: BandRow[]; showActual: boolean 
             <td className="px-3 py-2 text-center text-gray-600">{fmtPct(r.upper)}</td>
             {showActual && (
               <td className={`px-3 py-2 text-center tabular-nums ${STATUS_CLASS[r.status]}`} title={STATUS_TITLE[r.status]}>
-                {r.actual.toFixed(1)}%
+                {r.actual.toFixed(2)}%
               </td>
             )}
           </tr>
@@ -93,7 +93,7 @@ function BandTable({ rows, showActual }: { rows: BandRow[]; showActual: boolean 
 }
 
 function fmtPct(v: number | null) {
-  return v != null ? `${v.toFixed(1)}%` : '—'
+  return v != null ? `${v.toFixed(2)}%` : '—'
 }
 
 export function PortfolioOverview({ portfolio, overrideModelPortfolio }: PortfolioOverviewProps) {
@@ -135,7 +135,7 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
           const v = (modelPortfolio as unknown as Record<string, unknown>)[`${key}_target`] as number | null
           return sum + (v ?? 0)
         }, 0)
-        return { name: label, value: Math.round(total * 10) / 10 }
+        return { name: label, value: Math.round(total * 100) / 100 }
       }).filter((d) => d.value > 0)
     : []
 
@@ -222,13 +222,13 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                         <li key={item.name} className="flex items-center gap-1.5 text-xs">
                           <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
                           <span className="whitespace-nowrap text-gray-600">{item.name}</span>
-                          <span className="ml-auto pl-2 font-medium text-gray-900 tabular-nums">{item.value}%</span>
+                          <span className="ml-auto pl-2 font-medium text-gray-900 tabular-nums">{item.value.toFixed(2)}%</span>
                           {t1 && (
                             <span
-                              className={`w-14 pl-2 text-right tabular-nums ${STATUS_CLASS[t1.status]}`}
-                              title={`Actual ${t1.actual.toFixed(1)}% · ${STATUS_TITLE[t1.status]}`}
+                              className={`w-16 pl-2 text-right tabular-nums ${STATUS_CLASS[t1.status]}`}
+                              title={`Actual ${t1.actual.toFixed(2)}% · ${STATUS_TITLE[t1.status]}`}
                             >
-                              {t1.actual.toFixed(1)}%
+                              {t1.actual.toFixed(2)}%
                             </span>
                           )}
                         </li>
@@ -259,7 +259,7 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                 // Never silently dropped: unclassified weight is why the column
                 // would otherwise not sum to 100%.
                 <p className="mt-2 text-xs font-medium text-amber-600">
-                  {bands.unclassified.reduce((sum, u) => sum + u.weight, 0).toFixed(1)}% unclassified —{' '}
+                  {bands.unclassified.reduce((sum, u) => sum + u.weight, 0).toFixed(2)}% unclassified —{' '}
                   {bands.unclassified.map((u) => u.symbol).join(', ')}
                 </p>
               )}
