@@ -2335,7 +2335,6 @@ export type Database = {
           portfolio_name: string
           security_id: string
           sort_order: number | null
-          target_weight: number | null
           updated_at: string
           upper_limit: number | null
         }
@@ -2348,7 +2347,6 @@ export type Database = {
           portfolio_name: string
           security_id: string
           sort_order?: number | null
-          target_weight?: number | null
           updated_at?: string
           upper_limit?: number | null
         }
@@ -2361,7 +2359,6 @@ export type Database = {
           portfolio_name?: string
           security_id?: string
           sort_order?: number | null
-          target_weight?: number | null
           updated_at?: string
           upper_limit?: number | null
         }
@@ -2420,41 +2417,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      rebalance_log: {
-        Row: {
-          created_at: string
-          id: number
-          notes: string | null
-          portfolio_name: string | null
-          positions_snapshot: Json | null
-          rebalanced_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          notes?: string | null
-          portfolio_name?: string | null
-          positions_snapshot?: Json | null
-          rebalanced_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          notes?: string | null
-          portfolio_name?: string | null
-          positions_snapshot?: Json | null
-          rebalanced_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "rebalance_log_portfolio_name_fkey"
-            columns: ["portfolio_name"]
-            isOneToOne: false
-            referencedRelation: "portfolio"
-            referencedColumns: ["name"]
-          },
-        ]
       }
       research_reports: {
         Row: {

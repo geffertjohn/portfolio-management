@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AddPositionModal } from '@/components/AddPositionModal'
 import { CreateActionItemModal } from '@/components/CreateActionItemModal'
 import { EditPositionModal } from '@/components/EditPositionModal'
-import { RebalancingPanel } from '@/components/RebalancingPanel'
 import { HoldingsChangeLog } from '@/components/HoldingsChangeLog'
 import { TradeSuitabilityLog } from '@/components/TradeSuitabilityLog'
 import { PortfolioReviewsPanel } from '@/components/PortfolioReviewsPanel'
@@ -395,7 +394,7 @@ export function PortfolioDetailPage() {
                       positions.forEach((p) => {
                         init[p.securityId] = {
                           lower: p.lowerLimit != null ? String(p.lowerLimit) : '',
-                          target: p.targetWeight != null ? String(p.targetWeight) : '',
+                          target: String(p.weight),
                           upper: p.upperLimit != null ? String(p.upperLimit) : '',
                         }
                       })
@@ -499,7 +498,7 @@ export function PortfolioDetailPage() {
                               const actual = actualWeightFor(pos.securityId, pos.ticker)
                               if (actual == null)
                                 return <td className="whitespace-nowrap px-4 py-2.5 text-gray-400">—</td>
-                              const target = pos.targetWeight ?? pos.weight
+                              const target = pos.weight
                               const lower = pos.lowerLimit
                                 ?? (isCashTicker(pos.securityId) ? modelPortfolio?.cash_lower_limit ?? null : driftLower(target))
                               const upper = pos.upperLimit
@@ -517,7 +516,7 @@ export function PortfolioDetailPage() {
                                 if (pos.lowerLimit != null) return `${pos.lowerLimit.toFixed(1)}%`
                                 if (isCashTicker(pos.securityId) && modelPortfolio?.cash_lower_limit != null)
                                   return `${modelPortfolio.cash_lower_limit.toFixed(1)}%`
-                                const target = pos.targetWeight ?? pos.weight
+                                const target = pos.weight
                                 const val = driftLower(target)
                                 return val != null ? `${val.toFixed(1)}%` : '—'
                               })()}
@@ -530,7 +529,7 @@ export function PortfolioDetailPage() {
                                 if (pos.upperLimit != null) return `${pos.upperLimit.toFixed(1)}%`
                                 if (isCashTicker(pos.securityId) && modelPortfolio?.cash_upper_limit != null)
                                   return `${modelPortfolio.cash_upper_limit.toFixed(1)}%`
-                                const target = pos.targetWeight ?? pos.weight
+                                const target = pos.weight
                                 const val = driftUpper(target)
                                 return val != null ? `${val.toFixed(1)}%` : '—'
                               })()}
@@ -593,7 +592,6 @@ export function PortfolioDetailPage() {
                   className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
                 >
                   <option value="changelog">Change Log</option>
-                  <option value="rebalance">Rebalancing</option>
                   <option value="suitability">Suitability</option>
                 </select>
                 {changeLogView === 'suitability' && (
@@ -603,7 +601,6 @@ export function PortfolioDetailPage() {
 
               <div className="mt-4">
                 {changeLogView === 'changelog' && <HoldingsChangeLog portfolioId={id} />}
-                {changeLogView === 'rebalance' && <RebalancingPanel portfolioId={id} positions={positions} modelDriftPct={driftPct} />}
                 {changeLogView === 'suitability' && <TradeSuitabilityLog portfolioId={id} />}
               </div>
             </div>

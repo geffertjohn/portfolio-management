@@ -6,7 +6,6 @@ export interface PortfolioPosition {
   name: string | null
   weight: number
   updatedAt: string | null
-  targetWeight: number | null
   driftThreshold: number | null
   assetClass: string | null
   categoryName: string | null

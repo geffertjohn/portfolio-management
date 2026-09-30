@@ -18,6 +18,13 @@ import {
 import { fetchReviewSchedules, isOverdue, isDueSoon } from './reviewSchedules'
 import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReviews'
 import { fetchUnacknowledgedAlerts } from './alertRules'
+import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET } from './documents'
+import { fetchLatestActualAllocation } from './currentAllocation'
+import { fetchPositionsByPortfolioId } from './positions'
+import { computePositionBands, isCashTicker } from './positionBands'
+import {
+  fetchDirectModelPortfolioId, fetchModelPortfolioById, fetchModelPortfolioByObjective,
+} from './modelPortfolios'
 import { fetchActiveAtRisk } from './atRisk'
 import {
   daysSince, fetchLatestImportRuns, fmtImportDate, missedScheduledRefresh,
@@ -145,33 +152,84 @@ async function fetchCandidateActions(): Promise<UnifiedAction[]> {
 }
 
 // ── Derived: positions out of drift tolerance, grouped per portfolio ────────
+//
+// Drift is ACTUAL vs TARGET, and the two live in different places: the target is
+// `positions.allocation_pct` (set from the YCharts allocation import) and the
+// actual is the most recent file in the portfolio's Documents folder. This used
+// to compare allocation_pct against `positions.target_weight`, which no writer
+// ever populated — so the source could not fire a single action. Same band rule
+// as the Positions tab, so the two agree.
+//
+// Only portfolios with an uploaded allocation file can be evaluated; the rest
+// have no actual to compare against and are skipped rather than reported clean.
 async function fetchDriftActions(): Promise<UnifiedAction[]> {
-  const { data, error } = await supabase
-    .from('positions')
-    .select('portfolio_name, security_id, allocation_pct, target_weight, drift_threshold')
-  if (error) throw error
-  const byPortfolio = new Map<string, number>()
-  for (const p of data ?? []) {
-    const target = p.target_weight
-    if (target == null) continue
-    const drift = (p.allocation_pct ?? 0) - target
-    const threshold = p.drift_threshold ?? 5
-    if (Math.abs(drift) > threshold) {
-      byPortfolio.set(p.portfolio_name, (byPortfolio.get(p.portfolio_name) ?? 0) + 1)
+  let files
+  try {
+    files = (await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)).files
+  } catch {
+    // The Express file store being down must not take out the whole Actions hub.
+    return []
+  }
+  const withFiles = [...new Set(files.map((f) => f.folder).filter(Boolean))] as string[]
+  if (withFiles.length === 0) return []
+
+  const out: UnifiedAction[] = []
+  for (const name of withFiles) {
+    try {
+      const [actual, positions, model] = await Promise.all([
+        fetchLatestActualAllocation(name),
+        fetchPositionsByPortfolioId(name),
+        resolveModelForPortfolio(name),
+      ])
+      if (!actual || positions.length === 0) continue
+
+      const bands = computePositionBands(positions, model)
+      let breaches = 0
+      for (const b of bands) {
+        const a = actualWeightFor(actual.weights, b.symbol)
+        if (a == null) continue
+        if ((b.lower != null && a < b.lower - 0.005) || (b.upper != null && a > b.upper + 0.005)) breaches++
+      }
+      if (breaches === 0) continue
+
+      out.push({
+        key: `drift:${name}`,
+        category: 'trade' as const,
+        source: 'drift' as const,
+        title: `Rebalance ${name}`,
+        subtitle: `${breaches} position${breaches > 1 ? 's' : ''} outside drift tolerance`,
+        linkedLabel: name,
+        route: `/portfolio/${encodeURIComponent(name)}`,
+        dueDate: null,
+        priority: 'medium' as const,
+        isManual: false,
+      })
+    } catch {
+      // One unreadable portfolio must not drop the others.
+      continue
     }
   }
-  return [...byPortfolio.entries()].map(([name, count]) => ({
-    key: `drift:${name}`,
-    category: 'trade' as const,
-    source: 'drift' as const,
-    title: `Rebalance ${name}`,
-    subtitle: `${count} position${count > 1 ? 's' : ''} outside drift tolerance`,
-    linkedLabel: name,
-    route: `/portfolio/${encodeURIComponent(name)}`,
-    dueDate: null,
-    priority: 'medium' as const,
-    isManual: false,
-  }))
+  return out
+}
+
+/** Actual weight for a ticker; all cash-like symbols collapse to the one cash row. */
+function actualWeightFor(weights: Map<string, number>, ticker: string): number | null {
+  if (isCashTicker(ticker)) {
+    let cash: number | null = null
+    for (const [k, v] of weights) if (isCashTicker(k)) cash = (cash ?? 0) + v
+    return cash
+  }
+  return weights.get(ticker.trim().toUpperCase()) ?? null
+}
+
+/** The model a portfolio resolves to — map first, investment_objective as fallback. */
+async function resolveModelForPortfolio(name: string) {
+  const { data: pf } = await supabase
+    .from('portfolio').select('security_id, investment_objective').eq('name', name).maybeSingle()
+  if (!pf) return null
+  const mapped = pf.security_id ? await fetchDirectModelPortfolioId(pf.security_id) : null
+  if (mapped != null) return fetchModelPortfolioById(mapped)
+  return pf.investment_objective ? fetchModelPortfolioByObjective(pf.investment_objective) : null
 }
 
 /**

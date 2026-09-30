@@ -1306,7 +1306,6 @@ CREATE TABLE IF NOT EXISTS "public"."positions" (
     "sort_order" integer DEFAULT 0,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "target_weight" numeric,
     "drift_threshold" numeric,
     "security_id" "text" NOT NULL,
     "portfolio_name" "text" NOT NULL,
@@ -1354,34 +1353,6 @@ ALTER SEQUENCE "public"."prospects_id_seq" OWNER TO "postgres";
 
 
 ALTER SEQUENCE "public"."prospects_id_seq" OWNED BY "public"."prospects"."id";
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."rebalance_log" (
-    "id" bigint NOT NULL,
-    "rebalanced_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "notes" "text",
-    "positions_snapshot" "jsonb",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "portfolio_name" "text"
-);
-
-
-ALTER TABLE "public"."rebalance_log" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."rebalance_log_id_seq"
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE "public"."rebalance_log_id_seq" OWNER TO "postgres";
-
-
-ALTER SEQUENCE "public"."rebalance_log_id_seq" OWNED BY "public"."rebalance_log"."id";
 
 
 
@@ -1931,10 +1902,6 @@ ALTER TABLE ONLY "public"."prospects" ALTER COLUMN "id" SET DEFAULT "nextval"('"
 
 
 
-ALTER TABLE ONLY "public"."rebalance_log" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."rebalance_log_id_seq"'::"regclass");
-
-
-
 ALTER TABLE ONLY "public"."review_log" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."review_log_id_seq"'::"regclass");
 
 
@@ -2118,11 +2085,6 @@ ALTER TABLE ONLY "public"."positions"
 
 ALTER TABLE ONLY "public"."prospects"
     ADD CONSTRAINT "prospects_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."rebalance_log"
-    ADD CONSTRAINT "rebalance_log_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2310,10 +2272,6 @@ CREATE INDEX "idx_positions_active" ON "public"."positions" USING "btree" ("port
 
 
 CREATE INDEX "idx_positions_security_id" ON "public"."positions" USING "btree" ("security_id");
-
-
-
-CREATE INDEX "idx_rebalance_log_portfolio_name" ON "public"."rebalance_log" USING "btree" ("portfolio_name");
 
 
 
@@ -2655,11 +2613,6 @@ ALTER TABLE ONLY "public"."positions"
 
 
 
-ALTER TABLE ONLY "public"."rebalance_log"
-    ADD CONSTRAINT "rebalance_log_portfolio_name_fkey" FOREIGN KEY ("portfolio_name") REFERENCES "public"."portfolio"("name") ON DELETE CASCADE;
-
-
-
 ALTER TABLE ONLY "public"."research_reports"
     ADD CONSTRAINT "research_reports_addition_id_fkey" FOREIGN KEY ("addition_id") REFERENCES "public"."security_additions"("id") ON DELETE SET NULL;
 
@@ -2814,10 +2767,6 @@ CREATE POLICY "Allow delete prospects" ON "public"."prospects" FOR DELETE USING 
 
 
 
-CREATE POLICY "Allow delete rebalance_log" ON "public"."rebalance_log" FOR DELETE TO "authenticated", "anon" USING (true);
-
-
-
 CREATE POLICY "Allow delete review_log" ON "public"."review_log" FOR DELETE TO "authenticated", "anon" USING (true);
 
 
@@ -2927,10 +2876,6 @@ CREATE POLICY "Allow insert positions" ON "public"."positions" FOR INSERT TO "au
 
 
 CREATE POLICY "Allow insert prospects" ON "public"."prospects" FOR INSERT WITH CHECK (true);
-
-
-
-CREATE POLICY "Allow insert rebalance_log" ON "public"."rebalance_log" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
 
 
 
@@ -3046,10 +2991,6 @@ CREATE POLICY "Allow read prospects" ON "public"."prospects" FOR SELECT USING (t
 
 
 
-CREATE POLICY "Allow read rebalance_log" ON "public"."rebalance_log" FOR SELECT TO "authenticated", "anon" USING (true);
-
-
-
 CREATE POLICY "Allow read review_log" ON "public"."review_log" FOR SELECT TO "authenticated", "anon" USING (true);
 
 
@@ -3159,10 +3100,6 @@ CREATE POLICY "Allow update positions" ON "public"."positions" FOR UPDATE TO "au
 
 
 CREATE POLICY "Allow update prospects" ON "public"."prospects" FOR UPDATE USING (true) WITH CHECK (true);
-
-
-
-CREATE POLICY "Allow update rebalance_log" ON "public"."rebalance_log" FOR UPDATE TO "authenticated", "anon" USING (true);
 
 
 
@@ -3348,9 +3285,6 @@ ALTER TABLE "public"."positions" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."prospects" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."rebalance_log" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."research_reports" ENABLE ROW LEVEL SECURITY;
@@ -3890,18 +3824,6 @@ GRANT ALL ON TABLE "public"."prospects" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."prospects_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."prospects_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."prospects_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."rebalance_log" TO "anon";
-GRANT ALL ON TABLE "public"."rebalance_log" TO "authenticated";
-GRANT ALL ON TABLE "public"."rebalance_log" TO "service_role";
-
-
-
-GRANT ALL ON SEQUENCE "public"."rebalance_log_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."rebalance_log_id_seq" TO "authenticated";
-GRANT ALL ON SEQUENCE "public"."rebalance_log_id_seq" TO "service_role";
 
 
 

@@ -47,7 +47,7 @@ export function computePositionBands(
 ): PositionBand[] {
   const driftPct = modelPortfolio?.drift_percentage ?? null
   return positions.map((p) => {
-    const target = p.targetWeight ?? p.weight
+    const target = p.weight
     const cash = isCashPosition(p)
     let lower = p.lowerLimit
     let upper = p.upperLimit

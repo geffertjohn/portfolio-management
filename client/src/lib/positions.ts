@@ -75,16 +75,28 @@ export async function createPosition(
   if (error) throw error
 }
 
+/**
+ * Bulk band edit from the Positions tab.
+ *
+ * `target` writes `allocation_pct`, which IS the position's target weight. It
+ * used to write `target_weight`, a second target column that no other surface
+ * read and that was null on every row; it has been dropped. allocation_pct is
+ * NOT NULL, so a blank target leaves the existing value alone.
+ */
 export async function updatePositionBands(
   portfolioName: string,
   securityId: string,
   lowerLimit: number | null,
-  targetWeight: number | null,
+  target: number | null,
   upperLimit: number | null,
 ): Promise<void> {
   const { error } = await supabase
     .from('positions')
-    .update({ lower_limit: lowerLimit, target_weight: targetWeight, upper_limit: upperLimit })
+    .update({
+      lower_limit: lowerLimit,
+      upper_limit: upperLimit,
+      ...(target != null ? { allocation_pct: target } : {}),
+    })
     .eq('portfolio_name', portfolioName)
     .eq('security_id', securityId)
     .is('deleted_at', null)
@@ -114,7 +126,6 @@ interface PositionQueryRow {
   allocation_pct: number
   sort_order: number | null
   updated_at: string | null
-  target_weight: number | null
   drift_threshold: number | null
   lower_limit: number | null
   upper_limit: number | null
@@ -153,7 +164,7 @@ export async function fetchPositionsByPortfolioId(
 ): Promise<PortfolioPosition[]> {
   const { data, error } = await supabase
     .from('positions')
-    .select('portfolio_name, security_id, allocation_pct, sort_order, updated_at, target_weight, drift_threshold, lower_limit, upper_limit, securities2(id, security_id, security_name, broad_asset_class, category_name, expense_ratio_generic)')
+    .select('portfolio_name, security_id, allocation_pct, sort_order, updated_at, drift_threshold, lower_limit, upper_limit, securities2(id, security_id, security_name, broad_asset_class, category_name, expense_ratio_generic)')
     .eq('portfolio_name', portfolioName)
     .is('deleted_at', null)
     .order('allocation_pct', { ascending: false })
@@ -176,7 +187,6 @@ export async function fetchPositionsByPortfolioId(
       name,
       weight: Number(row.allocation_pct),
       updatedAt: row.updated_at ?? null,
-      targetWeight: row.target_weight ?? null,
       driftThreshold: row.drift_threshold ?? null,
       assetClass: sec?.broad_asset_class ?? null,
       categoryName: sec?.category_name ?? null,
