@@ -108,17 +108,30 @@ export type SectorAllocations = Record<string, SectorBand>
 
 export type ModelPortfolioInput = Omit<ModelPortfolio, 'id' | 'created_at' | 'updated_at'>
 
+/**
+ * The asset-class taxonomy — labels and their DB column prefixes.
+ *
+ * The LABELS are the firm's canonical names and the single source for every
+ * screen that lists asset classes. The KEYS are `model_portfolio_data` column
+ * prefixes (`<key>_target` / `_lower_limit` / `_upper_limit`) and deliberately
+ * do NOT track the labels: renaming 48 columns to match display text would
+ * touch the schema, the generated types and every dynamic-key read for no gain.
+ *
+ * Order is the display order (equity sleeves, then fixed income). `alternatives`
+ * sits before cash and is its own tier-1 category alongside Equity, Fixed Income
+ * and Cash — see CATEGORY_GROUPS in PortfolioOverview.
+ */
 export const ASSET_CLASS_ROWS: { label: string; key: string }[] = [
-  { label: 'Large Cap Blend',                                    key: 'large_cap_blend' },
-  { label: 'Large Cap Value',                                    key: 'large_cap_value' },
-  { label: 'Large Cap Growth',                                   key: 'large_cap_growth' },
-  { label: 'US Mid Cap',                                         key: 'us_mid_cap' },
-  { label: 'US Small Cap',                                       key: 'us_small_cap' },
-  { label: 'Non-US Developed',                                   key: 'non_us_developed' },
-  { label: 'Emerging Market',                                    key: 'emerging_market' },
-  { label: 'IG Intermediate Maturity Fixed Income',              key: 'ig_intermediate_fixed_income' },
+  { label: 'US Large Cap Blend',                                 key: 'large_cap_blend' },
+  { label: 'US Large Cap Growth',                                key: 'large_cap_growth' },
+  { label: 'US Large Cap Value',                                 key: 'large_cap_value' },
+  { label: 'US Mid Cap Equity',                                  key: 'us_mid_cap' },
+  { label: 'US Small Cap Equity',                                key: 'us_small_cap' },
+  { label: 'Non-US Developed Market Equity',                     key: 'non_us_developed' },
+  { label: 'Emerging Market Equity',                             key: 'emerging_market' },
+  { label: 'Investment Grade Intermediate Maturity Fixed Income', key: 'ig_intermediate_fixed_income' },
+  { label: 'Investment Grade Short Maturity Fixed Income',       key: 'ig_short_fixed_income' },
   { label: 'Non-Investment Grade Fixed Income',                  key: 'non_ig_fixed_income' },
-  { label: 'IG Short Maturity Fixed Income',                     key: 'ig_short_fixed_income' },
   { label: 'Non-US Fixed Income',                                key: 'non_us_fixed_income' },
   { label: 'Multi-Sector Fixed Income',                          key: 'multi_sector_fixed_income' },
   { label: 'Alternative Investments',                            key: 'alternatives' },

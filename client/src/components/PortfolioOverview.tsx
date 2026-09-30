@@ -18,11 +18,11 @@ const PALETTE = [
 const CATEGORY_GROUPS: { label: string; keys: string[] }[] = [
   {
     label: 'Equity',
-    keys: ['large_cap_blend', 'large_cap_value', 'large_cap_growth', 'us_mid_cap', 'us_small_cap', 'non_us_developed', 'emerging_market'],
+    keys: ['large_cap_blend', 'large_cap_growth', 'large_cap_value', 'us_mid_cap', 'us_small_cap', 'non_us_developed', 'emerging_market'],
   },
   {
     label: 'Fixed Income',
-    keys: ['ig_intermediate_fixed_income', 'non_ig_fixed_income', 'ig_short_fixed_income', 'non_us_fixed_income', 'multi_sector_fixed_income'],
+    keys: ['ig_intermediate_fixed_income', 'ig_short_fixed_income', 'non_ig_fixed_income', 'non_us_fixed_income', 'multi_sector_fixed_income'],
   },
   {
     label: 'Alternatives',
@@ -49,49 +49,26 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
     enabled: !!effectiveBenchmark,
   })
 
-  const IG_FIXED_INCOME_KEYS = ['ig_intermediate_fixed_income', 'ig_short_fixed_income']
-
+  /**
+   * One row per funded asset class, straight from ASSET_CLASS_ROWS.
+   *
+   * The intermediate and short IG sleeves used to be summed into a synthesized
+   * "Investment Grade Fixed Income" row here, which made this table disagree
+   * with the Model Portfolios settings page for the same numbers. They are
+   * separate classes in the firm taxonomy, so they render separately.
+   *
+   * A class with neither a target nor an upper limit is unfunded and skipped.
+   */
   const allocationRows = (() => {
     if (!modelPortfolio) return []
     const mp = modelPortfolio as unknown as Record<string, unknown>
 
-    const sumField = (keys: string[], field: string) =>
-      keys.reduce((s, k) => s + ((mp[`${k}_${field}`] as number | null) ?? 0), 0)
-
-    const rows: { label: string; lower: number | null; target: number | null; upper: number | null }[] = []
-
-    for (const { label, key } of ASSET_CLASS_ROWS) {
-      if (IG_FIXED_INCOME_KEYS.includes(key)) continue
-      const target = (mp[`${key}_target`] as number | null) ?? 0
-      const upper = (mp[`${key}_upper_limit`] as number | null) ?? 0
-      if (!target && !upper) continue
-      // Insert merged IG Fixed Income row before non-IG fixed income
-      if (key === 'non_ig_fixed_income' && sumField(IG_FIXED_INCOME_KEYS, 'target') > 0) {
-        rows.push({
-          label: 'Investment Grade Fixed Income',
-          lower:  sumField(IG_FIXED_INCOME_KEYS, 'lower_limit'),
-          target: sumField(IG_FIXED_INCOME_KEYS, 'target'),
-          upper:  sumField(IG_FIXED_INCOME_KEYS, 'upper_limit'),
-        })
-      }
-      rows.push({
-        label,
-        lower:  mp[`${key}_lower_limit`] as number | null,
-        target: mp[`${key}_target`]      as number | null,
-        upper:  mp[`${key}_upper_limit`] as number | null,
-      })
-    }
-
-    if (!rows.some((r) => r.label === 'Investment Grade Fixed Income') && sumField(IG_FIXED_INCOME_KEYS, 'target') > 0) {
-      rows.push({
-        label: 'Investment Grade Fixed Income',
-        lower:  sumField(IG_FIXED_INCOME_KEYS, 'lower_limit'),
-        target: sumField(IG_FIXED_INCOME_KEYS, 'target'),
-        upper:  sumField(IG_FIXED_INCOME_KEYS, 'upper_limit'),
-      })
-    }
-
-    return rows
+    return ASSET_CLASS_ROWS.flatMap(({ label, key }) => {
+      const target = mp[`${key}_target`]      as number | null
+      const upper  = mp[`${key}_upper_limit`] as number | null
+      if (!target && !upper) return []
+      return [{ label, lower: mp[`${key}_lower_limit`] as number | null, target, upper }]
+    })
   })()
 
   const pieData = modelPortfolio
