@@ -22,8 +22,11 @@ import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET } from './documents'
 import { fetchLatestActualAllocation } from './currentAllocation'
 import { fetchPositionsByPortfolioId } from './positions'
 import { computePositionBands, isCashTicker } from './positionBands'
+import { computeAllocationBands } from './allocationBands'
+import { fetchSecurities } from './securities'
 import {
   fetchDirectModelPortfolioId, fetchModelPortfolioById, fetchModelPortfolioByObjective,
+  fetchModelPortfolios,
 } from './modelPortfolios'
 import { fetchActiveAtRisk } from './atRisk'
 import {
@@ -40,6 +43,7 @@ export type ActionSource =
   | 'alert'
   | 'at_risk'
   | 'drift'
+  | 'allocation_band'
   | 'data_refresh'
 
 export const SOURCE_LABELS: Record<ActionSource, string> = {
@@ -51,6 +55,7 @@ export const SOURCE_LABELS: Record<ActionSource, string> = {
   alert: 'Alert',
   at_risk: 'At-Risk',
   drift: 'Drift',
+  allocation_band: 'Allocation',
   data_refresh: 'Data',
 }
 
@@ -212,6 +217,91 @@ async function fetchDriftActions(): Promise<UnifiedAction[]> {
   return out
 }
 
+// ── Derived: asset-class allocation out of band (tiers 1 and 2) ─────────────
+//
+// The band card on each portfolio's Overview, surfaced as an action. Covers ALL
+// portfolios, unlike the tier-3 drift source, because the comparison adapts to
+// the data that exists: ACTUAL weights from the allocation file where there is
+// one (the all-stock portfolios), otherwise the position targets rolled up
+// (every fund/ETF portfolio, which deliberately gets no file).
+//
+// Batched deliberately. This spans 19 portfolios, so per-portfolio lookups would
+// mean ~57 round trips; the reference data is fetched once and joined in memory.
+async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
+  const [portfoliosRes, mapRes, models, positionsRes, securities] = await Promise.all([
+    supabase.from('portfolio').select('name, security_id, investment_objective'),
+    supabase.from('portfolio_model_map').select('security_id, model_portfolio_id'),
+    fetchModelPortfolios(),
+    supabase.from('positions').select('portfolio_name, security_id, allocation_pct').limit(5000),
+    fetchSecurities(),
+  ])
+  if (portfoliosRes.error) throw portfoliosRes.error
+  if (positionsRes.error) throw positionsRes.error
+
+  // Files are optional: a file store that is down must not take out the hub, it
+  // just means every portfolio falls back to its position targets.
+  let filesByFolder = new Set<string>()
+  try {
+    const { files } = await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)
+    filesByFolder = new Set(files.map((f) => f.folder).filter(Boolean) as string[])
+  } catch { /* fall through to position targets */ }
+
+  const modelById = new Map(models.map((m) => [m.id, m]))
+  const mappedModel = new Map(
+    (mapRes.data ?? []).map((r) => [r.security_id as string, r.model_portfolio_id as number]),
+  )
+  const posByPortfolio = new Map<string, Map<string, number>>()
+  for (const r of positionsRes.data ?? []) {
+    const name = r.portfolio_name as string
+    if (!posByPortfolio.has(name)) posByPortfolio.set(name, new Map())
+    posByPortfolio.get(name)!.set(String(r.security_id).trim().toUpperCase(), Number(r.allocation_pct))
+  }
+
+  const out: UnifiedAction[] = []
+  for (const pf of portfoliosRes.data ?? []) {
+    const name = pf.name as string
+    const mid = pf.security_id ? mappedModel.get(pf.security_id) : undefined
+    const model =
+      (mid != null ? modelById.get(mid) : undefined) ??
+      models.find((m) => m.investment_objective === pf.investment_objective) ??
+      null
+    if (!model) continue
+
+    let weights: Map<string, number> | null = null
+    let basis: 'actual' | 'holdings' = 'holdings'
+    if (filesByFolder.has(name)) {
+      try {
+        const actual = await fetchLatestActualAllocation(name)
+        if (actual) { weights = actual.weights; basis = 'actual' }
+      } catch { /* fall back to targets below */ }
+    }
+    if (!weights) weights = posByPortfolio.get(name) ?? null
+    if (!weights || weights.size === 0) continue
+
+    const { tier1, tier2 } = computeAllocationBands(weights, securities, model)
+    const breached = [...tier1, ...tier2].filter((r) => r.status !== 'ok')
+    if (breached.length === 0) continue
+
+    // Name the classes rather than only counting them — "US Mid Cap Equity" is
+    // actionable from the list; "3 asset classes" means opening the portfolio.
+    const named = tier2.filter((r) => r.status !== 'ok').map((r) => r.label)
+    out.push({
+      key: `allocation_band:${name}`,
+      category: 'portfolio' as const,
+      source: 'allocation_band' as const,
+      title: `Allocation out of band — ${name}`,
+      subtitle: `${named.length > 0 ? named.join(', ') : `${breached.length} band(s)`}` +
+        ` · vs ${basis === 'actual' ? 'actual holdings' : 'position targets'}`,
+      linkedLabel: name,
+      route: `/portfolio/${encodeURIComponent(name)}`,
+      dueDate: null,
+      priority: 'medium' as const,
+      isManual: false,
+    })
+  }
+  return out
+}
+
 /** Actual weight for a ticker; all cash-like symbols collapse to the one cash row. */
 function actualWeightFor(weights: Map<string, number>, ticker: string): number | null {
   if (isCashTicker(ticker)) {
@@ -292,7 +382,7 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
 
 // ── Assemble everything ─────────────────────────────────────────────────────
 export async function fetchAllActions(): Promise<UnifiedAction[]> {
-  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh] = await Promise.all([
+  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh, allocationBands] = await Promise.all([
     fetchActionItems(),
     fetchReviewSchedules(),
     fetchPortfolioReviewSchedules(),
@@ -302,6 +392,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     fetchCandidateActions(),
     fetchDriftActions(),
     fetchDataRefreshActions(),
+    fetchAllocationBandActions(),
   ])
 
   // Include closed manual items too; the Actions page decides what to show.
@@ -371,6 +462,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     ...alertActions,
     ...atRiskActions,
     ...drift,
+    ...allocationBands,
     ...dataRefresh,
   ]
 }
