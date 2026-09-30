@@ -184,6 +184,99 @@ export async function importAllocationSnapshots(
   return { inserted: inserts.length, dates: parsed.dates.length }
 }
 
+export interface PositionSyncResult {
+  /** The snapshot the positions were taken from. */
+  effectiveDate: string
+  added: number
+  updated: number
+  removed: number
+  /**
+   * Tickers in the snapshot that `securities2` does not have. Non-empty means
+   * NOTHING was written — see the note below.
+   */
+  unknownSecurities: string[]
+}
+
+/**
+ * Point `positions` at a portfolio's most recent allocation snapshot.
+ *
+ * `positions` holds the CURRENT target weights and `portfolio_allocations` holds
+ * the dated history, so after an import the newest snapshot and the positions
+ * table should agree. They used to drift: the import only wrote history, which is
+ * how Hybrid Conservative kept two wrong tickers through a re-upload and how six
+ * ETF weights ended up rounded away from their quarter-point source values.
+ *
+ * ALL-OR-NOTHING on unknown securities. `portfolio_allocations` has no FK and
+ * deliberately stages any symbol, but `positions.security_id` DOES reference
+ * securities2 — and 70 symbols in the history (sold holdings like WMFFX, CPLB)
+ * are not in securities2 today. Writing the rows we can would leave positions not
+ * summing to 100% with nothing saying why, so a single unknown ticker aborts the
+ * whole sync and is reported. The history import still stands; positions stay
+ * consistent-but-stale rather than becoming silently wrong.
+ *
+ * Per-position settings survive. An existing row has only its `allocation_pct`
+ * updated, so hand-set `lower_limit` / `upper_limit` / `drift_threshold` /
+ * `sort_order` are preserved; only genuinely new holdings get defaults.
+ */
+export async function syncPositionsFromLatestSnapshot(
+  portfolioName: string,
+  parsed: ParsedDynamicAllocations,
+): Promise<PositionSyncResult | null> {
+  if (parsed.dates.length === 0) return null
+  // dates are not guaranteed sorted; take the latest by value, not by position.
+  let li = 0
+  for (let i = 1; i < parsed.dates.length; i++) if (parsed.dates[i] > parsed.dates[li]) li = i
+  const effectiveDate = parsed.dates[li]
+
+  const target = new Map<string, number>()
+  for (const r of parsed.rows) {
+    const w = r.weights[li]
+    if (w != null && w !== 0) target.set(normalizeSymbol(r.security_id), w)
+  }
+  if (target.size === 0) return null
+
+  const symbols = [...target.keys()]
+  const { data: known, error: kErr } = await supabase
+    .from('securities2').select('security_id').in('security_id', symbols)
+  if (kErr) throw kErr
+  const knownSet = new Set((known ?? []).map((r) => r.security_id))
+  const unknownSecurities = symbols.filter((s) => !knownSet.has(s)).sort()
+  if (unknownSecurities.length > 0) {
+    return { effectiveDate, added: 0, updated: 0, removed: 0, unknownSecurities }
+  }
+
+  const { data: current, error: cErr } = await supabase
+    .from('positions').select('security_id').eq('portfolio_name', portfolioName)
+  if (cErr) throw cErr
+  const currentSet = new Set((current ?? []).map((r) => r.security_id))
+
+  const gone = [...currentSet].filter((s) => !target.has(s))
+  if (gone.length > 0) {
+    const { error } = await supabase
+      .from('positions').delete().eq('portfolio_name', portfolioName).in('security_id', gone)
+    if (error) throw error
+  }
+
+  const toInsert = symbols.filter((s) => !currentSet.has(s))
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from('positions').insert(
+      toInsert.map((s) => ({ portfolio_name: portfolioName, security_id: s, allocation_pct: target.get(s)! })),
+    )
+    if (error) throw error
+  }
+
+  const toUpdate = symbols.filter((s) => currentSet.has(s))
+  for (const s of toUpdate) {
+    const { error } = await supabase
+      .from('positions')
+      .update({ allocation_pct: target.get(s)!, updated_at: new Date().toISOString() })
+      .eq('portfolio_name', portfolioName).eq('security_id', s)
+    if (error) throw error
+  }
+
+  return { effectiveDate, added: toInsert.length, updated: toUpdate.length, removed: gone.length, unknownSecurities: [] }
+}
+
 /**
  * Parse a YCharts dynamic source file. The export is the **long** format —
  * columns `Date · Symbol · Target Weight`, one row per holding per date (weights

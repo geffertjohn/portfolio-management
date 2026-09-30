@@ -9,7 +9,7 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { uploadYchartBenchmarks } from '@/lib/ychartBenchmarksUpload'
 import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
-import { importAllocationSnapshots, parseYchartsDynamic } from '@/lib/portfolioAllocations'
+import { importAllocationSnapshots, parseYchartsDynamic, syncPositionsFromLatestSnapshot } from '@/lib/portfolioAllocations'
 import {
   fetchLatestImportRuns, fmtImportDate, recordImportRuns,
   type ImportRunInput, type ImportSource,
@@ -278,10 +278,31 @@ export function ImportExportPage() {
             run={async (file) => {
               const parsed = parseYchartsDynamic(await firstSheetRows(file))
               const r = await importAllocationSnapshots(targetPortfolio, parsed, true)
+              // The newest snapshot IS the current target, so positions follows the
+              // history rather than being maintained separately and drifting from it.
+              const sync = await syncPositionsFromLatestSnapshot(targetPortfolio, parsed)
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allocationGrid(targetPortfolio) })
+              await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.positions(targetPortfolio) })
+
+              const parts = [`Imported ${r.inserted} weights across ${r.dates} dates into ${targetPortfolio}`]
+              const errors: string[] = []
+              if (sync && sync.unknownSecurities.length > 0) {
+                // Reported, not thrown: the history landed and is worth keeping.
+                const msg =
+                  `positions NOT updated — ${sync.unknownSecurities.length} ticker(s) in the ` +
+                  `${sync.effectiveDate} snapshot are not in securities2: ${sync.unknownSecurities.join(', ')}. ` +
+                  `Add them, then re-import.`
+                parts.push(msg)
+                errors.push(msg)
+              } else if (sync) {
+                parts.push(
+                  `positions set from ${sync.effectiveDate} (${sync.added} added, ` +
+                  `${sync.updated} updated, ${sync.removed} removed)`,
+                )
+              }
               return {
-                runs: [{ source: 'ycharts_allocations', rows: r.inserted }],
-                message: `Imported ${r.inserted} weights across ${r.dates} dates into ${targetPortfolio}.`,
+                runs: [{ source: 'ycharts_allocations', rows: r.inserted, errors }],
+                message: `${parts.join(' · ')}.`,
               }
             }}
           />
