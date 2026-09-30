@@ -28,6 +28,31 @@ const SKIP_COLS = new Set([
   'security_id',
 ])
 
+/**
+ * `portfolio_strategy` is NOT NULL and the Model Portfolios sheet has no column
+ * for it, so a row for a portfolio that doesn't exist yet has to derive one.
+ *
+ * Longest prefix first, so "Fixed Income Total Return" resolves to `Fixed Income`
+ * rather than stopping at a shorter match. The two all-stock strategies don't
+ * follow the prefix rule at all and are named outright.
+ */
+const STRATEGY_BY_NAME_PREFIX: [string, string][] = [
+  ['Fixed Income', 'Fixed Income'],
+  ['Foundation',   'Foundation'],
+  ['Hybrid',       'Hybrid'],
+  ['ETF',          'ETF'],
+]
+const EQUITY_PORTFOLIO_NAMES = new Set(['Core Growth', 'Equity Income', 'Equity Income & Core Growth'])
+
+export function derivePortfolioStrategy(name: string): string | null {
+  const n = name.trim()
+  if (EQUITY_PORTFOLIO_NAMES.has(n)) return 'Equity'
+  for (const [prefix, strategy] of STRATEGY_BY_NAME_PREFIX) {
+    if (n.startsWith(prefix)) return strategy
+  }
+  return null
+}
+
 function looksLikeDbColumn(v: unknown): boolean {
   if (typeof v !== 'string') return false
   const s = v.trim()
@@ -67,7 +92,7 @@ function buildPatchFromRow(
 
 export async function bulkUploadPortfoliosFromExcel(
   file: File,
-): Promise<{ succeeded: number; failed: number; errors: string[] }> {
+): Promise<{ succeeded: number; created: number; failed: number; errors: string[] }> {
   assertExcelFile(file)
 
   const buf = await file.arrayBuffer()
@@ -95,6 +120,7 @@ export async function bulkUploadPortfoliosFromExcel(
   const secNameIdx = headers.indexOf('security_name')
 
   let succeeded = 0
+  let created = 0
   let failed = 0
   const errors: string[] = []
 
@@ -117,13 +143,41 @@ export async function bulkUploadPortfoliosFromExcel(
       if (error) throw error
       if (data?.name) portfolioName = data.name
     }
-    if (!portfolioName) {
-      failed++
-      errors.push(`Row ${r + 1}: could not match portfolio (security_id="${secId}", security_name="${secName}")`)
-      continue
-    }
-
     const patch = buildPatchFromRow(headers, row)
+
+    // No existing portfolio — create it, the way the fund importer inserts a stub
+    // for an unknown security_id. Without this a portfolio added to the workbook
+    // is reported as a failed row and never appears in the app.
+    if (!portfolioName) {
+      if (!secName) {
+        failed++
+        errors.push(`Row ${r + 1}: no security_name, cannot create portfolio (security_id="${secId}")`)
+        continue
+      }
+      const strategy = derivePortfolioStrategy(secName)
+      if (!strategy) {
+        failed++
+        errors.push(
+          `Row ${r + 1}: "${secName}" is new, but its strategy could not be derived from the name — ` +
+          `create the portfolio manually, then re-import to populate it.`,
+        )
+        continue
+      }
+      // description is NOT NULL; the sheet supplies it, '' is the documented fallback.
+      const { error: insErr } = await supabase.from('portfolio').insert({
+        name: secName,
+        security_id: secId || null,
+        portfolio_strategy: strategy,
+        description: typeof patch.description === 'string' ? patch.description : '',
+      })
+      if (insErr) {
+        failed++
+        errors.push(`Row ${r + 1} (${secName}): could not create portfolio — ${insErr.message}`)
+        continue
+      }
+      portfolioName = secName
+      created++
+    }
     const safe: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(patch)) {
       if (v === undefined || v === null) continue
@@ -147,5 +201,5 @@ export async function bulkUploadPortfoliosFromExcel(
     }
   }
 
-  return { succeeded, failed, errors }
+  return { succeeded, created, failed, errors }
 }

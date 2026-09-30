@@ -234,6 +234,9 @@ export function ImportExportPage() {
                 const r = await bulkUploadPortfoliosFromExcel(file)
                 runs.push({ source: 'ycharts_portfolios', rows: r.succeeded, errors: r.errors })
                 parts.push(`${r.succeeded} portfolio${r.succeeded !== 1 ? 's' : ''}`)
+                // A portfolio new to the workbook is worth calling out: it changes
+                // what the app contains, not just what it knows.
+                if (r.created > 0) parts.push(`${r.created} NEW portfolio${r.created !== 1 ? 's' : ''} created`)
                 if (r.failed > 0) parts.push(`${r.failed} portfolio(s) failed: ${r.errors[0] ?? ''}`)
               } catch (e) {
                 const msg = e instanceof Error ? e.message : 'unknown error'
