@@ -1307,7 +1307,7 @@ CREATE TABLE IF NOT EXISTS "public"."positions" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "target_weight" numeric,
-    "drift_threshold" numeric DEFAULT 5.0,
+    "drift_threshold" numeric,
     "security_id" "text" NOT NULL,
     "portfolio_name" "text" NOT NULL,
     "deleted_at" timestamp with time zone,
@@ -1318,6 +1318,10 @@ CREATE TABLE IF NOT EXISTS "public"."positions" (
 
 
 ALTER TABLE "public"."positions" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."positions"."drift_threshold" IS 'Per-position drift override in percent. NULL (the norm) means fall through to model_portfolio_data.drift_percentage.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."prospects" (

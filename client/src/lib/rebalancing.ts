@@ -30,6 +30,10 @@ export interface DriftRow {
 export function calcDrift(positions: PortfolioPosition[], modelDriftPct?: number | null): DriftRow[] {
   return positions.map((p) => {
     const target = p.targetWeight ?? null
+    // driftThreshold is a per-position OVERRIDE and is normally NULL, so this
+    // resolves to the model's tier-3 drift. It used to be 5.0 on every row (a
+    // column default, never set deliberately), which meant the model's value
+    // never applied and this panel disagreed with the Allocation tab.
     const threshold = p.driftThreshold ?? modelDriftPct ?? 5
     const drift = target != null ? p.weight - target : null
     return {
