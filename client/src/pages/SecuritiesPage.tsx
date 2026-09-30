@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AddSecurityModal } from '@/components/AddSecurityModal'
 import { useSecurities } from '@/hooks/useSecurities'
 import { getSecurityDisplayType, type Security } from '@/lib/securities'
+import { resolveAssetClass, assetClassLabel } from '@/lib/assetClass'
 
 export function SecuritiesPage() {
   const navigate = useNavigate()
@@ -28,7 +29,22 @@ export function SecuritiesPage() {
   const stocks = securities.filter((s) => getSecurityDisplayType(s) === 'Stock')
   const fundsAndEtfs = securities.filter((s) => getSecurityDisplayType(s) !== 'Stock')
 
-  function renderTable(title: string, rows: typeof securities, categoryOf: (s: Security) => string | null) {
+  /**
+   * The two tables carry DIFFERENT third columns, deliberately.
+   *
+   * Stocks show their peer-group Category; funds/ETFs show the derived Asset
+   * Class instead. Funds carry three vendor classifications that disagree
+   * (Morningstar `category_name`, Lipper `peer_group_name`, YCharts
+   * `ycharts_benchmark_category`), so rendering the Lipper one beside the
+   * Morningstar-derived asset class read as a contradiction — "Large-Cap Value
+   * Funds" next to "US Large Cap Blend" for FLCSX. The peer group still drives
+   * the peer scorecard; it just isn't shown here.
+   */
+  function renderTable(
+    title: string,
+    rows: typeof securities,
+    column: { header: string; cell: (s: Security) => ReactNode },
+  ) {
     return (
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
@@ -43,7 +59,7 @@ export function SecuritiesPage() {
                 <tr>
                   <th scope="col" className="px-4 py-3 font-semibold text-gray-900">Ticker</th>
                   <th scope="col" className="px-4 py-3 font-semibold text-gray-900">Name</th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-gray-900">Category</th>
+                  <th scope="col" className="px-4 py-3 font-semibold text-gray-900">{column.header}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
@@ -63,7 +79,7 @@ export function SecuritiesPage() {
                   >
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">{s.security_id}</td>
                     <td className="px-4 py-3 text-gray-700">{s.security_name ?? '—'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">{categoryOf(s) ?? '—'}</td>
+                    {column.cell(s)}
                   </tr>
                 ))}
               </tbody>
@@ -143,8 +159,29 @@ export function SecuritiesPage() {
         <p className="mt-6 text-gray-500">No securities found.</p>
       ) : (
         <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-          {renderTable('Stocks', stocks, (s) => s.category_name ?? s.equity_style_internal ?? s.peer_group_name)}
-          {renderTable('ETFs & Funds', fundsAndEtfs, (s) => s.peer_group_name)}
+          {renderTable('Stocks', stocks, {
+            header: 'Category',
+            cell: (s) => (
+              <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                {s.category_name ?? s.equity_style_internal ?? s.peer_group_name ?? '—'}
+              </td>
+            ),
+          })}
+          {renderTable('ETFs & Funds', fundsAndEtfs, {
+            header: 'Asset Class',
+            // Derived, never stored — see lib/assetClass.ts. Amber means the vendor
+            // category could not be placed, which would leave this security out of
+            // an asset-class rollup. Wraps rather than nowrap: "Investment Grade
+            // Intermediate Maturity Fixed Income" overflows in the two-up layout.
+            cell: (s) => {
+              const label = assetClassLabel(resolveAssetClass(s))
+              return (
+                <td className={`px-4 py-3 ${label ? 'text-gray-700' : 'font-medium text-amber-600'}`}>
+                  {label ?? '— unclassified'}
+                </td>
+              )
+            },
+          })}
         </div>
       )}
 

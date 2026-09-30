@@ -121,7 +121,27 @@ export type ModelPortfolioInput = Omit<ModelPortfolio, 'id' | 'created_at' | 'up
  * sits before cash and is its own tier-1 category alongside Equity, Fixed Income
  * and Cash — see CATEGORY_GROUPS in PortfolioOverview.
  */
-export const ASSET_CLASS_ROWS: { label: string; key: string }[] = [
+/**
+ * The asset-class keys. Also the `model_portfolio_data` column prefixes, so a
+ * rollup can read `mp[`${key}_target`]` with no translation step.
+ */
+export type AssetClassKey =
+  | 'large_cap_blend'
+  | 'large_cap_growth'
+  | 'large_cap_value'
+  | 'us_mid_cap'
+  | 'us_small_cap'
+  | 'non_us_developed'
+  | 'emerging_market'
+  | 'ig_intermediate_fixed_income'
+  | 'ig_short_fixed_income'
+  | 'non_ig_fixed_income'
+  | 'non_us_fixed_income'
+  | 'multi_sector_fixed_income'
+  | 'alternatives'
+  | 'cash'
+
+export const ASSET_CLASS_ROWS: { label: string; key: AssetClassKey }[] = [
   { label: 'US Large Cap Blend',                                 key: 'large_cap_blend' },
   { label: 'US Large Cap Growth',                                key: 'large_cap_growth' },
   { label: 'US Large Cap Value',                                 key: 'large_cap_value' },
