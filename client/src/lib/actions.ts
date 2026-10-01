@@ -232,7 +232,12 @@ async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
     supabase.from('portfolio').select('name, security_id, investment_objective'),
     supabase.from('portfolio_model_map').select('security_id, model_portfolio_id'),
     fetchModelPortfolios(),
-    supabase.from('positions').select('portfolio_name, security_id, allocation_pct').limit(5000),
+    // `.is('deleted_at', null)` is load-bearing: positions are SOFT-deleted, so a
+    // retired holding still has a row with its old weight. Without the filter a
+    // portfolio's rollup includes securities it no longer holds and invents band
+    // breaches for asset classes the live lineup has no exposure to at all.
+    supabase.from('positions').select('portfolio_name, security_id, allocation_pct')
+      .is('deleted_at', null).limit(5000),
     fetchSecurities(),
   ])
   if (portfoliosRes.error) throw portfoliosRes.error
