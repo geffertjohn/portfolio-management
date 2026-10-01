@@ -184,9 +184,20 @@ export const SECTOR_ROWS: { label: string; key: string }[] = [
   { label: 'Materials',               key: 'materials' },
 ]
 
-/** Sector allocation tables are maintained only for the all-equity stock models. */
+/**
+ * Sector allocation tables are maintained only for the all-equity stock models.
+ *
+ * Equity Income & Core Growth is the 50/50 blend of the other two and inherits
+ * their (identical) sector targets, so it belongs here as well. Leaving it out
+ * made its edit page offer a Description it is not supposed to carry and list
+ * the seven international / fixed-income rows it can never use.
+ */
+const EQUITY_MODEL_NAMES = new Set([
+  'Core Growth', 'Equity Income', 'Equity Income & Core Growth',
+])
+
 export function hasSectorAllocations(name: string | null | undefined): boolean {
-  return name === 'Core Growth' || name === 'Equity Income'
+  return name != null && EQUITY_MODEL_NAMES.has(name)
 }
 
 export async function fetchModelPortfolioById(id: number): Promise<ModelPortfolio | null> {

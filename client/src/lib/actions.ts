@@ -19,7 +19,7 @@ import { fetchReviewSchedules, isOverdue, isDueSoon } from './reviewSchedules'
 import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReviews'
 import { fetchUnacknowledgedAlerts } from './alertRules'
 import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET } from './documents'
-import { fetchLatestActualAllocation } from './currentAllocation'
+import { fetchLatestActualAllocation, portfoliosWithActualAllocation } from './currentAllocation'
 import { fetchPositionsByPortfolioId } from './positions'
 import { computePositionBands, isCashTicker } from './positionBands'
 import { computeAllocationBands } from './allocationBands'
@@ -175,7 +175,8 @@ async function fetchDriftActions(): Promise<UnifiedAction[]> {
     // The Express file store being down must not take out the whole Actions hub.
     return []
   }
-  const withFiles = [...new Set(files.map((f) => f.folder).filter(Boolean))] as string[]
+  const folders = new Set(files.map((f) => f.folder).filter(Boolean) as string[])
+  const withFiles = [...portfoliosWithActualAllocation(folders)]
   if (withFiles.length === 0) return []
 
   const out: UnifiedAction[] = []
@@ -245,10 +246,12 @@ async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
 
   // Files are optional: a file store that is down must not take out the hub, it
   // just means every portfolio falls back to its position targets.
-  let filesByFolder = new Set<string>()
+  let withActual = new Set<string>()
   try {
     const { files } = await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)
-    filesByFolder = new Set(files.map((f) => f.folder).filter(Boolean) as string[])
+    withActual = portfoliosWithActualAllocation(
+      new Set(files.map((f) => f.folder).filter(Boolean) as string[]),
+    )
   } catch { /* fall through to position targets */ }
 
   const modelById = new Map(models.map((m) => [m.id, m]))
@@ -274,7 +277,7 @@ async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
 
     let weights: Map<string, number> | null = null
     let basis: 'actual' | 'holdings' = 'holdings'
-    if (filesByFolder.has(name)) {
+    if (withActual.has(name)) {
       try {
         const actual = await fetchLatestActualAllocation(name)
         if (actual) { weights = actual.weights; basis = 'actual' }

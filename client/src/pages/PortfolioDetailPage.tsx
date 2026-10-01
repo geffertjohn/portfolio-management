@@ -341,6 +341,9 @@ export function PortfolioDetailPage() {
                 <p className="mt-0.5 text-xs text-gray-400">
                   Current allocation as of{' '}
                   {new Date(currentAllocation.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {/* Say so when the column is blended rather than uploaded — the
+                      date is the OLDEST source file, not this portfolio's own. */}
+                  {currentAllocation.derivedFrom && ` · blended from ${currentAllocation.derivedFrom.join(' + ')}`}
                 </p>
               )}
             </div>
