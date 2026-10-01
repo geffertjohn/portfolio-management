@@ -18,7 +18,7 @@ import { AllocationHistoryPanel } from '@/components/AllocationHistoryPanel'
 import { usePortfolio, usePositions, useLatestActualAllocation } from '@/hooks/usePortfolio'
 import { updatePortfolioObjective } from '@/lib/portfolio'
 import { updatePositionBands } from '@/lib/positions'
-import { isCashTicker } from '@/lib/positionBands'
+import { driftBandFor, isCashTicker } from '@/lib/positionBands'
 import { fetchModelPortfolios, fetchModelPortfolioByObjective, fetchDirectModelPortfolioId, fetchModelPortfolioById } from '@/lib/modelPortfolios'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import type { PortfolioPosition } from '@/types/position'
@@ -87,9 +87,10 @@ export function PortfolioDetailPage() {
 
   const driftPct = modelPortfolio?.drift_percentage ?? null
 
-  function roundToHalf(v: number) { return Math.round(v / 0.5) * 0.5 }
-  function driftLower(target: number) { return driftPct != null ? roundToHalf(target * (1 - driftPct / 100)) : null }
-  function driftUpper(target: number) { return driftPct != null ? roundToHalf(target * (1 + driftPct / 100)) : null }
+  // Shared with computePositionBands / PositionSizingCheck so the table, the
+  // review check and the Actions drift count cannot disagree.
+  function driftLower(target: number) { return driftBandFor(target, driftPct)?.lower ?? null }
+  function driftUpper(target: number) { return driftBandFor(target, driftPct)?.upper ?? null }
 
   const objectiveMutation = useMutation({
     mutationFn: async (objective: string) => {
