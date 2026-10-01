@@ -20,6 +20,7 @@ import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReview
 import { fetchUnacknowledgedAlerts } from './alertRules'
 import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET } from './documents'
 import { fetchLatestActualAllocation, portfoliosWithActualAllocation } from './currentAllocation'
+import { fetchRebalanceSchedules } from './rebalanceSchedule'
 import { fetchPositionsByPortfolioId } from './positions'
 import { computePositionBands, isCashTicker } from './positionBands'
 import { computeAllocationBands } from './allocationBands'
@@ -44,6 +45,7 @@ export type ActionSource =
   | 'at_risk'
   | 'drift'
   | 'allocation_band'
+  | 'scheduled_rebalance'
   | 'data_refresh'
 
 export const SOURCE_LABELS: Record<ActionSource, string> = {
@@ -56,6 +58,7 @@ export const SOURCE_LABELS: Record<ActionSource, string> = {
   at_risk: 'At-Risk',
   drift: 'Drift',
   allocation_band: 'Allocation',
+  scheduled_rebalance: 'Rebalance',
   data_refresh: 'Data',
 }
 
@@ -388,9 +391,61 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
   }]
 }
 
+// ── Scheduled rebalance (the time-based trigger) ────────────────────────────
+// Every schedule is projected, due or not, matching the portfolio_review source
+// — the hub's date buckets sort them and its filters hide them. The route is the
+// portfolio page, where adding an allocation date is what completes the action.
+async function fetchScheduledRebalanceActions(): Promise<UnifiedAction[]> {
+  const schedules = await fetchRebalanceSchedules()
+
+  return schedules.flatMap((s): UnifiedAction[] => {
+    // No cadence on the model means nothing was scheduled, which is not the
+    // same as something being overdue — stay silent.
+    if (!s.frequency) return []
+    const route = `/portfolio/${encodeURIComponent(s.portfolioName)}`
+
+    // A portfolio with no allocation history cannot be scheduled at all. Surface
+    // that rather than skipping it: silence reads as "nothing due".
+    if (!s.anchor || !s.due) {
+      return [{
+        key: `rebalance:${s.portfolioName}`,
+        category: 'trade' as const,
+        source: 'scheduled_rebalance' as const,
+        title: `Rebalance schedule unknown — ${s.portfolioName}`,
+        subtitle: `${s.frequency} cadence · no allocation history to date it from`,
+        linkedLabel: s.portfolioName,
+        route,
+        dueDate: null,
+        priority: 'low' as const,
+        isManual: false,
+      }]
+    }
+
+    return [{
+      key: `rebalance:${s.portfolioName}`,
+      category: 'trade' as const,
+      source: 'scheduled_rebalance' as const,
+      title: `Rebalance due — ${s.portfolioName}`,
+      subtitle: `${s.frequency} · last rebalanced ${fmtScheduleDate(s.anchor)}`,
+      linkedLabel: s.portfolioName,
+      route,
+      dueDate: s.due,
+      priority: duePriority(s.due),
+      isManual: false,
+    }]
+  })
+}
+
+/** A bare YYYY-MM-DD is parsed as UTC, so render it as UTC or it slips a day. */
+function fmtScheduleDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+  })
+}
+
 // ── Assemble everything ─────────────────────────────────────────────────────
 export async function fetchAllActions(): Promise<UnifiedAction[]> {
-  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh, allocationBands] = await Promise.all([
+  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh, allocationBands, scheduledRebalances] = await Promise.all([
     fetchActionItems(),
     fetchReviewSchedules(),
     fetchPortfolioReviewSchedules(),
@@ -401,6 +456,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     fetchDriftActions(),
     fetchDataRefreshActions(),
     fetchAllocationBandActions(),
+    fetchScheduledRebalanceActions(),
   ])
 
   // Include closed manual items too; the Actions page decides what to show.
@@ -471,6 +527,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     ...atRiskActions,
     ...drift,
     ...allocationBands,
+    ...scheduledRebalances,
     ...dataRefresh,
   ]
 }
