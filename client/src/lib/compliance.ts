@@ -111,6 +111,11 @@ export const RULE_TYPE_LABELS: Record<RuleType, string> = {
   min_position_count:     'Min Position Count',
 }
 
+/** Count rules carry a whole number of holdings, not a percentage. */
+export function isCountRule(type: RuleType): boolean {
+  return type === 'max_position_count' || type === 'min_position_count'
+}
+
 /** Rule types that operate on portfolio-level aggregates. */
 export const PORTFOLIO_RULE_TYPES = new Set<RuleType>([
   'max_single_position', 'min_equity_pct', 'max_equity_pct',
@@ -162,8 +167,14 @@ export async function createComplianceRule(rule: Omit<ComplianceRule, 'id' | 'cr
   if (error) throw error
 }
 
-export async function updateComplianceRule(id: number, updates: Partial<ComplianceRule>): Promise<void> {
-  const { error } = await supabase.from('compliance_rules').update(updates).eq('id', id)
+export async function updateComplianceRule(
+  id: number,
+  updates: Partial<Pick<ComplianceRule, 'label' | 'threshold_value' | 'is_active'>>,
+): Promise<void> {
+  const { error } = await supabase
+    .from('compliance_rules')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
   if (error) throw error
 }
 

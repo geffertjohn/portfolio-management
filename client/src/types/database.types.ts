@@ -555,6 +555,7 @@ export type Database = {
       }
       firm_compliance_rules: {
         Row: {
+          deleted_at: string | null
           id: number
           is_active: boolean
           label: string
@@ -563,6 +564,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          deleted_at?: string | null
           id?: number
           is_active?: boolean
           label: string
@@ -571,6 +573,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          deleted_at?: string | null
           id?: number
           is_active?: boolean
           label?: string

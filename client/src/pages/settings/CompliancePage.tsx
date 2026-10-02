@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchAllComplianceRules,
   createComplianceRule,
+  updateComplianceRule,
   deleteComplianceRule,
   RULE_TYPE_LABELS,
   PORTFOLIO_RULE_TYPES,
@@ -16,6 +17,8 @@ import {
 import {
   fetchFirmComplianceRules,
   updateFirmComplianceRule,
+  createFirmComplianceRule,
+  deleteFirmComplianceRule,
   fetchAllPortfolioPositions,
   fetchClientPortfolioNames,
   computeCrossPortfolioChecks,
@@ -46,7 +49,6 @@ export function CompliancePage() {
   const [positionThreshold, setPositionThreshold] = useState('')
   const [positionFormError, setPositionFormError] = useState<string | null>(null)
 
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
   const [editingFirmRuleId, setEditingFirmRuleId] = useState<number | null>(null)
   const [editingThreshold, setEditingThreshold] = useState('')
   const [consistencyExpanded, setConsistencyExpanded] = useState(true)
@@ -92,6 +94,16 @@ export function CompliancePage() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.firmComplianceRules })
       setEditingFirmRuleId(null)
     },
+  })
+
+  const createFirmRuleMutation = useMutation({
+    mutationFn: createFirmComplianceRule,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.firmComplianceRules }),
+  })
+
+  const deleteFirmRuleMutation = useMutation({
+    mutationFn: (id: number) => deleteFirmComplianceRule(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.firmComplianceRules }),
   })
 
   const toggleFirmRuleMutation = useMutation({
@@ -190,9 +202,17 @@ export function CompliancePage() {
     onError: (err) => setPositionFormError(err instanceof Error ? err.message : 'Failed to add rule'),
   })
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, patch }: {
+      id: number
+      patch: { label?: string; threshold_value?: number; is_active?: boolean }
+    }) => updateComplianceRule(id, patch),
+    onSuccess: invalidate,
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteComplianceRule(id),
-    onSuccess: () => { invalidate(); setConfirmDeleteId(null) },
+    onSuccess: invalidate,
   })
 
   return (
@@ -215,6 +235,10 @@ export function CompliancePage() {
         setEditingThreshold={setEditingThreshold}
         onSaveThreshold={(id, threshold_value) => updateFirmRuleMutation.mutate({ id, threshold_value })}
         onToggle={(id, is_active) => toggleFirmRuleMutation.mutate({ id, is_active })}
+        onCreate={(rule) => createFirmRuleMutation.mutateAsync(rule)}
+        onDelete={(id) => deleteFirmRuleMutation.mutateAsync(id)}
+        isSaving={createFirmRuleMutation.isPending}
+        isDeleting={deleteFirmRuleMutation.isPending}
       />
 
       {/* Cross-Portfolio Consistency — only show when there are actual deviations */}
@@ -248,9 +272,9 @@ export function CompliancePage() {
         isSaving={createMutation.isPending}
         portfoliosWithRules={portfoliosWithRules}
         byPortfolio={byPortfolio}
-        confirmDeleteId={confirmDeleteId}
-        setConfirmDeleteId={setConfirmDeleteId}
-        onDelete={(id) => deleteMutation.mutate(id)}
+        onUpdate={(id, patch) => updateMutation.mutateAsync({ id, patch })}
+        isUpdating={updateMutation.isPending}
+        onDelete={(id) => deleteMutation.mutateAsync(id)}
         isDeleting={deleteMutation.isPending}
       />
 
@@ -275,9 +299,9 @@ export function CompliancePage() {
         isSaving={createPositionMutation.isPending}
         portfoliosWithPositionRules={portfoliosWithPositionRules}
         positionByPortfolio={positionByPortfolio}
-        confirmDeleteId={confirmDeleteId}
-        setConfirmDeleteId={setConfirmDeleteId}
-        onDelete={(id) => deleteMutation.mutate(id)}
+        onUpdate={(id, patch) => updateMutation.mutateAsync({ id, patch })}
+        isUpdating={updateMutation.isPending}
+        onDelete={(id) => deleteMutation.mutateAsync(id)}
         isDeleting={deleteMutation.isPending}
       />
     </div>

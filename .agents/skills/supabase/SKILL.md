@@ -102,11 +102,12 @@ For setup instructions, server URL, and configuration, see the [MCP setup guide]
    `curl -so /dev/null -w "%{http_code}" https://mcp.supabase.com/mcp`
    A `401` is expected (no token) and means the server is up. Timeout or "connection refused" means it may be down.
 
-2. **Check `.mcp.json` configuration:**
-   Verify the project root has a valid `.mcp.json` with the correct server URL. If missing, create one pointing to `https://mcp.supabase.com/mcp`.
+2. **Check which Supabase server this session actually has:**
+   This project deliberately has **no `.mcp.json`** — Supabase reaches it through the user's account-level **connector**, not a project-scoped server. Do NOT create a `.mcp.json`; a second registration of the same project reports `needs_auth` forever while the connector works fine, which has already caused a session to wrongly conclude the database was unreachable.
+   List the session's servers and look for a `Supabase` entry of kind `connector` with a tool count. If it is `connected`, the tools are there — call one before believing any warning that says otherwise.
 
 3. **Authenticate the MCP server:**
-   If the server is reachable and `.mcp.json` is correct but tools aren't visible, the user needs to authenticate. The Supabase MCP server uses OAuth 2.1 — tell the user to trigger the auth flow in their agent, complete it in the browser, and reload the session.
+   If the connector itself is `needs_auth`, only the user can sign it in — via Settings → Connectors, or `/mcp` in an interactive terminal. The Supabase MCP server uses OAuth 2.1 and the agent cannot start the flow.
 
 ## Supabase Documentation
 

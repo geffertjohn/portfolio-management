@@ -486,11 +486,16 @@ CREATE TABLE IF NOT EXISTS "public"."firm_compliance_rules" (
     "threshold_value" numeric NOT NULL,
     "label" "text" NOT NULL,
     "is_active" boolean DEFAULT true NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "deleted_at" timestamp with time zone,
+    CONSTRAINT "firm_compliance_rules_rule_type_check" CHECK (("rule_type" = ANY (ARRAY['max_single_position'::"text", 'min_holdings_count'::"text", 'consistency_deviation'::"text"])))
 );
 
 
 ALTER TABLE "public"."firm_compliance_rules" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."firm_compliance_rules"."deleted_at" IS 'Soft delete. Always filter `deleted_at is null` — a removed rule is retained for audit.';
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."firm_compliance_rules_id_seq"
@@ -1984,9 +1989,6 @@ ALTER TABLE ONLY "public"."firm_compliance_rules"
 
 
 
-ALTER TABLE ONLY "public"."firm_compliance_rules"
-    ADD CONSTRAINT "firm_compliance_rules_rule_type_key" UNIQUE ("rule_type");
-
 
 
 ALTER TABLE ONLY "public"."holding_reviews"
@@ -2270,6 +2272,10 @@ CREATE INDEX "idx_holdings_change_log_portfolio_name" ON "public"."holdings_chan
 
 
 CREATE INDEX "idx_holdings_change_log_security_id" ON "public"."holdings_change_log" USING "btree" ("security_id");
+
+
+
+CREATE UNIQUE INDEX "firm_compliance_rules_one_per_type" ON "public"."firm_compliance_rules" USING "btree" ("rule_type") WHERE ("deleted_at" IS NULL);
 
 
 

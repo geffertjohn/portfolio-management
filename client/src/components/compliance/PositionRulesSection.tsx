@@ -1,19 +1,11 @@
-import { Fragment } from 'react'
 import {
   RULE_TYPE_LABELS,
-  scopeLabel,
-  scopeCoverage,
   type RuleType,
   type ComplianceRule,
 } from '@/lib/compliance'
 import type { Portfolio } from '@/types/portfolio'
 import { ScopeSelect } from './ScopeSelect'
-
-const RESULT_COLORS: Record<string, string> = {
-  pass:   'bg-green-100 text-green-700',
-  warn:   'bg-amber-100 text-amber-700',
-  breach: 'bg-red-100 text-red-700',
-}
+import { ScopedRulesTable } from './ScopedRulesTable'
 
 const POSITION_RULE_TYPE_OPTIONS: { value: RuleType; label: string; unit: string; hint: string }[] = [
   {
@@ -56,9 +48,9 @@ interface PositionRulesSectionProps {
   isSaving: boolean
   portfoliosWithPositionRules: string[]
   positionByPortfolio: Record<string, ComplianceRule[]>
-  confirmDeleteId: number | null
-  setConfirmDeleteId: (id: number | null) => void
-  onDelete: (id: number) => void
+  onUpdate: (id: number, patch: { label?: string; threshold_value?: number; is_active?: boolean }) => Promise<unknown>
+  onDelete: (id: number) => Promise<unknown>
+  isUpdating: boolean
   isDeleting: boolean
 }
 
@@ -82,9 +74,9 @@ export function PositionRulesSection({
   isSaving,
   portfoliosWithPositionRules,
   positionByPortfolio,
-  confirmDeleteId,
-  setConfirmDeleteId,
+  onUpdate,
   onDelete,
+  isUpdating,
   isDeleting,
 }: PositionRulesSectionProps) {
   const positionOption = POSITION_RULE_TYPE_OPTIONS.find((o) => o.value === positionRuleType)!
@@ -195,81 +187,15 @@ export function PositionRulesSection({
           <p className="text-sm text-gray-500">No position rules yet. Click "Add Rule" to create one.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {portfoliosWithPositionRules.map((portfolioName) => (
-            <div key={portfolioName} className="rounded-lg border border-gray-200 bg-white">
-              <div className="border-b border-gray-200 px-5 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">{scopeLabel(portfolioName)}</h2>
-                <p className="text-xs text-gray-500">
-                  {positionByPortfolio[portfolioName].length} rule{positionByPortfolio[portfolioName].length !== 1 ? 's' : ''}
-                  {scopeCoverage(portfolioName, portfolios)}
-                </p>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-xs">
-                    <th className="px-4 py-2.5 text-left font-semibold text-gray-600">Rule</th>
-                    <th className="px-4 py-2.5 text-left font-semibold text-gray-600">Type</th>
-                    <th className="w-28 px-4 py-2.5 text-right font-semibold text-gray-600">Threshold</th>
-                    <th className="w-20 px-4 py-2.5 text-center font-semibold text-gray-600">Active</th>
-                    <th className="w-16 px-4 py-2.5" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {positionByPortfolio[portfolioName].map((rule) => {
-                    const isCount = rule.rule_type === 'max_position_count' || rule.rule_type === 'min_position_count'
-                    return (
-                      <Fragment key={rule.id}>
-                        <tr className="hover:bg-gray-50">
-                          <td className="px-4 py-2.5 font-medium text-gray-900">{rule.label}</td>
-                          <td className="px-4 py-2.5 text-gray-600">{RULE_TYPE_LABELS[rule.rule_type]}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
-                            {isCount ? rule.threshold_value : `${rule.threshold_value}%`}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${rule.is_active ? RESULT_COLORS.pass : 'bg-gray-100 text-gray-500'}`}>
-                              {rule.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
-                            <button
-                              onClick={() => setConfirmDeleteId(rule.id)}
-                              className="text-xs text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                        {confirmDeleteId === rule.id && (
-                          <tr key={`confirm-${rule.id}`} className="bg-red-50">
-                            <td colSpan={5} className="px-4 py-2.5">
-                              <div className="flex items-center gap-3">
-                                <p className="text-xs font-medium text-red-700">Remove "{rule.label}"?</p>
-                                <button
-                                  onClick={() => onDelete(rule.id)}
-                                  disabled={isDeleting}
-                                  className="rounded bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                                >
-                                  {isDeleting ? 'Removing…' : 'Yes, remove'}
-                                </button>
-                                <button
-                                  onClick={() => setConfirmDeleteId(null)}
-                                  className="text-xs text-gray-500 hover:text-gray-700"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ))}
-        </div>
+        <ScopedRulesTable
+          scopeKeys={portfoliosWithPositionRules}
+          byScope={positionByPortfolio}
+          portfolios={portfolios}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          isUpdating={isUpdating}
+          isDeleting={isDeleting}
+        />
       )}
     </div>
   )
