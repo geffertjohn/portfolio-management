@@ -7,6 +7,9 @@ import {
   RULE_TYPE_LABELS,
   PORTFOLIO_RULE_TYPES,
   POSITION_RULE_TYPES,
+  parseScopeValue,
+  ruleScopeKey,
+  STRATEGY_SCOPE_PREFIX,
   type RuleType,
   type ComplianceRule,
 } from '@/lib/compliance'
@@ -101,13 +104,15 @@ export function CompliancePage() {
   const portfolioRules = allRules.filter((r) => PORTFOLIO_RULE_TYPES.has(r.rule_type))
   const positionRulesAll = allRules.filter((r) => POSITION_RULE_TYPES.has(r.rule_type))
 
+  // Keyed by SCOPE, not portfolio name: a strategy rule has portfolio_name null,
+  // so the old key collapsed every one of them into a single "" bucket.
   const byPortfolio = portfolioRules.reduce<Record<string, ComplianceRule[]>>((acc, rule) => {
-    ;(acc[rule.portfolio_name] ??= []).push(rule)
+    ;(acc[ruleScopeKey(rule)] ??= []).push(rule)
     return acc
   }, {})
 
   const positionByPortfolio = positionRulesAll.reduce<Record<string, ComplianceRule[]>>((acc, rule) => {
-    ;(acc[rule.portfolio_name] ??= []).push(rule)
+    ;(acc[ruleScopeKey(rule)] ??= []).push(rule)
     return acc
   }, {})
 
@@ -116,7 +121,11 @@ export function CompliancePage() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allComplianceRules })
-    const allPortfolioNames = new Set([...portfoliosWithRules, ...portfoliosWithPositionRules])
+    // Scope keys include `strategy:<X>`, which is not a portfolio cache key.
+    const allPortfolioNames = new Set(
+      [...portfoliosWithRules, ...portfoliosWithPositionRules]
+        .filter((k) => !k.startsWith(STRATEGY_SCOPE_PREFIX)),
+    )
     allPortfolioNames.forEach((name) =>
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.complianceRules(name) })
     )
@@ -124,12 +133,12 @@ export function CompliancePage() {
 
   const createMutation = useMutation({
     mutationFn: () => {
-      if (!formPortfolio) throw new Error('Select a portfolio.')
+      if (!formPortfolio) throw new Error('Select a portfolio or strategy.')
       const val = parseFloat(threshold)
       if (Number.isNaN(val) || val <= 0 || val > 100)
         throw new Error('Threshold must be between 0.01 and 100.')
       return createComplianceRule({
-        portfolio_name: formPortfolio,
+        ...parseScopeValue(formPortfolio),
         rule_type: ruleType,
         label: label || RULE_TYPE_LABELS[ruleType],
         threshold_value: val,
@@ -152,7 +161,7 @@ export function CompliancePage() {
 
   const createPositionMutation = useMutation({
     mutationFn: () => {
-      if (!positionFormPortfolio) throw new Error('Select a portfolio.')
+      if (!positionFormPortfolio) throw new Error('Select a portfolio or strategy.')
       const val = parseFloat(positionThreshold)
       if (positionIsCountRule) {
         if (Number.isNaN(val) || val <= 0 || !Number.isInteger(val))
@@ -162,7 +171,7 @@ export function CompliancePage() {
           throw new Error('Threshold must be between 0.01 and 100.')
       }
       return createComplianceRule({
-        portfolio_name: positionFormPortfolio,
+        ...parseScopeValue(positionFormPortfolio),
         rule_type: positionRuleType,
         label: positionLabel || RULE_TYPE_LABELS[positionRuleType],
         threshold_value: val,

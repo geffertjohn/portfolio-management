@@ -1,10 +1,13 @@
 import { Fragment } from 'react'
 import {
   RULE_TYPE_LABELS,
+  scopeLabel,
+  scopeCoverage,
   type RuleType,
   type ComplianceRule,
 } from '@/lib/compliance'
 import type { Portfolio } from '@/types/portfolio'
+import { ScopeSelect } from './ScopeSelect'
 
 const RESULT_COLORS: Record<string, string> = {
   pass:   'bg-green-100 text-green-700',
@@ -40,6 +43,7 @@ interface PortfolioRulesSectionProps {
   onCancelForm: () => void
   onSaveRule: () => void
   isSaving: boolean
+  /** Scope keys (a portfolio name, or `strategy:<Strategy>`). */
   portfoliosWithRules: string[]
   byPortfolio: Record<string, ComplianceRule[]>
   confirmDeleteId: number | null
@@ -79,7 +83,8 @@ export function PortfolioRulesSection({
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Portfolio Rules</h2>
           <p className="mt-0.5 text-sm text-gray-500">
-            Per-portfolio rules on aggregate allocations — equity, fixed income, cash, and max single position.
+            Rules on aggregate allocations — equity, fixed income, cash, and max single position.
+            Scope each to one portfolio or to a whole strategy.
           </p>
         </div>
         <button
@@ -96,17 +101,8 @@ export function PortfolioRulesSection({
           <h2 className="mb-4 text-sm font-semibold text-gray-900">New Portfolio Rule</h2>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-gray-700">Portfolio</label>
-              <select
-                value={formPortfolio}
-                onChange={(e) => setFormPortfolio(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-              >
-                <option value="">Select portfolio…</option>
-                {portfolios.map((p) => (
-                  <option key={p.name} value={p.name}>{p.name}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-medium text-gray-700">Applies to</label>
+              <ScopeSelect portfolios={portfolios} value={formPortfolio} onChange={setFormPortfolio} />
             </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-gray-700">Rule Type</label>
@@ -173,9 +169,10 @@ export function PortfolioRulesSection({
           {portfoliosWithRules.map((portfolioName) => (
             <div key={portfolioName} className="rounded-lg border border-gray-200 bg-white">
               <div className="border-b border-gray-200 px-5 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">{portfolioName}</h2>
+                <h2 className="text-sm font-semibold text-gray-900">{scopeLabel(portfolioName)}</h2>
                 <p className="text-xs text-gray-500">
                   {byPortfolio[portfolioName].length} rule{byPortfolio[portfolioName].length !== 1 ? 's' : ''}
+                  {scopeCoverage(portfolioName, portfolios)}
                 </p>
               </div>
               <table className="w-full text-sm">

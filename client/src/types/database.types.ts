@@ -514,6 +514,7 @@ export type Database = {
           is_active: boolean
           label: string
           portfolio_name: string | null
+          portfolio_strategy: string | null
           rule_type: string
           threshold_value: number
           updated_at: string
@@ -525,6 +526,7 @@ export type Database = {
           is_active?: boolean
           label: string
           portfolio_name?: string | null
+          portfolio_strategy?: string | null
           rule_type: string
           threshold_value: number
           updated_at?: string
@@ -536,6 +538,7 @@ export type Database = {
           is_active?: boolean
           label?: string
           portfolio_name?: string | null
+          portfolio_strategy?: string | null
           rule_type?: string
           threshold_value?: number
           updated_at?: string

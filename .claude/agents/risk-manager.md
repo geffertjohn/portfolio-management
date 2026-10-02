@@ -26,7 +26,9 @@ You run in two modes:
 The **single source of compliance rules** is the Compliance Rules hub, stored in two tables:
 
 - `firm_compliance_rules` — firm-wide fiduciary rules applied to every portfolio (e.g. Max Single Position, Minimum Holdings Count). Filter to `is_active = true`.
-- `compliance_rules` — per-portfolio rules for this portfolio (`portfolio_name = <name>`, `deleted_at is null`, `is_active = true`); portfolio-aggregate and position-level thresholds.
+- `compliance_rules` — rules for this portfolio, scoped EITHER to the portfolio itself OR to its whole strategy. A rule sets exactly one of `portfolio_name` / `portfolio_strategy`, so you must match on both or you will silently miss every strategy-scoped rule:
+  `where (portfolio_name = <name> or portfolio_strategy = <the portfolio's portfolio_strategy>) and deleted_at is null and is_active = true`.
+  Covers portfolio-aggregate and position-level thresholds.
 
 **Verify against the ACTUAL book, not the model targets.** The actual current allocation is the most recent file in the `Portfolio Documents` storage bucket (folder = portfolio name); weights are percent points, and cash-like tickers (e.g. `FDXCASH`) collapse into the one cash position. If no actual-allocation file exists, say so in `notes` and fall back to the model target weights (and flag that the check basis is targets).
 

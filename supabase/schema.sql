@@ -452,11 +452,17 @@ CREATE TABLE IF NOT EXISTS "public"."compliance_rules" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "portfolio_name" "text",
     "deleted_at" timestamp with time zone,
-    CONSTRAINT "compliance_rules_rule_type_check" CHECK (("rule_type" = ANY (ARRAY['max_single_position'::"text", 'min_equity_pct'::"text", 'max_equity_pct'::"text", 'min_fixed_income_pct'::"text", 'max_fixed_income_pct'::"text", 'min_cash_pct'::"text", 'max_cash_pct'::"text", 'custom'::"text"])))
+    "portfolio_strategy" "text",
+    CONSTRAINT "compliance_rules_one_scope_check" CHECK (("num_nonnulls"("portfolio_name", "portfolio_strategy") = 1)),
+    CONSTRAINT "compliance_rules_portfolio_strategy_check" CHECK ((("portfolio_strategy" IS NULL) OR ("portfolio_strategy" = ANY (ARRAY['Equity'::"text", 'ETF'::"text", 'Foundation'::"text", 'Hybrid'::"text", 'Fixed Income'::"text"])))),
+    CONSTRAINT "compliance_rules_rule_type_check" CHECK (("rule_type" = ANY (ARRAY['max_single_position'::"text", 'min_equity_pct'::"text", 'max_equity_pct'::"text", 'min_fixed_income_pct'::"text", 'max_fixed_income_pct'::"text", 'min_cash_pct'::"text", 'max_cash_pct'::"text", 'min_position_weight'::"text", 'max_position_count'::"text", 'min_position_count'::"text", 'custom'::"text"])))
 );
 
 
 ALTER TABLE "public"."compliance_rules" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."compliance_rules"."portfolio_strategy" IS 'Scopes the rule to every portfolio with this portfolio_strategy. Mutually exclusive with portfolio_name — exactly one is set.';
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."compliance_rules_id_seq"
@@ -2264,6 +2270,10 @@ CREATE INDEX "idx_holdings_change_log_portfolio_name" ON "public"."holdings_chan
 
 
 CREATE INDEX "idx_holdings_change_log_security_id" ON "public"."holdings_change_log" USING "btree" ("security_id");
+
+
+
+CREATE INDEX "compliance_rules_strategy_idx" ON "public"."compliance_rules" USING "btree" ("portfolio_strategy") WHERE ("deleted_at" IS NULL);
 
 
 
