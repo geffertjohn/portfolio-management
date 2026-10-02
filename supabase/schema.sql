@@ -465,6 +465,7 @@ ALTER TABLE "public"."compliance_rules" OWNER TO "postgres";
 COMMENT ON COLUMN "public"."compliance_rules"."portfolio_strategy" IS 'Scopes the rule to every portfolio with this portfolio_strategy. Mutually exclusive with portfolio_name — exactly one is set.';
 
 
+
 CREATE SEQUENCE IF NOT EXISTS "public"."compliance_rules_id_seq"
     START WITH 1
     INCREMENT BY 1
@@ -496,6 +497,7 @@ ALTER TABLE "public"."firm_compliance_rules" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."firm_compliance_rules"."deleted_at" IS 'Soft delete. Always filter `deleted_at is null` — a removed rule is retained for audit.';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."firm_compliance_rules_id_seq"
@@ -1989,8 +1991,6 @@ ALTER TABLE ONLY "public"."firm_compliance_rules"
 
 
 
-
-
 ALTER TABLE ONLY "public"."holding_reviews"
     ADD CONSTRAINT "holding_reviews_pkey" PRIMARY KEY ("id");
 
@@ -2227,6 +2227,14 @@ CREATE INDEX "communication_log_security_id_idx" ON "public"."communication_log"
 
 
 
+CREATE INDEX "compliance_rules_strategy_idx" ON "public"."compliance_rules" USING "btree" ("portfolio_strategy") WHERE ("deleted_at" IS NULL);
+
+
+
+CREATE UNIQUE INDEX "firm_compliance_rules_one_per_type" ON "public"."firm_compliance_rules" USING "btree" ("rule_type") WHERE ("deleted_at" IS NULL);
+
+
+
 CREATE INDEX "holding_reviews_log_idx" ON "public"."holding_reviews" USING "btree" ("review_log_id");
 
 
@@ -2272,14 +2280,6 @@ CREATE INDEX "idx_holdings_change_log_portfolio_name" ON "public"."holdings_chan
 
 
 CREATE INDEX "idx_holdings_change_log_security_id" ON "public"."holdings_change_log" USING "btree" ("security_id");
-
-
-
-CREATE UNIQUE INDEX "firm_compliance_rules_one_per_type" ON "public"."firm_compliance_rules" USING "btree" ("rule_type") WHERE ("deleted_at" IS NULL);
-
-
-
-CREATE INDEX "compliance_rules_strategy_idx" ON "public"."compliance_rules" USING "btree" ("portfolio_strategy") WHERE ("deleted_at" IS NULL);
 
 
 
