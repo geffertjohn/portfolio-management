@@ -48,7 +48,7 @@ interface PositionRulesSectionProps {
   isSaving: boolean
   portfoliosWithPositionRules: string[]
   positionByPortfolio: Record<string, ComplianceRule[]>
-  onUpdate: (id: number, patch: { label?: string; threshold_value?: number; is_active?: boolean }) => Promise<unknown>
+  onUpdate: (id: number, patch: { label?: string; threshold_value?: number }) => Promise<unknown>
   onDelete: (id: number) => Promise<unknown>
   isUpdating: boolean
   isDeleting: boolean

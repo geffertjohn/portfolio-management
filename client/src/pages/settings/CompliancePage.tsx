@@ -112,9 +112,14 @@ export function CompliancePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.firmComplianceRules }),
   })
 
-  // Separate portfolio rules from position rules
-  const portfolioRules = allRules.filter((r) => PORTFOLIO_RULE_TYPES.has(r.rule_type))
-  const positionRulesAll = allRules.filter((r) => POSITION_RULE_TYPES.has(r.rule_type))
+  // Separate portfolio rules from position rules.
+  // Active-only: these tables no longer carry an Active column, so an inactive
+  // rule would render identically to a live one. Nothing in the UI can set a
+  // rule inactive any more — removal is the way to retire one — so this filter
+  // only ever hides a row deactivated directly in the database.
+  const activeRules = allRules.filter((r) => r.is_active)
+  const portfolioRules = activeRules.filter((r) => PORTFOLIO_RULE_TYPES.has(r.rule_type))
+  const positionRulesAll = activeRules.filter((r) => POSITION_RULE_TYPES.has(r.rule_type))
 
   // Keyed by SCOPE, not portfolio name: a strategy rule has portfolio_name null,
   // so the old key collapsed every one of them into a single "" bucket.

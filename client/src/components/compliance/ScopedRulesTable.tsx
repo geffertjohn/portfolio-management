@@ -29,7 +29,7 @@ export function ScopedRulesTable({
   scopeKeys: string[]
   byScope: Record<string, ComplianceRule[]>
   portfolios: Portfolio[]
-  onUpdate: (id: number, patch: { label?: string; threshold_value?: number; is_active?: boolean }) => Promise<unknown>
+  onUpdate: (id: number, patch: { label?: string; threshold_value?: number }) => Promise<unknown>
   onDelete: (id: number) => Promise<unknown>
   isUpdating: boolean
   isDeleting: boolean
@@ -91,9 +91,7 @@ export function ScopedRulesTable({
             <thead>
               <tr className="bg-gray-50 text-xs">
                 <th className="px-4 py-2.5 text-left font-semibold text-gray-600">Rule</th>
-                <th className="px-4 py-2.5 text-left font-semibold text-gray-600">Type</th>
                 <th className="w-28 px-4 py-2.5 text-right font-semibold text-gray-600">Threshold</th>
-                <th className="w-20 px-4 py-2.5 text-center font-semibold text-gray-600">Active</th>
                 <th className="w-32 px-4 py-2.5" />
               </tr>
             </thead>
@@ -111,9 +109,19 @@ export function ScopedRulesTable({
                             onChange={(e) => { setEditLabel(e.target.value); setEditError(null) }}
                             className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-gray-500 focus:outline-none"
                           />
-                        ) : rule.label}
+                        ) : (
+                          <>
+                            {rule.label}
+                            {/* The label defaults to the type name, so a Type column just
+                                repeated it. Shown only once a rename has hidden the type. */}
+                            {rule.label !== RULE_TYPE_LABELS[rule.rule_type] && (
+                              <span className="ml-2 text-xs font-normal text-gray-400">
+                                {RULE_TYPE_LABELS[rule.rule_type]}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">{RULE_TYPE_LABELS[rule.rule_type]}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
                         {isEditing ? (
                           <input
@@ -126,19 +134,6 @@ export function ScopedRulesTable({
                             className="w-20 rounded border border-gray-300 px-2 py-1 text-right text-sm focus:border-gray-500 focus:outline-none"
                           />
                         ) : isCount ? rule.threshold_value : `${rule.threshold_value}%`}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        {/* The badge is the toggle, matching the Fiduciary table. */}
-                        <button
-                          onClick={() => onUpdate(rule.id, { is_active: !rule.is_active })}
-                          disabled={isUpdating}
-                          title={rule.is_active ? 'Deactivate this rule' : 'Activate this rule'}
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium hover:opacity-80 disabled:opacity-50 ${
-                            rule.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                          }`}
-                        >
-                          {rule.is_active ? 'Active' : 'Inactive'}
-                        </button>
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         {isEditing ? (
@@ -177,12 +172,12 @@ export function ScopedRulesTable({
                     </tr>
                     {isEditing && editError && (
                       <tr>
-                        <td colSpan={5} className="px-4 pb-2 text-xs text-red-600">{editError}</td>
+                        <td colSpan={3} className="px-4 pb-2 text-xs text-red-600">{editError}</td>
                       </tr>
                     )}
                     {confirmDeleteId === rule.id && (
                       <tr className="bg-red-50">
-                        <td colSpan={5} className="px-4 py-2.5">
+                        <td colSpan={3} className="px-4 py-2.5">
                           <div className="flex items-center gap-3">
                             <p className="text-xs font-medium text-red-700">Remove "{rule.label}"?</p>
                             <button
