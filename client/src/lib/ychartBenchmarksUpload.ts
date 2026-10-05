@@ -140,7 +140,11 @@ const TABLE_CONFIGS: TableConfig[] = [
     keyCol: 'peer_group_ticker',
     // The Excel omits peer_group_benchmark for most rows (it's set manually in
     // the DB); upsert preserves that value and only updates metrics.
-    upsertOn: 'peer_group_ticker,peer_group_category',
+    // Category alone, not (ticker, category): a peer group has one benchmark,
+    // and 13 tickers serve more than one category, so the ticker is a mutable
+    // attribute rather than part of the identity. Keying on the composite meant
+    // a corrected ticker inserted a duplicate instead of updating the row.
+    upsertOn: 'peer_group_category',
   },
   {
     tableName: 'sector_benchmarks',

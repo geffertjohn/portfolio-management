@@ -2002,6 +2002,15 @@ ALTER TABLE ONLY "public"."model_portfolio_data"
 
 
 ALTER TABLE ONLY "public"."peer_group_benchmarks"
+    ADD CONSTRAINT "peer_group_benchmarks_category_key" UNIQUE ("peer_group_category");
+
+
+
+COMMENT ON CONSTRAINT "peer_group_benchmarks_category_key" ON "public"."peer_group_benchmarks" IS 'One benchmark per peer group. The importer upserts on this; a corrected ticker updates the row rather than forking a duplicate.';
+
+
+
+ALTER TABLE ONLY "public"."peer_group_benchmarks"
     ADD CONSTRAINT "peer_group_benchmarks_pkey" PRIMARY KEY ("id");
 
 
@@ -2260,10 +2269,6 @@ CREATE INDEX "import_runs_source_imported_at_idx" ON "public"."import_runs" USIN
 
 
 CREATE UNIQUE INDEX "model_portfolio_benchmarks_security_id_key" ON "public"."model_portfolio_benchmarks" USING "btree" ("security_id");
-
-
-
-CREATE UNIQUE INDEX "peer_group_benchmarks_ticker_category_key" ON "public"."peer_group_benchmarks" USING "btree" ("peer_group_ticker", "peer_group_category");
 
 
 
