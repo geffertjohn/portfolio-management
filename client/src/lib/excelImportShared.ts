@@ -81,6 +81,31 @@ function parseScaledNumberSuffix(s: string): number | null {
  * consolidated YCharts workbook is macro-enabled — its Workbook_Open macro drives
  * the unattended refresh, so the file it produces can only be `.xlsm`.
  */
+/**
+ * YCharts writes two different error sentinels into refreshed cells, and they
+ * mean opposite things for an import:
+ *
+ *   ERR: NO DATA       — a definitive answer. The series does not exist for this
+ *                        security over this window (a portfolio four days old
+ *                        genuinely has no 1-year return). The stored value is
+ *                        WRONG and must be cleared.
+ *   ERR: INVALID CALC  — the calculation did not run. Ambiguous and often
+ *                        transient, so the stored value is left alone rather
+ *                        than blanked on a bad refresh.
+ *
+ * Every importer treated both the same and skipped the column, which meant an
+ * upsert never carried it and last week's number survived — a four-day-old
+ * portfolio kept showing a 1-year Sharpe ratio, reported as a successful import.
+ */
+export type YchartsCellError = 'no_data' | 'other'
+
+export function ychartsError(v: unknown): YchartsCellError | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim()
+  if (!/^ERR\s*:/i.test(s)) return null
+  return /^ERR\s*:\s*NO\s+DATA$/i.test(s) ? 'no_data' : 'other'
+}
+
 export function assertExcelFile(file: File): void {
   if (!/\.xls[xm]?$/.test(file.name.toLowerCase())) {
     throw new Error('Please choose an Excel file (.xlsx, .xlsm, or .xls).')

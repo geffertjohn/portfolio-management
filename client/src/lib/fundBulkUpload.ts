@@ -24,6 +24,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import {
   assertExcelFile, coerceDate, coerceNumber, isValidCalendarDateString, pickSheetName,
+  ychartsError,
 } from '@/lib/excelImportShared'
 
 // ── Column classification ─────────────────────────────────────────────────────
@@ -97,10 +98,6 @@ const SKIP_COLS = new Set([
 
 // ── Row-level parsing ─────────────────────────────────────────────────────────
 
-function isErrString(v: unknown): boolean {
-  return typeof v === 'string' && /^ERR\s*:/i.test(v.trim())
-}
-
 /**
  * Strip YCharts asset-class prefixes from security_id values.
  * e.g. "M:APDFX" → "APDFX", "E:SPY" → "SPY"
@@ -109,8 +106,12 @@ function stripYChartsPrefix(raw: string): string {
   return raw.replace(/^[A-Z]{1,2}:/i, '').trim()
 }
 
+/** `undefined` leaves the stored value alone; `null` clears it. */
 function coerceCell(col: string, raw: unknown): unknown {
-  if (raw == null || raw === '' || isErrString(raw)) return undefined
+  if (raw == null || raw === '') return undefined
+  const err = ychartsError(raw)
+  if (err === 'other') return undefined
+  if (err === 'no_data') return null
 
   if (DATE_COLS.has(col)) {
     const d = coerceDate(raw)

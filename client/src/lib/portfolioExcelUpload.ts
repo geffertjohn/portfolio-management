@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import {
   assertExcelFile, coerceDate, coerceNumber, isValidCalendarDateString, pickSheetName,
+  ychartsError,
 } from '@/lib/excelImportShared'
 
 const TEXT_COLS = new Set([
@@ -75,7 +76,11 @@ function buildPatchFromRow(
     if (!key || SKIP_COLS.has(key)) continue
     const raw = row[i]
     if (raw == null || raw === '') continue
-    if (typeof raw === 'string' && /^ERR\s*:/i.test(raw.trim())) continue
+    // NO DATA is an answer, so clear the column; any other error is ambiguous
+    // and must not blank a good stored value. See ychartsError.
+    const err = ychartsError(raw)
+    if (err === 'other') continue
+    if (err === 'no_data') { patch[key] = null; continue }
     if (DATE_COLS.has(key)) {
       const d = coerceDate(raw)
       if (d != null) patch[key] = d

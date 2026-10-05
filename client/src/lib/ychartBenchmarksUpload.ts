@@ -28,7 +28,7 @@
 import * as XLSX from 'xlsx'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import { assertExcelFile } from './excelImportShared'
+import { assertExcelFile, ychartsError } from './excelImportShared'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -243,6 +243,11 @@ function parseSheet(
 
     for (const [colIdx, dbCol] of colMap) {
       const val = row[colIdx]
+      // Omitting a column leaves the stored value untouched, so NO DATA has to
+      // write an explicit null or a retired figure lives on forever.
+      const err = ychartsError(val)
+      if (err === 'other') continue
+      if (err === 'no_data') { record[dbCol] = null; continue }
       if (config.textCols.has(dbCol)) {
         const t = coerceText(val)
         if (t != null) record[dbCol] = t
