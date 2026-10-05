@@ -136,6 +136,23 @@ prlctl suspend "$VM" >>"$LOG" 2>&1 && log "VM suspended" || log "WARN: suspend f
 
 # ── Import ──────────────────────────────────────────────────────────────────
 STAMPED="$(date +%Y-%m-%d_%H%M%S)"
+# The importer is an esbuild bundle that INLINES client/src/lib/*Upload.ts, and
+# it is gitignored — a fresh clone does not have it, and an edit to any importer
+# does not reach this script until it is rebuilt. Build when it is missing or
+# older than any source it bundles, so the scheduled run can never quietly use
+# importer logic that the app has already moved past.
+NEWEST_SRC="$(find "$REPO/client/src/lib" "$REPO/scripts/refresh/import-workbook.ts" \
+                -name '*.ts' -newer "$REPO/scripts/refresh/import-workbook.cjs" 2>/dev/null | head -1)"
+if [ ! -f "$REPO/scripts/refresh/import-workbook.cjs" ] || [ -n "$NEWEST_SRC" ]; then
+  log "importer bundle missing or stale — rebuilding"
+  if sh "$REPO/scripts/refresh/build.sh" >>"$LOG" 2>&1; then
+    log "bundle rebuilt"
+  else
+    log "FATAL: could not build the importer bundle"
+    exit 1
+  fi
+fi
+
 if node "$REPO/scripts/refresh/import-workbook.cjs" "$OUTPUT" >>"$LOG" 2>&1; then
   mv "$OUTPUT" "$PROCESSED/Ycharts-$STAMPED.xlsx"
   log "=== refresh OK ==="
