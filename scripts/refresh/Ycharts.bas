@@ -2,12 +2,15 @@
 '
 ' Versioned here as text so it is diffable; the workbook itself is binary. Paste
 ' into ThisWorkbook (NOT a Module — Workbook_Open only fires from there) in the
-' driver workbook, which lives on the Mac at ~/Documents/Ycharts/Ycharts.xlsm and
-' is opened from the VM as \\Mac\Home\Documents\Ycharts\Ycharts.xlsm.
+' driver workbook, which lives on the VM at C:\portfolio\Ycharts.xlsm.
 '
-' That is a NETWORK path to Excel, so it only runs if the folder is a Trusted
-' Location AND "Allow Trusted Locations on my network" is enabled. Without both,
-' Workbook_Open never fires and the run silently produces nothing.
+' IT LIVES ON C:, NOT ON THE Z: SHARE. Office treats a mapped network drive as
+' untrusted, so a workbook opened over SMB needs the folder marked a Trusted
+' Location AND "Allow Trusted Locations on my network" — a setting that can
+' silently reset, after which Workbook_Open never fires and the run produces
+' nothing at all. Every recalc would also cross SMB. An earlier layout ran it
+' from ~/Documents/Ycharts/ over \\Mac\Home for exactly that reason and was
+' abandoned; do not reintroduce it.
 '
 ' HOW THE REFRESH ACTUALLY HAPPENS
 ' The YCharts add-in has AutoUpdate enabled, so opening the workbook is itself
