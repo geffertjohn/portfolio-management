@@ -40,11 +40,20 @@ function fmtSignedPct(v: number): string {
 
 
 /** Card shell matching the Scorecard MetricCard dimensions. */
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  children: React.ReactNode
+}) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4">
       <div className="text-center">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
+        {subtitle && <p className="mt-0.5 text-[10px] text-gray-400">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -152,8 +161,19 @@ export function AnalystSummaryCards({ security }: Props) {
         )}
       </Card>
 
-      {/* ── Price Target ──────────────────────────────────────────────────── */}
-      <Card title="Price Target">
+      {/* ── Price Target ──────────────────────────────────────────────────────
+          QUALIFIED DELIBERATELY. The individual targets are 12-month ones by
+          sell-side convention, but `price-target-consensus` does not average all
+          of them: it takes each covering firm's LATEST target and keeps only
+          firms that published within roughly the last 183 days. FMP documents
+          neither the window nor a count, so this was established by reproducing
+          the endpoint exactly from /price-target-news across seven tickers
+          (183–195 days fits all; 180 and 210 do not). The filter drops stale
+          targets, which on a re-rated name are the low ones — HWM reads $331 on
+          10 firms here against TipRanks' $295.78 on 23 standing targets in the
+          Street Coverage block directly below. Both are right; without the
+          subtitle they look like a contradiction. */}
+      <Card title="Price Target" subtitle="Latest per firm · last 6 months">
         <div className="flex flex-1 items-center justify-center">
           <p className={`text-2xl font-semibold tabular-nums ${targetColor}`}>
             {target != null ? `$${fmtDollar(target)}` : '—'}

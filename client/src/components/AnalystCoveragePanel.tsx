@@ -133,7 +133,13 @@ export function AnalystCoveragePanel({ security }: Props) {
         {/* ── Price Target Consensus ───────────────────────────────────────── */}
         {ptConsensus != null && (
           <div>
-            <p className="text-xs font-medium text-gray-600">Price Target</p>
+            {/* Same endpoint, same caveat as the Research page's Price Target
+                card: each covering firm's latest target, firms active within
+                roughly the last 6 months — not every standing target. */}
+            <p className="text-xs font-medium text-gray-600">
+              Price Target{' '}
+              <span className="font-normal text-gray-400">· latest per firm, last 6 months</span>
+            </p>
 
             {hasPtRange ? (
               <RangeBar
