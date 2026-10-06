@@ -58,6 +58,7 @@ function App() {
           <Route path="portfolio/:portfolioId/candidate/:additionId" element={<Page><SecurityAdditionWorkspace /></Page>} />
           <Route path="security/:securityId" element={<Page><SecurityDetailPage /></Page>} />
           <Route path="research" element={<Page><ResearchPage /></Page>} />
+          <Route path="research/:symbol" element={<Page><ResearchPage /></Page>} />
           <Route path="audit" element={<Page><AuditLogPage /></Page>} />
           <Route path="settings" element={<Navigate to="/settings/model-portfolios" replace />} />
           <Route path="settings/documents" element={<Page><DocumentsPage /></Page>} />

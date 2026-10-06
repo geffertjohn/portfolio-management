@@ -9,7 +9,6 @@ export const QUERY_KEYS = {
   atRisk: ['at_risk'] as const,
   atRiskBySecurity: (securityId: string) => ['at_risk', securityId] as const,
   prospects: ['prospects'] as const,
-  prospectsBySecurity: (securityId: string) => ['prospects', securityId] as const,
   reviewSchedules: ['review_schedules'] as const,
   reviewSchedule: (securityId: string) => ['review_schedules', securityId] as const,
   reviewLog: (securityId: string) => ['review_log', securityId] as const,

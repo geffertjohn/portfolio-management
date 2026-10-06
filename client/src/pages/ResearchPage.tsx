@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import type { SecurityDetail } from '@/lib/securities'
 import { StockScorecardPanels } from '@/components/StockScorecardPanels'
@@ -33,14 +34,23 @@ function buildResearchSecurity(symbol: string, name: string | null): SecurityDet
 }
 
 export function ResearchPage() {
-  const [draft, setDraft] = useState('')
-  const [symbol, setSymbol] = useState<string | null>(null)
+  // The symbol lives in the URL so anything can link into this page — the
+  // watchlist opens an idea here, and a researched ticker is shareable and
+  // survives a reload. `/research` with no param keeps the empty search state.
+  const { symbol: symbolParam } = useParams<{ symbol?: string }>()
+  const navigate = useNavigate()
+  const symbol = symbolParam?.trim().toUpperCase() || null
+
+  const [draft, setDraft] = useState(symbol ?? '')
   const [financialsOpen, setFinancialsOpen] = useState(false)
+
+  // Follow the URL when it changes under us (a link from another page, or Back).
+  useEffect(() => { setDraft(symbol ?? '') }, [symbol])
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     const t = draft.trim().toUpperCase()
-    setSymbol(t || null)
+    navigate(t ? `/research/${t}` : '/research')
   }
 
   // ── Identity / header — live from FMP, never persisted ──────────────────────

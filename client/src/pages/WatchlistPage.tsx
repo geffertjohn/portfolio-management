@@ -1,9 +1,15 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { fetchActiveProspects, removeProspect, type ProspectEntryWithSecurity } from '@/lib/prospects'
+import {
+  fetchActiveProspects,
+  removeProspect,
+  removeProspectPortfolio,
+  type ProspectIdea,
+} from '@/lib/prospects'
 import { CONVICTION_LABELS } from '@/lib/reviewLog'
-import { fetchResearchReports } from '@/lib/researchReports'
+import { fetchResearchReports, type ResearchReport } from '@/lib/researchReports'
+import { fetchProfile, type Profile } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { AddProspectModal } from '@/components/AddProspectModal'
 import { ResearchCard } from '@/components/icReviewCards'
@@ -24,43 +30,80 @@ const COLUMNS: { type: SecurityDisplayType; label: string; badge: string }[] = [
   { type: 'Mutual fund', label: 'Mutual Funds', badge: 'bg-green-100 text-green-700' },
 ]
 
+/**
+ * An idea is usually NOT in securities2 — that is the point of a watchlist — so
+ * the securities2 classifier has no columns to read and would call everything a
+ * stock. FMP's own profile flags are the only signal available before a ticker
+ * is ever added.
+ */
+function displayTypeFor(entry: ProspectIdea, profile: Profile | null): SecurityDisplayType {
+  if (entry.securities2) return getSecurityDisplayType(entry.securities2)
+  if (profile?.isEtf) return 'ETF'
+  if (profile?.isFund) return 'Mutual fund'
+  return 'Stock'
+}
+
 function ProspectCard({
   entry,
+  profile,
+  displayType,
   streamable,
-  onNavigate,
+  onOpen,
   onRemove,
+  onDetach,
   removePending,
 }: {
-  entry: ProspectEntryWithSecurity
+  entry: ProspectIdea
+  profile: Profile | null
+  displayType: SecurityDisplayType
   streamable: boolean
-  onNavigate: () => void
+  onOpen: (() => void) | null
   onRemove: () => void
+  onDetach: (portfolio: string) => void
   removePending: boolean
 }) {
   const sec = entry.securities2
-  const navigable = sec?.id != null
-  // Stream by the prospect's own ticker so watch candidates not in securities2 still get a live price.
+  const name = sec?.security_name ?? profile?.companyName ?? null
+  // Stream by the idea's own ticker so candidates not in securities2 still get a live price.
   const live = useLiveQuote(streamable ? entry.security_id : null)
   const [showResearch, setShowResearch] = useState(false)
 
-  // AI research for this candidate, scoped to its portfolio (the recommendation is
-  // portfolio-specific). Produced by the research analysts in Claude Code.
+  // AI research for this ticker, produced by the analysts in Claude Code. Reports
+  // are portfolio-scoped, so keep the ones aimed at a portfolio this idea names
+  // plus any unscoped report.
   const { data: allResearch = [] } = useQuery({
     queryKey: QUERY_KEYS.researchReports(entry.security_id),
     queryFn: () => fetchResearchReports(entry.security_id),
   })
   const research = allResearch
-    .filter((r) => r.portfolio_name === entry.target_portfolio || r.portfolio_name == null)
+    .filter((r) => r.portfolio_name == null || entry.portfolios.includes(r.portfolio_name))
     .sort((a, b) => (ROLE_ORDER[a.author_role] ?? 9) - (ROLE_ORDER[b.author_role] ?? 9))
-  const analyst = research.find((r) => r.author_role === 'research_analyst') ?? null
+
+  // Grouped for display: one idea can now carry research for several portfolios.
+  const grouped = useMemo(() => {
+    const m = new Map<string, ResearchReport[]>()
+    for (const r of research) {
+      const key = r.portfolio_name ?? ''
+      m.set(key, [...(m.get(key) ?? []), r])
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [research])
+
+  const analysts = research.filter((r) => r.author_role === 'research_analyst')
+  // With several portfolios the analyst ratings can legitimately disagree, so a
+  // single headline pill would have to pick a winner. Say how many instead.
+  const soleAnalyst = analysts.length === 1 ? analysts[0] : null
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-      <div className={`px-4 py-3 ${navigable ? 'cursor-pointer hover:bg-gray-50' : ''}`} onClick={navigable ? onNavigate : undefined}>
+      <div
+        className={`px-4 py-3 ${onOpen ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+        onClick={onOpen ?? undefined}
+      >
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900">{entry.security_id}</p>
-            <p className="mt-0.5 text-xs text-gray-500">{sec?.security_name ?? '—'}</p>
+            <p className="mt-0.5 truncate text-xs text-gray-500">{name ?? '—'}</p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-0.5">
             {live != null && (
@@ -75,20 +118,42 @@ function ProspectCard({
           </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-1">
-          {entry.target_portfolio && (
-            <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-              {entry.target_portfolio}
+        <div className="mt-2 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+          {entry.portfolios.length === 0 ? (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs italic text-gray-500">
+              No portfolio yet
             </span>
+          ) : (
+            entry.portfolios.map((p) => (
+              <span
+                key={p}
+                className="group flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700"
+              >
+                {p}
+                <button
+                  type="button"
+                  onClick={() => onDetach(p)}
+                  title={`Remove ${p}`}
+                  className="text-indigo-300 hover:text-indigo-700"
+                >
+                  ×
+                </button>
+              </span>
+            ))
           )}
-          {analyst?.rating && (
+          {soleAnalyst?.rating && (
             <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs font-medium text-white">
-              {RATING_LABEL[analyst.rating] ?? analyst.rating}
+              {RATING_LABEL[soleAnalyst.rating] ?? soleAnalyst.rating}
             </span>
           )}
-          {analyst?.conviction && (
+          {soleAnalyst?.conviction && (
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-              {CONVICTION_LABELS[analyst.conviction]}
+              {CONVICTION_LABELS[soleAnalyst.conviction]}
+            </span>
+          )}
+          {analysts.length > 1 && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+              {analysts.length} analyst views
             </span>
           )}
           {research.length === 0 && (
@@ -114,17 +179,29 @@ function ProspectCard({
             </svg>
           </button>
           {showResearch && (
-            <div className="space-y-3 border-t border-gray-100 bg-gray-50 px-3 py-3">
-              {research.map((r) => <ResearchCard key={r.id} r={r} />)}
+            <div className="space-y-4 border-t border-gray-100 bg-gray-50 px-3 py-3">
+              {grouped.map(([portfolio, reports]) => (
+                <div key={portfolio} className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    {portfolio || 'Not portfolio-specific'}
+                  </p>
+                  {reports.map((r) => <ResearchCard key={r.id} r={r} />)}
+                </div>
+              ))}
             </div>
           )}
         </>
       )}
 
       <div
-        className="flex items-center justify-end border-t border-gray-100 px-3 py-2"
+        className="flex items-center justify-between border-t border-gray-100 px-3 py-2"
         onClick={(e) => e.stopPropagation()}
       >
+        <span className="text-xs text-gray-400">
+          {onOpen
+            ? 'Open research →'
+            : `${displayType} not in your securities`}
+        </span>
         <button
           type="button"
           disabled={removePending}
@@ -148,15 +225,40 @@ export function WatchlistPage() {
     queryFn: fetchActiveProspects,
   })
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.prospects })
+
   const removeMutation = useMutation({
     mutationFn: (entryId: number) => removeProspect(entryId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.prospects }),
+    onSuccess: invalidate,
+  })
+  const detachMutation = useMutation({
+    mutationFn: ({ id, portfolio }: { id: number; portfolio: string }) =>
+      removeProspectPortfolio(id, portfolio),
+    onSuccess: invalidate,
   })
 
-  const grouped = COLUMNS.map(({ type, label, badge }) => ({
-    type, label, badge,
-    items: entries.filter((e) => getSecurityDisplayType(e.securities2 ?? {}) === type),
-  }))
+  // Identity + asset type for ideas that are not in securities2. Shares the
+  // profile cache with the research page, so opening an idea costs no extra call.
+  const unknownSymbols = useMemo(
+    () => [...new Set(entries.filter((e) => !e.securities2).map((e) => e.security_id))],
+    [entries],
+  )
+  const profileQueries = useQueries({
+    queries: unknownSymbols.map((sym) => ({
+      queryKey: QUERY_KEYS.profile(sym),
+      queryFn: () => fetchProfile(sym),
+      staleTime: 1000 * 60 * 60 * 24,
+      retry: false,
+    })),
+  })
+  const profileBySymbol = new Map<string, Profile | null>(
+    unknownSymbols.map((s, i) => [s, profileQueries[i]?.data ?? null]),
+  )
+
+  const resolved = entries.map((entry) => {
+    const profile = entry.securities2 ? null : profileBySymbol.get(entry.security_id) ?? null
+    return { entry, profile, type: displayTypeFor(entry, profile) }
+  })
 
   return (
     <div>
@@ -164,12 +266,12 @@ export function WatchlistPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Watchlist</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Securities you're considering adding to a portfolio.
+            Investment ideas you're considering — for one or more portfolios, or none yet.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-indigo-100 px-3 py-1 text-sm font-medium text-indigo-700">
-            {entries.length} candidates
+            {entries.length} idea{entries.length !== 1 ? 's' : ''}
           </span>
           <button
             type="button"
@@ -197,42 +299,60 @@ export function WatchlistPage() {
           <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-10 text-center">
             <p className="text-sm font-medium text-gray-500">No securities on the watchlist</p>
             <p className="mt-1 text-xs text-gray-400">
-              Add a candidate you're considering for a portfolio.
+              Add any ticker you're considering — a portfolio can come later.
             </p>
           </div>
         )}
 
         {entries.length > 0 && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {grouped.map(({ type, label, badge, items }) => (
-              <div key={type}>
-                <div className="mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge}`}>
-                    {label}
-                  </span>
-                  <span className="text-xs text-gray-400">{items.length}</span>
+            {COLUMNS.map(({ type, label, badge }) => {
+              const items = resolved.filter((r) => r.type === type)
+              return (
+                <div key={type}>
+                  <div className="mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge}`}>
+                      {label}
+                    </span>
+                    <span className="text-xs text-gray-400">{items.length}</span>
+                  </div>
+                  <div className="space-y-3">
+                    {items.length === 0 ? (
+                      <p className="text-xs italic text-gray-400">None</p>
+                    ) : (
+                      items.map(({ entry, profile }) => {
+                        // Stocks open the on-demand research page, which runs on a
+                        // bare ticker — so an idea you don't own is no longer a
+                        // dead card. The research page is stock-only, so a fund or
+                        // ETF still opens its securities2 detail page when it has one.
+                        const secId = entry.securities2?.id ?? null
+                        const onOpen =
+                          type === 'Stock'
+                            ? () => navigate(`/research/${entry.security_id}`)
+                            : secId != null
+                              ? () => navigate(`/security/${secId}`)
+                              : null
+                        return (
+                          <ProspectCard
+                            key={entry.id}
+                            entry={entry}
+                            profile={profile}
+                            displayType={type}
+                            streamable={type !== 'Mutual fund'}
+                            onOpen={onOpen}
+                            onRemove={() => removeMutation.mutate(entry.id)}
+                            onDetach={(portfolio) =>
+                              detachMutation.mutate({ id: entry.id, portfolio })
+                            }
+                            removePending={removeMutation.isPending}
+                          />
+                        )
+                      })
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  {items.length === 0 ? (
-                    <p className="text-xs italic text-gray-400">None</p>
-                  ) : (
-                    items.map((entry) => {
-                      const sec = entry.securities2
-                      return (
-                        <ProspectCard
-                          key={entry.id}
-                          entry={entry}
-                          streamable={type !== 'Mutual fund'}
-                          onNavigate={() => { if (sec?.id != null) navigate(`/security/${sec.id}`) }}
-                          onRemove={() => removeMutation.mutate(entry.id)}
-                          removePending={removeMutation.isPending}
-                        />
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

@@ -55,22 +55,20 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
     setSelectedPortfolios((prev) => (prev.includes(name) ? prev.filter((p) => p !== name) : [...prev, name]))
 
   const mutation = useMutation({
-    // One watchlist entry per selected portfolio, so each gets its own
-    // portfolio-specific AI research + recommendation.
+    // ONE idea per ticker, with its portfolios attached. Portfolios are optional:
+    // a ticker you have not placed yet is still an idea worth recording. Adding a
+    // ticker that is already watched attaches the new portfolios to it.
     mutationFn: async () => {
       if (!selectedId) throw new Error('No security selected')
-      if (selectedPortfolios.length === 0) throw new Error('Select at least one portfolio')
       const price = targetPrice.trim() ? Number(targetPrice) : null
-      const targetPriceVal = price != null && Number.isFinite(price) ? price : null
-      await Promise.all(
-        selectedPortfolios.map((portfolio) =>
-          addProspect({ securityId: selectedId, targetPortfolio: portfolio, targetPrice: targetPriceVal }),
-        ),
-      )
+      await addProspect({
+        securityId: selectedId,
+        portfolios: selectedPortfolios,
+        targetPrice: price != null && Number.isFinite(price) ? price : null,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.prospects })
-      if (selectedId) queryClient.invalidateQueries({ queryKey: QUERY_KEYS.prospectsBySecurity(selectedId) })
       onClose()
     },
   })
@@ -139,6 +137,20 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
               />
               {search.trim() && (
                 <div className="max-h-48 overflow-y-auto rounded-md border border-gray-200 bg-white">
+                  {/* Any ticker is watchable, held or not — that is what a watchlist is
+                      for. Listed FIRST because below 50 matched securities it was
+                      effectively invisible and the field read as a securities picker. */}
+                  {typedTicker && !hasExactMatch && (
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedId(typedTicker); setSearch('') }}
+                      className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2.5 text-left hover:bg-indigo-50"
+                    >
+                      <span className="text-sm text-indigo-600">Watch</span>
+                      <span className="font-mono text-sm font-semibold text-indigo-700">{typedTicker}</span>
+                      <span className="text-xs text-gray-400">— not in your securities</span>
+                    </button>
+                  )}
                   {filtered.map((s) => (
                     <button
                       key={s.id}
@@ -152,18 +164,6 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
                       )}
                     </button>
                   ))}
-                  {/* Always allow watching the typed ticker as-is (any security). */}
-                  {typedTicker && !hasExactMatch && (
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedId(typedTicker); setSearch('') }}
-                      className="flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2.5 text-left hover:bg-indigo-50"
-                    >
-                      <span className="text-sm text-indigo-600">Watch</span>
-                      <span className="font-mono text-sm font-semibold text-indigo-700">{typedTicker}</span>
-                      <span className="text-xs text-gray-400">— not in your securities</span>
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -175,7 +175,8 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
             {/* Which portfolio(s) is this being considered for — one entry each. */}
             <div>
               <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Considered for portfolio(s)
+                Considered for portfolio(s){' '}
+                <span className="font-normal normal-case text-gray-400">(optional)</span>
               </label>
               <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-1">
                 {portfolios.length === 0 ? (
@@ -217,7 +218,7 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
 
             <p className="rounded-md bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
               The AI research team will draft the thesis, bull &amp; bear case, conviction, and
-              recommendation for each selected portfolio.
+              recommendation for each selected portfolio. You can add portfolios later.
             </p>
           </>
         )}
@@ -240,7 +241,7 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
         </button>
         <button
           type="button"
-          disabled={!selectedId || selectedPortfolios.length === 0 || mutation.isPending}
+          disabled={!selectedId || mutation.isPending}
           onClick={() => mutation.mutate()}
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         >

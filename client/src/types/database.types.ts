@@ -2344,6 +2344,42 @@ export type Database = {
           },
         ]
       }
+      prospect_portfolios: {
+        Row: {
+          created_at: string
+          id: number
+          portfolio_name: string
+          prospect_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          portfolio_name: string
+          prospect_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          portfolio_name?: string
+          prospect_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_portfolios_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "prospect_portfolios_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prospects: {
         Row: {
           conviction: string | null
@@ -2352,7 +2388,6 @@ export type Database = {
           id: number
           removed_at: string | null
           security_id: string
-          target_portfolio: string | null
           target_price: number | null
           thesis: string | null
           updated_at: string
@@ -2364,7 +2399,6 @@ export type Database = {
           id?: number
           removed_at?: string | null
           security_id: string
-          target_portfolio?: string | null
           target_price?: number | null
           thesis?: string | null
           updated_at?: string
@@ -2376,7 +2410,6 @@ export type Database = {
           id?: number
           removed_at?: string | null
           security_id?: string
-          target_portfolio?: string | null
           target_price?: number | null
           thesis?: string | null
           updated_at?: string

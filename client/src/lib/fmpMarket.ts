@@ -18,6 +18,18 @@ export interface Profile {
   description: string | null
   sector: string | null
   industry: string | null
+  /**
+   * FMP's own asset-type flags. The securities2 classifier needs columns we do
+   * not have for a ticker that is only being WATCHED, so these are the only way
+   * to tell a stock from a fund before it is ever added.
+   */
+  isEtf: boolean
+  isFund: boolean
+}
+
+/** FMP sends these as real booleans on /stable/profile, but older rows carry "true"/"false". */
+function bool(v: unknown): boolean {
+  return v === true || (typeof v === 'string' && v.trim().toLowerCase() === 'true')
 }
 
 export async function fetchProfile(symbol: string): Promise<Profile> {
@@ -28,6 +40,8 @@ export async function fetchProfile(symbol: string): Promise<Profile> {
     description: str(p.description),
     sector: str(p.sector),
     industry: str(p.industry),
+    isEtf: bool(p.isEtf),
+    isFund: bool(p.isFund),
   }
 }
 
