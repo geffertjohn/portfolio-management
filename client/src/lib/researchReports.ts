@@ -12,7 +12,12 @@
 import { supabase } from './supabase'
 import type { Json } from '@/types/database.types'
 
-export type ReportType = 'initial' | 'earnings_review' | 'update'
+/**
+ * `pre_earnings` was called `earnings_review` until Oct 2026, when the
+ * post-earnings counterpart arrived and the old name stopped distinguishing
+ * anything. The 30 existing briefs were all pre-earnings and were renamed.
+ */
+export type ReportType = 'initial' | 'pre_earnings' | 'post_earnings' | 'update'
 export type Rating = 'buy' | 'add' | 'hold' | 'trim' | 'sell'
 export type Conviction = 'high' | 'medium' | 'low'
 export type ReportStatus = 'draft' | 'final'
@@ -21,6 +26,29 @@ export type AuthorRole = 'research_analyst' | 'devils_advocate' | 'quant_analyst
 
 export interface Citation { title?: string; url?: string; note?: string }
 
+/** How a post-earnings brief judged one of the pre-brief's watch-items. */
+export type WatchVerdict = 'hit' | 'miss' | 'unclear'
+
+/**
+ * One "what actually matters this print" item, carried across both briefs.
+ *
+ * The PRE brief sets `key`/`title`/`detail` — what to watch and what the bar is.
+ * The POST brief copies those forward unchanged and adds `verdict`/`actual`/
+ * `note`. Same shape from both ends, so the card renders either without
+ * branching on report type, and a resolved item still shows what was asked.
+ */
+export interface WatchItem {
+  key: string
+  title: string
+  detail?: string | null
+  verdict?: WatchVerdict | null
+  actual?: string | null
+  note?: string | null
+}
+
+/** Post-earnings verdict. Same vocabulary as `holding_reviews.thesis_status`. */
+export type ThesisStatus = 'intact' | 'at_risk' | 'broken'
+
 export interface ResearchReport {
   id: number
   security_id: string
@@ -28,6 +56,10 @@ export interface ResearchReport {
   addition_id: number | null
   author_role: AuthorRole
   report_type: ReportType
+  /** The pre-earnings brief a post-earnings brief answers. Required for `post_earnings`. */
+  parent_report_id: number | null
+  watch_items: WatchItem[] | null
+  thesis_status: ThesisStatus | null
   thesis: string | null
   bull_case: string | null
   bear_case: string | null
@@ -44,7 +76,7 @@ export interface ResearchReport {
 }
 
 const COLS =
-  'id, security_id, portfolio_name, addition_id, author_role, report_type, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
+  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
 
 function mapRow(r: Record<string, unknown>): ResearchReport {
   return {
@@ -54,6 +86,9 @@ function mapRow(r: Record<string, unknown>): ResearchReport {
     addition_id: (r.addition_id as number | null) ?? null,
     author_role: r.author_role as AuthorRole,
     report_type: r.report_type as ReportType,
+    parent_report_id: (r.parent_report_id as number | null) ?? null,
+    watch_items: (r.watch_items as WatchItem[] | null) ?? null,
+    thesis_status: (r.thesis_status as ThesisStatus | null) ?? null,
     thesis: (r.thesis as string | null) ?? null,
     bull_case: (r.bull_case as string | null) ?? null,
     bear_case: (r.bear_case as string | null) ?? null,
@@ -100,6 +135,9 @@ export interface NewResearchReport {
   portfolio_name?: string | null
   addition_id?: number | null
   report_type?: ReportType
+  parent_report_id?: number | null
+  watch_items?: WatchItem[] | null
+  thesis_status?: ThesisStatus | null
   thesis?: string | null
   bull_case?: string | null
   bear_case?: string | null
@@ -122,6 +160,9 @@ export async function insertResearchReport(input: NewResearchReport): Promise<nu
       portfolio_name: input.portfolio_name ?? null,
       addition_id: input.addition_id ?? null,
       report_type: input.report_type ?? 'initial',
+      parent_report_id: input.parent_report_id ?? null,
+      watch_items: (input.watch_items ?? null) as unknown as Json,
+      thesis_status: input.thesis_status ?? null,
       thesis: input.thesis ?? null,
       bull_case: input.bull_case ?? null,
       bear_case: input.bear_case ?? null,

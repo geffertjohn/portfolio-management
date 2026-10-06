@@ -519,7 +519,18 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 ### Scheduled jobs (draft-only)
 
-Three `create_scheduled_task` routines (persisted in `~/.claude/scheduled-tasks/`, self-contained prompts that adopt a role): **pre-earnings-brief** (weekday → draft `research_reports`), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; run in Claude Code while the app is open.
+Four `create_scheduled_task` routines (persisted in `~/.claude/scheduled-tasks/`, self-contained prompts that adopt a role): **pre-earnings-brief** (weekday → draft `research_reports`), **post-earnings-brief** (weekday → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; run in Claude Code while the app is open.
+
+### Earnings briefs — a matched pair
+
+`report_type` is `'pre_earnings'` / `'post_earnings'` (the pre value was `'earnings_review'` until Oct 2026; the 30 existing rows were renamed and the old value no longer passes the CHECK). A post-earnings brief **answers** a specific pre-earnings brief rather than standing alone:
+
+- **`watch_items` `jsonb`** = `[{key, title, detail, verdict?, actual?, note?}]`, filled from both ends. The **pre**-brief sets `key`/`title`/`detail` — what to watch and **what the bar is**, stated as a number wherever one exists, because the post-brief grades against that text. The **post**-brief carries those three fields forward unchanged and adds `verdict` (`hit`/`miss`/`unclear`), `actual` and `note`. One shape from both ends, so `ResearchCard` renders either without branching, and a resolved item still shows the question next to the answer.
+- **`parent_report_id`** — self-FK to the pre-brief. **A CHECK enforces it for `post_earnings`**, which is the "strict pairing" scope decision made structural: a holding that reported without a pre-brief gets nothing.
+- **`research_reports_one_post_per_parent`** (partial unique on `parent_report_id`) is **not cosmetic.** The generator runs daily over a ~21-day lookback so it can wait for FMP to post actuals; without the index the first name to report would accumulate a duplicate brief every day.
+- **The post job gates on ACTUALS, never on the earnings calendar.** No actuals in FMP → skip silently and retry on a later run. This is the lag the briefs themselves kept flagging ("AbbVie confirmed a 7/31 pre-market release, but as of this brief no Q2 actuals had posted to FMP's earnings calendar").
+- **`thesis_status`** (`intact`/`at_risk`/`broken`) is the post-brief's verdict, deliberately the same vocabulary as `holding_reviews.thesis_status` so an earnings read-through and a quarterly review say the same words. Still recommend-only — nothing downstream acts on it.
+- **The 30 pre-briefs that predate this have `watch_items` NULL**, so the post job's "derive 2-3 items from the thesis prose and say so" fallback is the path that actually runs until the next earnings cycle.
 
 ### Related UI primitives
 

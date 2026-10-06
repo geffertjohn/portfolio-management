@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
-import type { ResearchReport, Rating, Conviction } from '@/lib/researchReports'
+import type {
+  ResearchReport, Rating, Conviction, ReportType, ThesisStatus, WatchVerdict, WatchItem,
+} from '@/lib/researchReports'
 import type { RiskReport, RiskVerdict } from '@/lib/riskReports'
 import type { IcMemo, IcDecision } from '@/lib/icMemos'
 import { fmtUsd, EMPTY } from '@/lib/formatters'
@@ -28,6 +30,63 @@ const VERDICT_BADGE: Record<RiskVerdict, string> = {
 
 const RATING_LABEL: Record<Rating, string> = { buy: 'Buy', add: 'Add', hold: 'Hold', trim: 'Trim', sell: 'Sell' }
 const CONVICTION_LABEL: Record<Conviction, string> = { high: 'High', medium: 'Medium', low: 'Low' }
+
+const REPORT_TYPE_BADGE: Partial<Record<ReportType, { label: string; className: string }>> = {
+  pre_earnings:  { label: 'Pre-earnings',  className: 'bg-indigo-100 text-indigo-700' },
+  post_earnings: { label: 'Post-earnings', className: 'bg-teal-100 text-teal-700' },
+}
+
+const THESIS_STATUS: Record<ThesisStatus, { label: string; className: string }> = {
+  intact:  { label: 'Thesis intact',  className: 'bg-green-100 text-green-700' },
+  at_risk: { label: 'Thesis at risk', className: 'bg-amber-100 text-amber-700' },
+  broken:  { label: 'Thesis broken',  className: 'bg-red-100 text-red-700' },
+}
+
+const WATCH_VERDICT: Record<WatchVerdict, { label: string; className: string }> = {
+  hit:     { label: 'Hit',     className: 'bg-green-100 text-green-700' },
+  miss:    { label: 'Miss',    className: 'bg-red-100 text-red-700' },
+  unclear: { label: 'Unclear', className: 'bg-gray-100 text-gray-600' },
+}
+
+/**
+ * The "what actually matters this print" list.
+ *
+ * Rendered from the same array on both briefs: unresolved on the pre-brief (what
+ * to watch, and the bar), resolved on the post-brief (same item, plus the
+ * verdict and the actual figure). Showing the original question next to the
+ * answer is the point — a verdict with the question stripped out is unreadable
+ * a quarter later.
+ */
+function WatchItems({ items }: { items: WatchItem[] }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+        What actually matters this print
+      </p>
+      <ol className="mt-1.5 space-y-2">
+        {items.map((it, i) => {
+          const v = it.verdict ? WATCH_VERDICT[it.verdict] : null
+          return (
+            <li key={it.key || i} className="text-sm">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="font-medium text-gray-800">{i + 1}. {it.title}</span>
+                {v && <Badge className={v.className}>{v.label}</Badge>}
+              </div>
+              {it.detail && <p className="mt-0.5 text-gray-600">{it.detail}</p>}
+              {it.actual && (
+                <p className="mt-0.5 text-gray-700">
+                  <span className="text-xs uppercase tracking-wide text-gray-400">Actual </span>
+                  {it.actual}
+                </p>
+              )}
+              {it.note && <p className="mt-0.5 text-gray-600">{it.note}</p>}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
 
 const ROLE_LABEL: Record<string, string> = {
   research_analyst: 'Research Analyst',
@@ -96,13 +155,25 @@ export function MemoCard({
   )
 }
 
-export function ResearchCard({ r, showTicker = false }: { r: ResearchReport; showTicker?: boolean }) {
+export function ResearchCard({
+  r,
+  showTicker = false,
+  parentDate,
+}: {
+  r: ResearchReport
+  showTicker?: boolean
+  /** `created_at` of the pre-brief this one answers, when the caller can resolve it. */
+  parentDate?: string | null
+}) {
+  const typeBadge = REPORT_TYPE_BADGE[r.report_type]
+  const status = r.thesis_status ? THESIS_STATUS[r.thesis_status] : null
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold text-gray-800">{roleLabel(r.author_role)}</h3>
         {showTicker && <span className="text-xs font-medium text-gray-500">{r.security_id}</span>}
-        {r.report_type === 'earnings_review' && <Badge className="bg-indigo-100 text-indigo-700">Pre-earnings</Badge>}
+        {typeBadge && <Badge className={typeBadge.className}>{typeBadge.label}</Badge>}
+        {status && <Badge className={status.className}>{status.label}</Badge>}
         {r.status === 'draft' && <Badge className="bg-sky-100 text-sky-700">Draft</Badge>}
         {r.rating && <Badge className="bg-gray-100 text-gray-700">{RATING_LABEL[r.rating]}</Badge>}
         {r.conviction && <span className="text-xs text-gray-500">Conviction: {CONVICTION_LABEL[r.conviction]}</span>}
@@ -114,8 +185,14 @@ export function ResearchCard({ r, showTicker = false }: { r: ResearchReport; sho
         )}
         <span className="ml-auto text-xs text-gray-400">{formatDate(r.created_at)}</span>
       </div>
+      {r.report_type === 'post_earnings' && parentDate && (
+        <p className="mt-1 text-xs text-gray-400">
+          Answers the pre-earnings brief of {formatDate(parentDate)}
+        </p>
+      )}
       <div className="mt-3 space-y-3">
         <Field label="Thesis" value={r.thesis} />
+        {r.watch_items && r.watch_items.length > 0 && <WatchItems items={r.watch_items} />}
         <Field label="Bull case" value={r.bull_case} />
         <Field label="Bear case" value={r.bear_case} />
         {r.sources && r.sources.length > 0 && (

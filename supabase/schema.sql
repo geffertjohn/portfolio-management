@@ -1384,14 +1384,23 @@ CREATE TABLE IF NOT EXISTS "public"."research_reports" (
     "status" "text" DEFAULT 'final'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "deleted_at" timestamp with time zone,
+    "parent_report_id" bigint,
+    "watch_items" "jsonb",
+    "thesis_status" "text",
     CONSTRAINT "research_reports_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
+    CONSTRAINT "research_reports_post_needs_parent" CHECK ((("report_type" <> 'post_earnings'::"text") OR ("parent_report_id" IS NOT NULL))),
     CONSTRAINT "research_reports_rating_check" CHECK (("rating" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))),
-    CONSTRAINT "research_reports_report_type_check" CHECK (("report_type" = ANY (ARRAY['initial'::"text", 'earnings_review'::"text", 'update'::"text"]))),
-    CONSTRAINT "research_reports_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'final'::"text"])))
+    CONSTRAINT "research_reports_report_type_check" CHECK (("report_type" = ANY (ARRAY['initial'::"text", 'pre_earnings'::"text", 'post_earnings'::"text", 'update'::"text"]))),
+    CONSTRAINT "research_reports_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'final'::"text"]))),
+    CONSTRAINT "research_reports_thesis_status_check" CHECK ((("thesis_status" IS NULL) OR ("thesis_status" = ANY (ARRAY['intact'::"text", 'at_risk'::"text", 'broken'::"text"]))))
 );
 
 
 ALTER TABLE "public"."research_reports" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."research_reports"."watch_items" IS 'Array of {key, title, detail, verdict?, actual?, note?}. Pre-earnings briefs set key/title/detail (what to watch and what the bar is); post-earnings briefs carry those forward and resolve each with verdict = hit | miss | unclear plus the actual figure.';
+
 
 
 ALTER TABLE "public"."research_reports" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
@@ -2331,6 +2340,14 @@ CREATE UNIQUE INDEX "prospects_active_security_key" ON "public"."prospects" USIN
 
 
 
+CREATE UNIQUE INDEX "research_reports_one_post_per_parent" ON "public"."research_reports" USING "btree" ("parent_report_id") WHERE (("report_type" = 'post_earnings'::"text") AND ("deleted_at" IS NULL));
+
+
+
+CREATE INDEX "research_reports_parent_idx" ON "public"."research_reports" USING "btree" ("parent_report_id") WHERE ("parent_report_id" IS NOT NULL);
+
+
+
 CREATE INDEX "research_reports_portfolio_idx" ON "public"."research_reports" USING "btree" ("portfolio_name") WHERE ("deleted_at" IS NULL);
 
 
@@ -2640,6 +2657,11 @@ ALTER TABLE ONLY "public"."prospect_portfolios"
 
 ALTER TABLE ONLY "public"."research_reports"
     ADD CONSTRAINT "research_reports_addition_id_fkey" FOREIGN KEY ("addition_id") REFERENCES "public"."security_additions"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."research_reports"
+    ADD CONSTRAINT "research_reports_parent_report_id_fkey" FOREIGN KEY ("parent_report_id") REFERENCES "public"."research_reports"("id") ON DELETE SET NULL;
 
 
 

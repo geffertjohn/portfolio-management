@@ -2429,6 +2429,7 @@ export type Database = {
           deleted_at: string | null
           fair_value: number | null
           id: number
+          parent_report_id: number | null
           portfolio_name: string | null
           rating: string | null
           report_type: string
@@ -2436,7 +2437,9 @@ export type Database = {
           sources: Json | null
           status: string
           thesis: string | null
+          thesis_status: string | null
           valuation_summary: Json | null
+          watch_items: Json | null
         }
         Insert: {
           addition_id?: number | null
@@ -2450,6 +2453,7 @@ export type Database = {
           deleted_at?: string | null
           fair_value?: number | null
           id?: never
+          parent_report_id?: number | null
           portfolio_name?: string | null
           rating?: string | null
           report_type?: string
@@ -2457,7 +2461,9 @@ export type Database = {
           sources?: Json | null
           status?: string
           thesis?: string | null
+          thesis_status?: string | null
           valuation_summary?: Json | null
+          watch_items?: Json | null
         }
         Update: {
           addition_id?: number | null
@@ -2471,6 +2477,7 @@ export type Database = {
           deleted_at?: string | null
           fair_value?: number | null
           id?: never
+          parent_report_id?: number | null
           portfolio_name?: string | null
           rating?: string | null
           report_type?: string
@@ -2478,7 +2485,9 @@ export type Database = {
           sources?: Json | null
           status?: string
           thesis?: string | null
+          thesis_status?: string | null
           valuation_summary?: Json | null
+          watch_items?: Json | null
         }
         Relationships: [
           {
@@ -2486,6 +2495,13 @@ export type Database = {
             columns: ["addition_id"]
             isOneToOne: false
             referencedRelation: "security_additions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_reports_parent_report_id_fkey"
+            columns: ["parent_report_id"]
+            isOneToOne: false
+            referencedRelation: "research_reports"
             referencedColumns: ["id"]
           },
           {

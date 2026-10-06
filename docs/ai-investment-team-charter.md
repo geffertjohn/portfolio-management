@@ -125,7 +125,7 @@ Maps onto and extends the existing `security_additions` workflow.
 
 ### 4.2 Ongoing monitoring (later)
 
-Earnings-driven (live FMP earnings dates) → analyst re-review → PM/Risk assessment → At-Risk flag. Writes to `review_log` / `holding_reviews` (existing) + a `research_reports` row of type `earnings_review`.
+Earnings-driven (live FMP earnings dates) → analyst re-review → PM/Risk assessment → At-Risk flag. Writes to `review_log` / `holding_reviews` (existing) + a `research_reports` row of type `pre_earnings` before the print and `post_earnings` after it.
 
 ### 4.3 Portfolio review (later)
 
@@ -147,7 +147,7 @@ create table public.research_reports (
   addition_id      bigint references public.security_additions(id) on delete set null,
   author_role      text not null,                          -- 'research_analyst' | 'devils_advocate' | ...
   report_type      text not null default 'initial'
-                     check (report_type in ('initial','earnings_review','update')),
+                     check (report_type in ('initial','pre_earnings','post_earnings','update')),
   thesis           text,
   bull_case        text,
   bear_case        text,
@@ -269,7 +269,8 @@ return { bull, bear, quant, pm, risk, verdict: risk.verdict }
 
 | Job | Cadence | Output |
 |---|---|---|
-| Pre-earnings brief | morning of a holding's earnings (live FMP dates) | analyst "what to watch" memo → `research_reports` (type `earnings_review`, `status='draft'`) |
+| Pre-earnings brief | morning of a holding's earnings (live FMP dates) | analyst "what to watch" memo + structured `watch_items` → `research_reports` (type `pre_earnings`, `status='draft'`) |
+| Post-earnings brief | daily, once FMP posts ACTUALS for a briefed holding | each pre-brief watch-item graded hit/miss/unclear, bull & bear updated, `thesis_status` verdict → `research_reports` (type `post_earnings`, `parent_report_id` → the pre-brief, `status='draft'`) |
 | Weekly risk report | weekly | portfolio-scoped `risk_reports` (concentration + factor drift) |
 | Reviews-due digest | daily/weekly | rollup of existing per-security + portfolio-review cadences |
 
