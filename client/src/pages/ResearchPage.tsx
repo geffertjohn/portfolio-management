@@ -6,6 +6,7 @@ import { StockScorecardPanels } from '@/components/StockScorecardPanels'
 import { StockReturnTable } from '@/components/StockReturnTable'
 import { AnalystSummaryCards } from '@/components/AnalystSummaryCards'
 import { NewsAlertsPanel } from '@/components/NewsAlertsPanel'
+import { TipRanksPanel } from '@/components/TipRanksPanel'
 import { FinancialsSection } from '@/components/FinancialsSection'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
 import { useLatestTranscript } from '@/hooks/useTranscript'
@@ -187,6 +188,12 @@ export function ResearchPage() {
               <AnalystSummaryCards security={security} />
             </div>
           </div>
+
+          {/* ── Street Coverage ──────────────────────────────────────────
+              The FMP consensus above is a head-count snapshot; this is the same
+              street weighted by track record. Renders its own card, so it is not
+              wrapped. Keyed on the ticker alone — no securities2 row needed. */}
+          <TipRanksPanel securityId={security.security_id} />
 
           {/* ── Scorecard ────────────────────────────────────────────────── */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
