@@ -56,6 +56,7 @@ export const QUERY_KEYS = {
   holdingReviews: (portfolioName: string) => ['holding_reviews', portfolioName] as const,
   securityAdditions: (portfolioName: string) => ['security_additions', portfolioName] as const,
   securityAddition: (id: number) => ['security_addition', id] as const,
+  securityTheses: (securityId: string) => ['security_theses', securityId] as const,
   researchReports: (securityId: string) => ['research_reports', securityId] as const,
   researchReportsForAddition: (additionId: number) => ['research_reports', 'addition', additionId] as const,
   riskReports: (portfolioName: string) => ['risk_reports', portfolioName] as const,

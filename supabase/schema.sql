@@ -1723,7 +1723,6 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "alt_1" "text",
     "alt_2" "text",
     "alt_3" "text",
-    "thesis" "text",
     "scorecard_cohort" "text",
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
@@ -1836,6 +1835,10 @@ ALTER TABLE "public"."security_theses" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."security_theses" IS 'Append-only investment thesis versions, one lineage per security. Published rows are immutable (see security_theses_append_only). Portfolio-level sizing/fit lives elsewhere.';
+
+
+
+COMMENT ON COLUMN "public"."security_theses"."security_id" IS 'Ticker. Deliberately NO FK to securities2 -- a thesis is written before the position exists, and the record outlives the holding.';
 
 
 
@@ -2824,11 +2827,6 @@ ALTER TABLE ONLY "public"."security_additions"
 
 ALTER TABLE ONLY "public"."security_related_securities"
     ADD CONSTRAINT "security_related_securities_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."security_theses"
-    ADD CONSTRAINT "security_theses_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id") ON DELETE CASCADE;
 
 
 

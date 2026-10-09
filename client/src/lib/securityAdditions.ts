@@ -61,11 +61,9 @@ const sel = (opts: string[], labels: string[]) =>
 export const ADDITION_STAGES: StageDef[] = [
   {
     key: 'full_research', stage: 3, label: 'Full Research', output: 'Research Complete',
-    purpose: 'Does this company deserve capital? This is where the thesis document gets created.',
+    purpose: 'Does this company deserve capital? The thesis, bull case and bear case live on the SECURITY (one per security, versioned) -- write them on the security page. This stage covers the portfolio-facing work.',
     fields: [
       { key: 'business_overview', label: 'Business Overview', type: 'textarea', guidance: 'What does the company do? Revenue sources, major segments.' },
-      { key: 'investment_thesis', label: 'Investment Thesis', type: 'textarea', guidance: 'Typically 2–4 reasons (e.g. durable advantage, above-average growth, expanding margins, attractive valuation).' },
-      { key: 'risks', label: 'Risks', type: 'textarea', guidance: 'e.g. regulatory risk, customer concentration, cyclicality.' },
       { key: 'financial_review', label: 'Financial Review', type: 'textarea', guidance: 'Revenue growth, EPS growth, margins, ROIC, balance sheet, cash flow.' },
       { key: 'valuation', label: 'Valuation', type: 'textarea', guidance: 'Forward P/E, PEG, EV/EBITDA, DCF (if used).' },
       { key: 'portfolio_fit', label: 'Portfolio Fit', type: 'textarea', guidance: 'Why is this better than existing opportunities?' },

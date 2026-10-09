@@ -2901,7 +2901,6 @@ export type Database = {
           sharpe_peer_group_rank: number | null
           sharpe_rank: number | null
           stock_net: number | null
-          thesis: string | null
           three_month_total_return: number | null
           three_month_total_return_nav: number | null
           three_month_total_return_peer_group_rank_nav: number | null
@@ -2997,7 +2996,6 @@ export type Database = {
           sharpe_peer_group_rank?: number | null
           sharpe_rank?: number | null
           stock_net?: number | null
-          thesis?: string | null
           three_month_total_return?: number | null
           three_month_total_return_nav?: number | null
           three_month_total_return_peer_group_rank_nav?: number | null
@@ -3093,7 +3091,6 @@ export type Database = {
           sharpe_peer_group_rank?: number | null
           sharpe_rank?: number | null
           stock_net?: number | null
-          thesis?: string | null
           three_month_total_return?: number | null
           three_month_total_return_nav?: number | null
           three_month_total_return_peer_group_rank_nav?: number | null
@@ -3260,15 +3257,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "security_theses_security_id_fkey"
-            columns: ["security_id"]
-            isOneToOne: false
-            referencedRelation: "securities2"
-            referencedColumns: ["security_id"]
-          },
-        ]
+        Relationships: []
       }
       substitutions: {
         Row: {

@@ -151,7 +151,6 @@ export interface SecurityDetail extends Security {
   yield_to_maturity: number | null
   average_coupon: number | null
 
-  thesis: string | null
   as_of_date: string | null
 
   // ── Stock — classification ────────────────────────────────────────────────
@@ -249,23 +248,9 @@ export function getSecurityDisplayType(security: SecurityClassInput): SecurityDi
   return kind === 'etf' ? 'ETF' : kind === 'fund' ? 'Mutual fund' : 'Stock'
 }
 
-/** ETF / mutual fund — fund-specific UI (returns table, thesis blocks, etc.). */
+/** ETF / mutual fund — fund-specific UI (returns table, scorecards, etc.). */
 export function isFundOrEtfSecurity(security: SecurityClassInput): boolean {
   return classifySecurity(security) !== 'stock'
-}
-
-export function getThesisText(security: { thesis?: string | null } | null): string {
-  const t = security?.thesis
-  return typeof t === 'string' ? t : ''
-}
-
-export async function updateSecurityThesis(securityId: number, thesis: string): Promise<void> {
-  const { error } = await supabase
-    .from('securities2')
-    .update({ thesis })
-    .eq('id', securityId)
-
-  if (error) throw error
 }
 
 export async function fetchSecurities(): Promise<Security[]> {

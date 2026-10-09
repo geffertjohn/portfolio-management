@@ -3,9 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import {
   fetchRelatedSecurities,
-  getThesisText,
   isFundOrEtfSecurity,
-  updateSecurityThesis,
   refreshSecurityFromFMP,
   setScorecardCohort,
 } from '@/lib/securities'
@@ -43,6 +41,7 @@ import { SecurityResearchPanel } from '@/components/SecurityResearchPanel'
 import { TipRanksPanel } from '@/components/TipRanksPanel'
 import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
+import { SecurityThesisPanel } from '@/components/SecurityThesisPanel'
 
 /**
  * Maps the variety of YCharts/Morningstar asset class values to a canonical
@@ -76,8 +75,6 @@ export function SecurityDetailPage() {
   const { securityId } = useParams<{ securityId: string }>()
   const backLink = useSecurityBackLink()
   const id = securityId ? parseInt(securityId, 10) : NaN
-  const [thesisDraft, setThesisDraft] = useState('')
-  const [thesisSavedFlash, setThesisSavedFlash] = useState(false)
   const [atRiskModalOpen, setAtRiskModalOpen] = useState(false)
   const [prospectModalOpen, setProspectModalOpen] = useState(false)
   const [addActionOpen, setAddActionOpen] = useState(false)
@@ -152,11 +149,6 @@ export function SecurityDetailPage() {
   const sector = (isStock ? profile?.sector : null) ?? security?.morningstar_sector ?? null
   const industry = (isStock ? profile?.industry : null) ?? security?.morningstar_industry ?? null
 
-  useEffect(() => {
-    if (!security) return
-    setThesisDraft(getThesisText(security))
-  }, [security])
-
   // The cohort a fund is REVIEWED against. Deliberately separate from the
   // Category / Peer group tabs below it: those switch what you are looking at,
   // and the whole point is to be able to read both without changing which one
@@ -164,15 +156,6 @@ export function SecurityDetailPage() {
   const cohortMutation = useMutation({
     mutationFn: (cohort: ScorecardCohort) => setScorecardCohort(id, cohort),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: QUERY_KEYS.security(id) }) },
-  })
-
-  const thesisMutation = useMutation({
-    mutationFn: () => updateSecurityThesis(id, thesisDraft),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.security(id) })
-      setThesisSavedFlash(true)
-      window.setTimeout(() => setThesisSavedFlash(false), 2500)
-    },
   })
 
   const { data: portfoliosHolding = [] } = useQuery({
@@ -518,57 +501,8 @@ export function SecurityDetailPage() {
       {/* ── Fund/ETF: Thesis (unchanged) ────────────────────────────────────── */}
       {isFundOrEtfSecurity(security) && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-gray-900">Thesis</h2>
+          <h2 className="text-base font-semibold text-gray-900">Review</h2>
           <div className="mt-6 space-y-6">
-            <section>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
-                Investment Thesis
-              </h3>
-              <div className="mt-3 space-y-3">
-                <label htmlFor="security-thesis" className="sr-only">Investment thesis</label>
-                <textarea
-                  id="security-thesis"
-                  value={thesisDraft}
-                  onChange={(e) => setThesisDraft(e.target.value)}
-                  rows={8}
-                  placeholder="Describe the investment thesis for this fund or ETF…"
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-                />
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => thesisMutation.mutate()}
-                    disabled={thesisMutation.isPending}
-                    className="rounded-md border border-transparent bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
-                  >
-                    {thesisMutation.isPending ? 'Saving…' : 'Save thesis'}
-                  </button>
-                  {thesisSavedFlash && <span className="text-sm text-green-700">Saved.</span>}
-                </div>
-                {thesisMutation.isError && (
-                  <p className="text-sm text-red-600">
-                    {thesisMutation.error instanceof Error
-                      ? thesisMutation.error.message
-                      : 'Failed to save thesis. Check Supabase permissions (RLS).'}
-                  </p>
-                )}
-              </div>
-            </section>
-            <div className="border-t border-gray-100" />
-            <section>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Risks</h3>
-              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 text-sm text-gray-500">
-                Content to be added.
-              </div>
-            </section>
-            <div className="border-t border-gray-100" />
-            <section>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Exit Criteria</h3>
-              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 text-sm text-gray-500">
-                Content to be added.
-              </div>
-            </section>
-            <div className="border-t border-gray-100" />
             <section>
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Review Schedule</h3>
               {reviewSchedule ? (
@@ -687,64 +621,12 @@ export function SecurityDetailPage() {
             </div>
           </div>
 
-          {/* Thesis, Risks, Exit Criteria, Review Schedule, Review History (moved from Research) */}
+          {/* The thesis is its own document of record (append-only, PDF per version). */}
+          <SecurityThesisPanel ticker={security.security_id} securityName={security.security_name} />
+
+          {/* Review Schedule + Review History */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="space-y-6">
-            <section>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
-                Investment Thesis
-              </h3>
-              <div className="mt-3 space-y-3">
-                <label htmlFor="security-thesis" className="sr-only">Investment thesis</label>
-                <textarea
-                  id="security-thesis"
-                  value={thesisDraft}
-                  onChange={(e) => setThesisDraft(e.target.value)}
-                  rows={8}
-                  placeholder="Describe the investment thesis for this holding…"
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-                />
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => thesisMutation.mutate()}
-                    disabled={thesisMutation.isPending}
-                    className="rounded-md border border-transparent bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50"
-                  >
-                    {thesisMutation.isPending ? 'Saving…' : 'Save thesis'}
-                  </button>
-                  {thesisSavedFlash && <span className="text-sm text-green-700">Saved.</span>}
-                </div>
-                {thesisMutation.isError && (
-                  <p className="text-sm text-red-600">
-                    {thesisMutation.error instanceof Error
-                      ? thesisMutation.error.message
-                      : 'Failed to save thesis. Check Supabase permissions (RLS).'}
-                  </p>
-                )}
-              </div>
-            </section>
-
-            <div className="border-t border-gray-100" />
-
-            <section>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Risks</h3>
-              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 text-sm text-gray-500">
-                Content to be added.
-              </div>
-            </section>
-
-            <div className="border-t border-gray-100" />
-
-            <section>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Exit Criteria</h3>
-              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/50 p-4 text-sm text-gray-500">
-                Content to be added.
-              </div>
-            </section>
-
-            <div className="border-t border-gray-100" />
-
             <section>
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Review Schedule</h3>
               {reviewSchedule ? (
