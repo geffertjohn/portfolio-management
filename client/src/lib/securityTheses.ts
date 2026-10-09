@@ -41,7 +41,18 @@ export interface ThesisReason {
 export interface ThesisPoint {
   key: string
   reasonKey: string | null
+  /** The claim in a line. */
   label: string
+  /** WHAT is measured -- the series to track, e.g. "Services revenue". */
+  metric: string
+  /** The reading to measure future ones against: value plus the period it is as of. */
+  baseline: string
+  /** Direction and rate so far -- growth, CAGR, prior readings. */
+  trend: string
+  /** The reading that would say this reason is deteriorating. Without it a
+   *  metric is an assertion, not something a later review can test. */
+  breaksIf: string
+  /** Optional narrative tying the figure back to the reason. */
   context: string
 }
 
@@ -91,6 +102,10 @@ function toPoints(v: unknown): ThesisPoint[] {
       key: str(o.key),
       reasonKey: typeof o.reasonKey === 'string' ? o.reasonKey : null,
       label: str(o.label),
+      metric: str(o.metric),
+      baseline: str(o.baseline),
+      trend: str(o.trend),
+      breaksIf: str(o.breaksIf),
       context: str(o.context),
     }]
   })
@@ -318,6 +333,10 @@ function proseToPoints(prefix: string, text: string | null): ThesisPoint[] {
       key: `${prefix}-${i + 1}`,
       reasonKey: null,
       label: (m ? m[1] : chunk).trim(),
+      metric: '',
+      baseline: '',
+      trend: '',
+      breaksIf: '',
       context: (m ? m[2] : '').trim(),
     }
   })

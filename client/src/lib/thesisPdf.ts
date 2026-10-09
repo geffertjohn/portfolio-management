@@ -126,12 +126,22 @@ export function buildThesisPdf(input: ThesisPdfInput): ThesisPdfResult {
       autoTable(doc, {
         startY: y,
         margin: { left: marginX + 16, right: marginX },
-        head: [['Supporting metrics', '']],
-        body: metrics.map((m) => [m.label || EMPTY, m.context || EMPTY]),
+        head: [['Metric', 'Current', 'Trend', 'Deteriorates if']],
+        body: metrics.map((m) => [
+          m.label + (m.metric ? `\n(${m.metric})` : ''),
+          m.baseline || EMPTY,
+          m.trend || EMPTY,
+          m.breaksIf || EMPTY,
+        ]),
         theme: 'striped',
-        styles: { fontSize: 9, cellPadding: 4, textColor: [31, 41, 55], valign: 'top' },
+        styles: { fontSize: 8, cellPadding: 4, textColor: [31, 41, 55], valign: 'top' },
         headStyles: { fillColor: [22, 101, 52], textColor: [255, 255, 255], fontStyle: 'bold' },
-        columnStyles: { 0: { cellWidth: 150, fontStyle: 'bold' }, 1: { cellWidth: 'auto' } },
+        columnStyles: {
+          0: { cellWidth: 110, fontStyle: 'bold' },
+          1: { cellWidth: 95 },
+          2: { cellWidth: 'auto' },
+          3: { cellWidth: 110, textColor: [146, 64, 14] },
+        },
       })
       y = afterTable() + 14
     } else {
@@ -155,15 +165,21 @@ export function buildThesisPdf(input: ThesisPdfInput): ThesisPdfResult {
     autoTable(doc, {
       startY: y + 8,
       margin: { left: marginX, right: marginX },
-      head: [['#', 'Item', 'Context']],
-      body: points.map((p, i) => [String(i + 1), p.label || EMPTY, p.context || EMPTY]),
+      head: [['Risk / headwind', 'Current', 'Trend', 'Worsens if']],
+      body: points.map((p) => [
+        p.label + (p.metric ? `\n(${p.metric})` : ''),
+        p.baseline || EMPTY,
+        p.trend || EMPTY,
+        p.breaksIf || EMPTY,
+      ]),
       theme: 'striped',
-      styles: { fontSize: 9, cellPadding: 4, textColor: [31, 41, 55], valign: 'top' },
+      styles: { fontSize: 8, cellPadding: 4, textColor: [31, 41, 55], valign: 'top' },
       headStyles: { fillColor: head, textColor: [255, 255, 255], fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 20, halign: 'right', textColor: [107, 114, 128] },
-        1: { cellWidth: 150, fontStyle: 'bold' },
+        0: { cellWidth: 110, fontStyle: 'bold' },
+        1: { cellWidth: 95 },
         2: { cellWidth: 'auto' },
+        3: { cellWidth: 110, textColor: [146, 64, 14] },
       },
     })
     y = afterTable() + 10

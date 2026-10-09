@@ -31,7 +31,8 @@ interface Props {
 }
 
 const blankPoint = (prefix: string, n: number, reasonKey: string | null): ThesisPoint => ({
-  key: `${prefix}-${n}-${Math.random().toString(36).slice(2, 7)}`, reasonKey, label: '', context: '',
+  key: `${prefix}-${n}-${Math.random().toString(36).slice(2, 7)}`, reasonKey,
+  label: '', metric: '', baseline: '', trend: '', breaksIf: '', context: '',
 })
 
 const blankReason = (n: number): ThesisReason => ({
@@ -84,8 +85,8 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
 
   const fields = (): ThesisDraftFields => ({
     thesis: thesis.filter((r) => r.title.trim() || r.rationale.trim()),
-    bullCase: bull.filter((p) => p.label.trim() || p.context.trim()),
-    bearCase: bear.filter((p) => p.label.trim() || p.context.trim()),
+    bullCase: bull.filter((p) => p.label.trim() || p.baseline.trim() || p.context.trim()),
+    bearCase: bear.filter((p) => p.label.trim() || p.baseline.trim() || p.context.trim()),
     conviction: conviction || null,
     sourceReportIds: sourceIds,
   })
@@ -182,59 +183,100 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
     p: ThesisPoint, i: number,
     points: ThesisPoint[], setPoints: (v: ThesisPoint[]) => void,
     showReasonPicker: boolean,
-  ) => (
-    <div key={p.key} className="rounded-md border border-gray-200 bg-white p-2">
-      <div className="flex items-start gap-2">
-        <span className="mt-2 w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <input
-            value={p.label}
-            onChange={(e) => setPoints(points.map((q) => q.key === p.key ? { ...q, label: e.target.value } : q))}
-            placeholder="What the metric shows, in a line"
-            className="block w-full rounded border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-          />
-          <AutoGrowTextarea
-            value={p.context}
-            onChange={(v) => setPoints(points.map((q) => q.key === p.key ? { ...q, context: v } : q))}
-            placeholder="The figures, with the period they come from"
-            className="block w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-          />
-          {showReasonPicker && (
-            <select
-              value={p.reasonKey ?? ''}
-              onChange={(e) => setPoints(points.map((q) => q.key === p.key ? { ...q, reasonKey: e.target.value || null } : q))}
-              className="rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-700 focus:border-gray-500 focus:outline-none"
-            >
-              <option value="">Not yet tied to a reason</option>
-              {thesis.map((r) => (
-                <option key={r.key} value={r.key}>{r.title || 'Untitled reason'}</option>
-              ))}
-            </select>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setPoints(points.filter((q) => q.key !== p.key))}
-          className="mt-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          aria-label={`Remove metric ${i + 1}`}
-        >
-          ×
-        </button>
+  ) => {
+    const set = (patch: Partial<ThesisPoint>) =>
+      setPoints(points.map((q) => q.key === p.key ? { ...q, ...patch } : q))
+    const field = (
+      lbl: string, val: string, ph: string,
+      on: (v: string) => void, hint?: string,
+    ) => (
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+          {lbl}{hint && <span className="ml-1 font-normal normal-case text-gray-400">{hint}</span>}
+        </p>
+        <input
+          value={val}
+          onChange={(e) => on(e.target.value)}
+          placeholder={ph}
+          className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-800 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+        />
       </div>
-    </div>
-  )
+    )
+    return (
+      <div key={p.key} className="rounded-md border border-gray-200 bg-white p-2">
+        <div className="flex items-start gap-2">
+          <span className="mt-2 w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
+          <div className="min-w-0 flex-1 space-y-2">
+            <input
+              value={p.label}
+              onChange={(e) => set({ label: e.target.value })}
+              placeholder="What the metric shows, in a line"
+              className="block w-full rounded border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              {field('Metric', p.metric, 'e.g. Services revenue', (v) => set({ metric: v }))}
+              {field('Current', p.baseline, 'e.g. $109.2B (FY2025)', (v) => set({ baseline: v }), '· value + period')}
+              {field('Trend', p.trend, 'e.g. 15.2% 5-yr CAGR from $53.8B (FY2020)', (v) => set({ trend: v }))}
+              {field('Deteriorates if', p.breaksIf, 'e.g. growth falls below total revenue growth 2 yrs running', (v) => set({ breaksIf: v }), '· the test')}
+            </div>
+            <AutoGrowTextarea
+              value={p.context}
+              onChange={(v) => set({ context: v })}
+              placeholder="Optional — why this figure evidences the reason"
+              className="block w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+            />
+            {showReasonPicker && (
+              <select
+                value={p.reasonKey ?? ''}
+                onChange={(e) => set({ reasonKey: e.target.value || null })}
+                className="rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-700 focus:border-gray-500 focus:outline-none"
+              >
+                <option value="">Not yet tied to a reason</option>
+                {thesis.map((r) => (
+                  <option key={r.key} value={r.key}>{r.title || 'Untitled reason'}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setPoints(points.filter((q) => q.key !== p.key))}
+            className="mt-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            aria-label={`Remove metric ${i + 1}`}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const metricList = (points: ThesisPoint[], accent: string) =>
     points.length === 0 ? (
       <p className="mt-1 text-sm text-gray-400">None recorded.</p>
     ) : (
-      <ol className="mt-1.5 space-y-1.5">
+      <ol className="mt-1.5 space-y-2.5">
         {points.map((p, i) => (
           <li key={p.key} className="flex gap-2 text-sm">
             <span className="w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className={`font-medium ${accent}`}>{p.label || EMPTY}</p>
               {p.context && <p className="text-gray-600">{p.context}</p>}
+              {(p.metric || p.baseline || p.trend || p.breaksIf) && (
+                <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-[auto_1fr]">
+                  {([
+                    ['Metric', p.metric],
+                    ['Current', p.baseline],
+                    ['Trend', p.trend],
+                    ['Deteriorates if', p.breaksIf],
+                  ] as const).filter(([, v]) => v).map(([k2, v]) => (
+                    <div key={k2} className="contents">
+                      <dt className="font-medium uppercase tracking-wide text-gray-400">{k2}</dt>
+                      <dd className={k2 === 'Deteriorates if' ? 'text-amber-700' : 'text-gray-700'}>{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </div>
           </li>
         ))}
