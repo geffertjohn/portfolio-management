@@ -3214,12 +3214,11 @@ export type Database = {
           created_at: string
           evidence_doc_path: string | null
           id: number
-          rating: string | null
           revision_reason: string | null
           security_id: string
           source_report_ids: Json | null
           status: string
-          thesis: string | null
+          thesis: Json | null
           updated_at: string
           version: number
         }
@@ -3231,12 +3230,11 @@ export type Database = {
           created_at?: string
           evidence_doc_path?: string | null
           id?: never
-          rating?: string | null
           revision_reason?: string | null
           security_id: string
           source_report_ids?: Json | null
           status?: string
-          thesis?: string | null
+          thesis?: Json | null
           updated_at?: string
           version: number
         }
@@ -3248,12 +3246,11 @@ export type Database = {
           created_at?: string
           evidence_doc_path?: string | null
           id?: never
-          rating?: string | null
           revision_reason?: string | null
           security_id?: string
           source_report_ids?: Json | null
           status?: string
-          thesis?: string | null
+          thesis?: Json | null
           updated_at?: string
           version?: number
         }

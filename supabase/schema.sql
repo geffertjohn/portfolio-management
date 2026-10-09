@@ -102,7 +102,6 @@ begin
 
   new.updated_at := now();
 
-  -- A draft is freely editable, and may publish.
   if old.status = 'draft' then
     if new.status not in ('draft', 'current') then
       raise exception 'security_theses: a draft may only remain draft or become current';
@@ -110,17 +109,15 @@ begin
     return new;
   end if;
 
-  -- A live version may only be retired when a newer one publishes, and
-  -- retiring it must not touch a single recorded field.
   if old.status = 'current' then
     if new.status <> 'superseded' then
       raise exception 'security_theses: a published thesis is immutable (% v%)', old.security_id, old.version;
     end if;
-    if (new.security_id, new.version, new.thesis, new.bull_case, new.bear_case, new.rating,
+    if (new.security_id, new.version, new.thesis, new.bull_case, new.bear_case,
         new.conviction, new.revision_reason, new.source_report_ids, new.evidence_doc_path,
         new.authored_at, new.created_at)
        is distinct from
-       (old.security_id, old.version, old.thesis, old.bull_case, old.bear_case, old.rating,
+       (old.security_id, old.version, old.thesis, old.bull_case, old.bear_case,
         old.conviction, old.revision_reason, old.source_report_ids, old.evidence_doc_path,
         old.authored_at, old.created_at) then
       raise exception 'security_theses: superseding must not alter the recorded thesis (% v%)', old.security_id, old.version;
@@ -1811,10 +1808,9 @@ CREATE TABLE IF NOT EXISTS "public"."security_theses" (
     "security_id" "text" NOT NULL,
     "version" integer NOT NULL,
     "status" "text" DEFAULT 'draft'::"text" NOT NULL,
-    "thesis" "text",
+    "thesis" "jsonb",
     "bull_case" "jsonb",
     "bear_case" "jsonb",
-    "rating" "text",
     "conviction" "text",
     "revision_reason" "text",
     "source_report_ids" "jsonb",
@@ -1823,8 +1819,7 @@ CREATE TABLE IF NOT EXISTS "public"."security_theses" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "security_theses_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
-    CONSTRAINT "security_theses_published_is_complete" CHECK ((("status" = 'draft'::"text") OR (("thesis" IS NOT NULL) AND ("length"("btrim"("thesis")) > 0) AND ("authored_at" IS NOT NULL) AND ("evidence_doc_path" IS NOT NULL)))),
-    CONSTRAINT "security_theses_rating_check" CHECK (("rating" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))),
+    CONSTRAINT "security_theses_published_is_complete" CHECK ((("status" = 'draft'::"text") OR (("thesis" IS NOT NULL) AND ("jsonb_typeof"("thesis") = 'array'::"text") AND ("jsonb_array_length"("thesis") > 0) AND ("authored_at" IS NOT NULL) AND ("evidence_doc_path" IS NOT NULL)))),
     CONSTRAINT "security_theses_revision_reason_required" CHECK ((("version" = 1) OR (("revision_reason" IS NOT NULL) AND ("length"("btrim"("revision_reason")) > 0)))),
     CONSTRAINT "security_theses_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'current'::"text", 'superseded'::"text"]))),
     CONSTRAINT "security_theses_version_check" CHECK (("version" >= 1))
@@ -1839,6 +1834,18 @@ COMMENT ON TABLE "public"."security_theses" IS 'Append-only investment thesis ve
 
 
 COMMENT ON COLUMN "public"."security_theses"."security_id" IS 'Ticker. Deliberately NO FK to securities2 -- a thesis is written before the position exists, and the record outlives the holding.';
+
+
+
+COMMENT ON COLUMN "public"."security_theses"."thesis" IS '[{key, title, rationale}] -- the durable reasons to own it. No dated figures: those belong in bull_case, keyed to a reason.';
+
+
+
+COMMENT ON COLUMN "public"."security_theses"."bull_case" IS '[{key, reasonKey, label, context}] -- metric evidence for a thesis reason. reasonKey references thesis[].key; a reason may have several.';
+
+
+
+COMMENT ON COLUMN "public"."security_theses"."bear_case" IS '[{key, reasonKey, label, context}] -- risks and headwinds. reasonKey is null: a risk is not evidence for a reason to own.';
 
 
 

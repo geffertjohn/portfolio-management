@@ -19,7 +19,7 @@
  */
 import { supabase } from './supabase'
 import type { Json } from '@/types/database.types'
-import type { Rating, Conviction } from './researchReports'
+import type { Conviction } from './researchReports'
 
 /**
  * One reason, with the context that makes it evidence rather than an assertion.
@@ -27,9 +27,21 @@ import type { Rating, Conviction } from './researchReports'
  * branching — and `key` is stable across revisions, so a later version can say
  * which specific reason stopped holding.
  */
+export interface ThesisReason {
+  key: string
+  title: string
+  rationale: string
+}
+
+/**
+ * A metric block. In the bull case it answers "what makes that a reason?" for
+ * one thesis reason, named by `reasonKey`; a reason may carry several. In the
+ * bear case `reasonKey` is null -- a risk is not evidence for a reason to own.
+ */
 export interface ThesisPoint {
   key: string
-  reason: string
+  reasonKey: string | null
+  label: string
   context: string
 }
 
@@ -40,10 +52,9 @@ export interface SecurityThesis {
   securityId: string
   version: number
   status: ThesisStatus
-  thesis: string | null
+  thesis: ThesisReason[]
   bullCase: ThesisPoint[]
   bearCase: ThesisPoint[]
-  rating: Rating | null
   conviction: Conviction | null
   revisionReason: string | null
   sourceReportIds: number[]
@@ -55,18 +66,32 @@ export interface SecurityThesis {
 
 // One string literal, not a concatenation: the schema-typed client infers the
 // row shape from the literal, and a built-up string collapses it to an error type.
-const COLS = 'id, security_id, version, status, thesis, bull_case, bear_case, rating, conviction, revision_reason, source_report_ids, evidence_doc_path, authored_at, created_at, updated_at'
+const COLS = 'id, security_id, version, status, thesis, bull_case, bear_case, conviction, revision_reason, source_report_ids, evidence_doc_path, authored_at, created_at, updated_at'
 
 /** A jsonb column round-trips as unknown; narrow it without trusting the shape. */
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
+function toReasons(v: unknown): ThesisReason[] {
+  if (!Array.isArray(v)) return []
+  return v.flatMap((raw) => {
+    if (typeof raw !== 'object' || raw === null) return []
+    const o = raw as Record<string, unknown>
+    return [{ key: str(o.key), title: str(o.title), rationale: str(o.rationale) }]
+  })
+}
+
 function toPoints(v: unknown): ThesisPoint[] {
   if (!Array.isArray(v)) return []
   return v.flatMap((raw) => {
     if (typeof raw !== 'object' || raw === null) return []
     const o = raw as Record<string, unknown>
     return [{
-      key: typeof o.key === 'string' ? o.key : '',
-      reason: typeof o.reason === 'string' ? o.reason : '',
-      context: typeof o.context === 'string' ? o.context : '',
+      key: str(o.key),
+      reasonKey: typeof o.reasonKey === 'string' ? o.reasonKey : null,
+      label: str(o.label),
+      context: str(o.context),
     }]
   })
 }
@@ -84,10 +109,9 @@ function mapRow(r: Row): SecurityThesis {
     securityId: r.security_id as string,
     version: r.version as number,
     status: r.status as ThesisStatus,
-    thesis: (r.thesis as string | null) ?? null,
+    thesis: toReasons(r.thesis),
     bullCase: toPoints(r.bull_case),
     bearCase: toPoints(r.bear_case),
-    rating: (r.rating as Rating | null) ?? null,
     conviction: (r.conviction as Conviction | null) ?? null,
     revisionReason: (r.revision_reason as string | null) ?? null,
     sourceReportIds: toIds(r.source_report_ids),
@@ -111,20 +135,18 @@ export async function fetchThesisHistory(securityId: string): Promise<SecurityTh
 
 /** Fields an editor can change while a version is still a draft. */
 export interface ThesisDraftFields {
-  thesis: string | null
+  thesis: ThesisReason[]
   bullCase: ThesisPoint[]
   bearCase: ThesisPoint[]
-  rating: Rating | null
   conviction: Conviction | null
   sourceReportIds?: number[]
 }
 
 function draftPayload(f: ThesisDraftFields): Record<string, unknown> {
   return {
-    thesis: f.thesis,
+    thesis: f.thesis as unknown as Json,
     bull_case: f.bullCase as unknown as Json,
     bear_case: f.bearCase as unknown as Json,
-    rating: f.rating,
     conviction: f.conviction,
     ...(f.sourceReportIds ? { source_report_ids: f.sourceReportIds as unknown as Json } : {}),
   }
@@ -173,10 +195,9 @@ export async function startOrResumeThesisDraft(
       status: 'draft',
       revision_reason: version > 1 ? revisionReason!.trim() : null,
       // Pre-fill from the live version so a revision is an edit, not a retype.
-      thesis: current?.thesis ?? null,
+      thesis: (current?.thesis ?? []) as unknown as Json,
       bull_case: (current?.bullCase ?? []) as unknown as Json,
       bear_case: (current?.bearCase ?? []) as unknown as Json,
-      rating: current?.rating ?? null,
       conviction: current?.conviction ?? null,
     })
     .select(COLS)
@@ -269,28 +290,34 @@ export interface ThesisDraftSeed {
   /** Which kind of report this came from -- 'initial' is foundational research,
    *  anything else is an earnings brief being used as a stand-in. */
   sourcedFrom: string | null
-  thesis: string | null
+  thesis: ThesisReason[]
   bullCase: ThesisPoint[]
   bearCase: ThesisPoint[]
-  rating: Rating | null
   conviction: Conviction | null
   sourceReportIds: number[]
 }
 
-/** Split prose into points so the advisor edits structure, not a wall of text. */
+/**
+ * Split prose into metric blocks so the advisor edits structure, not a wall of
+ * text. Seeded blocks come back UNATTACHED (`reasonKey: null`) -- the committee
+ * writes prose and does not know which thesis reason each figure evidences;
+ * guessing that mapping would put words in the advisor's mouth. The editor
+ * surfaces unattached blocks for assignment.
+ */
 function proseToPoints(prefix: string, text: string | null): ThesisPoint[] {
   if (!text?.trim()) return []
   const chunks = text
-    .split(/\n\s*[-*•]\s+|\n{2,}/)
-    .map((s) => s.replace(/^\s*[-*•]\s*/, '').trim())
+    .split(/\n\s*[-*•]\s+|\n{2,}|(?=\d+\.\s)/)
+    .map((s) => s.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim())
     .filter(Boolean)
   return chunks.map((chunk, i) => {
     // "Heading: detail" is the shape the agents tend to emit; keep the split
-    // when there is one, otherwise the whole chunk is the reason.
+    // when there is one, otherwise the whole chunk is the label.
     const m = /^(.{3,80}?)\s*[:—-]\s+(.*)$/s.exec(chunk)
     return {
       key: `${prefix}-${i + 1}`,
-      reason: (m ? m[1] : chunk).trim(),
+      reasonKey: null,
+      label: (m ? m[1] : chunk).trim(),
       context: (m ? m[2] : '').trim(),
     }
   })
@@ -299,7 +326,7 @@ function proseToPoints(prefix: string, text: string | null): ThesisPoint[] {
 export async function fetchThesisSeedFromResearch(securityId: string): Promise<ThesisDraftSeed> {
   const { data, error } = await supabase
     .from('research_reports')
-    .select('id, author_role, report_type, thesis, bull_case, bear_case, rating, conviction, created_at')
+    .select('id, author_role, report_type, thesis, bull_case, bear_case, conviction, created_at')
     .eq('security_id', securityId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -308,7 +335,7 @@ export async function fetchThesisSeedFromResearch(securityId: string): Promise<T
   type R = {
     id: number; author_role: string; report_type: string; thesis: string | null
     bull_case: string | null; bear_case: string | null
-    rating: string | null; conviction: string | null
+    conviction: string | null
   }
 
   // `initial` reports FIRST, newest within each group. An earnings brief is a
@@ -324,19 +351,24 @@ export async function fetchThesisSeedFromResearch(securityId: string): Promise<T
   const withThesis = rows.find((r) => r.thesis?.trim())
   const withBull = rows.find((r) => r.bull_case?.trim())
   const withBear = rows.find((r) => r.bear_case?.trim())
-  const withRating = rows.find((r) => r.rating)
+  const withConviction = rows.find((r) => r.conviction)
 
-  const used = [withThesis, withBull, withBear, withRating]
+  const used = [withThesis, withBull, withBear, withConviction]
     .filter((r): r is R => !!r)
     .map((r) => r.id)
 
+  // The committee writes prose, so a seeded thesis arrives as ONE reason to be
+  // split and retitled -- a starting point, not the finished structure.
+  const thesis: ThesisReason[] = withThesis?.thesis?.trim()
+    ? [{ key: 'reason-1', title: 'Drafted from research -- split into named reasons', rationale: withThesis.thesis.trim() }]
+    : []
+
   return {
     sourcedFrom: withThesis?.report_type ?? withBull?.report_type ?? withBear?.report_type ?? null,
-    thesis: withThesis?.thesis?.trim() ?? null,
+    thesis,
     bullCase: proseToPoints('bull', withBull?.bull_case ?? null),
     bearCase: proseToPoints('bear', withBear?.bear_case ?? null),
-    rating: (withRating?.rating as Rating | null) ?? null,
-    conviction: (withRating?.conviction as Conviction | null) ?? null,
+    conviction: (withConviction?.conviction as Conviction | null) ?? null,
     sourceReportIds: [...new Set(used)],
   }
 }

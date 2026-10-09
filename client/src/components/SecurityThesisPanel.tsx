@@ -16,13 +16,10 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 import {
   fetchThesisHistory, startOrResumeThesisDraft, saveThesisDraft, discardThesisDraft,
   publishThesis, fetchThesisSeedFromResearch,
-  type SecurityThesis, type ThesisPoint, type ThesisDraftFields,
+  type SecurityThesis, type ThesisPoint, type ThesisReason, type ThesisDraftFields,
 } from '@/lib/securityTheses'
-import type { Rating, Conviction } from '@/lib/researchReports'
-import {
-  RECOMMENDATION_OPTIONS, RECOMMENDATION_LABELS, RECOMMENDATION_COLORS,
-  CONVICTION_OPTIONS, CONVICTION_LABELS,
-} from '@/lib/reviewLog'
+import type { Conviction } from '@/lib/researchReports'
+import { CONVICTION_OPTIONS, CONVICTION_LABELS } from '@/lib/reviewLog'
 import { buildThesisPdf } from '@/lib/thesisPdf'
 import { uploadFile, getSignedUrl, SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { AutoGrowTextarea } from './AutoGrowTextarea'
@@ -33,8 +30,12 @@ interface Props {
   securityName: string | null
 }
 
-const blankPoint = (prefix: string, n: number): ThesisPoint => ({
-  key: `${prefix}-${n}`, reason: '', context: '',
+const blankPoint = (prefix: string, n: number, reasonKey: string | null): ThesisPoint => ({
+  key: `${prefix}-${n}-${Math.random().toString(36).slice(2, 7)}`, reasonKey, label: '', context: '',
+})
+
+const blankReason = (n: number): ThesisReason => ({
+  key: `reason-${n}-${Math.random().toString(36).slice(2, 7)}`, title: '', rationale: '',
 })
 
 function fmtWhen(iso: string | null): string {
@@ -60,10 +61,9 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
   const past = versions.filter((v) => v.status === 'superseded')
 
   // ── Draft edit state ──────────────────────────────────────────────────────
-  const [thesis, setThesis] = useState('')
+  const [thesis, setThesis] = useState<ThesisReason[]>([])
   const [bull, setBull] = useState<ThesisPoint[]>([])
   const [bear, setBear] = useState<ThesisPoint[]>([])
-  const [rating, setRating] = useState<Rating | ''>('')
   const [conviction, setConviction] = useState<Conviction | ''>('')
   const [sourceIds, setSourceIds] = useState<number[]>([])
 
@@ -74,20 +74,18 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
   useEffect(() => {
     if (!draft || seededFor.current === draft.id) return
     seededFor.current = draft.id
-    setThesis(draft.thesis ?? '')
+    setThesis(draft.thesis)
     setBull(draft.bullCase)
     setBear(draft.bearCase)
-    setRating(draft.rating ?? '')
     setConviction(draft.conviction ?? '')
     setSourceIds(draft.sourceReportIds)
     setEditing(true)
   }, [draft])
 
   const fields = (): ThesisDraftFields => ({
-    thesis: thesis.trim() ? thesis : null,
-    bullCase: bull.filter((p) => p.reason.trim() || p.context.trim()),
-    bearCase: bear.filter((p) => p.reason.trim() || p.context.trim()),
-    rating: rating || null,
+    thesis: thesis.filter((r) => r.title.trim() || r.rationale.trim()),
+    bullCase: bull.filter((p) => p.label.trim() || p.context.trim()),
+    bearCase: bear.filter((p) => p.label.trim() || p.context.trim()),
     conviction: conviction || null,
     sourceReportIds: sourceIds,
   })
@@ -116,10 +114,9 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
     mutationFn: () => fetchThesisSeedFromResearch(ticker),
     onSuccess: (s) => {
       // Fill only what is still empty — never overwrite the advisor's own words.
-      if (!thesis.trim() && s.thesis) setThesis(s.thesis)
+      if (thesis.length === 0) setThesis(s.thesis)
       if (bull.length === 0) setBull(s.bullCase)
       if (bear.length === 0) setBear(s.bearCase)
-      if (!rating && s.rating) setRating(s.rating)
       if (!conviction && s.conviction) setConviction(s.conviction)
       setSourceIds((prev) => [...new Set([...prev, ...s.sourceReportIds])])
       setErr(
@@ -144,14 +141,14 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
   const publish = useMutation({
     mutationFn: async () => {
       const f = fields()
-      if (!f.thesis) throw new Error('A thesis needs its statement before it can be adopted.')
+      if (f.thesis.length === 0) throw new Error('A thesis needs at least one reason before it can be adopted.')
       const authoredAt = new Date()
       const { blob, filename } = buildThesisPdf({
         ticker, securityName,
         version: draft!.version,
         revisionReason: draft!.revisionReason,
         thesis: f.thesis, bullCase: f.bullCase, bearCase: f.bearCase,
-        rating: f.rating, conviction: f.conviction, authoredAt,
+        conviction: f.conviction, authoredAt,
       })
       // Persist the path the server RETURNS — it date-prefixes and sanitises the
       // name, so a path derived here points at a file that does not exist.
@@ -178,70 +175,65 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
   }
 
   // ── Point list editor ─────────────────────────────────────────────────────
-  const pointEditor = (
-    label: string,
-    hint: string,
-    points: ThesisPoint[],
-    setPoints: (p: ThesisPoint[]) => void,
-    prefix: string,
-    accent: string,
+  // ── Metric blocks ─────────────────────────────────────────────────────────
+  // A block is the evidence for a thesis reason. `reasonKey` says which one; a
+  // reason may carry several, and a block may sit unattached while drafting.
+  const metricRow = (
+    p: ThesisPoint, i: number,
+    points: ThesisPoint[], setPoints: (v: ThesisPoint[]) => void,
+    showReasonPicker: boolean,
   ) => (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <h4 className={`text-sm font-semibold ${accent}`}>{label}</h4>
-        <span className="text-xs text-gray-400">{hint}</span>
-      </div>
-      <div className="mt-2 space-y-2">
-        {points.map((p, i) => (
-          <div key={p.key} className="rounded-md border border-gray-200 p-2">
-            <div className="flex items-start gap-2">
-              <span className="mt-2 w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <input
-                  value={p.reason}
-                  onChange={(e) => setPoints(points.map((q, j) => j === i ? { ...q, reason: e.target.value } : q))}
-                  placeholder="Reason — the claim in a line"
-                  className="block w-full rounded border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-                />
-                <AutoGrowTextarea
-                  value={p.context}
-                  onChange={(v) => setPoints(points.map((q, j) => j === i ? { ...q, context: v } : q))}
-                  placeholder="Context — the evidence behind it"
-                  className="block w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setPoints(points.filter((_, j) => j !== i))}
-                className="mt-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                aria-label={`Remove ${label} point ${i + 1}`}
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        ))}
+    <div key={p.key} className="rounded-md border border-gray-200 bg-white p-2">
+      <div className="flex items-start gap-2">
+        <span className="mt-2 w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <input
+            value={p.label}
+            onChange={(e) => setPoints(points.map((q) => q.key === p.key ? { ...q, label: e.target.value } : q))}
+            placeholder="What the metric shows, in a line"
+            className="block w-full rounded border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+          />
+          <AutoGrowTextarea
+            value={p.context}
+            onChange={(v) => setPoints(points.map((q) => q.key === p.key ? { ...q, context: v } : q))}
+            placeholder="The figures, with the period they come from"
+            className="block w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+          />
+          {showReasonPicker && (
+            <select
+              value={p.reasonKey ?? ''}
+              onChange={(e) => setPoints(points.map((q) => q.key === p.key ? { ...q, reasonKey: e.target.value || null } : q))}
+              className="rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-700 focus:border-gray-500 focus:outline-none"
+            >
+              <option value="">Not yet tied to a reason</option>
+              {thesis.map((r) => (
+                <option key={r.key} value={r.key}>{r.title || 'Untitled reason'}</option>
+              ))}
+            </select>
+          )}
+        </div>
         <button
           type="button"
-          onClick={() => setPoints([...points, blankPoint(prefix, points.length + 1)])}
-          className="rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50"
+          onClick={() => setPoints(points.filter((q) => q.key !== p.key))}
+          className="mt-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          aria-label={`Remove metric ${i + 1}`}
         >
-          + Add {label.toLowerCase()} point
+          ×
         </button>
       </div>
     </div>
   )
 
-  const pointList = (points: ThesisPoint[], accent: string) =>
+  const metricList = (points: ThesisPoint[], accent: string) =>
     points.length === 0 ? (
-      <p className="mt-2 text-sm text-gray-400">None recorded.</p>
+      <p className="mt-1 text-sm text-gray-400">None recorded.</p>
     ) : (
-      <ol className="mt-2 space-y-2">
+      <ol className="mt-1.5 space-y-1.5">
         {points.map((p, i) => (
           <li key={p.key} className="flex gap-2 text-sm">
             <span className="w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
             <div className="min-w-0">
-              <p className={`font-medium ${accent}`}>{p.reason || EMPTY}</p>
+              <p className={`font-medium ${accent}`}>{p.label || EMPTY}</p>
               {p.context && <p className="text-gray-600">{p.context}</p>}
             </div>
           </li>
@@ -249,13 +241,39 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
       </ol>
     )
 
+  /** Reasons with their metric evidence nested underneath — the read view. */
+  const reasonsView = (v: SecurityThesis) => (
+    <div className="space-y-5">
+      {v.thesis.map((r, i) => {
+        const metrics = v.bullCase.filter((b) => b.reasonKey === r.key)
+        return (
+          <div key={r.key}>
+            <h4 className="text-sm font-semibold text-gray-900">{i + 1}. {r.title || EMPTY}</h4>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{r.rationale}</p>
+            {metrics.length > 0 && (
+              <div className="mt-2 border-l-2 border-green-200 pl-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-green-800">Supporting metrics</p>
+                {metricList(metrics, 'text-green-900')}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {(() => {
+        const loose = v.bullCase.filter((b) => !b.reasonKey || !v.thesis.some((r) => r.key === b.reasonKey))
+        return loose.length === 0 ? null : (
+          <div>
+            <h4 className="text-sm font-semibold text-green-800">Supporting metrics not tied to a reason</h4>
+            {metricList(loose, 'text-green-900')}
+          </div>
+        )
+      })()}
+    </div>
+  )
+
+
   const badges = (v: SecurityThesis) => (
     <div className="flex flex-wrap items-center gap-2">
-      {v.rating && (
-        <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${RECOMMENDATION_COLORS[v.rating]}`}>
-          {RECOMMENDATION_LABELS[v.rating]}
-        </span>
-      )}
       {v.conviction && (
         <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
           {CONVICTION_LABELS[v.conviction]}
@@ -354,55 +372,128 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
           )}
 
           <div>
-            <p className="text-sm font-semibold text-gray-800">Thesis</p>
-            <AutoGrowTextarea
-              value={thesis}
-              onChange={setThesis}
-              placeholder="Why this company is worth owning."
-              maxHeightPx={400}
-              className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
-            />
+            <div className="flex items-baseline justify-between">
+              <p className="text-sm font-semibold text-gray-800">Why we own it</p>
+              <span className="text-xs text-gray-400">durable reasons — no dated figures</span>
+            </div>
+            <div className="mt-2 space-y-4">
+              {thesis.length === 0 && (
+                <p className="text-sm text-gray-400">No reasons yet. Add the first one below.</p>
+              )}
+              {thesis.map((r, i) => {
+                const metrics = bull.filter((b) => b.reasonKey === r.key)
+                return (
+                  <div key={r.key} className="rounded-md border border-gray-300 bg-white p-3">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-2 w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <input
+                          value={r.title}
+                          onChange={(e) => setThesis(thesis.map((q) => q.key === r.key ? { ...q, title: e.target.value } : q))}
+                          placeholder="Name the reason, e.g. Ecosystem Lock-In and Switching Costs"
+                          className="block w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                        />
+                        <AutoGrowTextarea
+                          value={r.rationale}
+                          onChange={(v) => setThesis(thesis.map((q) => q.key === r.key ? { ...q, rationale: v } : q))}
+                          placeholder="Why this is a durable reason to own it. No figures — those go in the metrics below."
+                          className="block w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Detach this reason's metrics rather than deleting
+                          // them — the figures are still true, they just need
+                          // a new home.
+                          setBull(bull.map((b) => b.reasonKey === r.key ? { ...b, reasonKey: null } : b))
+                          setThesis(thesis.filter((q) => q.key !== r.key))
+                        }}
+                        className="mt-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        aria-label={`Remove reason ${i + 1}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="mt-2 border-l-2 border-green-200 pl-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-green-800">
+                        Supporting metrics
+                      </p>
+                      <div className="mt-1.5 space-y-2">
+                        {metrics.map((m, mi) => metricRow(m, mi, bull, setBull, false))}
+                        <button
+                          type="button"
+                          onClick={() => setBull([...bull, blankPoint('bull', bull.length + 1, r.key)])}
+                          className="rounded-md border border-dashed border-green-300 px-2.5 py-1 text-xs font-medium text-green-800 hover:bg-green-50"
+                        >
+                          + Add a metric for this reason
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => setThesis([...thesis, blankReason(thesis.length + 1)])}
+                className="rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-400 hover:bg-gray-50"
+              >
+                + Add reason
+              </button>
+            </div>
           </div>
 
-          {pointEditor('Bull case', 'the key reasons to own it', bull, setBull, 'bull', 'text-green-800')}
-          {pointEditor('Bear case', 'risks and headwinds', bear, setBear, 'bear', 'text-red-800')}
+          {/* Metrics seeded from research arrive unattached; assign or drop. */}
+          {bull.some((b) => !b.reasonKey) && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm font-semibold text-amber-900">Metrics not yet tied to a reason</p>
+              <p className="mt-0.5 text-xs text-amber-800">
+                Assign each to the reason it supports, or remove it.
+              </p>
+              <div className="mt-2 space-y-2">
+                {bull.filter((b) => !b.reasonKey).map((m, mi) => metricRow(m, mi, bull, setBull, true))}
+              </div>
+            </div>
+          )}
 
-          <div className="flex flex-wrap gap-4">
-            <div>
-              <label htmlFor="thesis-rating" className="block text-xs font-medium text-gray-600">Rating</label>
-              <select
-                id="thesis-rating"
-                value={rating}
-                onChange={(e) => setRating(e.target.value as Rating | '')}
-                className="mt-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
-              >
-                <option value="">—</option>
-                {RECOMMENDATION_OPTIONS.map((r) => (
-                  <option key={r} value={r}>{RECOMMENDATION_LABELS[r]}</option>
-                ))}
-              </select>
+          <div>
+            <div className="flex items-baseline justify-between">
+              <p className="text-sm font-semibold text-red-800">Bear case</p>
+              <span className="text-xs text-gray-400">risks and headwinds</span>
             </div>
-            <div>
-              <label htmlFor="thesis-conviction" className="block text-xs font-medium text-gray-600">Conviction</label>
-              <select
-                id="thesis-conviction"
-                value={conviction}
-                onChange={(e) => setConviction(e.target.value as Conviction | '')}
-                className="mt-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
+            <div className="mt-2 space-y-2">
+              {bear.map((m, mi) => metricRow(m, mi, bear, setBear, false))}
+              <button
+                type="button"
+                onClick={() => setBear([...bear, blankPoint('bear', bear.length + 1, null)])}
+                className="rounded-md border border-dashed border-red-300 px-3 py-1.5 text-xs font-medium text-red-800 hover:bg-red-50"
               >
-                <option value="">—</option>
-                {CONVICTION_OPTIONS.map((c) => (
-                  <option key={c} value={c}>{CONVICTION_LABELS[c]}</option>
-                ))}
-              </select>
+                + Add bear case point
+              </button>
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="thesis-conviction" className="block text-xs font-medium text-gray-600">Conviction</label>
+            <select
+              id="thesis-conviction"
+              value={conviction}
+              onChange={(e) => setConviction(e.target.value as Conviction | '')}
+              className="mt-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-gray-500 focus:outline-none"
+            >
+              <option value="">—</option>
+              {CONVICTION_OPTIONS.map((c) => (
+                <option key={c} value={c}>{CONVICTION_LABELS[c]}</option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
             <button
               type="button"
               onClick={() => publish.mutate()}
-              disabled={publish.isPending || !thesis.trim()}
+              disabled={publish.isPending || thesis.length === 0}
               className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
             >
               {publish.isPending ? 'Adopting…' : 'Save as thesis'}
@@ -455,16 +546,11 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
                   )}
                 </div>
               </div>
-              <p className="whitespace-pre-wrap text-sm text-gray-800">{current.thesis}</p>
-              <div className="grid gap-5 md:grid-cols-2">
-                <div>
-                  <h4 className="text-sm font-semibold text-green-800">Bull case</h4>
-                  {pointList(current.bullCase, 'text-green-900')}
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-red-800">Bear case</h4>
-                  {pointList(current.bearCase, 'text-red-900')}
-                </div>
+              {reasonsView(current)}
+              <div className="border-t border-gray-100 pt-3">
+                <h4 className="text-sm font-semibold text-red-800">Bear case</h4>
+                <p className="text-xs text-gray-400">risks and headwinds</p>
+                {metricList(current.bearCase, 'text-red-900')}
               </div>
             </div>
           )}
@@ -508,16 +594,10 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
                         <span className="font-semibold">Revision reason: </span>{v.revisionReason}
                       </p>
                     )}
-                    <p className="whitespace-pre-wrap text-sm text-gray-700">{v.thesis}</p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <h5 className="text-xs font-semibold text-green-800">Bull case</h5>
-                        {pointList(v.bullCase, 'text-green-900')}
-                      </div>
-                      <div>
-                        <h5 className="text-xs font-semibold text-red-800">Bear case</h5>
-                        {pointList(v.bearCase, 'text-red-900')}
-                      </div>
+                    {reasonsView(v)}
+                    <div className="border-t border-gray-200 pt-2">
+                      <h5 className="text-xs font-semibold text-red-800">Bear case</h5>
+                      {metricList(v.bearCase, 'text-red-900')}
                     </div>
                   </div>
                 )}
