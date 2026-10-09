@@ -88,6 +88,54 @@ $$;
 ALTER FUNCTION "public"."log_position_change"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."security_theses_append_only"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+begin
+  if tg_op = 'DELETE' then
+    if old.status <> 'draft' then
+      raise exception 'security_theses: published versions cannot be deleted (% v%)', old.security_id, old.version;
+    end if;
+    return old;
+  end if;
+
+  new.updated_at := now();
+
+  -- A draft is freely editable, and may publish.
+  if old.status = 'draft' then
+    if new.status not in ('draft', 'current') then
+      raise exception 'security_theses: a draft may only remain draft or become current';
+    end if;
+    return new;
+  end if;
+
+  -- A live version may only be retired when a newer one publishes, and
+  -- retiring it must not touch a single recorded field.
+  if old.status = 'current' then
+    if new.status <> 'superseded' then
+      raise exception 'security_theses: a published thesis is immutable (% v%)', old.security_id, old.version;
+    end if;
+    if (new.security_id, new.version, new.thesis, new.bull_case, new.bear_case, new.rating,
+        new.conviction, new.revision_reason, new.source_report_ids, new.evidence_doc_path,
+        new.authored_at, new.created_at)
+       is distinct from
+       (old.security_id, old.version, old.thesis, old.bull_case, old.bear_case, old.rating,
+        old.conviction, old.revision_reason, old.source_report_ids, old.evidence_doc_path,
+        old.authored_at, old.created_at) then
+      raise exception 'security_theses: superseding must not alter the recorded thesis (% v%)', old.security_id, old.version;
+    end if;
+    return new;
+  end if;
+
+  raise exception 'security_theses: superseded versions are immutable (% v%)', old.security_id, old.version;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."security_theses_append_only"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."seed_portfolio_review_schedules"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -1759,6 +1807,49 @@ ALTER TABLE "public"."security_related_securities" ALTER COLUMN "id" ADD GENERAT
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."security_theses" (
+    "id" bigint NOT NULL,
+    "security_id" "text" NOT NULL,
+    "version" integer NOT NULL,
+    "status" "text" DEFAULT 'draft'::"text" NOT NULL,
+    "thesis" "text",
+    "bull_case" "jsonb",
+    "bear_case" "jsonb",
+    "rating" "text",
+    "conviction" "text",
+    "revision_reason" "text",
+    "source_report_ids" "jsonb",
+    "evidence_doc_path" "text",
+    "authored_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "security_theses_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
+    CONSTRAINT "security_theses_published_is_complete" CHECK ((("status" = 'draft'::"text") OR (("thesis" IS NOT NULL) AND ("length"("btrim"("thesis")) > 0) AND ("authored_at" IS NOT NULL) AND ("evidence_doc_path" IS NOT NULL)))),
+    CONSTRAINT "security_theses_rating_check" CHECK (("rating" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))),
+    CONSTRAINT "security_theses_revision_reason_required" CHECK ((("version" = 1) OR (("revision_reason" IS NOT NULL) AND ("length"("btrim"("revision_reason")) > 0)))),
+    CONSTRAINT "security_theses_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'current'::"text", 'superseded'::"text"]))),
+    CONSTRAINT "security_theses_version_check" CHECK (("version" >= 1))
+);
+
+
+ALTER TABLE "public"."security_theses" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."security_theses" IS 'Append-only investment thesis versions, one lineage per security. Published rows are immutable (see security_theses_append_only). Portfolio-level sizing/fit lives elsewhere.';
+
+
+
+ALTER TABLE "public"."security_theses" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."security_theses_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."substitutions" (
     "id" bigint NOT NULL,
     "at_risk_id" bigint NOT NULL,
@@ -2169,6 +2260,16 @@ ALTER TABLE ONLY "public"."security_related_securities"
 
 
 
+ALTER TABLE ONLY "public"."security_theses"
+    ADD CONSTRAINT "security_theses_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."security_theses"
+    ADD CONSTRAINT "security_theses_version_unique" UNIQUE ("security_id", "version");
+
+
+
 ALTER TABLE ONLY "public"."substitutions"
     ADD CONSTRAINT "substitutions_pkey" PRIMARY KEY ("id");
 
@@ -2392,6 +2493,18 @@ CREATE INDEX "security_related_securities_security_id_idx" ON "public"."security
 
 
 
+CREATE UNIQUE INDEX "security_theses_one_current" ON "public"."security_theses" USING "btree" ("security_id") WHERE ("status" = 'current'::"text");
+
+
+
+CREATE UNIQUE INDEX "security_theses_one_draft" ON "public"."security_theses" USING "btree" ("security_id") WHERE ("status" = 'draft'::"text");
+
+
+
+CREATE INDEX "security_theses_security_idx" ON "public"."security_theses" USING "btree" ("security_id");
+
+
+
 CREATE INDEX "substitutions_incumbent_security_id_idx" ON "public"."substitutions" USING "btree" ("incumbent_security_id");
 
 
@@ -2505,6 +2618,10 @@ CREATE OR REPLACE TRIGGER "review_schedules_set_updated_at" BEFORE UPDATE ON "pu
 
 
 CREATE OR REPLACE TRIGGER "securities2_updated_at" BEFORE UPDATE ON "public"."securities2" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "security_theses_append_only" BEFORE DELETE OR UPDATE ON "public"."security_theses" FOR EACH ROW EXECUTE FUNCTION "public"."security_theses_append_only"();
 
 
 
@@ -2707,6 +2824,11 @@ ALTER TABLE ONLY "public"."security_additions"
 
 ALTER TABLE ONLY "public"."security_related_securities"
     ADD CONSTRAINT "security_related_securities_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."security_theses"
+    ADD CONSTRAINT "security_theses_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id") ON DELETE CASCADE;
 
 
 
@@ -3346,6 +3468,41 @@ ALTER TABLE "public"."security_additions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."security_related_securities" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."security_theses" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "security_theses_delete_anon" ON "public"."security_theses" FOR DELETE TO "anon" USING (true);
+
+
+
+CREATE POLICY "security_theses_delete_auth" ON "public"."security_theses" FOR DELETE TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "security_theses_insert_anon" ON "public"."security_theses" FOR INSERT TO "anon" WITH CHECK (true);
+
+
+
+CREATE POLICY "security_theses_insert_auth" ON "public"."security_theses" FOR INSERT TO "authenticated" WITH CHECK (true);
+
+
+
+CREATE POLICY "security_theses_select_anon" ON "public"."security_theses" FOR SELECT TO "anon" USING (true);
+
+
+
+CREATE POLICY "security_theses_select_auth" ON "public"."security_theses" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "security_theses_update_anon" ON "public"."security_theses" FOR UPDATE TO "anon" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "security_theses_update_auth" ON "public"."security_theses" FOR UPDATE TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."substitutions" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3520,6 +3677,12 @@ GRANT ALL ON FUNCTION "public"."log_audit"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."log_position_change"() TO "anon";
 GRANT ALL ON FUNCTION "public"."log_position_change"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."log_position_change"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."security_theses_append_only"() TO "anon";
+GRANT ALL ON FUNCTION "public"."security_theses_append_only"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."security_theses_append_only"() TO "service_role";
 
 
 
@@ -3955,6 +4118,18 @@ GRANT ALL ON TABLE "public"."security_related_securities" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."security_related_securities_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."security_related_securities_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."security_related_securities_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."security_theses" TO "anon";
+GRANT ALL ON TABLE "public"."security_theses" TO "authenticated";
+GRANT ALL ON TABLE "public"."security_theses" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."security_theses_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."security_theses_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."security_theses_id_seq" TO "service_role";
 
 
 

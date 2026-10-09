@@ -3208,6 +3208,68 @@ export type Database = {
           },
         ]
       }
+      security_theses: {
+        Row: {
+          authored_at: string | null
+          bear_case: Json | null
+          bull_case: Json | null
+          conviction: string | null
+          created_at: string
+          evidence_doc_path: string | null
+          id: number
+          rating: string | null
+          revision_reason: string | null
+          security_id: string
+          source_report_ids: Json | null
+          status: string
+          thesis: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          authored_at?: string | null
+          bear_case?: Json | null
+          bull_case?: Json | null
+          conviction?: string | null
+          created_at?: string
+          evidence_doc_path?: string | null
+          id?: never
+          rating?: string | null
+          revision_reason?: string | null
+          security_id: string
+          source_report_ids?: Json | null
+          status?: string
+          thesis?: string | null
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          authored_at?: string | null
+          bear_case?: Json | null
+          bull_case?: Json | null
+          conviction?: string | null
+          created_at?: string
+          evidence_doc_path?: string | null
+          id?: never
+          rating?: string | null
+          revision_reason?: string | null
+          security_id?: string
+          source_report_ids?: Json | null
+          status?: string
+          thesis?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_theses_security_id_fkey"
+            columns: ["security_id"]
+            isOneToOne: false
+            referencedRelation: "securities2"
+            referencedColumns: ["security_id"]
+          },
+        ]
+      }
       substitutions: {
         Row: {
           approved_at: string | null
