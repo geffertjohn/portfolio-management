@@ -204,11 +204,14 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
         <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
           {lbl}{hint && <span className="ml-1 font-normal normal-case text-gray-400">{hint}</span>}
         </p>
-        <input
+        {/* Auto-growing, not an <input>: these fields routinely run long -- a
+            trend line carries six years of readings -- and a single-line input
+            hides the overflow, so the document cannot be proof-read. */}
+        <AutoGrowTextarea
           value={val}
-          onChange={(e) => on(e.target.value)}
+          onChange={on}
           placeholder={ph}
-          className="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-800 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+          className="mt-0.5 block w-full resize-none rounded border border-gray-300 px-2 py-1 text-sm leading-snug text-gray-800 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
         />
       </div>
     )
@@ -217,11 +220,11 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
         <div className="flex items-start gap-2">
           <span className="mt-2 w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
           <div className="min-w-0 flex-1 space-y-2">
-            <input
+            <AutoGrowTextarea
               value={p.label}
-              onChange={(e) => set({ label: e.target.value })}
+              onChange={(v) => set({ label: v.replace(/\n/g, ' ') })}
               placeholder="What the metric shows, in a line"
-              className="block w-full rounded border border-gray-300 px-2 py-1 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+              className="block w-full resize-none rounded border border-gray-300 px-2 py-1 text-sm font-medium leading-snug text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
             />
             <div className="grid gap-2 sm:grid-cols-2">
               {field('Metric', p.metric, 'e.g. Services revenue', (v) => set({ metric: v }))}
@@ -446,7 +449,6 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
                 value={bizDesc}
                 onChange={setBizDesc}
                 placeholder="Segments, and the key drivers of revenue and expense. Written so a reader who has never heard of the company can follow the rest. No dated figures."
-                maxHeightPx={320}
                 className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
               />
             </div>
@@ -460,7 +462,6 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
                 value={compPos}
                 onChange={setCompPos}
                 placeholder="Industry structure and the company's place in it. Name the peer set — later comparisons depend on it. State the source of advantage and what would erode it. No dated figures."
-                maxHeightPx={320}
                 className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
               />
             </div>
@@ -483,11 +484,11 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
                     <div className="flex items-start gap-2">
                       <span className="mt-2 w-4 shrink-0 text-right text-xs text-gray-400">{i + 1}</span>
                       <div className="min-w-0 flex-1 space-y-1.5">
-                        <input
+                        <AutoGrowTextarea
                           value={r.title}
-                          onChange={(e) => setThesis(thesis.map((q) => q.key === r.key ? { ...q, title: e.target.value } : q))}
+                          onChange={(v) => setThesis(thesis.map((q) => q.key === r.key ? { ...q, title: v.replace(/\n/g, ' ') } : q))}
                           placeholder="Name the reason, e.g. Ecosystem Lock-In and Switching Costs"
-                          className="block w-full rounded border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+                          className="block w-full resize-none rounded border border-gray-300 px-2 py-1 text-sm font-semibold leading-snug text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
                         />
                         <AutoGrowTextarea
                           value={r.rationale}
