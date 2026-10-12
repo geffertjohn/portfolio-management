@@ -21,7 +21,7 @@ import {
 import type { Conviction } from '@/lib/researchReports'
 import { CONVICTION_OPTIONS, CONVICTION_LABELS } from '@/lib/reviewLog'
 import { buildThesisPdf } from '@/lib/thesisPdf'
-import { uploadFile, getSignedUrl, SECURITY_DOCS_BUCKET } from '@/lib/documents'
+import { uploadFile, getSignedUrl, isServerUnreachable, SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { AutoGrowTextarea } from './AutoGrowTextarea'
 import { EMPTY } from '@/lib/formatters'
 
@@ -96,6 +96,19 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
     conviction: conviction || null,
     sourceReportIds: sourceIds,
   })
+
+  /**
+   * Adopting and opening a PDF both go through the Express file store, so the
+   * usual failure is simply that it is not running -- and the browser's own
+   * message for that ("Load failed" in Safari, "Failed to fetch" in Chrome)
+   * tells the user nothing about what to do. Name the cause and the fix.
+   */
+  function fileStoreError(e: unknown, fallback: string): string {
+    if (isServerUnreachable(e)) {
+      return 'The document server is not running, so the evidence PDF could not be saved — and a thesis is never adopted without it. Start it with `cd server && npm run dev`, then try again. Your draft is untouched.'
+    }
+    return e instanceof Error ? e.message : fallback
+  }
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.securityTheses(ticker) })
@@ -173,7 +186,7 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
       invalidate()
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(SECURITY_DOCS_BUCKET) })
     },
-    onError: (e) => setErr(e instanceof Error ? e.message : 'Could not adopt the thesis.'),
+    onError: (e) => setErr(fileStoreError(e, 'Could not adopt the thesis.')),
   })
 
   async function openPdf(path: string | null) {
@@ -181,7 +194,7 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
     try {
       window.open(await getSignedUrl(path, SECURITY_DOCS_BUCKET), '_blank', 'noopener')
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not open the document.')
+      setErr(fileStoreError(e, 'Could not open the document.'))
     }
   }
 
