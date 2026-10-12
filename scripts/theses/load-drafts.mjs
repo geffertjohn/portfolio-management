@@ -57,8 +57,30 @@ function digitsIn(text) {
   return /(^|[^0-9A-Za-z])\d[\d,.]*([^0-9A-Za-z]|$)/.test(text)
 }
 
+/**
+ * Unknown keys are a REPORTED problem, not a dropped one. `build()` reads a
+ * fixed set of fields, so anything else an agent supplies -- a `_sources` list,
+ * an `_analyst_notes` block -- vanishes into nothing. Silently discarding part
+ * of a thesis of record is exactly the failure this script exists to prevent,
+ * so say so and let the operator decide whether it needed folding in first.
+ */
+function unknownKeys(obj, allowed, where, warns) {
+  for (const k of Object.keys(obj ?? {})) {
+    if (!allowed.has(k)) warns.push(`${where}: unknown key "${k}" -- build() will not persist it`)
+  }
+}
+
+const RESEARCH_KEYS = new Set(['security_id', 'business_description', 'competitive_position', 'reasons', 'conviction'])
+const REASON_KEYS = new Set(['key', 'title', 'rationale', 'metrics'])
+const METRIC_KEYS = new Set(['label', 'metric', 'baseline', 'trend', 'breaks_if', 'context'])
+const BEAR_KEYS = new Set(['security_id', 'bear_case', 'conviction'])
+const BEAR_POINT_KEYS = new Set(['label', 'metric', 'baseline', 'trend', 'worsens_if', 'breaks_if', 'context'])
+
 function validate(ticker, research, bear) {
   const errs = []
+  const warns = []
+  unknownKeys(research, RESEARCH_KEYS, 'research', warns)
+  unknownKeys(bear, BEAR_KEYS, 'bear', warns)
   const bd = str(research.business_description)
   const cp = str(research.competitive_position)
 
@@ -71,6 +93,7 @@ function validate(ticker, research, bear) {
 
   const seen = new Set()
   reasons.forEach((r, i) => {
+    unknownKeys(r, REASON_KEYS, `reason ${i + 1}`, warns)
     const key = str(r.key), title = str(r.title), rationale = str(r.rationale)
     if (!key) errs.push(`reason ${i + 1}: no key`)
     if (seen.has(key)) errs.push(`reason ${i + 1}: duplicate key "${key}"`)
@@ -83,6 +106,7 @@ function validate(ticker, research, bear) {
     const ms = Array.isArray(r.metrics) ? r.metrics : []
     if (ms.length < 2) errs.push(`reason "${title || key}": ${ms.length} metrics (expected 2-3)`)
     ms.forEach((m, j) => {
+      unknownKeys(m, METRIC_KEYS, `reason "${title || key}" metric ${j + 1}`, warns)
       for (const f of ['label', 'metric', 'baseline', 'trend']) {
         if (!str(m[f])) errs.push(`reason "${title || key}" metric ${j + 1}: ${f} missing`)
       }
@@ -95,6 +119,7 @@ function validate(ticker, research, bear) {
   const bears = Array.isArray(bear.bear_case) ? bear.bear_case : []
   if (bears.length < 4) errs.push(`only ${bears.length} bear points (expected 4-6)`)
   bears.forEach((b, i) => {
+    unknownKeys(b, BEAR_POINT_KEYS, `bear ${i + 1}`, warns)
     for (const f of ['label', 'metric', 'baseline', 'trend']) {
       if (!str(b[f])) errs.push(`bear ${i + 1}: ${f} missing`)
     }
@@ -105,7 +130,7 @@ function validate(ticker, research, bear) {
   if (conviction && !['high', 'medium', 'low'].includes(conviction)) {
     errs.push(`conviction "${conviction}" is not high/medium/low`)
   }
-  return errs
+  return { errs, warns }
 }
 
 function build(ticker, research, bear) {
@@ -159,7 +184,8 @@ for (const ticker of tickers) {
     continue
   }
 
-  const errs = validate(ticker, research, bear)
+  const { errs, warns } = validate(ticker, research, bear)
+  for (const w of warns) console.log(`! ${ticker} ${w}`)
   if (errs.length) {
     console.log(`✗ ${ticker} REJECTED (${errs.length})`)
     for (const e of errs) console.log(`    · ${e}`)
