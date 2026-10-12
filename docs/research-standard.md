@@ -98,6 +98,19 @@ policy. Read the footnotes. Good break tests here are a restatement, an auditor
 change, a material-weakness disclosure, or a widening gap between GAAP net income
 and free cash flow.
 
+**Read the Critical Audit Matter first.** Before hunting for an earnings-quality
+problem, read what the auditor already said was hard. A CAM is the independent
+auditor's statement of which estimate carried the most risk of material
+misstatement, and it is published in the audit report at the front of the 10-K.
+In practice it has repeatedly named the exact figure the bear case turns on --
+Allstate's reserve (Deloitte), AbbVie's rebate accrual and Welltower's
+immediately-vesting equity grant (both E&Y), each the company's *sole* CAM. The
+auditor's own described procedures are also the best available break test: when
+Deloitte says it performed a retrospective review "to identify potential bias",
+that is the test to re-run. Name the CAM in the relevant point's `context`, and
+treat a CAM appearing, disappearing or changing subject between years as a
+finding in its own right.
+
 ---
 
 ## Standing rules
@@ -105,6 +118,18 @@ and free cash flow.
 - **Ground every figure with its period.** "$109.2B (FY2025)", not "$109.2B".
 - **Say when a number is unavailable** rather than estimating one. Naming the gap
   is a finding; inventing a series is a defect.
+- **A withdrawn disclosure is itself a reading.** When a company stops publishing
+  a series, check it rather than assume it: Home Depot dropped sales per retail
+  square foot after three years of decline, IBM dropped its generative-AI book of
+  business, Palantir dropped customer-count growth after it decelerated. The same
+  applies to a metric quietly *redefined* (P&G has changed its free-cash-flow
+  productivity denominator almost every year) or to a test quietly *softened*
+  (P&G's share scorecard went from "grew share" to "held or grew share", which
+  understates the decline it reports). Where the key series lives only in a call
+  or a slide and never in a filing, write "management stops disclosing it" into
+  the break test. Report the check when it comes back clean too -- Boston
+  Scientific merged two segments but kept every business unit disaggregated, and
+  that is worth stating.
 - **Flag low-precision metrics** as such — a figure disclosed only as a rounded
   floor is testable for direction, not for rate.
 - **Do not extrapolate a cycle.** Projecting forward from the top or the bottom
