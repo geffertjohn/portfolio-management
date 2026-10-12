@@ -114,10 +114,12 @@ begin
       raise exception 'security_theses: a published thesis is immutable (% v%)', old.security_id, old.version;
     end if;
     if (new.security_id, new.version, new.thesis, new.bull_case, new.bear_case,
+        new.business_description, new.competitive_position,
         new.conviction, new.revision_reason, new.source_report_ids, new.evidence_doc_path,
         new.authored_at, new.created_at)
        is distinct from
        (old.security_id, old.version, old.thesis, old.bull_case, old.bear_case,
+        old.business_description, old.competitive_position,
         old.conviction, old.revision_reason, old.source_report_ids, old.evidence_doc_path,
         old.authored_at, old.created_at) then
       raise exception 'security_theses: superseding must not alter the recorded thesis (% v%)', old.security_id, old.version;
@@ -1818,8 +1820,10 @@ CREATE TABLE IF NOT EXISTS "public"."security_theses" (
     "authored_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "business_description" "text",
+    "competitive_position" "text",
     CONSTRAINT "security_theses_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
-    CONSTRAINT "security_theses_published_is_complete" CHECK ((("status" = 'draft'::"text") OR (("thesis" IS NOT NULL) AND ("jsonb_typeof"("thesis") = 'array'::"text") AND ("jsonb_array_length"("thesis") > 0) AND ("authored_at" IS NOT NULL) AND ("evidence_doc_path" IS NOT NULL)))),
+    CONSTRAINT "security_theses_published_is_complete" CHECK ((("status" = 'draft'::"text") OR (("thesis" IS NOT NULL) AND ("jsonb_typeof"("thesis") = 'array'::"text") AND ("jsonb_array_length"("thesis") > 0) AND ("business_description" IS NOT NULL) AND ("length"("btrim"("business_description")) > 0) AND ("authored_at" IS NOT NULL) AND ("evidence_doc_path" IS NOT NULL)))),
     CONSTRAINT "security_theses_revision_reason_required" CHECK ((("version" = 1) OR (("revision_reason" IS NOT NULL) AND ("length"("btrim"("revision_reason")) > 0)))),
     CONSTRAINT "security_theses_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'current'::"text", 'superseded'::"text"]))),
     CONSTRAINT "security_theses_version_check" CHECK (("version" >= 1))
@@ -1846,6 +1850,14 @@ COMMENT ON COLUMN "public"."security_theses"."bull_case" IS '[{key, reasonKey, l
 
 
 COMMENT ON COLUMN "public"."security_theses"."bear_case" IS '[{key, reasonKey, label, context}] -- risks and headwinds. reasonKey is null: a risk is not evidence for a reason to own.';
+
+
+
+COMMENT ON COLUMN "public"."security_theses"."business_description" IS 'What the company does and how it earns money -- segments, and the key drivers of revenue and expense. Durable: no dated figures.';
+
+
+
+COMMENT ON COLUMN "public"."security_theses"."competitive_position" IS 'Industry structure, the named peer set, and the source of competitive advantage (the moat) with what would erode it. Durable: no dated figures.';
 
 
 

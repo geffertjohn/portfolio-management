@@ -26,6 +26,8 @@ export interface ThesisPdfInput {
   version: number
   /** Null on v1 — the original statement of the view, not a change to it. */
   revisionReason: string | null
+  businessDescription: string | null
+  competitivePosition: string | null
   thesis: ThesisReason[]
   bullCase: ThesisPoint[]
   bearCase: ThesisPoint[]
@@ -42,6 +44,7 @@ export interface ThesisPdfResult {
 export function buildThesisPdf(input: ThesisPdfInput): ThesisPdfResult {
   const {
     ticker, securityName, version, revisionReason,
+    businessDescription, competitivePosition,
     thesis, bullCase, bearCase, conviction, authoredAt,
   } = input
 
@@ -95,6 +98,23 @@ export function buildThesisPdf(input: ThesisPdfInput): ThesisPdfResult {
   // ── The reasons ───────────────────────────────────────────────────────────
   // These are the thesis. Each is durable; the figures that evidence it follow
   // underneath, so the document stays readable as "why we own it" first.
+  // The two durable context sections, before the reasons: a reader coming to
+  // this cold -- a regulator, a client -- needs them to follow what follows.
+  const prose = (title: string, body: string | null) => {
+    if (!body?.trim()) return
+    sectionTitle(title)
+    y += 10
+    doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(55, 65, 81)
+    for (const line of doc.splitTextToSize(body.trim(), textW) as string[]) {
+      room(16)
+      doc.text(line, marginX, y)
+      y += 13
+    }
+    y += 8
+  }
+  prose('Business description', businessDescription)
+  prose('Competitive position', competitivePosition)
+
   sectionTitle('Why we own it')
   y += 8
   if (thesis.length === 0) {

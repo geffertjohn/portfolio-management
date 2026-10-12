@@ -63,6 +63,10 @@ export interface SecurityThesis {
   securityId: string
   version: number
   status: ThesisStatus
+  /** What the company does and how it earns money. Durable; no dated figures. */
+  businessDescription: string | null
+  /** Industry structure, named peer set, moat and what would erode it. */
+  competitivePosition: string | null
   thesis: ThesisReason[]
   bullCase: ThesisPoint[]
   bearCase: ThesisPoint[]
@@ -77,7 +81,7 @@ export interface SecurityThesis {
 
 // One string literal, not a concatenation: the schema-typed client infers the
 // row shape from the literal, and a built-up string collapses it to an error type.
-const COLS = 'id, security_id, version, status, thesis, bull_case, bear_case, conviction, revision_reason, source_report_ids, evidence_doc_path, authored_at, created_at, updated_at'
+const COLS = 'id, security_id, version, status, business_description, competitive_position, thesis, bull_case, bear_case, conviction, revision_reason, source_report_ids, evidence_doc_path, authored_at, created_at, updated_at'
 
 /** A jsonb column round-trips as unknown; narrow it without trusting the shape. */
 function str(v: unknown): string {
@@ -124,6 +128,8 @@ function mapRow(r: Row): SecurityThesis {
     securityId: r.security_id as string,
     version: r.version as number,
     status: r.status as ThesisStatus,
+    businessDescription: (r.business_description as string | null) ?? null,
+    competitivePosition: (r.competitive_position as string | null) ?? null,
     thesis: toReasons(r.thesis),
     bullCase: toPoints(r.bull_case),
     bearCase: toPoints(r.bear_case),
@@ -150,6 +156,8 @@ export async function fetchThesisHistory(securityId: string): Promise<SecurityTh
 
 /** Fields an editor can change while a version is still a draft. */
 export interface ThesisDraftFields {
+  businessDescription: string | null
+  competitivePosition: string | null
   thesis: ThesisReason[]
   bullCase: ThesisPoint[]
   bearCase: ThesisPoint[]
@@ -159,6 +167,8 @@ export interface ThesisDraftFields {
 
 function draftPayload(f: ThesisDraftFields): Record<string, unknown> {
   return {
+    business_description: f.businessDescription,
+    competitive_position: f.competitivePosition,
     thesis: f.thesis as unknown as Json,
     bull_case: f.bullCase as unknown as Json,
     bear_case: f.bearCase as unknown as Json,
@@ -210,6 +220,8 @@ export async function startOrResumeThesisDraft(
       status: 'draft',
       revision_reason: version > 1 ? revisionReason!.trim() : null,
       // Pre-fill from the live version so a revision is an edit, not a retype.
+      business_description: current?.businessDescription ?? null,
+      competitive_position: current?.competitivePosition ?? null,
       thesis: (current?.thesis ?? []) as unknown as Json,
       bull_case: (current?.bullCase ?? []) as unknown as Json,
       bear_case: (current?.bearCase ?? []) as unknown as Json,

@@ -62,6 +62,8 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
   const past = versions.filter((v) => v.status === 'superseded')
 
   // ── Draft edit state ──────────────────────────────────────────────────────
+  const [bizDesc, setBizDesc] = useState('')
+  const [compPos, setCompPos] = useState('')
   const [thesis, setThesis] = useState<ThesisReason[]>([])
   const [bull, setBull] = useState<ThesisPoint[]>([])
   const [bear, setBear] = useState<ThesisPoint[]>([])
@@ -75,6 +77,8 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
   useEffect(() => {
     if (!draft || seededFor.current === draft.id) return
     seededFor.current = draft.id
+    setBizDesc(draft.businessDescription ?? '')
+    setCompPos(draft.competitivePosition ?? '')
     setThesis(draft.thesis)
     setBull(draft.bullCase)
     setBear(draft.bearCase)
@@ -84,6 +88,8 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
   }, [draft])
 
   const fields = (): ThesisDraftFields => ({
+    businessDescription: bizDesc.trim() ? bizDesc : null,
+    competitivePosition: compPos.trim() ? compPos : null,
     thesis: thesis.filter((r) => r.title.trim() || r.rationale.trim()),
     bullCase: bull.filter((p) => p.label.trim() || p.baseline.trim() || p.context.trim()),
     bearCase: bear.filter((p) => p.label.trim() || p.baseline.trim() || p.context.trim()),
@@ -143,11 +149,15 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
     mutationFn: async () => {
       const f = fields()
       if (f.thesis.length === 0) throw new Error('A thesis needs at least one reason before it can be adopted.')
+      // A document written for a regulator or a client cannot omit what the
+      // company is. The DB enforces this too; failing here gives a better message.
+      if (!f.businessDescription) throw new Error('A thesis needs its business description before it can be adopted.')
       const authoredAt = new Date()
       const { blob, filename } = buildThesisPdf({
         ticker, securityName,
         version: draft!.version,
         revisionReason: draft!.revisionReason,
+        businessDescription: f.businessDescription, competitivePosition: f.competitivePosition,
         thesis: f.thesis, bullCase: f.bullCase, bearCase: f.bearCase,
         conviction: f.conviction, authoredAt,
       })
@@ -284,8 +294,21 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
     )
 
   /** Reasons with their metric evidence nested underneath — the read view. */
+  const proseSection = (title: string, body: string | null) =>
+    !body ? null : (
+      <div>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</h4>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{body}</p>
+      </div>
+    )
+
   const reasonsView = (v: SecurityThesis) => (
     <div className="space-y-5">
+      {proseSection('Business description', v.businessDescription)}
+      {proseSection('Competitive position', v.competitivePosition)}
+      {(v.businessDescription || v.competitivePosition) && (
+        <div className="border-t border-gray-100 pt-1" />
+      )}
       {v.thesis.map((r, i) => {
         const metrics = v.bullCase.filter((b) => b.reasonKey === r.key)
         return (
@@ -414,6 +437,37 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
           )}
 
           <div>
+            <div>
+              <div className="flex items-baseline justify-between">
+                <p className="text-sm font-semibold text-gray-800">Business description</p>
+                <span className="text-xs text-gray-400">required · what it does, how it earns</span>
+              </div>
+              <AutoGrowTextarea
+                value={bizDesc}
+                onChange={setBizDesc}
+                placeholder="Segments, and the key drivers of revenue and expense. Written so a reader who has never heard of the company can follow the rest. No dated figures."
+                maxHeightPx={320}
+                className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-baseline justify-between">
+                <p className="text-sm font-semibold text-gray-800">Competitive position</p>
+                <span className="text-xs text-gray-400">industry, named peers, the moat and what erodes it</span>
+              </div>
+              <AutoGrowTextarea
+                value={compPos}
+                onChange={setCompPos}
+                placeholder="Industry structure and the company's place in it. Name the peer set — later comparisons depend on it. State the source of advantage and what would erode it. No dated figures."
+                maxHeightPx={320}
+                className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-500 focus:outline-none"
+              />
+            </div>
+
+          </div>
+
+          <div>
             <div className="flex items-baseline justify-between">
               <p className="text-sm font-semibold text-gray-800">Why we own it</p>
               <span className="text-xs text-gray-400">durable reasons — no dated figures</span>
@@ -535,7 +589,7 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
             <button
               type="button"
               onClick={() => publish.mutate()}
-              disabled={publish.isPending || thesis.length === 0}
+              disabled={publish.isPending || thesis.length === 0 || !bizDesc.trim()}
               className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
             >
               {publish.isPending ? 'Adopting…' : 'Save as thesis'}
