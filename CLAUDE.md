@@ -561,16 +561,31 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 Four `create_scheduled_task` routines (persisted in `~/.claude/scheduled-tasks/`, self-contained prompts that adopt a role): **pre-earnings-brief** (weekday → draft `research_reports`), **post-earnings-brief** (weekday → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; run in Claude Code while the app is open.
 
-### Earnings briefs — a matched pair
+### Earnings briefs — a matched pair, in two sections
 
-`report_type` is `'pre_earnings'` / `'post_earnings'` (the pre value was `'earnings_review'` until Oct 2026; the 30 existing rows were renamed and the old value no longer passes the CHECK). A post-earnings brief **answers** a specific pre-earnings brief rather than standing alone:
+`report_type` is `'pre_earnings'` / `'post_earnings'` (the pre value was `'earnings_review'` until Oct 2026; the 30 existing rows were renamed and the old value no longer passes the CHECK). A post-earnings brief **answers** a specific pre-earnings brief rather than standing alone.
 
-- **`watch_items` `jsonb`** = `[{key, title, detail, verdict?, actual?, note?}]`, filled from both ends. The **pre**-brief sets `key`/`title`/`detail` — what to watch and **what the bar is**, stated as a number wherever one exists, because the post-brief grades against that text. The **post**-brief carries those three fields forward unchanged and adds `verdict` (`hit`/`miss`/`unclear`), `actual` and `note`. One shape from both ends, so `ResearchCard` renders either without branching, and a resolved item still shows the question next to the answer.
-- **`parent_report_id`** — self-FK to the pre-brief. **A CHECK enforces it for `post_earnings`**, which is the "strict pairing" scope decision made structural: a holding that reported without a pre-brief gets nothing.
+**Both briefs render in two sections** (Oct 2026), and every field is filled from BOTH ends — the pre-brief states the expectation, the post-brief copies those fields forward **unchanged** and appends the outcome. One shape per concept, so `ResearchCard` renders either without branching and a resolved row still shows what was asked.
+
+**Section 1 — The Street.**
+- **`estimates`** `jsonb` = `EstimateRow[]`: `{key,label,unit,estimate,low,high,analysts,source}` from the pre-brief; the post adds `{actual,surprisePct,note}`. Four rows — `eps`, `revenue`, `ebitda`, `ebitda_margin`. `unit` drives rendering: `usd`, `usd_large` (abbreviated via `fmtUsdCompact`), `pct` (**decimal**). The Actual/Surprise columns render only once a row has an actual, so the pre-brief shows a clean expectations table.
+- **Commentary** is the `thesis` column — narrative prose, not a list. The gradeable items live in `street_questions` and Section 2. **There is no timing caveat**; the post job gates on actuals, so that concern is structural.
+- **`street_questions`** `jsonb` = `{key,question,why}` + `{answered: yes|partial|no, answer}`. The *market's* questions. `answered: 'no'` is a real outcome — a company declining to address something is information.
+
+**Section 2 — Thesis Evaluation.** Both halves are `ThesisCheck[]` — `{key,title,metric,test,watchFor}` + `{status,finding}` — and both are **carried from the security's `security_theses` record**, with `test` being that document's own break test **verbatim**:
+- **`thesis_checks`** — why we own it, from the thesis's `bull_case` metrics.
+- **`risk_checks`** — what would break it, from its `bear_case` points.
+- **`thesis_id`** records WHICH thesis version was graded (FK, `ON DELETE SET NULL`).
+- `status` is `supported` / `mixed` / `undermined` / `not_addressed` — deliberately **not** hit/miss, because one print rarely settles a durable multi-year thesis. A **tripped break test** goes in `finding` explicitly and leads the digest.
+
+This is the payoff of the thesis/brief split: an earnings call becomes a scheduled re-measurement of the thesis of record, not a fresh opinion.
+
+- **`parent_report_id`** — self-FK to the pre-brief. **A CHECK enforces it for `post_earnings`**, making strict pairing structural: a holding that reported without a pre-brief gets nothing.
 - **`research_reports_one_post_per_parent`** (partial unique on `parent_report_id`) is **not cosmetic.** The generator runs daily over a ~21-day lookback so it can wait for FMP to post actuals; without the index the first name to report would accumulate a duplicate brief every day.
-- **The post job gates on ACTUALS, never on the earnings calendar.** No actuals in FMP → skip silently and retry on a later run. This is the lag the briefs themselves kept flagging ("AbbVie confirmed a 7/31 pre-market release, but as of this brief no Q2 actuals had posted to FMP's earnings calendar").
-- **`thesis_status`** (`intact`/`at_risk`/`broken`) is the post-brief's verdict, deliberately the same vocabulary as `holding_reviews.thesis_status` so an earnings read-through and a quarterly review say the same words. Still recommend-only — nothing downstream acts on it.
-- **The 30 pre-briefs that predate this have `watch_items` NULL**, so the post job's "derive 2-3 items from the thesis prose and say so" fallback is the path that actually runs until the next earnings cycle.
+- **The post job gates on ACTUALS, never on the earnings calendar.** No actuals in FMP → skip silently and retry on a later run.
+- **`thesis_status`** (`intact`/`at_risk`/`broken`) is the post-brief's verdict, deliberately the same vocabulary as `holding_reviews.thesis_status`. It must reconcile with Section 2 — `intact` alongside an `undermined` check with a tripped test needs explaining.
+- **`watch_items` is SUPERSEDED** by the four fields above. It was never populated on any row; the column and its renderer are kept only so a legacy brief would still display.
+- **EBITDA caution:** FMP's `ebitda` is derived from its `operatingIncome`, which disagrees with the filing on ~1 name in 3 — the post-brief takes EBITDA from the company's own release.
 
 ### Related UI primitives
 

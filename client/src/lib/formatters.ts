@@ -46,6 +46,24 @@ export function fmtUsd(v: number | null | undefined, decimals = 2): string {
   return `$${v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`
 }
 
+/**
+ * Large dollar amounts, abbreviated (16_780_000_000 → "$16.78B"). For figures
+ * like revenue and EBITDA, where the full digit string is noise and the
+ * magnitude is the point. Sub-million values fall through to `fmtUsd`.
+ */
+export function fmtUsdCompact(v: number | null | undefined, decimals = 2): string {
+  if (v == null || !Number.isFinite(v)) return EMPTY
+  const abs = Math.abs(v)
+  const [div, suffix] =
+    abs >= 1e12 ? [1e12, 'T'] :
+    abs >= 1e9  ? [1e9,  'B'] :
+    abs >= 1e6  ? [1e6,  'M'] :
+    [0, '']
+  if (!div) return fmtUsd(v, decimals)
+  const n = (v / div).toFixed(decimals)
+  return `${v < 0 ? '-' : ''}$${n.replace('-', '')}${suffix}`
+}
+
 /** Signed decimal-stored percentage (e.g. 0.0123 → "+1.23%", -0.021 → "-2.10%"). */
 export function fmtSignedPct(v: number | null | undefined, decimals = 2): string {
   if (v == null || !Number.isFinite(v)) return EMPTY

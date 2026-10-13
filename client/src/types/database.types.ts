@@ -2427,16 +2427,21 @@ export type Database = {
           current_price: number | null
           dcf_inputs: Json | null
           deleted_at: string | null
+          estimates: Json | null
           fair_value: number | null
           id: number
           parent_report_id: number | null
           portfolio_name: string | null
           rating: string | null
           report_type: string
+          risk_checks: Json | null
           security_id: string
           sources: Json | null
           status: string
+          street_questions: Json | null
           thesis: string | null
+          thesis_checks: Json | null
+          thesis_id: number | null
           thesis_status: string | null
           valuation_summary: Json | null
           watch_items: Json | null
@@ -2451,16 +2456,21 @@ export type Database = {
           current_price?: number | null
           dcf_inputs?: Json | null
           deleted_at?: string | null
+          estimates?: Json | null
           fair_value?: number | null
           id?: never
           parent_report_id?: number | null
           portfolio_name?: string | null
           rating?: string | null
           report_type?: string
+          risk_checks?: Json | null
           security_id: string
           sources?: Json | null
           status?: string
+          street_questions?: Json | null
           thesis?: string | null
+          thesis_checks?: Json | null
+          thesis_id?: number | null
           thesis_status?: string | null
           valuation_summary?: Json | null
           watch_items?: Json | null
@@ -2475,16 +2485,21 @@ export type Database = {
           current_price?: number | null
           dcf_inputs?: Json | null
           deleted_at?: string | null
+          estimates?: Json | null
           fair_value?: number | null
           id?: never
           parent_report_id?: number | null
           portfolio_name?: string | null
           rating?: string | null
           report_type?: string
+          risk_checks?: Json | null
           security_id?: string
           sources?: Json | null
           status?: string
+          street_questions?: Json | null
           thesis?: string | null
+          thesis_checks?: Json | null
+          thesis_id?: number | null
           thesis_status?: string | null
           valuation_summary?: Json | null
           watch_items?: Json | null
@@ -2510,6 +2525,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "portfolio"
             referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "research_reports_thesis_id_fkey"
+            columns: ["thesis_id"]
+            isOneToOne: false
+            referencedRelation: "security_theses"
+            referencedColumns: ["id"]
           },
         ]
       }

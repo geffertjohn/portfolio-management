@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import type {
   ResearchReport, Rating, Conviction, ReportType, ThesisStatus, WatchVerdict, WatchItem,
+  EstimateRow, EstimateUnit, StreetQuestion, ThesisCheck, AnswerState, CheckStatus,
 } from '@/lib/researchReports'
 import type { RiskReport, RiskVerdict } from '@/lib/riskReports'
 import type { IcMemo, IcDecision } from '@/lib/icMemos'
-import { fmtUsd, EMPTY } from '@/lib/formatters'
+import { fmtUsd, fmtUsdCompact, fmtDecimalPct, fmtSignedPct, EMPTY } from '@/lib/formatters'
 import { formatDate } from '@/lib/fundFormat'
 
 /**
@@ -36,6 +37,24 @@ const REPORT_TYPE_BADGE: Partial<Record<ReportType, { label: string; className: 
   post_earnings: { label: 'Post-earnings', className: 'bg-teal-100 text-teal-700' },
 }
 
+const ANSWER_STATE: Record<AnswerState, { label: string; className: string }> = {
+  yes:     { label: 'Answered', className: 'bg-green-100 text-green-700' },
+  partial: { label: 'Partly',   className: 'bg-amber-100 text-amber-700' },
+  no:      { label: 'Unanswered', className: 'bg-gray-100 text-gray-600' },
+}
+
+/**
+ * How the print bore on a thesis reason or bear point. Deliberately NOT
+ * hit/miss: a quarter rarely settles a durable thesis outright, and forcing a
+ * binary verdict onto a multi-year break test overstates what one print proves.
+ */
+const CHECK_STATUS: Record<CheckStatus, { label: string; className: string }> = {
+  supported:     { label: 'Supported',     className: 'bg-green-100 text-green-700' },
+  mixed:         { label: 'Mixed',         className: 'bg-amber-100 text-amber-700' },
+  undermined:    { label: 'Undermined',    className: 'bg-red-100 text-red-700' },
+  not_addressed: { label: 'Not addressed', className: 'bg-gray-100 text-gray-600' },
+}
+
 const THESIS_STATUS: Record<ThesisStatus, { label: string; className: string }> = {
   intact:  { label: 'Thesis intact',  className: 'bg-green-100 text-green-700' },
   at_risk: { label: 'Thesis at risk', className: 'bg-amber-100 text-amber-700' },
@@ -57,6 +76,155 @@ const WATCH_VERDICT: Record<WatchVerdict, { label: string; className: string }> 
  * answer is the point — a verdict with the question stripped out is unreadable
  * a quarter later.
  */
+/** Section heading — the two halves an earnings brief is split into. */
+function SectionHeading({ n, title }: { n: number; title: string }) {
+  return (
+    <div className="mt-4 flex items-baseline gap-2 border-b border-gray-200 pb-1 first:mt-0">
+      <span className="text-xs font-semibold text-gray-400">{n}</span>
+      <h4 className="text-sm font-semibold text-gray-700">{title}</h4>
+    </div>
+  )
+}
+
+function SubHeading({ children }: { children: ReactNode }) {
+  return <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{children}</p>
+}
+
+function fmtEstimate(v: number | null | undefined, unit: EstimateUnit): string {
+  if (v == null) return EMPTY
+  if (unit === 'pct') return fmtDecimalPct(v)
+  if (unit === 'usd_large') return fmtUsdCompact(v)
+  return fmtUsd(v)
+}
+
+/**
+ * Section 1 estimates. The Actual and Surprise columns appear only once something
+ * has actually printed, so a pre-brief shows a clean expectations table and the
+ * post-brief shows the same rows with the result beside them.
+ */
+function Estimates({ rows }: { rows: EstimateRow[] }) {
+  const hasActuals = rows.some((r) => r.actual != null)
+  return (
+    <div>
+      <SubHeading>Estimates</SubHeading>
+      <table className="mt-1.5 w-full text-sm">
+        <thead>
+          <tr className="text-xs uppercase tracking-wide text-gray-400">
+            <th className="py-1 text-left font-medium">Metric</th>
+            <th className="py-1 text-right font-medium">Estimate</th>
+            {hasActuals && <th className="py-1 text-right font-medium">Actual</th>}
+            {hasActuals && <th className="py-1 text-right font-medium">Surprise</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={row.key || i} className="border-t border-gray-100 align-top">
+              <td className="py-1 pr-2 text-gray-700">
+                {row.label}
+                {row.source && <span className="block text-xs text-gray-400">{row.source}</span>}
+                {row.note && <span className="block text-xs text-gray-500">{row.note}</span>}
+              </td>
+              <td className="py-1 text-right tabular-nums text-gray-700">
+                {fmtEstimate(row.estimate, row.unit)}
+                {row.low != null && row.high != null && (
+                  <span className="block text-xs text-gray-400">
+                    {fmtEstimate(row.low, row.unit)}–{fmtEstimate(row.high, row.unit)}
+                  </span>
+                )}
+              </td>
+              {hasActuals && (
+                <td className="py-1 text-right font-medium tabular-nums text-gray-900">
+                  {fmtEstimate(row.actual, row.unit)}
+                </td>
+              )}
+              {hasActuals && (
+                <td className={`py-1 text-right tabular-nums ${
+                  row.surprisePct == null ? 'text-gray-400'
+                    : row.surprisePct >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  {row.surprisePct != null ? fmtSignedPct(row.surprisePct) : EMPTY}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Section 1 — what the street wants settled on the call, and whether it was. */
+function StreetQuestions({ items }: { items: StreetQuestion[] }) {
+  return (
+    <div>
+      <SubHeading>Questions the street wants answered</SubHeading>
+      <ol className="mt-1.5 space-y-2">
+        {items.map((q, i) => {
+          const a = q.answered ? ANSWER_STATE[q.answered] : null
+          return (
+            <li key={q.key || i} className="text-sm">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="font-medium text-gray-800">{i + 1}. {q.question}</span>
+                {a && <Badge className={a.className}>{a.label}</Badge>}
+              </div>
+              {q.why && <p className="mt-0.5 text-gray-600">{q.why}</p>}
+              {q.answer && (
+                <p className="mt-0.5 text-gray-700">
+                  <span className="text-xs uppercase tracking-wide text-gray-400">Answer </span>
+                  {q.answer}
+                </p>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+/**
+ * Section 2 — one half of the thesis evaluation. `test` is the break test copied
+ * verbatim out of `security_theses`, so the reader sees the bar the thesis itself
+ * set rather than one invented for the quarter.
+ */
+function ThesisChecks({ heading, items }: { heading: string; items: ThesisCheck[] }) {
+  return (
+    <div>
+      <SubHeading>{heading}</SubHeading>
+      <ol className="mt-1.5 space-y-2.5">
+        {items.map((c, i) => {
+          const s = c.status ? CHECK_STATUS[c.status] : null
+          return (
+            <li key={c.key || i} className="text-sm">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="font-medium text-gray-800">{c.title}</span>
+                {s && <Badge className={s.className}>{s.label}</Badge>}
+              </div>
+              {c.metric && <p className="mt-0.5 text-xs text-gray-500">{c.metric}</p>}
+              <p className="mt-0.5 text-gray-600">
+                <span className="text-xs uppercase tracking-wide text-gray-400">Test </span>
+                {c.test}
+              </p>
+              {c.watchFor && (
+                <p className="mt-0.5 text-gray-600">
+                  <span className="text-xs uppercase tracking-wide text-gray-400">Watch </span>
+                  {c.watchFor}
+                </p>
+              )}
+              {c.finding && (
+                <p className="mt-0.5 text-gray-700">
+                  <span className="text-xs uppercase tracking-wide text-gray-400">Finding </span>
+                  {c.finding}
+                </p>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+/** @deprecated legacy pre-Oct-2026 briefs; superseded by the two sections above. */
 function WatchItems({ items }: { items: WatchItem[] }) {
   return (
     <div>
@@ -167,6 +335,7 @@ export function ResearchCard({
 }) {
   const typeBadge = REPORT_TYPE_BADGE[r.report_type]
   const status = r.thesis_status ? THESIS_STATUS[r.thesis_status] : null
+  const isEarnings = r.report_type === 'pre_earnings' || r.report_type === 'post_earnings'
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -191,10 +360,36 @@ export function ResearchCard({
         </p>
       )}
       <div className="mt-3 space-y-3">
-        <Field label="Thesis" value={r.thesis} />
+        {isEarnings ? (
+          <>
+            {/* SECTION 1 — what the market expects and wants settled. */}
+            <SectionHeading n={1} title="The Street" />
+            {r.estimates && r.estimates.length > 0 && <Estimates rows={r.estimates} />}
+            <Field label="Commentary" value={r.thesis} />
+            {r.street_questions && r.street_questions.length > 0 && (
+              <StreetQuestions items={r.street_questions} />
+            )}
+
+            {/* SECTION 2 — the firm's own thesis, re-tested against this print. */}
+            <SectionHeading n={2} title="Thesis Evaluation" />
+            {r.thesis_checks && r.thesis_checks.length > 0 && (
+              <ThesisChecks heading="What we're looking for" items={r.thesis_checks} />
+            )}
+            {r.risk_checks && r.risk_checks.length > 0 && (
+              <ThesisChecks heading="Risks we're watching" items={r.risk_checks} />
+            )}
+            <Field label="Bull case" value={r.bull_case} />
+            <Field label="Bear case" value={r.bear_case} />
+          </>
+        ) : (
+          <>
+            <Field label="Thesis" value={r.thesis} />
+            <Field label="Bull case" value={r.bull_case} />
+            <Field label="Bear case" value={r.bear_case} />
+          </>
+        )}
+        {/* Legacy briefs written before the two-section split. */}
         {r.watch_items && r.watch_items.length > 0 && <WatchItems items={r.watch_items} />}
-        <Field label="Bull case" value={r.bull_case} />
-        <Field label="Bear case" value={r.bear_case} />
         {r.sources && r.sources.length > 0 && (
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Sources</p>
