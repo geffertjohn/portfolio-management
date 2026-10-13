@@ -166,8 +166,13 @@ function build(ticker, research, bear) {
   }
 }
 
+// Only the two filenames the committee actually writes. Taking everything up to the
+// first dot turned an unrelated `HWM-stub-before-replacement.json` sitting in the
+// staging directory into a phantom ticker, which then "failed" and set the exit code --
+// a clean load reported as a broken one. Notes and backups can live beside the pair.
+const PAIR = /^([A-Za-z][A-Za-z0-9.-]*)\.(research|bear)\.json$/
 const tickers = [...new Set(
-  readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => f.split('.')[0]),
+  readdirSync(dir).map((f) => f.match(PAIR)?.[1]).filter(Boolean),
 )].sort()
 
 let loaded = 0, skipped = 0, failed = 0

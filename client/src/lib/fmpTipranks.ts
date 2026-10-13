@@ -76,8 +76,21 @@ export interface TipRanksRating {
   priceTarget: number | null
   /** This analyst's success rate on THIS symbol (decimal). */
   stockSuccessRate: number | null
-  /** Realised return since the call (decimal), null while unresolved. */
+  /**
+   * NOT a realised return — it is the GAP TO SPOT: exactly `price / target - 1`,
+   * verified on 272 of 272 rows across three symbols. It carries no time dimension
+   * and no outcome, so the same analyst's $325 and $705 targets on one name read
+   * -16.6% and -61.6% against a single spot price. Never present it as
+   * performance, and never colour it green/red — a positive value just means the
+   * target sits below the current price.
+   */
   stockReturn: number | null
+  /**
+   * The provider's per-row beat flag. UNRELIABLE and deliberately not rendered:
+   * on Walmart it marks roughly half the rows as beats against a symbol-level
+   * record of 6 beats in 259. Use `beatRate()` on the summary aggregate instead,
+   * which gates on `MIN_RATINGS_FOR_ACCURACY`.
+   */
   beatTarget: boolean | null
   articleTitle: string | null
   url: string | null

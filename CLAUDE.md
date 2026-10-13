@@ -367,6 +367,46 @@ On the Overview tab. News and Press Releases are company-specific feeds, side by
 - **Suppress growth/CAGR when the base is ≤ 0** — a ratio across a zero/negative base (common for EPS) is meaningless; return `null`.
 - These are GAAP figures; they won't match YCharts "Normalized" metrics, which exclude one-time items.
 
+### FMP's annual `operatingIncome` is unreliable — check it against SEC XBRL
+
+FMP relocates charges out of the operating line. Audited against SEC's own
+`us-gaap:OperatingIncomeLoss` across the 54 names carrying a thesis, **13 of the 40
+checkable names disagree on at least one fiscal year**: **BSX FY2020 is reported as
++$601M against a filed −$80M operating LOSS** (a sign flip), ELF FY2026 as $131.3M
+against a filed $73.6M (a −17% trend where the filing says −53%), HWM wrong in five of
+six years. **`incomeBeforeTax` ties in every case**, so nothing internal to the feed
+catches it, and **`ratios.operatingProfitMargin` is derived from the same number** — so
+the Scorecard inherits it directly. Confirmed affected: BSX, HWM, VZ, MA, APH, ELF,
+GEV, ABBV, GLW, THC, MSI, COIN, MU.
+
+**Do not assume "adjacent years tie" means the series is sound** — on BSX and HWM five
+or six consecutive years are wrong. Agreement with the *filing* is the only test.
+
+- **`lib/secOperatingIncome.ts`** fetches the as-filed figure and
+  `checkOperatingMargin()` recomputes the margin from it. `StockScorecardPanels`
+  prefers the filed value for its prior-year rows, labels them `(as filed)`, flags
+  `(as filed — vendor differs)` on a mismatch, and marks the TTM headline
+  `(vendor — unverified)` for an affected issuer (TTM is not a filed period, so it
+  cannot be checked directly).
+- **It goes through Express** — `GET /api/sec/operating-income?cik=…`. This is a
+  deliberate exception to "no business logic in Express", for two reasons that leave no
+  choice: `data.sec.gov` returns **no** `access-control-allow-origin` on a 200 (only on
+  its *error* responses, which is a trap that reads as working CORS), and SEC asks for a
+  descriptive `User-Agent`, which a browser will not let JavaScript set. Set
+  `SEC_USER_AGENT` in the server env. Cached 12h in-process; **when the server is down
+  the Scorecard degrades to the unverified vendor value** rather than breaking.
+- **Two traps when reading SEC XBRL** (both caused wrong answers while building this):
+  `fy`/`fp` describe **the filing a fact appears in, not the period it covers**, so a
+  10-K tags its own prior-year comparatives with the filing's year — **key on the period
+  end date**. And among facts for the same period, **an annual form must outrank a
+  quarterly one**; "latest filed wins" alone let a 10-Q's 365-day fact ($209M) replace
+  Comfort Systems' audited FY2025 operating income ($1,315M).
+- Banks, insurers and some foreign filers **don't tag operating income at all** (ALL,
+  CVX, HCA, IBM, JPM, LLY, TSM, WELL, HOOD) — the endpoint returns `tag: null` and the
+  card falls back to the vendor value, unverified. **Never substitute a pretax-income
+  tag as a fallback**: doing so manufactured false defects on IBM, LLY and HOOD during
+  this audit.
+
 ---
 
 ## Real-Time Quote Streaming (WebSocket)
@@ -537,6 +577,50 @@ Four `create_scheduled_task` routines (persisted in `~/.claude/scheduled-tasks/`
 - **Edit Model Portfolio is a dedicated page** (`EditModelPortfolioPage`, `/settings/model-portfolios/:id/edit`), reusing `ModelPortfolioModal` via its `asPage` prop (wide two-column layout); "New model" still uses the modal.
 - **`AutoGrowTextarea`** (`components/AutoGrowTextarea.tsx`) — textarea that grows to fit content (optional `maxHeightPx` cap); used on the Add Security workflow and the model-portfolio narrative fields.
 
+## Security Theses (`security_theses`) — the durable half of the research pair
+
+**One thesis per SECURITY (stocks only), shared by every portfolio holding it** — not
+one per position. The binding process document is **`docs/research-standard.md`**; read
+it before touching anything here. The split that makes the system work:
+
+| | **Security thesis** (`security_theses`) | **Buy record** (`security_additions`) |
+|---|---|---|
+| Question | Is this company worth owning? | Should this portfolio buy it, at this price and size? |
+| Scope | One per security | One per (portfolio, security) |
+| Lifespan | **Durable** — revised only when the view changes | Point-in-time |
+| Carries a price view | **No** — no rating, no fair value, no price target | Yes |
+
+- **`thesis` / `bull_case` / `bear_case` are `jsonb`.** `thesis` is the reasons
+  (`{key,title,rationale}`); `bull_case` is the supporting metrics, each tied to a
+  reason by `reasonKey`; `bear_case` is the risks, with the break field in `breaksIf`.
+  Every metric and bear point carries **metric / baseline / trend / breaksIf** so a
+  future reviewer can re-measure. `breaksIf` is the field that does the work and is
+  never optional.
+- **Durable sections carry no figures.** `business_description`, `competitive_position`
+  and every `rationale` must contain **no digits at all** — no money, percentages,
+  fiscal periods or years. Figures live in the metrics. The rule is mechanised in
+  `digitsIn()` in the loader, which deliberately allows digits welded into names
+  (L3Harris, 3M) while rejecting standalone figures.
+- **Append-only, enforced by a trigger** (`security_theses_append_only`): a **draft may
+  be freely edited or deleted**; a `current` row may only become `superseded` and only
+  with its recorded content unchanged; `superseded` rows are frozen. Partial unique
+  indexes `security_theses_one_draft` / `one_current` allow exactly one of each per
+  security, so **you cannot insert a second draft** — replace the existing one.
+- **The committee drafts; the advisor adopts.** Publishing requires a complete row
+  *and* an `evidence_doc_path` (CHECK `security_theses_published_is_complete`), the PDF
+  built by **`lib/thesisPdf.ts`** and uploaded to `Security Documents/<ticker>`. Each
+  version gets its own file; a revision never overwrites its predecessor. `version > 1`
+  requires a `revision_reason`.
+- **`security_id` has NO FK to `securities2`** — deliberately, so a watchlist candidate
+  that is not held can still carry a thesis. Expect orphans and do not "fix" them.
+- **Loader:** `scripts/theses/load-drafts.mjs <staging-dir> [--dry-run]` validates
+  committee JSON against the research standard and inserts **drafts only** — it never
+  publishes, never clobbers an existing lineage, and **warns on unknown keys** rather
+  than silently dropping them. It recognises only `<TICKER>.research.json` /
+  `<TICKER>.bear.json`, so notes and backups can sit beside the pair.
+- **Read-only surface:** `SecurityThesisPanel` on the stock detail page; data layer
+  `lib/securityTheses.ts`.
+
 ## Actions Hub (`/actions`)
 
 The Actions page is a **unified command center**, not a plain to-do list. It shows one `UnifiedAction[]` assembled by **per-source adapters** in **`lib/actions.ts`** (`fetchAllActions`), keeping each domain single-sourced.
@@ -693,4 +777,11 @@ Identity fields (`security_name`, `long_description`, `morningstar_sector`, `mor
 
 17. **`price-target-consensus` is a TRAILING-6-MONTH aggregate, not every standing target** — FMP returns `targetConsensus`/`High`/`Low`/`Median` with no horizon field, **no analyst count** (`fetchAnalystData` tries `numberOfAnalysts`/`numAnalysts`/`numberOfPriceTargets` and gets null for all three), and no documentation of the window. Reproducing it from `/price-target-news` across seven tickers shows the rule: **each covering firm's LATEST target, keeping only firms that published within ~183 days** (183–195 days fits all seven; 180 and 210 do not). It is not a fixed firm count — 10 firms for HWM, 20 for AAPL, 8 for GLW. The individual targets ARE 12-month ones by sell-side convention, but the aggregation is not. Because the filter drops stale targets, and on a re-rated name the stale ones are the LOW ones, it reads systematically high: HWM $331.10 off 10 firms vs TipRanks' $295.78 off 23 standing targets, on the same page. Both surfaces label it (`AnalystSummaryCards`, `AnalystCoveragePanel`); don't strip the qualifier.
 
+
 18. **Performance vs YCharts won't be bit-identical** — `lib/portfolioPerformance.ts` recomputes from FMP dividend-adjusted prices; the stored `portfolio.*_total_return` are YCharts' own model figures. They agree to ~0.2% except (a) **All-Time** when the portfolio launched on a big move day (since-inception is measured from the inception *close*; YCharts credits the launch day) and (b) base-date sensitivity near volatile dates. Don't "fix" the engine to chase an exact match — verify the convention first (see Portfolio Allocations & Performance).
+
+19. **FMP's annual `operatingIncome` disagrees with the filing on ~1 name in 3** — a charge is relocated out of the operating line while `incomeBeforeTax` ties, so no internal check catches it, and `ratios.operatingProfitMargin` is derived from the same number. BSX FY2020 reads +$601M against a filed **-$80M loss**. Read it from SEC XBRL via `lib/secOperatingIncome.ts`, and never conclude the feed is sound because two adjacent years agree with each other (see FMP Financial Metrics).
+
+20. **TipRanks `stockReturn` is a GAP TO SPOT, not a return** — it is exactly `price / target - 1` (verified on 272 of 272 rows across three symbols), so it has no time dimension and no outcome; the same analyst's $325 and $705 targets on one name read -16.6% and -61.6% against one spot price. Never label it a return and never colour it green/red: positive just means the target sits below the price. The per-row `beatTarget` flag is likewise unreliable (on WMT it marks ~half the rows as beats against a symbol record of 6 in 259) and is deliberately not rendered -- use `beatRate()` on the summary aggregate, which gates on `MIN_RATINGS_FOR_ACCURACY`.
+
+21. **`totalDebt` folds operating leases in as `capitalLeaseObligations`** (13+ names; TJX 4.7x overstated at $13,489M vs a filed $2,869M). On HWM and RDDT it is wrong **in kind** -- neither has any finance leases, and RDDT has no borrowings at all, so any feed-derived leverage ratio there is meaningless rather than merely wrong. It also breaks multi-year EV comparisons across the ASC 842 boundary (TJX net debt/EBITDA flips -0.11x to +1.55x). **`propertyPlantEquipmentNet`** folds in the ROU asset, with the mirror error visible in `otherNonCurrentAssets`.

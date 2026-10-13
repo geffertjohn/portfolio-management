@@ -354,6 +354,109 @@ app.get('/api/files/signed-url', async (req, res) => {
   res.json({ url: data.signedUrl })
 })
 
+// ── SEC XBRL (as-filed figures) ───────────────────────────────────────────────
+
+/**
+ * GET /api/sec/operating-income?cik=0000320193
+ *
+ * Returns the company's OWN filed annual operating income, straight from SEC
+ * XBRL. This exists because the market-data vendor's `operatingIncome` relocates
+ * charges out of the operating line: an audit against this endpoint found 17 of
+ * 45 names disagreeing on at least one fiscal year, including a SIGN FLIP (BSX
+ * FY2020: vendor +$601M against a filed -$80M operating loss) and IBM FY2022 off
+ * by 607%. Pretax ties in every case, so nothing internal to the feed catches it,
+ * and the vendor's `operatingProfitMargin` is derived from the same broken number
+ * — which is what the Scorecard renders.
+ *
+ * It is proxied rather than fetched from the browser for two reasons, both hard:
+ * data.sec.gov returns NO `access-control-allow-origin` on a 200 (only on its
+ * error responses, which is a trap), and SEC asks for a descriptive User-Agent,
+ * which a browser will not let JavaScript set.
+ */
+const SEC_UA = process.env.SEC_USER_AGENT
+  ?? 'portfolio-management-app (admin contact configured via SEC_USER_AGENT)'
+// Operating income is tagged differently by a few filers; try the standard tag first.
+const SEC_OPINC_TAGS = ['OperatingIncomeLoss', 'OperatingIncomeLossIncludingNoncontrollingInterest']
+const SEC_CACHE_TTL_MS = 12 * 60 * 60 * 1000 // as-filed history only changes on a new filing
+const secCache = new Map<string, { at: number; body: unknown }>()
+
+interface SecFact { start?: string; end?: string; val?: number; filed?: string; fy?: number; form?: string }
+
+app.get('/api/sec/operating-income', async (req, res) => {
+  const raw = typeof req.query.cik === 'string' ? req.query.cik : ''
+  const cik = raw.replace(/\D/g, '').padStart(10, '0')
+  if (!/^\d{10}$/.test(cik) || Number(cik) === 0) {
+    res.status(400).json({ error: 'cik must be a numeric CIK' })
+    return
+  }
+
+  const hit = secCache.get(cik)
+  if (hit && Date.now() - hit.at < SEC_CACHE_TTL_MS) {
+    res.json(hit.body)
+    return
+  }
+
+  try {
+    for (const tag of SEC_OPINC_TAGS) {
+      const r = await fetch(
+        `https://data.sec.gov/api/xbrl/companyconcept/CIK${cik}/us-gaap/${tag}.json`,
+        { headers: { 'User-Agent': SEC_UA, Accept: 'application/json' } },
+      )
+      if (r.status === 404) continue
+      if (!r.ok) {
+        res.status(502).json({ error: `SEC returned ${r.status}` })
+        return
+      }
+      const json = (await r.json()) as { units?: Record<string, SecFact[]> }
+      const facts = Object.values(json.units ?? {}).find(Array.isArray) ?? []
+
+      // Key on the PERIOD END DATE. SEC's `fy`/`fp` describe the filing a fact
+      // appears in, not the period it covers, so a 10-K tags its own prior-year
+      // comparatives with the filing's own fiscal year — keying on `fy` silently
+      // compares different years.
+      //
+      // Then rank candidates for the same period: an ANNUAL REPORT always beats a
+      // quarterly one, and only within the same class does the most recent filing
+      // win (which is how a genuine restatement gets picked up). Letting "latest
+      // filed" win outright is wrong: Comfort Systems' FY2025 is $1,315M in its
+      // 10-K, but a later 10-Q carries a 365-day fact ending on the same date
+      // valued at $209M, which would silently replace the audited figure.
+      const ANNUAL_FORMS = /^(10-K|20-F|40-F|10-KT)/
+      const rank = (f: SecFact) => (ANNUAL_FORMS.test(f.form ?? '') ? 1 : 0)
+      const byEnd = new Map<string, SecFact>()
+      for (const f of facts) {
+        if (!f.start || !f.end || typeof f.val !== 'number') continue
+        const days = (Date.parse(f.end) - Date.parse(f.start)) / 86_400_000
+        if (days < 330 || days > 400) continue // annual periods only
+        const prev = byEnd.get(f.end)
+        if (!prev) { byEnd.set(f.end, f); continue }
+        const better = rank(f) !== rank(prev)
+          ? rank(f) > rank(prev)
+          : Date.parse(f.filed ?? '') > Date.parse(prev.filed ?? '')
+        if (better) byEnd.set(f.end, f)
+      }
+
+      const body = {
+        cik,
+        tag,
+        periods: [...byEnd.values()]
+          .sort((a, b) => Date.parse(b.end!) - Date.parse(a.end!))
+          .slice(0, 12)
+          .map((f) => ({ end: f.end, start: f.start, val: f.val, filed: f.filed, form: f.form })),
+      }
+      secCache.set(cik, { at: Date.now(), body })
+      res.json(body)
+      return
+    }
+    // Banks, insurers and some foreign filers do not tag operating income at all.
+    const body = { cik, tag: null, periods: [] }
+    secCache.set(cik, { at: Date.now(), body })
+    res.json(body)
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : 'SEC request failed' })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`)
 })

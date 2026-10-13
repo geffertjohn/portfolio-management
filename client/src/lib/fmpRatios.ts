@@ -21,10 +21,25 @@ export async function fetchRatiosTTM(symbol: string): Promise<RatiosTTM> {
 export interface AnnualOperatingMargin {
   fiscalYear: string
   operatingProfitMargin: number | null
+  /** Fiscal period end, `YYYY-MM-DD` — the key for matching an SEC filed period. */
+  periodEnd: string
+  /** As-reported revenue, the denominator for recomputing the margin from the filing. */
+  revenue: number | null
+  /** Vendor operating income, carried so a caller can show what it disagreed with. */
+  operatingIncome: number | null
 }
 
 /**
- * Fetches annual operating margins from the FMP ratios endpoint.
+ * Fetches annual operating margins.
+ *
+ * Reads the **income statement** rather than `/ratios`, because the margin has to
+ * be checkable: this returns the period end date and revenue, which
+ * `lib/secOperatingIncome.ts` needs to recompute the margin from SEC's as-filed
+ * operating income. The arithmetic is identical to the vendor's own
+ * `operatingProfitMargin` (verified: both give ELF FY2026 as 8.02%) because FMP
+ * derives that field from this same `operatingIncome` — which is exactly the
+ * problem, since that line is wrong on 17 of 45 audited names.
+ *
  * Returns the `limit` most recent fiscal years (newest first).
  */
 export async function fetchAnnualOperatingMargins(
@@ -32,17 +47,27 @@ export async function fetchAnnualOperatingMargins(
   limit = 2
 ): Promise<AnnualOperatingMargin[]> {
   const res = await fetch(
-    `${FMP_STABLE}/ratios?symbol=${fmpSymbol(symbol)}&period=annual&limit=${limit}&apikey=${apiKey()}`
+    `${FMP_STABLE}/income-statement?symbol=${fmpSymbol(symbol)}&period=annual&limit=${limit}&apikey=${apiKey()}`
   )
-  if (!res.ok) throw new Error(`FMP ratios ${res.status}: ${symbol}`)
+  if (!res.ok) throw new Error(`FMP income-statement ${res.status}: ${symbol}`)
   const data = (await res.json()) as unknown[]
   if (!Array.isArray(data)) return []
   return data
     .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
-    .map((r) => ({
-      fiscalYear: fiscalYearOf(r),
-      operatingProfitMargin: num(r.operatingProfitMargin),
-    }))
+    .map((r) => {
+      const revenue = num(r.revenue)
+      const operatingIncome = num(r.operatingIncome)
+      return {
+        fiscalYear: fiscalYearOf(r),
+        operatingProfitMargin:
+          revenue != null && revenue !== 0 && operatingIncome != null
+            ? operatingIncome / revenue
+            : null,
+        periodEnd: typeof r.date === 'string' ? r.date : '',
+        revenue,
+        operatingIncome,
+      }
+    })
 }
 
 function fiscalYearOf(r: Record<string, unknown>): string {

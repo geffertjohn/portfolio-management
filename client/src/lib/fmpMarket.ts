@@ -25,6 +25,12 @@ export interface Profile {
    */
   isEtf: boolean
   isFund: boolean
+  /**
+   * SEC Central Index Key. Carried so a caller can look the company up in SEC's
+   * own XBRL data -- see `lib/secOperatingIncome.ts`, which checks the vendor's
+   * operating margin against the filed figure. Null for non-SEC filers.
+   */
+  cik: string | null
 }
 
 /** FMP sends these as real booleans on /stable/profile, but older rows carry "true"/"false". */
@@ -42,6 +48,7 @@ export async function fetchProfile(symbol: string): Promise<Profile> {
     industry: str(p.industry),
     isEtf: bool(p.isEtf),
     isFund: bool(p.isFund),
+    cik: str(p.cik),
   }
 }
 

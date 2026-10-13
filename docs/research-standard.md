@@ -152,6 +152,47 @@ finding in its own right.
   return 404/503 to a non-browser user agent and serve the document with one; and
   openFDA lags its own source by about a week, so a very recent decision may be
   absent from the API while present in the primary database.
+- **Never build a break test on a sell-side rating or price-target change.** The
+  provider's per-row `stockReturn` is exactly `price / target − 1` — a **gap to
+  spot**, not a realised return (verified on 272 of 272 rows across three symbols)
+  — and the symbol-level beats/misses series has no documented resolution basis.
+  So report analyst activity as **counts**, never as an accuracy or beat rate, and
+  never make a downgrade count the trigger. On one name the street went 0-for-149
+  while uniformly rating it a buy; on another there were zero upgrades and zero
+  downgrades across a year in which the shares fell by a third. A rating change is
+  not evidence about the business.
+- **Mandate fit is portfolio-level, not a per-security gate.** For an income
+  strategy the requirement is that the *portfolio's* yield exceeds its benchmark,
+  carried by the mix. **Never disqualify a name on its own dividend yield alone.**
+  `model_portfolio_data.investment_philosophy` is the rubric: a candidate need not
+  meet every criterion but must justify inclusion by the combination it
+  contributes. (A July 2026 run vetoed a name on a 0.18% yield against the
+  portfolio's own blend, when the stated bar was income above the S&P 500 at the
+  portfolio level.) This belongs to the **buy record**, never to the thesis — the
+  thesis has no portfolio in it.
+- **Take financial-statement figures from the filing, not from the data feed.**
+  Four vendor defects are confirmed and recur:
+  - **Annual `operatingIncome`** relocates charges out of the operating line.
+    **13 of 40 checkable names** disagree with SEC's own `us-gaap:OperatingIncomeLoss`
+    on at least one fiscal year — Boston Scientific FY2020 reported as **+$601M
+    against a filed −$80M operating loss**, a sign flip; e.l.f. FY2026 as $131.3M
+    against a filed $73.6M, which reads as a −17% trend where the filing says
+    −53%. `incomeBeforeTax` ties in every case, so nothing internal catches it, and
+    the vendor's `operatingProfitMargin` is derived from the same number. **Do not
+    assume adjacent years tying means the series is sound** — on Boston Scientific
+    and Howmet, five or six consecutive years are wrong.
+  - **`totalDebt`** folds operating-lease liabilities in and mislabels them
+    `capitalLeaseObligations` (one name 4.7x overstated; on two names it is wrong
+    *in kind*, the companies having no finance leases and, in one case, no
+    borrowings at all). It also breaks multi-year EV comparisons across the ASC 842
+    boundary. **`propertyPlantEquipmentNet`** folds in the ROU asset, with the
+    mirror error visible in `otherNonCurrentAssets`.
+  - **Multi-year series are spliced across a separation or divestiture.** Read off
+    the feed, one name's revenue looked like a −34.6% decline when continuing
+    operations grew **+75.5%**. Rebuild the base from the filing's own recast
+    figures and say which basis you used.
+  - **Currency can be mislabelled.** One analyst row carried a target of 3,260
+    tagged `USD` that was plainly the New Taiwan dollar target for the local listing.
 - **Recommend-only.** No agent executes a trade or writes to `positions`.
 - The committee drafts; **the advisor adopts.** A published thesis is authored by
   the advisor, with the reports it drew on recorded in `source_report_ids`.
