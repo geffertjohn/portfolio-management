@@ -136,6 +136,22 @@ finding in its own right.
   of a business cycle is the common error, especially for cyclicals.
 - **Weight analyst opinion by track record, not head count**, and suppress any
   accuracy figure with fewer than ten resolved targets.
+- **Verify an agency record in that agency's own data, and prefer its bulk file.**
+  A docket number, clearance, investigation or enforcement action cited from
+  reporting is not sourced. Two failures made this a rule. A competitor's product
+  was recorded as having no decision on file when the FDA's own De Novo database
+  showed it granted three months earlier (DEN250068, decided 21 Jul 2026). And a
+  bear case named three NHTSA investigations when the agency's flat investigation
+  file showed **eight open** on the same manufacturer, including one opened four
+  days before the review. The lesson is that a bulk agency file catches
+  *omissions*, not just errors: query the whole docket for the issuer rather than
+  looking up only the items you already knew about. Where a regulator publishes a
+  bulk extract, that is the series to name in the metric — NHTSA's is
+  `static.nhtsa.gov/odi/ffdd/inv/FLAT_INV.zip`, whose action number is column 0.
+  Two practical traps: some agency hosts (accessdata.fda.gov, static.nhtsa.gov)
+  return 404/503 to a non-browser user agent and serve the document with one; and
+  openFDA lags its own source by about a week, so a very recent decision may be
+  absent from the API while present in the primary database.
 - **Recommend-only.** No agent executes a trade or writes to `positions`.
 - The committee drafts; **the advisor adopts.** A published thesis is authored by
   the advisor, with the reports it drew on recorded in `source_report_ids`.
