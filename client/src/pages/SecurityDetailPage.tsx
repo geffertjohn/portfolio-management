@@ -15,12 +15,9 @@ import {
 } from '@/lib/atRisk'
 import { FundHeaderMetricsRow } from '@/components/FundHeaderMetricsRow'
 import { DetailPageState } from '@/components/DetailPageState'
-import { StockReturnTable } from '@/components/StockReturnTable'
 import { FundMonitoringPanel } from '@/components/FundMonitoringPanel'
 import { StockScorecardPanels } from '@/components/StockScorecardPanels'
-import { AnalystCoveragePanel } from '@/components/AnalystCoveragePanel'
 import { AlternativesPanel } from '@/components/AlternativesPanel'
-import { NewsAlertsPanel } from '@/components/NewsAlertsPanel'
 import { AtRiskModal } from '@/components/AtRiskModal'
 import { AddProspectModal } from '@/components/AddProspectModal'
 import { CreateActionItemModal } from '@/components/CreateActionItemModal'
@@ -33,7 +30,9 @@ import { useSecurityBackLink } from '@/hooks/useSecurityBackLink'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { useLatestTranscript } from '@/hooks/useTranscript'
 import { fetchKeyExecutives } from '@/lib/fmpTranscripts'
-import { fetchEarningsDates, fetchProfile } from '@/lib/fmpMarket'
+import { fetchEarningsDates, fetchProfile, fetchQuote } from '@/lib/fmpMarket'
+import { useLiveQuote } from '@/hooks/useLiveQuote'
+import { fmtUsd, EMPTY } from '@/lib/formatters'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { FinancialsSection } from '@/components/FinancialsSection'
 import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
@@ -144,6 +143,22 @@ export function SecurityDetailPage() {
     staleTime: 1000 * 60 * 60 * 24, // identity changes rarely
     retry: false,
   })
+  // Price in the header. This is the only place the stock page shows a price:
+  // the Analysts card that used to carry it was removed from Overview (Oct 2026).
+  // Same seam as everywhere else — TanStack owns the REST baseline, quoteStream
+  // owns the live last-trade leg, and the REST value stands in until the first
+  // tick (or indefinitely when the socket is down). `useLiveQuote` takes null to
+  // subscribe to nothing, which is how funds opt out: FMP does not stream them.
+  const { data: quote } = useQuery({
+    queryKey: QUERY_KEYS.quote(security?.security_id ?? ''),
+    queryFn: () => fetchQuote(security!.security_id),
+    enabled: isStock && !!security?.security_id,
+    staleTime: 1000 * 60,
+    retry: false,
+  })
+  const live = useLiveQuote(isStock ? security?.security_id : null)
+  const price = live?.price ?? quote?.price ?? null
+
   const companyName = (isStock ? profile?.companyName : null) ?? security?.security_name ?? null
   const description = (isStock ? profile?.description : null) ?? security?.long_description ?? null
   const sector = (isStock ? profile?.sector : null) ?? security?.morningstar_sector ?? null
@@ -392,7 +407,7 @@ export function SecurityDetailPage() {
           <div className="-mx-1 overflow-x-auto px-1">
             <div
               className={`grid min-w-[36rem] gap-4 sm:min-w-0 sm:w-full ${
-                isFundOrEtfSecurity(security) ? 'grid-cols-3' : 'grid-cols-5'
+                isFundOrEtfSecurity(security) ? 'grid-cols-3' : 'grid-cols-6'
               }`}
             >
               {isFundOrEtfSecurity(security) ? (
@@ -403,6 +418,20 @@ export function SecurityDetailPage() {
                 />
               ) : (
                 <>
+                  <div className="min-w-0">
+                    <dt className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Price
+                      {live != null && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-green-600">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+                          Live
+                        </span>
+                      )}
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium tabular-nums text-gray-900">
+                      {price != null ? fmtUsd(price) : EMPTY}
+                    </dd>
+                  </div>
                   <div className="min-w-0">
                     <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
                       Peer Group
@@ -578,98 +607,21 @@ export function SecurityDetailPage() {
       )}
 
       {/* ── Stock: Overview tab ─────────────────────────────────────────────── */}
+      {/*
+        Overview is the ownership case and nothing else. The Scorecard, Total
+        Performance, Analysts, News, Alerts and the review schedule/history were
+        removed here (Oct 2026) — the scorecard and the street data live on
+        Monitor, so this tab is not a second copy of them.
+        NOTE: this removed the only place the stock page showed a PRICE
+        (AnalystCoveragePanel carried the live quote and the "Live" indicator).
+        Funds are untouched and keep their own layout above.
+      */}
       {!isFundOrEtfSecurity(security) && activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Scorecard */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-base font-semibold text-gray-900">Scorecard</h2>
-            <div className="mt-6">
-              <StockScorecardPanels security={security} />
-            </div>
-          </div>
-
-          {/* Total Returns */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <StockReturnTable security={security} />
-          </div>
-
-          {/* Analysts (+ Alerts) | News — side by side */}
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-            {/* Left column: Analysts then Alerts */}
-            <div className="space-y-6">
-              {/* Analysts */}
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="text-base font-semibold text-gray-900">Analysts</h2>
-                <div className="mt-6">
-                  <AnalystCoveragePanel security={security} />
-                </div>
-              </div>
-
-              {/* Alerts */}
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="text-base font-semibold text-gray-900">Alerts</h2>
-                <div className="mt-6 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-400">
-                  Content to be added.
-                </div>
-              </div>
-            </div>
-
-            {/* News */}
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <h2 className="text-base font-semibold text-gray-900">News</h2>
-              <NewsAlertsPanel security={security} />
-            </div>
-          </div>
-
           {/* The thesis is its own document of record (append-only, PDF per version). */}
           <SecurityThesisPanel ticker={security.security_id} securityName={security.security_name} />
-
-          {/* Review Schedule + Review History */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="space-y-6">
-            <section>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Review Schedule</h3>
-              {reviewSchedule ? (
-                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Cadence</p>
-                      <p className="mt-1 capitalize text-gray-900">{reviewSchedule.cadence.replace('_', '-')}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Last Reviewed</p>
-                      <p className="mt-1 text-gray-900">
-                        {reviewSchedule.last_reviewed_at
-                          ? new Date(reviewSchedule.last_reviewed_at).toLocaleDateString()
-                          : <span className="text-gray-400">Never</span>}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Next Review</p>
-                      <p className={`mt-1 font-medium ${isOverdue(reviewSchedule.next_review_at) ? 'text-red-600' : isDueSoon(reviewSchedule.next_review_at) ? 'text-amber-600' : 'text-gray-900'}`}>
-                        {new Date(reviewSchedule.next_review_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
-                  No review schedule set. Click "Set Schedule" to configure a review cadence.
-                </div>
-              )}
-            </section>
-
-            <div className="border-t border-gray-100" />
-
-            <section>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-700">Review History</h3>
-              <ReviewLogSection securityId={security.security_id} />
-            </section>
-          </div>
-          </div>
         </div>
       )}
-
       {/* ── Stock: Monitor tab ──────────────────────────────────────────────── */}
       {!isFundOrEtfSecurity(security) && activeTab === 'monitor' && (
         <div className="space-y-6">
