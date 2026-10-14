@@ -1434,6 +1434,11 @@ CREATE TABLE IF NOT EXISTS "public"."research_reports" (
     "parent_report_id" bigint,
     "watch_items" "jsonb",
     "thesis_status" "text",
+    "estimates" "jsonb",
+    "street_questions" "jsonb",
+    "thesis_checks" "jsonb",
+    "risk_checks" "jsonb",
+    "thesis_id" bigint,
     CONSTRAINT "research_reports_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
     CONSTRAINT "research_reports_post_needs_parent" CHECK ((("report_type" <> 'post_earnings'::"text") OR ("parent_report_id" IS NOT NULL))),
     CONSTRAINT "research_reports_rating_check" CHECK (("rating" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))),
@@ -1446,7 +1451,23 @@ CREATE TABLE IF NOT EXISTS "public"."research_reports" (
 ALTER TABLE "public"."research_reports" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."research_reports"."watch_items" IS 'Array of {key, title, detail, verdict?, actual?, note?}. Pre-earnings briefs set key/title/detail (what to watch and what the bar is); post-earnings briefs carry those forward and resolve each with verdict = hit | miss | unclear plus the actual figure.';
+COMMENT ON COLUMN "public"."research_reports"."watch_items" IS 'SUPERSEDED by estimates/street_questions/thesis_checks/risk_checks (Oct 2026). Never populated on any row; kept so a legacy brief would still render.';
+
+
+
+COMMENT ON COLUMN "public"."research_reports"."estimates" IS 'Section 1. EstimateRow[]: {key,label,unit,estimate,low,high,analysts,source} set by the pre-brief; the post-brief adds {actual,surprisePct,note}. Rows: eps, revenue, ebitda, ebitda_margin.';
+
+
+
+COMMENT ON COLUMN "public"."research_reports"."street_questions" IS 'Section 1. StreetQuestion[]: {key,question,why} set by the pre-brief; the post-brief adds {answered: yes|partial|no, answer}.';
+
+
+
+COMMENT ON COLUMN "public"."research_reports"."thesis_checks" IS 'Section 2, bull half. ThesisCheck[] carried from security_theses.thesis/bull_case: {key,title,metric,test,watchFor} set by the pre-brief; the post-brief adds {status,finding}. `test` is the thesis metric''s breaksIf, verbatim.';
+
+
+
+COMMENT ON COLUMN "public"."research_reports"."risk_checks" IS 'Section 2, bear half. ThesisCheck[] carried from security_theses.bear_case: {key,title,metric,test,watchFor}; the post-brief adds {status,finding}. `test` is the bear point''s breaksIf (the "worsens if"), verbatim.';
 
 
 
@@ -2479,6 +2500,10 @@ CREATE INDEX "research_reports_security_idx" ON "public"."research_reports" USIN
 
 
 
+CREATE INDEX "research_reports_thesis_idx" ON "public"."research_reports" USING "btree" ("thesis_id") WHERE ("thesis_id" IS NOT NULL);
+
+
+
 CREATE INDEX "review_log_reviewed_at_idx" ON "public"."review_log" USING "btree" ("reviewed_at" DESC);
 
 
@@ -2806,6 +2831,11 @@ ALTER TABLE ONLY "public"."research_reports"
 
 ALTER TABLE ONLY "public"."research_reports"
     ADD CONSTRAINT "research_reports_portfolio_name_fkey" FOREIGN KEY ("portfolio_name") REFERENCES "public"."portfolio"("name") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."research_reports"
+    ADD CONSTRAINT "research_reports_thesis_id_fkey" FOREIGN KEY ("thesis_id") REFERENCES "public"."security_theses"("id") ON DELETE SET NULL;
 
 
 

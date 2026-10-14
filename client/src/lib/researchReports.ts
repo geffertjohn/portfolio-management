@@ -26,7 +26,83 @@ export type AuthorRole = 'research_analyst' | 'devils_advocate' | 'quant_analyst
 
 export interface Citation { title?: string; url?: string; note?: string }
 
-/** How a post-earnings brief judged one of the pre-brief's watch-items. */
+// ── Earnings briefs — two sections ──────────────────────────────────────────
+//
+// SECTION 1 "The Street": what the market expects (`estimates`) and what it wants
+// answered on the call (`street_questions`).
+// SECTION 2 "Thesis Evaluation": the firm's own reasons for owning it
+// (`thesis_checks`) and its own bear case (`risk_checks`), carried from the
+// security's `security_theses` record.
+//
+// Every shape is filled from BOTH ends: the pre-brief states the expectation, the
+// post-brief copies those fields forward unchanged and appends the outcome. One
+// shape per concept, so a card renders either brief without branching and a
+// resolved row still shows what was asked.
+
+/** How a figure is rendered. Revenue/EBITDA are raw dollars; margin is a decimal. */
+export type EstimateUnit = 'usd' | 'usd_large' | 'pct'
+
+/** One row of the Section 1 estimates table. */
+export interface EstimateRow {
+  key: 'eps' | 'revenue' | 'ebitda' | 'ebitda_margin' | (string & {})
+  label: string
+  unit: EstimateUnit
+  /** PRE: consensus (or the company's own guide — say which in `source`). */
+  estimate: number | null
+  low?: number | null
+  high?: number | null
+  analysts?: number | null
+  /** Where the estimate came from, e.g. 'FMP consensus (24 analysts)' or 'company guide'. */
+  source?: string | null
+  /** POST: what was actually printed. */
+  actual?: number | null
+  /** POST: (actual − estimate) / |estimate|, as a decimal. */
+  surprisePct?: number | null
+  note?: string | null
+}
+
+/** Did the call answer it? */
+export type AnswerState = 'yes' | 'partial' | 'no'
+
+/** A question the street wants settled on this call (Section 1). */
+export interface StreetQuestion {
+  key: string
+  question: string
+  /** Why the street cares — what turns on the answer. */
+  why?: string | null
+  /** POST: */
+  answered?: AnswerState | null
+  answer?: string | null
+}
+
+/** How the print bore on one thesis reason or bear point. */
+export type CheckStatus = 'supported' | 'mixed' | 'undermined' | 'not_addressed'
+
+/**
+ * One Section 2 item, used for BOTH halves — `thesis_checks` (why we own it) and
+ * `risk_checks` (what would break it). Carried from `security_theses`, so `test`
+ * is that document's own break test verbatim and an earnings call becomes a
+ * re-measurement of the thesis of record rather than a fresh opinion.
+ */
+export interface ThesisCheck {
+  /** The thesis reason / bull metric / bear point key it came from. */
+  key: string
+  title: string
+  /** The named series the thesis says to re-measure. */
+  metric?: string | null
+  /** The thesis's own `breaksIf` (bull) or worsens-if (bear), verbatim. */
+  test: string
+  /** PRE: what in THIS print bears on that test. */
+  watchFor?: string | null
+  /** POST: */
+  status?: CheckStatus | null
+  finding?: string | null
+}
+
+/**
+ * How a post-earnings brief judged one of the pre-brief's watch-items.
+ * @deprecated Superseded by the two-section shapes above (Oct 2026).
+ */
 export type WatchVerdict = 'hit' | 'miss' | 'unclear'
 
 /**
@@ -58,6 +134,15 @@ export interface ResearchReport {
   report_type: ReportType
   /** The pre-earnings brief a post-earnings brief answers. Required for `post_earnings`. */
   parent_report_id: number | null
+  /** Which `security_theses` version Section 2 was graded against. */
+  thesis_id: number | null
+  /** Section 1 — the street. */
+  estimates: EstimateRow[] | null
+  street_questions: StreetQuestion[] | null
+  /** Section 2 — thesis evaluation. */
+  thesis_checks: ThesisCheck[] | null
+  risk_checks: ThesisCheck[] | null
+  /** @deprecated superseded by the four fields above. */
   watch_items: WatchItem[] | null
   thesis_status: ThesisStatus | null
   thesis: string | null
@@ -76,7 +161,7 @@ export interface ResearchReport {
 }
 
 const COLS =
-  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
+  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, thesis_id, estimates, street_questions, thesis_checks, risk_checks, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
 
 function mapRow(r: Record<string, unknown>): ResearchReport {
   return {
@@ -87,6 +172,11 @@ function mapRow(r: Record<string, unknown>): ResearchReport {
     author_role: r.author_role as AuthorRole,
     report_type: r.report_type as ReportType,
     parent_report_id: (r.parent_report_id as number | null) ?? null,
+    thesis_id: (r.thesis_id as number | null) ?? null,
+    estimates: (r.estimates as EstimateRow[] | null) ?? null,
+    street_questions: (r.street_questions as StreetQuestion[] | null) ?? null,
+    thesis_checks: (r.thesis_checks as ThesisCheck[] | null) ?? null,
+    risk_checks: (r.risk_checks as ThesisCheck[] | null) ?? null,
     watch_items: (r.watch_items as WatchItem[] | null) ?? null,
     thesis_status: (r.thesis_status as ThesisStatus | null) ?? null,
     thesis: (r.thesis as string | null) ?? null,
@@ -136,6 +226,11 @@ export interface NewResearchReport {
   addition_id?: number | null
   report_type?: ReportType
   parent_report_id?: number | null
+  thesis_id?: number | null
+  estimates?: EstimateRow[] | null
+  street_questions?: StreetQuestion[] | null
+  thesis_checks?: ThesisCheck[] | null
+  risk_checks?: ThesisCheck[] | null
   watch_items?: WatchItem[] | null
   thesis_status?: ThesisStatus | null
   thesis?: string | null
@@ -161,6 +256,11 @@ export async function insertResearchReport(input: NewResearchReport): Promise<nu
       addition_id: input.addition_id ?? null,
       report_type: input.report_type ?? 'initial',
       parent_report_id: input.parent_report_id ?? null,
+      thesis_id: input.thesis_id ?? null,
+      estimates: (input.estimates ?? null) as unknown as Json,
+      street_questions: (input.street_questions ?? null) as unknown as Json,
+      thesis_checks: (input.thesis_checks ?? null) as unknown as Json,
+      risk_checks: (input.risk_checks ?? null) as unknown as Json,
       watch_items: (input.watch_items ?? null) as unknown as Json,
       thesis_status: input.thesis_status ?? null,
       thesis: input.thesis ?? null,
