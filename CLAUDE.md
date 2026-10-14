@@ -557,9 +557,21 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 **Portfolio Overview narrative** (`PortfolioNarrative`): shows the **Description**, or the **Objective** (`objective_statement`) when there is no Description — the block label follows the content (`description || objective`). **Equity Income & Core Growth retired their Description** (data cleared: `model_portfolio_data.description` null, `portfolio.description` `''` since that column is `NOT NULL`) and show the **Objective** on the overview; their edit page **hides** the Description field (gated on `hasSectorAllocations`). Other models keep Description. **Do not re-add a Description for EI/CG.**
 
-### Scheduled jobs (draft-only)
+### Scheduled jobs (draft-only) — prompts live in this repo
 
-Four `create_scheduled_task` routines (persisted in `~/.claude/scheduled-tasks/`, self-contained prompts that adopt a role): **pre-earnings-brief** (weekday → draft `research_reports`), **post-earnings-brief** (weekday → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; run in Claude Code while the app is open.
+Four routines: **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
+
+**The prompts are version-controlled at `.claude/scheduled-tasks/<taskId>/SKILL.md`** — that is the source of truth. The scheduler, however, reads each task from a fixed path it owns (`~/.claude/scheduled-tasks/<taskId>/SKILL.md`) and nothing repoints it, so the two must be kept in step by copying:
+
+```bash
+node scripts/scheduled-tasks/sync.mjs            # repo → scheduler (deploy)
+node scripts/scheduled-tasks/sync.mjs --check    # report drift, exit 1 if any
+node scripts/scheduled-tasks/sync.mjs --from-home # scheduler → repo (capture a UI edit)
+```
+
+**Do NOT symlink the scheduler's path at the repo file.** It fails silently and in the worst possible way: the task stays registered, enabled and on schedule, but its frontmatter reads back empty because the reader does not follow symlinks — and the prompt is that file, so the job runs with nothing to do while every listing looks healthy. This was tried and reverted; `sync.mjs --check` detects and repairs a symlink for exactly this reason.
+
+Editing a prompt through the app, or with `update_scheduled_task`, rewrites the **scheduler's** copy — run `--from-home` afterwards or the repo silently goes stale.
 
 ### Earnings briefs — a matched pair, in two sections
 
