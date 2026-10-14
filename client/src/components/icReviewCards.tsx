@@ -102,8 +102,33 @@ function fmtEstimate(v: number | null | undefined, unit: EstimateUnit): string {
  * has actually printed, so a pre-brief shows a clean expectations table and the
  * post-brief shows the same rows with the result beside them.
  */
+/**
+ * How much provenance fits on one line under a metric label before the table
+ * stops being scannable. Anything longer becomes a numbered note below.
+ */
+const INLINE_SOURCE_MAX = 110
+
 function Estimates({ rows }: { rows: EstimateRow[] }) {
   const hasActuals = rows.some((r) => r.actual != null)
+
+  // The estimates table exists to be read at a glance — four metrics, four
+  // numbers. A brief that documents its basis properly (currency, which figures
+  // were converted and at what rate, why a row is low-confidence) produces
+  // paragraphs, not captions, and inlining those turns every row into a wall of
+  // text with the number stranded at the right. Long text moves to a numbered
+  // note under the table, so nothing is lost and the figures stay legible.
+  const notes: { n: number; label: string; text: string }[] = []
+  const marks = rows.map((row) => {
+    const long = [row.source, row.note].filter((t): t is string => !!t && t.length > INLINE_SOURCE_MAX)
+    const short = [row.source, row.note].filter((t): t is string => !!t && t.length <= INLINE_SOURCE_MAX)
+    const ns = long.map((text) => {
+      const n = notes.length + 1
+      notes.push({ n, label: row.label, text })
+      return n
+    })
+    return { short, ns }
+  })
+
   return (
     <div>
       <SubHeading>Estimates</SubHeading>
@@ -121,8 +146,12 @@ function Estimates({ rows }: { rows: EstimateRow[] }) {
             <tr key={row.key || i} className="border-t border-gray-100 align-top">
               <td className="py-1 pr-2 text-gray-700">
                 {row.label}
-                {row.source && <span className="block text-xs text-gray-400">{row.source}</span>}
-                {row.note && <span className="block text-xs text-gray-500">{row.note}</span>}
+                {marks[i].ns.map((n) => (
+                  <sup key={n} className="ml-0.5 text-[10px] font-medium text-indigo-500">{n}</sup>
+                ))}
+                {marks[i].short.map((t, j) => (
+                  <span key={j} className="block text-xs text-gray-400">{t}</span>
+                ))}
               </td>
               <td className="py-1 text-right tabular-nums text-gray-700">
                 {fmtEstimate(row.estimate, row.unit)}
@@ -148,6 +177,17 @@ function Estimates({ rows }: { rows: EstimateRow[] }) {
           ))}
         </tbody>
       </table>
+      {notes.length > 0 && (
+        <ol className="mt-2 space-y-1 border-t border-gray-100 pt-2">
+          {notes.map((nt) => (
+            <li key={nt.n} className="text-xs leading-relaxed text-gray-500">
+              <sup className="mr-1 font-medium text-indigo-500">{nt.n}</sup>
+              <span className="font-medium text-gray-600">{nt.label}. </span>
+              {nt.text}
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   )
 }

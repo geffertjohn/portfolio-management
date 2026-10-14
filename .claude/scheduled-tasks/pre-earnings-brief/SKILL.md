@@ -50,6 +50,7 @@ The brief has two sections, and each field below is filled from BOTH ends: you s
    - `unit` drives rendering: `usd` (plain dollars), `usd_large` (abbreviated, $16.78B), `pct` (**decimal** — 0.4708, not 47.08).
    - **Where the company's own guide differs from consensus, the guide is the real bar** — add it as a `note` on the row and say so in the commentary. A stale consensus against a fresh company guide is a trap.
    - If a metric genuinely has no estimate, set `estimate: null` and say why in `source`. Do not fabricate one.
+   - **Keep `source` and `note` SHORT — a caption, not a paragraph.** Anything over roughly 110 characters is moved out of the table into a numbered note below it, so long text is preserved but stops being scannable inline. Put the one-line basis in `source` (e.g. "FMP consensus, USD") and any real caveat — a currency basis, a conversion rate, a low-confidence row — in `note`.
 
 6. **SECTION 1 — commentary (the `thesis` column).** Narrative prose, ~5-8 sentences: the setup, positioning, beat/miss cadence, what is already priced in, where expectations sit relative to the company's own guide. This is the analyst's read, NOT a list — the gradeable items live in `street_questions` and Section 2. **Do not include a timing caveat about whether results have posted yet**; the post-earnings job gates on actuals, so that concern is handled structurally.
 
@@ -84,6 +85,7 @@ The brief has two sections, and each field below is filled from BOTH ends: you s
 ## Data cautions
 
 - **FMP's `ebitda` is derived from its `operatingIncome`, which disagrees with the filing on roughly one name in three** (BSX FY2020: +$601M reported against a filed −$80M operating LOSS). For the ESTIMATE that is unavoidable — consensus EBITDA is a consensus. But flag in `source` that it is vendor-derived, and never present it as an as-filed figure.
+- **Check the reporting currency.** FMP serves `analyst-estimates` and the financial statements in the company's own reporting currency (`reportedCurrency`), while `/stable/earnings` is USD per ADS for foreign filers. The two bases can disagree by more than the surprise you are trying to measure, and FMP converts USD actuals at a rate it does not disclose. State the basis per row and say which figure is the clean one to grade against.
 - Ground every figure with its period.
 - Say when a number is unavailable rather than estimating one.
 
