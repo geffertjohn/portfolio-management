@@ -155,8 +155,17 @@ export function TipRanksAnalystModal({ expertUID, analystName, firmName, onClose
                   <th className="px-3 py-2 text-left font-semibold">Symbol</th>
                   <th className="px-3 py-2 text-left font-semibold">Call</th>
                   <th className="px-3 py-2 text-right font-semibold">Target</th>
-                  <th className="px-3 py-2 text-right font-semibold">Return</th>
-                  <th className="px-3 py-2 text-center font-semibold">Beat</th>
+                  {/*
+                    NOT a return. The provider's per-row `stockReturn` is exactly
+                    `price / target - 1` — verified on 272 of 272 rows across three
+                    symbols — so it measures how far the target sits from the
+                    current price, with no time dimension and no outcome. It was
+                    previously labelled "Return" and coloured green/red, which
+                    inverted the meaning: "green" was a target BELOW the price.
+                  */}
+                  <th className="px-3 py-2 text-right font-semibold" title="How far this target sits from the current price (target vs spot) — not a realised return">
+                    Gap to spot
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -171,16 +180,10 @@ export function TipRanksAnalystModal({ expertUID, analystName, firmName, onClose
                     <td className="px-3 py-2 text-right tabular-nums text-gray-700">
                       {r.priceTarget != null ? fmtUsd(r.priceTarget) : EMPTY}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${
-                      r.stockReturn == null ? 'text-gray-400' : r.stockReturn >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {/* Deliberately uncoloured: a gap to spot has no good or bad
+                        direction, and the old green/red read as a scorecard. */}
+                    <td className="px-3 py-2 text-right tabular-nums text-gray-700">
                       {r.stockReturn != null ? fmtSignedPct(r.stockReturn) : EMPTY}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {r.beatTarget == null
-                        ? <span className="text-gray-300">—</span>
-                        : r.beatTarget
-                          ? <span className="text-green-600">✓</span>
-                          : <span className="text-red-500">✗</span>}
                     </td>
                   </tr>
                 ))}

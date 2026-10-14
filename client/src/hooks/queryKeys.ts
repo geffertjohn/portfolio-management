@@ -96,7 +96,11 @@ export const QUERY_KEYS = {
   tipranksAnalyst: (name: string) => ['tipranks_analyst', name] as const,
   keyExecutives: (symbol: string) => ['key_executives', symbol] as const,
   ratiosTTM: (symbol: string) => ['ratios_ttm', symbol] as const,
-  ratiosAnnual: (symbol: string) => ['ratios_annual', 'v2', symbol] as const,
+  // v3: now sourced from the income statement so the margin carries its period end
+  // and revenue, which the SEC as-filed check needs.
+  ratiosAnnual: (symbol: string) => ['ratios_annual', 'v3', symbol] as const,
+  /** SEC as-filed annual operating income, keyed by CIK (not ticker). */
+  secOperatingIncome: (cik: string) => ['sec_operating_income', cik] as const,
   fcfMargins: (symbol: string) => ['fcf_margins', 'v2', symbol] as const,
   cagr3y: (symbol: string) => ['cagr_3y', 'annual', symbol] as const,
   ttmGrowth: (symbol: string) => ['ttm_growth', symbol] as const,
