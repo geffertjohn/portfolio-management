@@ -612,8 +612,7 @@ export function SecurityDetailPage() {
         Performance, Analysts, News, Alerts and the review schedule/history were
         removed here (Oct 2026) — the scorecard and the street data live on
         Monitor, so this tab is not a second copy of them.
-        NOTE: this removed the only place the stock page showed a PRICE
-        (AnalystCoveragePanel carried the live quote and the "Live" indicator).
+        The price those cards used to carry now lives in the header's metrics row.
         Funds are untouched and keep their own layout above.
       */}
       {!isFundOrEtfSecurity(security) && activeTab === 'overview' && (

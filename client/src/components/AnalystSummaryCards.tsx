@@ -10,11 +10,6 @@
  *                              sell) + Buy / Hold / Sell totals, where Buy folds
  *                              in Strong Buy and Sell folds in Strong Sell.
  *
- * Kept separate from AnalystCoveragePanel so that panel's layout is unaffected.
- * NOTE (Oct 2026): AnalystCoveragePanel no longer has a caller — the Analysts
- * card was removed from the stock Overview tab. The file is left in place rather
- * than deleted because it is the only component that renders the live quote with
- * its "Live" indicator, and re-siting it is a likelier outcome than dropping it.
  */
 import { useQuery } from '@tanstack/react-query'
 import type { SecurityDetail } from '@/lib/securities'

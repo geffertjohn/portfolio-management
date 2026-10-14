@@ -10,8 +10,9 @@ interface RangeBarProps {
 }
 
 /**
- * Horizontal range bar with a pinned marker. Shared by AnalystCoveragePanel and
- * AnalystSummaryCards (previously a near-duplicate component in each).
+ * Horizontal range bar with a pinned marker. Shared by AnalystSummaryCards and
+ * TipRanksPanel, which each carried a near-duplicate of it before it was lifted
+ * out here.
  */
 export function RangeBar({ pct, low, high, markerLabel, filled = false, className = 'mt-1' }: RangeBarProps) {
   const c = Math.max(0, Math.min(100, pct))
