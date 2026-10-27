@@ -26,7 +26,14 @@ export function AutoGrowTextarea({
     if (!el) return
     const resize = () => {
       el.style.height = 'auto'
-      const full = el.scrollHeight
+      // scrollHeight excludes the border, but Tailwind's preflight makes the box
+      // border-box — so setting height = scrollHeight clips the last line by the
+      // border width. Add it back.
+      const cs = getComputedStyle(el)
+      const border = cs.boxSizing === 'border-box'
+        ? parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)
+        : 0
+      const full = el.scrollHeight + border
       const capped = maxHeightPx != null ? Math.min(full, maxHeightPx) : full
       el.style.height = `${capped}px`
       el.style.overflowY = maxHeightPx != null && full > maxHeightPx ? 'auto' : 'hidden'

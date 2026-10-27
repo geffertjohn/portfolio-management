@@ -12,10 +12,10 @@ import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { beatRate, fetchTipRanksSymbolSummary } from '@/lib/fmpTipranks'
 import { fmtDecimalPct, fmtUsd, toLocalDateInputValue, EMPTY } from '@/lib/formatters'
-import { formatDate } from '@/lib/fundFormat'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fetchLatestPostEarningsBrief, composeReviewRationale } from '@/lib/researchReports'
 import type { SecurityDetail } from '@/lib/securities'
+import { AutoGrowTextarea } from './AutoGrowTextarea'
 import { FundMonitoringPanel } from './FundMonitoringPanel'
 import { buildFundReviewPdf } from '@/lib/reviewEvidencePdf'
 import { uploadFile, SECURITY_DOCS_BUCKET, isServerUnreachable } from '@/lib/documents'
@@ -389,10 +389,10 @@ export function MarkReviewedModal({
 
   return (
     <dialog ref={dialogRef} onCancel={handleClose}
-      className={`w-full rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30 ${
-        mode === 'review' && isFund ? 'max-w-3xl' : 'max-w-md'
+      className={`max-h-[90vh] w-full rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30 ${
+        mode === 'review' ? (isFund ? 'max-w-3xl' : 'max-w-2xl') : 'max-w-md'
       }`}>
-      <form onSubmit={handleSubmit} className="p-6">
+      <form onSubmit={handleSubmit} className="max-h-[90vh] overflow-y-auto p-6">
 
         {/* Header */}
         <h2 className="text-lg font-semibold text-gray-900">
@@ -556,40 +556,14 @@ export function MarkReviewedModal({
                   </div>
                 ) : (
                   <div className="mt-2 space-y-2">
-                    {/* What the post-earnings brief suggested, per portfolio.
-                        Shown rather than silently applied: add/trim is an
-                        allocation act, and where the books disagree that
-                        disagreement is the finding — so nothing is pre-selected
-                        in that case and the advisor picks. */}
-                    {recs.length > 0 && brief && (
-                      <div className="rounded-md border border-indigo-100 bg-indigo-50/60 p-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-indigo-700">
-                          From the post-earnings brief
-                          <span className="ml-2 font-normal normal-case text-indigo-500">
-                            {formatDate(brief.created_at)}
-                            {brief.current_price != null && ` · ${fmtUsd(brief.current_price)}`}
-                            {brief.thesis_status && ` · thesis ${brief.thesis_status.replace('_', ' ')}`}
-                          </span>
-                        </p>
-                        <ul className="mt-2 space-y-1">
-                          {recs.map((r) => (
-                            <li key={r.portfolioName} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                              <span className="text-gray-700">{r.portfolioName}</span>
-                              <span className="tabular-nums text-xs text-gray-500">
-                                {r.weightPct != null ? `${r.weightPct}%` : EMPTY}
-                              </span>
-                              <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${RECOMMENDATION_COLORS[r.recommendation]}`}>
-                                {RECOMMENDATION_LABELS[r.recommendation]}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                        {!unanimous && (
-                          <p className="mt-2 text-xs text-amber-700">
-                            The books disagree — nothing pre-selected. One decision is recorded for the security.
-                          </p>
-                        )}
-                      </div>
+                    {/* The brief's own figures are not repeated here — the
+                        composed rationale below carries them. What cannot be
+                        inferred from the buttons is a split book: where the
+                        portfolios disagree nothing is pre-selected, so say so. */}
+                    {recs.length > 0 && !unanimous && (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        The books disagree — nothing pre-selected. One decision is recorded for the security.
+                      </p>
                     )}
 
                     {/* Add / Hold / Trim / Sell — no Buy: the security is already held. */}
@@ -639,14 +613,18 @@ export function MarkReviewedModal({
                     : <span className="text-gray-400">(optional)</span>
                   }
                 </label>
-                <textarea
+                {/* Grows to fit: the stock rationale arrives as a composed
+                    multi-paragraph draft, and a fixed box hid most of it behind
+                    an inner scrollbar. The form scrolls instead. */}
+                <AutoGrowTextarea
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
+                  onChange={setNotes}
                   placeholder={isFund
                     ? 'Key findings, decisions made, follow-up items…'
                     : 'Thesis, valuation, catalysts/risks — why this Add/Hold/Trim/Sell call.'}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  className={`mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm leading-relaxed text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 ${
+                    isFund ? 'min-h-[5rem]' : 'min-h-[10rem]'
+                  }`}
                 />
               </div>
             </>
