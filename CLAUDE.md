@@ -455,7 +455,7 @@ For stocks, `last_earnings_release` / `next_earnings_release` driving these date
 
 ### Stock review captures an investment recommendation (not a process outcome)
 
-A **stock** review records a buy/sell/hold decision with a documented rationale and a frozen evidence snapshot (for audit defense). The stock path of `MarkReviewedModal` shows: a **Recommendation** (`buy` / `add` / `hold` / `trim` / `sell`, required), **conviction** (`high` / `medium` / `low`, optional), and a **required Rationale** (stored in `review_log.notes`). It has **no "Reviewed by" or "IPS suitable"** fields (single-user). Types + labels live in `lib/reviewLog.ts` (`Recommendation`, `Conviction`, `RECOMMENDATION_*`, `CONVICTION_*`).
+A **stock** review records an add/hold/trim/sell decision with a documented rationale and a frozen evidence snapshot (for audit defense). The stock path of `MarkReviewedModal` shows: a **Recommendation** (`add` / `hold` / `trim` / `sell`, required — **no `buy`**, see `review_recommendations` below), **conviction** (`high` / `medium` / `low`, optional), and a **required Rationale** (stored in `review_log.notes`). It has **no "Reviewed by" or "IPS suitable"** fields (single-user). Types + labels live in `lib/reviewLog.ts` (`Recommendation`, `Conviction`, `RECOMMENDATION_*`, `CONVICTION_*`).
 
 - `review_log` columns: `recommendation`, `conviction`, `price_at_review` (numeric), `metrics_snapshot` (`jsonb`, shape = `ReviewMetricsSnapshot`). All nullable; **funds leave them null** and keep the `outcome` enum (Maintain/Propose/At-Risk → `no_issues`/`flagged_for_action`/`placed_on_watchlist`). Stocks leave `outcome` null.
 - The **evidence snapshot is frozen at submit time** from on-demand FMP (`fetchScorecardMetrics` + `fetchAnalystData` + `fetchQuote`, deduped with the page's queries) so a review stays reconstructable later even though stock metrics are never persisted. `ReviewLogSection` shows the recommendation badge, conviction, rationale, and the frozen metrics.
@@ -631,11 +631,26 @@ rather than a separate job, and why there is no staleness problem to solve.
 - The pre-earnings window is **~4 days, not 2**, with a 7-day dedupe guard. Strict
   pairing means a day the job does not run costs that holding its brief, its
   recommendation, and the aid for a review that will not recur for a quarter.
+- **The modal shows the draft, not a banner about it.** An earlier version headed the
+  Recommendation block with the brief's date, price and thesis status over a
+  portfolio-by-portfolio list; it was removed as redundant, since the composed rationale
+  carries those figures and signs off by naming the brief it came from. What survives is
+  the one thing the buttons cannot express: where the books **disagree**, nothing is
+  pre-selected and an amber line says so.
+- **The rationale box is an `AutoGrowTextarea`, and that is not cosmetic.** The composed
+  draft runs past a thousand characters; the fixed three-row box showed two lines of it
+  behind an inner scrollbar, so the advisor was asked to sign a rationale they could not
+  read. The stock modal is `max-w-2xl` with the form scrolling inside a 90vh cap.
+- **Two pre-fill guards in `MarkReviewedModal`, both load-bearing.** It applies **once per
+  opening** via a ref keyed to the modal opening rather than to the query data — the brief
+  arrives asynchronously, so without it a `refetchOnWindowFocus` would overwrite whatever
+  had been typed (gotcha 9, the trap that made Alt rows vanish). And it **never overwrites
+  a non-empty rationale**, so typing before the brief lands wins.
 
 ### Related UI primitives
 
 - **Edit Model Portfolio is a dedicated page** (`EditModelPortfolioPage`, `/settings/model-portfolios/:id/edit`), reusing `ModelPortfolioModal` via its `asPage` prop (wide two-column layout); "New model" still uses the modal.
-- **`AutoGrowTextarea`** (`components/AutoGrowTextarea.tsx`) — textarea that grows to fit content (optional `maxHeightPx` cap); used on the Add Security workflow and the model-portfolio narrative fields.
+- **`AutoGrowTextarea`** (`components/AutoGrowTextarea.tsx`) — textarea that grows to fit content (optional `maxHeightPx` cap); used on the Add Security workflow, the model-portfolio narrative fields, and the `MarkReviewedModal` rationale/notes. It measures with `scrollHeight`, which **excludes the border** while Tailwind's preflight makes the box `border-box` — so the height must add the border width back or every caller clips its last line by 2px (it did).
 
 ## Security Theses (`security_theses`) — the durable half of the research pair
 
