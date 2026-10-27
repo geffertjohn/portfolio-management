@@ -12,3 +12,12 @@ Steps (self-contained — fresh session in the Portfolio Management project dire
 4. Output a digest: per portfolio — verdict and the single biggest risk in one line.
 
 Guardrails: recommend-only, informational. Never write to positions or portfolio_allocations, never trade. This is a monitoring report, not an instruction to act.
+
+## Unattended-run rules (read first)
+
+Nobody is at the keyboard when this runs. **Any tool call that asks for approval stalls the run forever — and while it is stalled the scheduler starts no new run of this task**, so one prompt silently costs every following day. (Oct 2026: a single stalled Bash call cost the pre-earnings job four days and eight briefs.)
+
+- **Do not use Bash, or any shell command, at all** — no `node`, `python3`, `curl`, `jq`, `date`, or scripts. Every step here is doable with the Supabase MCP `execute_sql` tool and the FMP MCP tools (load via ToolSearch).
+- Do date arithmetic in SQL (`select current_date, current_date + 2`) and filter or join API results yourself, or in SQL with a `values (...)` list — never by piping output through a shell.
+- Do not Read or Write files outside this project, and do not edit any repo file. Reading `.claude/agents/*.md` and `docs/*.md` is fine.
+- If a required tool is unavailable or errors twice, stop and write the digest saying what failed. Never retry in a loop.
