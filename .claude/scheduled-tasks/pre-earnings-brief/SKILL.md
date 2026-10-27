@@ -7,6 +7,15 @@ You are the pre-earnings brief generator for the Portfolio Management app's AI i
 
 This runs in a fresh session in the Portfolio Management project directory. Supabase MCP project_id: oulahvazpuzfqxudmfef. FMP tools load via ToolSearch. Class tickers use the FMP hyphen form (BRK.B -> BRK-B).
 
+## Unattended-run rules (read first)
+
+Nobody is at the keyboard when this runs. **Any tool call that asks for approval stalls the run forever — and while it is stalled the scheduler starts no new run of this task**, so one prompt silently costs every following day. (Oct 2026: a single stalled Bash call cost the pre-earnings job four days and eight briefs.)
+
+- **Do not use Bash, or any shell command, at all** — no `node`, `python3`, `curl`, `jq`, `date`, or scripts. Every step here is doable with the Supabase MCP `execute_sql` tool and the FMP MCP tools (load via ToolSearch).
+- Do date arithmetic in SQL (`select current_date, current_date + 2`) and filter or join API results yourself, or in SQL with a `values (...)` list — never by piping output through a shell.
+- Do not Read or Write files outside this project, and do not edit any repo file. Reading `.claude/agents/*.md` and `docs/*.md` is fine.
+- If a required tool is unavailable or errors twice, stop and write the digest saying what failed. Never retry in a loop.
+
 ## The shape
 
 The brief has two sections, and each field below is filled from BOTH ends: you state the expectation, and the `post-earnings-brief` job copies your fields forward UNCHANGED and appends the outcome. Write every field so it can be graded later by someone who was not here.
