@@ -10,8 +10,6 @@
  *                              sell) + Buy / Hold / Sell totals, where Buy folds
  *                              in Strong Buy and Sell folds in Strong Sell.
  *
- * Kept separate from AnalystCoveragePanel (still used on the stock detail page)
- * so that panel's layout is unaffected.
  */
 import { useQuery } from '@tanstack/react-query'
 import type { SecurityDetail } from '@/lib/securities'

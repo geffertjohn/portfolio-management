@@ -126,7 +126,8 @@ export function TipRanksPanel({ securityId }: { securityId: string }) {
     queryFn: () => fetchTipRanksRatings(securityId),
     ...opts,
   })
-  // Same key as AnalystCoveragePanel so the quote is fetched once per page.
+  // Same key the security page uses for its header price, so the quote is
+  // fetched once per page rather than per panel.
   const { data: quote } = useQuery({
     queryKey: QUERY_KEYS.quote(securityId),
     queryFn: () => fetchQuote(securityId),
