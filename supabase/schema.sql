@@ -1438,6 +1438,7 @@ CREATE TABLE IF NOT EXISTS "public"."research_reports" (
     "street_questions" "jsonb",
     "thesis_checks" "jsonb",
     "risk_checks" "jsonb",
+    "review_recommendations" "jsonb",
     "thesis_id" bigint,
     CONSTRAINT "research_reports_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
     CONSTRAINT "research_reports_post_needs_parent" CHECK ((("report_type" <> 'post_earnings'::"text") OR ("parent_report_id" IS NOT NULL))),
@@ -1469,6 +1470,9 @@ COMMENT ON COLUMN "public"."research_reports"."thesis_checks" IS 'Section 2, bul
 
 COMMENT ON COLUMN "public"."research_reports"."risk_checks" IS 'Section 2, bear half. ThesisCheck[] carried from security_theses.bear_case: {key,title,metric,test,watchFor}; the post-brief adds {status,finding}. `test` is the bear point''s breaksIf (the "worsens if"), verbatim.';
 
+COMMENT ON COLUMN "public"."research_reports"."review_recommendations" IS 'ReviewRecommendation[] produced by the post-earnings job, one entry per portfolio holding the security: {portfolioName, weightPct, recommendation: add|hold|trim|sell, rationale, scorecardRead, openQuestions[]}. Pre-fills the stock review modal; the advisor still records the decision. NOTE: no `buy` — a security under review is already held, so adding to it is `add`.';
+
+
 
 
 ALTER TABLE "public"."research_reports" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
@@ -1499,7 +1503,7 @@ CREATE TABLE IF NOT EXISTS "public"."review_log" (
     "evidence_doc_path" "text",
     CONSTRAINT "review_log_conviction_chk" CHECK ((("conviction" IS NULL) OR ("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"])))),
     CONSTRAINT "review_log_outcome_check" CHECK (("outcome" = ANY (ARRAY['no_issues'::"text", 'flagged_for_action'::"text", 'placed_on_watchlist'::"text", 'recommended_sell'::"text"]))),
-    CONSTRAINT "review_log_recommendation_chk" CHECK ((("recommendation" IS NULL) OR ("recommendation" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))))
+    CONSTRAINT "review_log_recommendation_check" CHECK ((("recommendation" IS NULL) OR ("recommendation" = ANY (ARRAY['add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))))
 );
 
 

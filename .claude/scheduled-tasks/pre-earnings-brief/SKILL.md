@@ -27,7 +27,17 @@ The brief has two sections, and each field below is filled from BOTH ends: you s
 
 1. **Held universe.** execute_sql: `select distinct security_id from positions`.
 
-2. **Upcoming earnings.** Via the FMP earnings calendar, keep only tickers reporting within ~2 calendar days of today. If none, write "No held stocks report in the next 2 days." and STOP (persist nothing).
+2. **Upcoming earnings.** Via the FMP earnings calendar, keep only tickers reporting within **~4 calendar days** of today. If none, write "No held stocks report in the next 4 days." and STOP (persist nothing).
+
+   **Why 4 and not 2:** a post-earnings brief cannot exist without its pre-brief — a CHECK constraint enforces the pairing — and the review that reads it falls due the day after the print. So a day this job does not run (the app was closed) silently costs that holding its brief, its recommendation, and the aid for a review that will not come round again for a quarter. A wider window gives each print several chances to be caught instead of exactly one.
+
+   **Do not write a second brief for a print you have already covered.** Before writing, check for an existing `pre_earnings` row for that ticker created within the last 7 days and skip it if one exists:
+
+   ```sql
+   select security_id, created_at from research_reports
+   where report_type = 'pre_earnings' and deleted_at is null
+     and created_at >= now() - interval '7 days';
+   ```
 
 3. **Load the thesis of record** for each qualifying ticker — this is what Section 2 grades:
 

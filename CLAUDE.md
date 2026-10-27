@@ -382,12 +382,19 @@ GEV, ABBV, GLW, THC, MSI, COIN, MU.
 **Do not assume "adjacent years tie" means the series is sound** — on BSX and HWM five
 or six consecutive years are wrong. Agreement with the *filing* is the only test.
 
-- **`lib/secOperatingIncome.ts`** fetches the as-filed figure and
-  `checkOperatingMargin()` recomputes the margin from it. `StockScorecardPanels`
-  prefers the filed value for its prior-year rows, labels them `(as filed)`, flags
-  `(as filed — vendor differs)` on a mismatch, and marks the TTM headline
-  `(vendor — unverified)` for an affected issuer (TTM is not a filed period, so it
-  cannot be checked directly).
+- **The Scorecard does NOT use this — it is single-source FMP (Oct 2026).** The card
+  compares TTM against FY2025 against FY2024, and TTM can never be SEC-sourced because
+  it is not a filed period; sourcing the prior years from XBRL made every comparison on
+  the card apples-to-oranges. **Comparability beat accuracy, deliberately** — so the
+  prior-year rows show the vendor figure, and on the 13 affected names that is the wrong
+  number (BSX FY2020 reads +$601M against a filed −$80M loss). The audit below still
+  stands; what changed is which figure the card displays.
+- **`lib/secOperatingIncome.ts`** and the Express `/api/sec/operating-income` endpoint
+  remain, working but with **no caller**. They are the tested path to the as-filed
+  figure, and the obvious next use is *flagging* a vendor/filing disagreement rather
+  than replacing a value. Anything computing from the scorecard — the review
+  recommendation especially — must use **FMP throughout** and never compare a filed
+  prior year against a vendor TTM.
 - **It goes through Express** — `GET /api/sec/operating-income?cik=…`. This is a
   deliberate exception to "no business logic in Express", for two reasons that leave no
   choice: `data.sec.gov` returns **no** `access-control-allow-origin` on a 200 (only on
@@ -598,6 +605,32 @@ This is the payoff of the thesis/brief split: an earnings call becomes a schedul
 - **`thesis_status`** (`intact`/`at_risk`/`broken`) is the post-brief's verdict, deliberately the same vocabulary as `holding_reviews.thesis_status`. It must reconcile with Section 2 — `intact` alongside an `undermined` check with a tripped test needs explaining.
 - **`watch_items` is SUPERSEDED** by the four fields above. It was never populated on any row; the column and its renderer are kept only so a legacy brief would still display.
 - **EBITDA caution:** FMP's `ebitda` is derived from its `operatingIncome`, which disagrees with the filing on ~1 name in 3 — the post-brief takes EBITDA from the company's own release.
+
+**`review_recommendations` — what the stock review pre-fills from.** Reviews are
+earnings-driven (`next_review_at` = `next_earnings_release + 1 day`), so the post-brief
+is written the day the review falls due; that is why it carries the recommendation
+rather than a separate job, and why there is no staleness problem to solve.
+
+- `ReviewRecommendation[]`, **one entry per portfolio** holding the security —
+  `{portfolioName, weightPct, recommendation, rationale, scorecardRead, openQuestions[]}`.
+  Add/trim is an allocation act and a name sits in several books at different weights
+  (META: 7.00% / 3.00% / 5.00%), so a single answer would be wrong for one of them.
+  `review_log` stays **per-security**, so the modal shows several and the advisor records one.
+- **`add` / `hold` / `trim` / `sell` — there is no `buy`.** A security under review is
+  already held, so adding to it is `add`. Enforced by `review_log_recommendation_check`
+  and mirrored in `Recommendation` (`lib/reviewLog.ts`). `research_reports.rating` KEEPS
+  `buy`: a new-buy candidate genuinely is one.
+- **The rule is reconciliation, not thresholds.** The Monitor scorecard (six metrics vs
+  prior years, benchmark, sector, peers) raises the question; the thesis and the print
+  answer it or fail to. A metric below its prior years is not a verdict — on META,
+  operating margin fell 8.6pts but ~half was a one-time legal charge (ex-charge ~37.0%,
+  and operating income *rose* ~11%), while the FCF-margin fall was capex/revenue going
+  20.2% → 43.2%, which is the thesis's own break test tripping.
+- **`openQuestions` earns its place:** what would change the call and this print did not
+  settle. On META, whether capex at 43% of revenue is building revenue or is a treadmill.
+- The pre-earnings window is **~4 days, not 2**, with a 7-day dedupe guard. Strict
+  pairing means a day the job does not run costs that holding its brief, its
+  recommendation, and the aid for a review that will not recur for a quarter.
 
 ### Related UI primitives
 
