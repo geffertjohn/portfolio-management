@@ -82,6 +82,41 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 
    One print rarely settles a durable multi-year thesis, which is why these are not hit/miss. Grade the measure, not the mood.
 
+6b. **REVIEW RECOMMENDATION — `review_recommendations`, one entry per portfolio.**
+
+   This is what the advisor's stock review pre-fills from. Reviews are earnings-driven — `review_schedules.next_review_at` is `next_earnings_release + 1 day` — so this brief is written on the day the review falls due, which is why it carries the recommendation rather than a separate job.
+
+   **Read all three inputs. The scorecard raises the question; the thesis and this print answer it or fail to.**
+
+   a. **The Monitor scorecard**, which is what the advisor actually uses to decide whether a name stays in the book. Six metrics — operating margin TTM, FCF margin TTM, revenue and EPS growth TTM, revenue and EPS CAGR 3Y — each against **the prior two fiscal years, the benchmark, the sector and the peer group**. Take all of it from **FMP** (`ratios`, `income-statement`, `cash-flow-statement`, plus the stored benchmark columns); do **not** mix in SEC as-filed figures — the card is a period-over-period comparison and one inconsistent basis invalidates it.
+
+   b. **The thesis of record** you just graded (Section 2) — the break tests are the firm's own stated bar.
+
+   c. **This print** — Section 1 and your own findings above.
+
+   **Reconcile; do not threshold.** A metric below its prior years is a *question*, not a verdict. Worked example — META, Q3 2026:
+
+   > Operating margin TTM 32.86% against 41.44% (FY2025) and 42.18% (FY2024); FCF margin 11.86% against 22.94% and 32.87%. Mechanically that reads as sharp deterioration on two of six metrics. But the two declines have **opposite character**. Add back the $9.9B multistate AG charge and TTM operating margin is ~37.0% — roughly half the drop is a one-time legal accrual, and ex-charge operating income *rose* ~11% y/y. The FCF decline is not margin erosion at all: capex/revenue went 20.2% → 22.6% → 34.7% → 43.2%, so the conversion is being spent, deliberately — and that is the limb that **tripped the thesis's own break test**. Meanwhile the engine the thesis rests on accelerated (price per ad +14% with impressions +10%). One decline is noise to strip; the other is the thesis under test.
+
+   **One entry per portfolio holding the security** — add/trim is an allocation act, and the same print can mean different things at different weights:
+
+   ```sql
+   select portfolio_name, allocation_pct from positions where security_id = 'TICKER';
+   ```
+
+   ```json
+   [{"portfolioName":"Core Growth","weightPct":7.00,
+     "recommendation":"hold",
+     "rationale":"Why, reconciling scorecard against thesis and print — at THIS weight.",
+     "scorecardRead":"Which metric moves this print explains, and which it does not.",
+     "openQuestions":["The question that would change the call, which this print did not settle."]}]
+   ```
+
+   - `recommendation` is one of **`add` / `hold` / `trim` / `sell`**. There is **no `buy`** — the security is already held, so adding to it is `add`. A CHECK constraint rejects `buy`.
+   - **`openQuestions` is not optional padding.** On META the honest open question is whether capex at 43% of revenue is building revenue or is a treadmill — nothing in the print settles it, and that is the most useful thing this job can hand the advisor.
+   - If a weight differs enough between books to change the call, **say so and differ** — do not average them into one answer.
+   - If the security is in no `positions` row, write an empty array and say why in the commentary.
+
 7. **PROSE (`thesis` column) — the commentary.** ~6-10 sentences: what printed against the bar, how the stock reacted, and what is now different. No timing caveat. Note the current price.
 
 8. **UPDATE `bull_case` / `bear_case`.** Not a copy of the pre-brief's — what the bull and bear cases are NOW, saying which prior items the print retired, confirmed, or left open.
@@ -95,7 +130,7 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 
 10. **LEGACY PARENTS.** Briefs written before Oct 2026 have `estimates`/`street_questions`/`thesis_checks`/`risk_checks` all null and are prose-only (some have a `watch_items` array in the superseded shape). For those: reconstruct what you reasonably can from the parent's prose into the new fields, keep the same object shapes, and **say in the commentary that the items were reconstructed from prose**. If the parent's security now has a `security_theses` row, use it to populate Section 2 properly and note that you did.
 
-11. **PERSIST** as a DRAFT via execute_sql. Dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb. Columns: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'post_earnings'`, `status = 'draft'`, **`parent_report_id` = the pre-brief's id (REQUIRED — a CHECK constraint rejects a post-earnings row without it)**, `thesis_id` (carry the parent's), `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, `thesis`, `bull_case`, `bear_case`, `thesis_status`, `current_price`, `sources`. Leave `portfolio_name`, `addition_id`, `watch_items` null.
+11. **PERSIST** as a DRAFT via execute_sql. Dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb. Columns: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'post_earnings'`, `status = 'draft'`, **`parent_report_id` = the pre-brief's id (REQUIRED — a CHECK constraint rejects a post-earnings row without it)**, `thesis_id` (carry the parent's), `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, **`review_recommendations`**, `thesis`, `bull_case`, `bear_case`, `thesis_status`, `current_price`, `sources`. Leave `portfolio_name`, `addition_id`, `watch_items` null.
 
     A unique index allows only ONE post-earnings brief per parent, so a duplicate insert fails loudly rather than piling up — if that happens the name was already briefed; skip it.
 

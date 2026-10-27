@@ -2434,6 +2434,7 @@ export type Database = {
           portfolio_name: string | null
           rating: string | null
           report_type: string
+          review_recommendations: Json | null
           risk_checks: Json | null
           security_id: string
           sources: Json | null
@@ -2463,6 +2464,7 @@ export type Database = {
           portfolio_name?: string | null
           rating?: string | null
           report_type?: string
+          review_recommendations?: Json | null
           risk_checks?: Json | null
           security_id: string
           sources?: Json | null
@@ -2492,6 +2494,7 @@ export type Database = {
           portfolio_name?: string | null
           rating?: string | null
           report_type?: string
+          review_recommendations?: Json | null
           risk_checks?: Json | null
           security_id?: string
           sources?: Json | null

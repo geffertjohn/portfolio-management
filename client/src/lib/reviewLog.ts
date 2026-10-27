@@ -3,13 +3,18 @@ import { supabase } from './supabase'
 /**
  * Investment recommendation captured on a stock review.
  * Replaces the process `outcome` enum for stocks; funds still use `outcome`.
+ *
+ * There is deliberately NO `buy`. A security reaches a review because it is
+ * already held in a portfolio, so the thing you would do is ADD to the existing
+ * allocation — `buy` would never be the right verb here. `research_reports.rating`
+ * keeps `buy`, because a candidate in the new-buy pipeline genuinely is one.
+ * Mirrored by the `review_log_recommendation_check` constraint.
  */
-export type Recommendation = 'buy' | 'add' | 'hold' | 'trim' | 'sell'
+export type Recommendation = 'add' | 'hold' | 'trim' | 'sell'
 
-export const RECOMMENDATION_OPTIONS: Recommendation[] = ['buy', 'add', 'hold', 'trim', 'sell']
+export const RECOMMENDATION_OPTIONS: Recommendation[] = ['add', 'hold', 'trim', 'sell']
 
 export const RECOMMENDATION_LABELS: Record<Recommendation, string> = {
-  buy:  'Buy',
   add:  'Add',
   hold: 'Hold',
   trim: 'Trim',
@@ -17,7 +22,6 @@ export const RECOMMENDATION_LABELS: Record<Recommendation, string> = {
 }
 
 export const RECOMMENDATION_COLORS: Record<Recommendation, string> = {
-  buy:  'bg-green-100 text-green-700',
   add:  'bg-emerald-100 text-emerald-700',
   hold: 'bg-gray-100 text-gray-700',
   trim: 'bg-amber-100 text-amber-700',

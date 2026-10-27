@@ -100,6 +100,41 @@ export interface ThesisCheck {
 }
 
 /**
+ * What the review should do about the position, per portfolio.
+ *
+ * No `buy` — a security under review is already held, so adding to it is `add`.
+ * Mirrors `Recommendation` in lib/reviewLog.ts and the review_log CHECK.
+ */
+export type ReviewAction = 'add' | 'hold' | 'trim' | 'sell'
+
+/**
+ * One portfolio's recommendation, produced by the post-earnings job.
+ *
+ * Reviews are earnings-driven, so the brief is written the day the review falls
+ * due — which is why it carries this rather than a separate job. Add/trim is an
+ * ALLOCATION act, so there is one entry per portfolio holding the security: the
+ * same print can mean trim at a 7% weight and hold at 3%.
+ *
+ * `openQuestions` is the field that earns its place. A recommendation that a
+ * deteriorating metric is explained is only as good as the question it leaves
+ * open — on META, operating and FCF margin both fell hard, one because of a
+ * one-time legal charge and the other because capex ran to 43% of revenue, and
+ * the thing worth recording is "is that capex building revenue or a treadmill?"
+ */
+export interface ReviewRecommendation {
+  portfolioName: string
+  /** Target weight in that portfolio at the time the brief was written. */
+  weightPct: number | null
+  recommendation: ReviewAction
+  /** Why — reconciling the scorecard against the thesis and this print. */
+  rationale: string
+  /** How the Monitor scorecard read, and which moves the print explains. */
+  scorecardRead?: string | null
+  /** What would change the call, and is not settled by this print. */
+  openQuestions?: string[] | null
+}
+
+/**
  * How a post-earnings brief judged one of the pre-brief's watch-items.
  * @deprecated Superseded by the two-section shapes above (Oct 2026).
  */
@@ -142,6 +177,8 @@ export interface ResearchReport {
   /** Section 2 — thesis evaluation. */
   thesis_checks: ThesisCheck[] | null
   risk_checks: ThesisCheck[] | null
+  /** Per-portfolio review recommendations; pre-fills the stock review modal. */
+  review_recommendations: ReviewRecommendation[] | null
   /** @deprecated superseded by the four fields above. */
   watch_items: WatchItem[] | null
   thesis_status: ThesisStatus | null
@@ -161,7 +198,7 @@ export interface ResearchReport {
 }
 
 const COLS =
-  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, thesis_id, estimates, street_questions, thesis_checks, risk_checks, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
+  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, thesis_id, estimates, street_questions, thesis_checks, risk_checks, review_recommendations, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
 
 function mapRow(r: Record<string, unknown>): ResearchReport {
   return {
@@ -177,6 +214,7 @@ function mapRow(r: Record<string, unknown>): ResearchReport {
     street_questions: (r.street_questions as StreetQuestion[] | null) ?? null,
     thesis_checks: (r.thesis_checks as ThesisCheck[] | null) ?? null,
     risk_checks: (r.risk_checks as ThesisCheck[] | null) ?? null,
+    review_recommendations: (r.review_recommendations as ReviewRecommendation[] | null) ?? null,
     watch_items: (r.watch_items as WatchItem[] | null) ?? null,
     thesis_status: (r.thesis_status as ThesisStatus | null) ?? null,
     thesis: (r.thesis as string | null) ?? null,
@@ -208,6 +246,64 @@ export async function fetchResearchReports(securityId: string): Promise<Research
 }
 
 /** All non-deleted reports tied to a specific candidate (new-buy) draft, newest first. */
+/**
+ * The most recent post-earnings brief for a security — what the stock review
+ * pre-fills from.
+ *
+ * Reviews are earnings-driven (`next_review_at` = `next_earnings_release + 1
+ * day`), so the newest post-brief is normally the one written for the print the
+ * review is about. No age filter: a hard cutoff would blank the field on exactly
+ * the names that go longest between prints, and the caller shows the brief's own
+ * date so staleness is visible rather than guessed at.
+ */
+export async function fetchLatestPostEarningsBrief(securityId: string): Promise<ResearchReport | null> {
+  const { data, error } = await supabase
+    .from('research_reports')
+    .select(COLS)
+    .eq('security_id', securityId)
+    .eq('report_type', 'post_earnings')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data ? mapRow(data as Record<string, unknown>) : null
+}
+
+/**
+ * Turn the per-portfolio recommendations into the review's rationale text.
+ *
+ * Kept here rather than in the modal because it is pure and it is a judgement
+ * about the record, not about layout: where every portfolio agrees the advisor
+ * reads one rationale, and where they differ each book is named with its weight,
+ * because that disagreement IS the finding. Open questions follow, de-duplicated
+ * — on META the same capex question applies at every weight.
+ */
+export function composeReviewRationale(
+  recs: ReviewRecommendation[],
+  briefDate: string,
+): string {
+  if (recs.length === 0) return ''
+  const when = new Date(briefDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const unanimous = recs.every((r) => r.recommendation === recs[0].recommendation)
+
+  const body = unanimous
+    ? recs[0].rationale
+    : recs
+        .map((r) => `${r.portfolioName} (${r.weightPct ?? '—'}%) — ${r.recommendation.toUpperCase()}: ${r.rationale}`)
+        .join('\n\n')
+
+  const scorecard = recs.find((r) => r.scorecardRead)?.scorecardRead
+  const questions = [...new Set(recs.flatMap((r) => r.openQuestions ?? []))]
+
+  return [
+    body,
+    scorecard ? `Scorecard: ${scorecard}` : null,
+    questions.length ? `Open questions:\n${questions.map((q) => `• ${q}`).join('\n')}` : null,
+    `(Drafted from the post-earnings brief of ${when}. Edit before recording.)`,
+  ].filter(Boolean).join('\n\n')
+}
+
 export async function fetchResearchReportsForAddition(additionId: number): Promise<ResearchReport[]> {
   const { data, error } = await supabase
     .from('research_reports')
@@ -231,6 +327,7 @@ export interface NewResearchReport {
   street_questions?: StreetQuestion[] | null
   thesis_checks?: ThesisCheck[] | null
   risk_checks?: ThesisCheck[] | null
+  review_recommendations?: ReviewRecommendation[] | null
   watch_items?: WatchItem[] | null
   thesis_status?: ThesisStatus | null
   thesis?: string | null
@@ -261,6 +358,7 @@ export async function insertResearchReport(input: NewResearchReport): Promise<nu
       street_questions: (input.street_questions ?? null) as unknown as Json,
       thesis_checks: (input.thesis_checks ?? null) as unknown as Json,
       risk_checks: (input.risk_checks ?? null) as unknown as Json,
+      review_recommendations: (input.review_recommendations ?? null) as unknown as Json,
       watch_items: (input.watch_items ?? null) as unknown as Json,
       thesis_status: input.thesis_status ?? null,
       thesis: input.thesis ?? null,
