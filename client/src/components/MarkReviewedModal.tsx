@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { markReviewed, upsertReviewSchedule, type ReviewCadence } from '@/lib/reviewSchedules'
 import {
@@ -12,7 +12,9 @@ import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { beatRate, fetchTipRanksSymbolSummary } from '@/lib/fmpTipranks'
 import { fmtDecimalPct, fmtUsd, toLocalDateInputValue, EMPTY } from '@/lib/formatters'
+import { formatDate } from '@/lib/fundFormat'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { fetchLatestPostEarningsBrief, composeReviewRationale } from '@/lib/researchReports'
 import type { SecurityDetail } from '@/lib/securities'
 import { FundMonitoringPanel } from './FundMonitoringPanel'
 import { buildFundReviewPdf } from '@/lib/reviewEvidencePdf'
@@ -104,6 +106,40 @@ export function MarkReviewedModal({
   // Fund-specific outcome state
   const [fundMainOutcome, setFundMainOutcome] = useState<FundMainOutcome | null>(null)
   const [fundAtRisk, setFundAtRisk] = useState(false)
+
+  // ── Pre-fill from the post-earnings brief ─────────────────────────────────
+  // Reviews are earnings-driven, so the newest post-brief is normally the one
+  // written for the print this review is about. Stocks only — funds keep the
+  // process-outcome flow and have no brief.
+  const { data: brief } = useQuery({
+    queryKey: QUERY_KEYS.latestPostEarningsBrief(securityId),
+    queryFn: () => fetchLatestPostEarningsBrief(securityId),
+    enabled: open && !isFund && !!securityId,
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  })
+  // Memoised: a fresh [] every render would change the pre-fill effect's deps
+  // on every render.
+  const recs = useMemo(() => brief?.review_recommendations ?? [], [brief])
+  const unanimous = recs.length > 0 && recs.every((r) => r.recommendation === recs[0].recommendation)
+
+  // Applied ONCE per opening. The brief arrives asynchronously, so without this
+  // guard a background refetch (TanStack refetches on window focus) would
+  // overwrite whatever the advisor had typed — the same trap that made Alt rows
+  // vanish in AlternativesPanel. The ref is keyed on the modal opening, not on
+  // the query data, so it cannot re-fire.
+  const prefillApplied = useRef(false)
+  useEffect(() => { if (open) prefillApplied.current = false }, [open])
+
+  useEffect(() => {
+    if (!open || isFund || prefillApplied.current || recs.length === 0 || !brief) return
+    prefillApplied.current = true
+    // Only pre-select where every portfolio agrees. Where they differ the
+    // disagreement is the point, and picking one for the advisor would hide it.
+    if (unanimous) setRecommendation(recs[0].recommendation)
+    // Never clobber something already typed.
+    setNotes((prev) => (prev.trim() === '' ? composeReviewRationale(recs, brief.created_at) : prev))
+  }, [open, isFund, brief, recs, unanimous])
 
   // Reset fields when modal opens
   useEffect(() => {
@@ -520,7 +556,43 @@ export function MarkReviewedModal({
                   </div>
                 ) : (
                   <div className="mt-2 space-y-2">
-                    {/* Buy / Add / Hold / Trim / Sell */}
+                    {/* What the post-earnings brief suggested, per portfolio.
+                        Shown rather than silently applied: add/trim is an
+                        allocation act, and where the books disagree that
+                        disagreement is the finding — so nothing is pre-selected
+                        in that case and the advisor picks. */}
+                    {recs.length > 0 && brief && (
+                      <div className="rounded-md border border-indigo-100 bg-indigo-50/60 p-3">
+                        <p className="text-xs font-medium uppercase tracking-wide text-indigo-700">
+                          From the post-earnings brief
+                          <span className="ml-2 font-normal normal-case text-indigo-500">
+                            {formatDate(brief.created_at)}
+                            {brief.current_price != null && ` · ${fmtUsd(brief.current_price)}`}
+                            {brief.thesis_status && ` · thesis ${brief.thesis_status.replace('_', ' ')}`}
+                          </span>
+                        </p>
+                        <ul className="mt-2 space-y-1">
+                          {recs.map((r) => (
+                            <li key={r.portfolioName} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                              <span className="text-gray-700">{r.portfolioName}</span>
+                              <span className="tabular-nums text-xs text-gray-500">
+                                {r.weightPct != null ? `${r.weightPct}%` : EMPTY}
+                              </span>
+                              <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${RECOMMENDATION_COLORS[r.recommendation]}`}>
+                                {RECOMMENDATION_LABELS[r.recommendation]}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        {!unanimous && (
+                          <p className="mt-2 text-xs text-amber-700">
+                            The books disagree — nothing pre-selected. One decision is recorded for the security.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Add / Hold / Trim / Sell — no Buy: the security is already held. */}
                     <div className="flex gap-2">
                       {RECOMMENDATION_OPTIONS.map((r) => (
                         <button
@@ -573,7 +645,7 @@ export function MarkReviewedModal({
                   rows={3}
                   placeholder={isFund
                     ? 'Key findings, decisions made, follow-up items…'
-                    : 'Thesis, valuation, catalysts/risks — why this Buy/Hold/Sell call.'}
+                    : 'Thesis, valuation, catalysts/risks — why this Add/Hold/Trim/Sell call.'}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
                 />
               </div>

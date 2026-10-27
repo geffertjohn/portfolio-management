@@ -246,6 +246,64 @@ export async function fetchResearchReports(securityId: string): Promise<Research
 }
 
 /** All non-deleted reports tied to a specific candidate (new-buy) draft, newest first. */
+/**
+ * The most recent post-earnings brief for a security — what the stock review
+ * pre-fills from.
+ *
+ * Reviews are earnings-driven (`next_review_at` = `next_earnings_release + 1
+ * day`), so the newest post-brief is normally the one written for the print the
+ * review is about. No age filter: a hard cutoff would blank the field on exactly
+ * the names that go longest between prints, and the caller shows the brief's own
+ * date so staleness is visible rather than guessed at.
+ */
+export async function fetchLatestPostEarningsBrief(securityId: string): Promise<ResearchReport | null> {
+  const { data, error } = await supabase
+    .from('research_reports')
+    .select(COLS)
+    .eq('security_id', securityId)
+    .eq('report_type', 'post_earnings')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data ? mapRow(data as Record<string, unknown>) : null
+}
+
+/**
+ * Turn the per-portfolio recommendations into the review's rationale text.
+ *
+ * Kept here rather than in the modal because it is pure and it is a judgement
+ * about the record, not about layout: where every portfolio agrees the advisor
+ * reads one rationale, and where they differ each book is named with its weight,
+ * because that disagreement IS the finding. Open questions follow, de-duplicated
+ * — on META the same capex question applies at every weight.
+ */
+export function composeReviewRationale(
+  recs: ReviewRecommendation[],
+  briefDate: string,
+): string {
+  if (recs.length === 0) return ''
+  const when = new Date(briefDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const unanimous = recs.every((r) => r.recommendation === recs[0].recommendation)
+
+  const body = unanimous
+    ? recs[0].rationale
+    : recs
+        .map((r) => `${r.portfolioName} (${r.weightPct ?? '—'}%) — ${r.recommendation.toUpperCase()}: ${r.rationale}`)
+        .join('\n\n')
+
+  const scorecard = recs.find((r) => r.scorecardRead)?.scorecardRead
+  const questions = [...new Set(recs.flatMap((r) => r.openQuestions ?? []))]
+
+  return [
+    body,
+    scorecard ? `Scorecard: ${scorecard}` : null,
+    questions.length ? `Open questions:\n${questions.map((q) => `• ${q}`).join('\n')}` : null,
+    `(Drafted from the post-earnings brief of ${when}. Edit before recording.)`,
+  ].filter(Boolean).join('\n\n')
+}
+
 export async function fetchResearchReportsForAddition(additionId: number): Promise<ResearchReport[]> {
   const { data, error } = await supabase
     .from('research_reports')
