@@ -18,8 +18,6 @@ import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions } from '@/lib/benchm
 import { MetricCard } from './MonitoringPanelShared'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fetchRatiosTTM, fetchAnnualOperatingMargins, fetchFcfMargins, fetchCagr3y, fetchTtmGrowth } from '@/lib/fmpRatios'
-import { fetchProfile } from '@/lib/fmpMarket'
-import { fetchFiledOperatingIncome, checkOperatingMargin } from '@/lib/secOperatingIncome'
 
 /**
  * Returns the two most recent annual entries to display alongside a TTM headline.
@@ -65,45 +63,6 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
   // with the TTM window, duplicating the headline — drop it and show the prior two.
   const opMarginYears = priorFullYears(operatingMargin, annualMargins, (m) => m.operatingProfitMargin)
   const fcfMarginYears = priorFullYears(fcfTtm, fcfAnnual, (m) => m.fcfMargin)
-
-  // ── Operating margin, checked against the filing ──────────────────────────
-  // The vendor's operating income relocates charges out of the operating line on
-  // 17 of 45 audited names (BSX FY2020: +$601M reported against a filed -$80M
-  // LOSS), and its margin is derived from that number. So the prior-year rows are
-  // recomputed from SEC's as-filed figure wherever one can be matched, and the
-  // vendor's value is shown only where it cannot. Needs the Express server; when
-  // that is down the card degrades to the unverified vendor value rather than
-  // breaking, the same way Documents does.
-  const { data: profile } = useQuery({
-    queryKey: QUERY_KEYS.profile(security.security_id),
-    queryFn: () => fetchProfile(security.security_id),
-    staleTime: 1000 * 60 * 60,
-    retry: false,
-  })
-  const cik = profile?.cik ?? null
-
-  const { data: filedOpInc = null } = useQuery({
-    queryKey: QUERY_KEYS.secOperatingIncome(cik ?? ''),
-    queryFn: () => fetchFiledOperatingIncome(cik ?? ''),
-    enabled: !!cik,
-    staleTime: 1000 * 60 * 60 * 12,
-    retry: false,
-  })
-
-  const opMarginRows = opMarginYears.map((m) => {
-    const check = checkOperatingMargin(filedOpInc, m.periodEnd, m.revenue, m.operatingProfitMargin)
-    return {
-      fiscalYear: m.fiscalYear,
-      // Prefer the filing. Fall back to the vendor only when nothing matched.
-      margin: check.verified ? check.filedMargin : m.operatingProfitMargin,
-      verified: check.verified,
-      mismatch: check.mismatch,
-    }
-  })
-  // A name whose filed history disagrees with the feed is a name whose TTM figure
-  // should not be trusted either — TTM is not a filed period, so it cannot be
-  // checked directly, and the only honest signal is that this issuer is affected.
-  const ttmSuspect = opMarginRows.some((r) => r.mismatch)
 
   const { data: cagr3y } = useQuery({
     queryKey: QUERY_KEYS.cagr3y(security.security_id),
@@ -182,22 +141,13 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
         neutral={0}
         scale={0.3}
         higherIsBetter={true}
-        benchmarkValue={opMarginRows[0]?.margin ?? null}
-        benchmark2Value={opMarginRows[1]?.margin ?? null}
+        benchmarkValue={opMarginYears[0]?.operatingProfitMargin ?? null}
+        benchmark2Value={opMarginYears[1]?.operatingProfitMargin ?? null}
         components={[
-          {
-            label: ttmSuspect ? 'Operating margin TTM (unverified)' : 'Operating margin TTM',
-            value: operatingMargin !== null ? fmtDecimalPct(operatingMargin) : EMPTY,
-          },
-          // The label only speaks when it changes the number. Marking every
-          // verified row "(as filed)" wrapped these labels onto four lines in a
-          // narrow card and told the reader nothing where the two sources agree;
-          // "(filed)" appears only where the displayed figure differs from the
-          // vendor's, which is exactly when someone comparing this card against
-          // another screen needs to know why.
-          ...opMarginRows.map((r) => ({
-            label: `${r.fiscalYear} Operating Margin${r.mismatch ? ' (filed)' : ''}`,
-            value: r.margin !== null ? fmtDecimalPct(r.margin) : EMPTY,
+          { label: 'Operating margin TTM', value: operatingMargin !== null ? fmtDecimalPct(operatingMargin) : EMPTY },
+          ...opMarginYears.map((m) => ({
+            label: `${m.fiscalYear} Operating Margin`,
+            value: m.operatingProfitMargin !== null ? fmtDecimalPct(m.operatingProfitMargin) : EMPTY,
           })),
         ]}
       />
