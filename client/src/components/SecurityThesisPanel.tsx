@@ -318,6 +318,21 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
       </div>
     )
 
+  /**
+   * Read-only view of one version: business, competitive position, and the
+   * numbered reasons with their metrics collapsed.
+   *
+   * Two deliberate omissions (Oct 2026), both DISPLAY ONLY — nothing was
+   * dropped from `security_theses`, the editor still captures both, and the
+   * rows are append-only so the content is unchanged:
+   *  - Supporting metrics open closed. Each reason carries several, each with
+   *    source, metric, current, trend and breaksIf, which buried the reasons
+   *    themselves under the evidence for them.
+   *  - The bear case is not rendered here at all. Its break tests are still the
+   *    thing the post-earnings brief grades in Section 2 (`risk_checks`), which
+   *    is where they are read in anger; repeating them on the ownership tab made
+   *    the page scroll for a document the advisor reads top-to-bottom.
+   */
   const reasonsView = (v: SecurityThesis) => (
     <div className="space-y-5">
       {proseSection('Business description', v.businessDescription)}
@@ -332,10 +347,13 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
             <h4 className="text-sm font-semibold text-gray-900">{i + 1}. {r.title || EMPTY}</h4>
             <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{r.rationale}</p>
             {metrics.length > 0 && (
-              <div className="mt-2 border-l-2 border-green-200 pl-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-green-800">Supporting metrics</p>
+              <details className="group mt-2 border-l-2 border-green-200 pl-3">
+                <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-semibold uppercase tracking-wide text-green-800 hover:text-green-900">
+                  <span className="transition-transform group-open:rotate-90">&#9656;</span>
+                  Supporting metrics ({metrics.length})
+                </summary>
                 {metricList(metrics, 'text-green-900')}
-              </div>
+              </details>
             )}
           </div>
         )
@@ -343,10 +361,13 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
       {(() => {
         const loose = v.bullCase.filter((b) => !b.reasonKey || !v.thesis.some((r) => r.key === b.reasonKey))
         return loose.length === 0 ? null : (
-          <div>
-            <h4 className="text-sm font-semibold text-green-800">Supporting metrics not tied to a reason</h4>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-green-800 hover:text-green-900">
+              <span className="transition-transform group-open:rotate-90">&#9656;</span>
+              Supporting metrics not tied to a reason ({loose.length})
+            </summary>
             {metricList(loose, 'text-green-900')}
-          </div>
+          </details>
         )
       })()}
     </div>
@@ -657,11 +678,6 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
                 </div>
               </div>
               {reasonsView(current)}
-              <div className="border-t border-gray-100 pt-3">
-                <h4 className="text-sm font-semibold text-red-800">Bear case</h4>
-                <p className="text-xs text-gray-400">risks and headwinds</p>
-                {metricList(current.bearCase, 'text-red-900')}
-              </div>
             </div>
           )}
         </div>
@@ -705,10 +721,6 @@ export function SecurityThesisPanel({ ticker, securityName }: Props) {
                       </p>
                     )}
                     {reasonsView(v)}
-                    <div className="border-t border-gray-200 pt-2">
-                      <h5 className="text-xs font-semibold text-red-800">Bear case</h5>
-                      {metricList(v.bearCase, 'text-red-900')}
-                    </div>
                   </div>
                 )}
               </li>
