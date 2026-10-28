@@ -126,13 +126,15 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 
    ```json
    [{"portfolioName":"Core Growth","weightPct":7.00,
-     "recommendation":"hold",
+     "recommendation":"hold","conviction":"medium",
      "rationale":"Why, reconciling scorecard against thesis and print — at THIS weight.",
      "scorecardRead":"Which metric moves this print explains, and which it does not.",
      "openQuestions":["The question that would change the call, which this print did not settle."]}]
    ```
 
    - `recommendation` is one of **`add` / `hold` / `trim` / `sell`**. There is **no `buy`** — the security is already held, so adding to it is `add`. A CHECK constraint rejects `buy`.
+   - **`conviction` is REQUIRED on every entry** — one of **`high` / `medium` / `low`**, the same vocabulary as `review_log.conviction`, which is what the review modal pre-selects from. It rates how firmly you hold the recommendation, NOT how good the company is: a `hold` on a name whose thesis checks all passed and whose break tests are nowhere near tripping is `high`; a `hold` you would revisit on one more print is `low`. Judge it per portfolio, because the same call can be firm at one weight and marginal at another — a `trim` at a tier-1 weight where the position is the book's largest is usually firmer than the same `trim` at a tier-3 weight.
+     **Where an open question in `openQuestions` would plausibly change the call, conviction cannot be `high`** — that is the test that keeps this field honest rather than uniformly confident. On META the capex question is exactly that, so its `trim` is `medium`.
    - **`openQuestions` is not optional padding.** On META the honest open question is whether capex at 43% of revenue is building revenue or is a treadmill — nothing in the print settles it, and that is the most useful thing this job can hand the advisor.
    - If a weight differs enough between books to change the call, **say so and differ** — do not average them into one answer.
    - If the security is in no `positions` row, write an empty array and say why in the commentary.
