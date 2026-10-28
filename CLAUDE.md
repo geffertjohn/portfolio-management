@@ -686,6 +686,12 @@ it before touching anything here. The split that makes the system work:
   built by **`lib/thesisPdf.ts`** and uploaded to `Security Documents/<ticker>`. Each
   version gets its own file; a revision never overwrites its predecessor. `version > 1`
   requires a `revision_reason`.
+  - **Two ordering rules inside `publishThesis`, both load-bearing.** The PDF is uploaded
+    FIRST and the row published only on success, so there is never a thesis of record
+    without its document. And a live version is retired to `superseded` BEFORE the draft
+    is promoted — `security_theses_one_current` is a partial unique index, so promoting
+    first fails. Publish against **the path `uploadFile` returned**, never a derived one:
+    the server date-prefixes and sanitises filenames (gotcha 15).
 - **`security_id` has NO FK to `securities2`** — deliberately, so a watchlist candidate
   that is not held can still carry a thesis. Expect orphans and do not "fix" them.
 - **Loader:** `scripts/theses/load-drafts.mjs <staging-dir> [--dry-run]` validates
@@ -693,8 +699,14 @@ it before touching anything here. The split that makes the system work:
   publishes, never clobbers an existing lineage, and **warns on unknown keys** rather
   than silently dropping them. It recognises only `<TICKER>.research.json` /
   `<TICKER>.bear.json`, so notes and backups can sit beside the pair.
-- **Read-only surface:** `SecurityThesisPanel` on the stock detail page; data layer
-  `lib/securityTheses.ts`.
+- **`SecurityThesisPanel` is the drafting AND adoption surface** (stock detail page;
+  data layer `lib/securityTheses.ts`) — it is **not** read-only. It seeds a draft from the
+  committee's own work (`fetchThesisSeedFromResearch` **merges two rows** — the research
+  analyst writes the bull case, the devil's advocate the bear case), edits it
+  (`startOrResumeThesisDraft` / `saveThesisDraft` / `discardThesisDraft`), and adopts it
+  via "Save as thesis" → `publishThesis`. An adopted version renders read-only behind a
+  "Revise thesis" button, which opens version N+1. The published record is authored by the
+  advisor, with the reports it drew on recorded in `source_report_ids`.
 
 ## Actions Hub (`/actions`)
 
