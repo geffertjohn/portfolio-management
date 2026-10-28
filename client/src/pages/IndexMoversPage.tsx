@@ -6,13 +6,18 @@ import {
   fetchIndexConstituents,
   fetchBaselines,
   INDEX_META,
+  BOARD_LABEL,
   type IndexKey,
+  type BoardKey,
 } from '@/lib/fmpIndexMovers'
+import { fetchEquityBookConstituents } from '@/lib/positions'
 import { fetchSecurities } from '@/lib/securities'
 import { useIndexMovers, type Mover } from '@/hooks/useIndexMovers'
 import { fmtUsd, fmtSignedPct } from '@/lib/formatters'
 
 const INDEX_KEYS = Object.keys(INDEX_META) as IndexKey[]
+/** Index boards first, then our own book. */
+const BOARD_KEYS: BoardKey[] = [...INDEX_KEYS, 'holdings']
 /** Baseline refresh cadence. FMP's 100-symbol websocket cap rules out streaming
  * a 500-name board, so prices are polled instead. */
 const POLL_MS = 5000
@@ -93,12 +98,15 @@ function MoversTable({
 }
 
 export function IndexMoversPage() {
-  const [index, setIndex] = useState<IndexKey>('sp500')
+  const [board, setBoard] = useState<BoardKey>('sp500')
+  const isHoldings = board === 'holdings'
 
   const { data: constituents = [], isLoading: loadingConstituents, error: constituentsError } = useQuery({
-    queryKey: QUERY_KEYS.indexConstituents(index),
-    queryFn: () => fetchIndexConstituents(index),
-    staleTime: 1000 * 60 * 60 * 24, // membership changes rarely — cache for a day
+    queryKey: QUERY_KEYS.indexConstituents(board),
+    queryFn: () => (isHoldings ? fetchEquityBookConstituents() : fetchIndexConstituents(board as IndexKey)),
+    // Index membership changes rarely; a position change is rarer still within a
+    // session, but it IS ours to change, so the book gets the shorter window.
+    staleTime: isHoldings ? 1000 * 60 * 5 : 1000 * 60 * 60 * 24,
   })
 
   const symbols = useMemo(() => constituents.map((c) => c.symbol), [constituents])
@@ -109,7 +117,7 @@ export function IndexMoversPage() {
     isFetching: fetchingBaselines,
     dataUpdatedAt,
   } = useQuery({
-    queryKey: QUERY_KEYS.indexBaselines(index),
+    queryKey: QUERY_KEYS.indexBaselines(board),
     queryFn: () => fetchBaselines(symbols),
     enabled: symbols.length > 0,
     refetchInterval: POLL_MS, // poll prices (pauses while the tab is hidden)
@@ -136,7 +144,9 @@ export function IndexMoversPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Index Movers</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Top 20 gainers and losers among index constituents — refreshed every {POLL_MS / 1000}s while this page is open.
+            {isHoldings
+              ? 'Top 20 gainers and losers across the Core Growth and Equity Income books, deduplicated'
+              : 'Top 20 gainers and losers among index constituents'} — refreshed every {POLL_MS / 1000}s while this page is open.
           </p>
         </div>
         <LiveDot active={fetchingBaselines || Object.keys(baselines).length > 0} />
@@ -144,23 +154,23 @@ export function IndexMoversPage() {
 
       {/* Index selector */}
       <div className="mt-4 inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
-        {INDEX_KEYS.map((k) => (
+        {BOARD_KEYS.map((k) => (
           <button
             key={k}
             type="button"
-            onClick={() => setIndex(k)}
+            onClick={() => setBoard(k)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              index === k ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
+              board === k ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            {INDEX_META[k].label}
+            {BOARD_LABEL[k]}
           </button>
         ))}
       </div>
 
       {/* Status line */}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400">
-        <span>{constituents.length} constituents</span>
+        <span>{constituents.length} {isHoldings ? 'holdings' : 'constituents'}</span>
         {coverage > 0 && <span>{Math.round(coverage * 100)}% priced</span>}
         {dataUpdatedAt > 0 && <span>updated {new Date(dataUpdatedAt).toLocaleTimeString()}</span>}
       </div>
@@ -175,7 +185,7 @@ export function IndexMoversPage() {
       )}
 
       {loading && !constituentsError && (
-        <p className="mt-6 text-sm text-gray-500">Loading {INDEX_META[index].label}…</p>
+        <p className="mt-6 text-sm text-gray-500">Loading {BOARD_LABEL[board]}…</p>
       )}
 
       {!loading && !constituentsError && (

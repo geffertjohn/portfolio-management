@@ -159,6 +159,43 @@ export async function fetchPortfoliosHoldingSecurity(
   })
 }
 
+/** The two individual-stock books whose holdings feed the movers board. */
+export const EQUITY_BOOK_NAMES = ['Core Growth', 'Equity Income'] as const
+
+/**
+ * Distinct tickers held across Core Growth and Equity Income, for the movers
+ * board's Holdings tab.
+ *
+ * Deduplicated by ticker: the two books overlap heavily (AVGO, MSFT and GOOGL
+ * sit in both), and a name appearing twice would take two of the twenty slots
+ * for one position. The derived Equity Income & Core Growth blend is deliberately
+ * NOT queried — every name in it is already in one of its two parents, so it
+ * would add nothing but duplicates.
+ *
+ * `$Cash` is dropped: it is a position row but not a security FMP can price.
+ */
+export async function fetchEquityBookConstituents(): Promise<Array<{ symbol: string; name: string | null }>> {
+  const { data, error } = await supabase
+    .from('positions')
+    .select('security_id, securities2(security_id, security_name)')
+    .in('portfolio_name', EQUITY_BOOK_NAMES as unknown as string[])
+    .is('deleted_at', null)
+  if (error) throw error
+
+  const bySymbol = new Map<string, { symbol: string; name: string | null }>()
+  for (const row of data ?? []) {
+    const symbol = (row.security_id ?? '').toUpperCase()
+    if (!symbol || symbol === '$CASH') continue
+    if (bySymbol.has(symbol)) continue
+    // Narrow embed (two columns), so this does not go through embeddedSecurity,
+    // which is typed for the full position select. PostgREST returns an embed as
+    // an object or a one-element array depending on the relationship.
+    const sec = Array.isArray(row.securities2) ? row.securities2[0] : row.securities2
+    bySymbol.set(symbol, { symbol, name: sec?.security_name?.trim() || null })
+  }
+  return [...bySymbol.values()].sort((a, b) => a.symbol.localeCompare(b.symbol))
+}
+
 export async function fetchPositionsByPortfolioId(
   portfolioName: string
 ): Promise<PortfolioPosition[]> {

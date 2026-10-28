@@ -22,6 +22,21 @@ export const INDEX_META: Record<IndexKey, { label: string; endpoint: string }> =
   dowjones: { label: 'Dow Jones',   endpoint: 'dowjones-constituent' },
 }
 
+/**
+ * A board is either an FMP index or the firm's own equity book. Only the index
+ * boards have a constituent endpoint; `holdings` is sourced from `positions`
+ * (see `fetchEquityBookConstituents`), which is why the label lives here and
+ * the endpoint does not.
+ */
+export type BoardKey = IndexKey | 'holdings'
+
+export const BOARD_LABEL: Record<BoardKey, string> = {
+  sp500: INDEX_META.sp500.label,
+  nasdaq: INDEX_META.nasdaq.label,
+  dowjones: INDEX_META.dowjones.label,
+  holdings: 'Holdings',
+}
+
 export interface Constituent {
   symbol: string
   name: string | null
