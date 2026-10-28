@@ -6,6 +6,11 @@ node_modules/
 .env.local
 .env.*.local
 
+# MCP servers — `claude mcp add -s project` writes .mcp.json, and an HTTP server's
+# URL carries its API key as a query param. This repo is public, so project scope
+# would publish the key: keep MCP config local (~/.claude.json) instead.
+.mcp.json
+
 # Build
 dist/
 build/
