@@ -78,7 +78,7 @@ export function SecurityDetailPage() {
   const [prospectModalOpen, setProspectModalOpen] = useState(false)
   const [addActionOpen, setAddActionOpen] = useState(false)
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'monitor' | 'documents'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'monitor' | 'commentary'>('overview')
   const [financialsOpen, setFinancialsOpen] = useState(false)
   const queryClient = useQueryClient()
 
@@ -588,7 +588,7 @@ export function SecurityDetailPage() {
       {!isFundOrEtfSecurity(security) && (
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex gap-6">
-            {(['overview', 'monitor', 'documents'] as const).map((tab) => (
+            {(['overview', 'monitor', 'commentary'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -608,15 +608,19 @@ export function SecurityDetailPage() {
 
       {/* ── Stock: Overview tab ─────────────────────────────────────────────── */}
       {/*
-        Overview is the ownership case and nothing else. The Scorecard, Total
-        Performance, Analysts, News, Alerts and the review schedule/history were
-        removed here (Oct 2026) — the scorecard and the street data live on
-        Monitor, so this tab is not a second copy of them.
+        Overview is the ownership case: what the street thinks, then what we
+        think. The Scorecard, Total Performance, News, Alerts and the review
+        schedule/history were removed here (Oct 2026) and live on Monitor, so
+        this tab is not a second copy of them.
         The price those cards used to carry now lives in the header's metrics row.
         Funds are untouched and keep their own layout above.
       */}
       {!isFundOrEtfSecurity(security) && activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Whole-street coverage, weighted by analyst track record. Sits ABOVE
+              the thesis deliberately: the outside view is context for our own,
+              and reading it second invites anchoring on it. */}
+          <TipRanksPanel securityId={security.security_id} />
           {/* The thesis is its own document of record (append-only, PDF per version). */}
           <SecurityThesisPanel ticker={security.security_id} securityName={security.security_name} />
         </div>
@@ -647,33 +651,6 @@ export function SecurityDetailPage() {
           {/* Alternatives comparison tables */}
           <AlternativesPanel security={security} />
 
-          {/* Whole-street coverage, weighted by analyst track record */}
-          <TipRanksPanel securityId={security.security_id} />
-
-          {/* AI research reports + pre-earnings briefs */}
-          <SecurityResearchPanel securityId={security.security_id} />
-
-          {/* Transcripts (moved from Research) */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-base font-semibold text-gray-900">Transcripts</h2>
-
-            {transcriptLoading && (
-              <p className="text-sm text-gray-400">Loading transcript…</p>
-            )}
-
-            {!transcriptLoading && !transcript && (
-              <p className="text-sm text-gray-400">No transcript available.</p>
-            )}
-
-            {!transcriptLoading && transcript && (
-              <TranscriptViewer
-                transcript={transcript}
-                companyName={companyName}
-                executives={executives ?? []}
-              />
-            )}
-          </div>
-
           {/* Financials (moved from Research) */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <button
@@ -699,15 +676,50 @@ export function SecurityDetailPage() {
         </div>
       )}
 
-      {/* ── Stock: Documents tab ────────────────────────────────────────────── */}
-      {!isFundOrEtfSecurity(security) && activeTab === 'documents' && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <DocumentsFolderPanel
-            bucket={SECURITY_DOCS_BUCKET}
-            folder={security.security_id}
-            scopeLabel={security.security_id}
-            emptyHint="Upload research notes, filings, and other files for this security here."
-          />
+      {/* ── Stock: Commentary tab ───────────────────────────────────────────── */}
+      {/*
+        Everything said ABOUT the security, in descending order of how processed
+        it is: our own briefs, then management's own words, then the raw filings
+        and notes. Renamed from "Documents" (Oct 2026) when the briefs and
+        transcripts moved here off Monitor — Monitor is the measurement surface
+        (scorecard, alternatives, financials) and this is the narrative one.
+      */}
+      {!isFundOrEtfSecurity(security) && activeTab === 'commentary' && (
+        <div className="space-y-6">
+
+          {/* AI research reports + pre/post-earnings briefs */}
+          <SecurityResearchPanel securityId={security.security_id} />
+
+          {/* Transcripts (moved from Monitor) */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold text-gray-900">Transcripts</h2>
+
+            {transcriptLoading && (
+              <p className="text-sm text-gray-400">Loading transcript…</p>
+            )}
+
+            {!transcriptLoading && !transcript && (
+              <p className="text-sm text-gray-400">No transcript available.</p>
+            )}
+
+            {!transcriptLoading && transcript && (
+              <TranscriptViewer
+                transcript={transcript}
+                companyName={companyName}
+                executives={executives ?? []}
+              />
+            )}
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <DocumentsFolderPanel
+              bucket={SECURITY_DOCS_BUCKET}
+              folder={security.security_id}
+              scopeLabel={security.security_id}
+              emptyHint="Upload research notes, filings, and other files for this security here."
+            />
+          </div>
+
         </div>
       )}
 
