@@ -122,6 +122,15 @@ export function MarkReviewedModal({
   // on every render.
   const recs = useMemo(() => brief?.review_recommendations ?? [], [brief])
   const unanimous = recs.length > 0 && recs.every((r) => r.recommendation === recs[0].recommendation)
+  // Conviction is judged independently of the recommendation — the books can
+  // agree on "hold" while differing on how firmly — so it gets its own
+  // unanimity test rather than riding on `unanimous`. Null unless every entry
+  // states the same conviction, which also covers briefs that state none.
+  const unanimousConviction = useMemo<Conviction | null>(() => {
+    const first = recs[0]?.conviction ?? null
+    if (!first) return null
+    return recs.every((r) => r.conviction === first) ? first : null
+  }, [recs])
 
   // Applied ONCE per opening. The brief arrives asynchronously, so without this
   // guard a background refetch (TanStack refetches on window focus) would
@@ -137,9 +146,10 @@ export function MarkReviewedModal({
     // Only pre-select where every portfolio agrees. Where they differ the
     // disagreement is the point, and picking one for the advisor would hide it.
     if (unanimous) setRecommendation(recs[0].recommendation)
+    if (unanimousConviction) setConviction(unanimousConviction)
     // Never clobber something already typed.
     setNotes((prev) => (prev.trim() === '' ? composeReviewRationale(recs, brief.created_at) : prev))
-  }, [open, isFund, brief, recs, unanimous])
+  }, [open, isFund, brief, recs, unanimous, unanimousConviction])
 
   // Reset fields when modal opens
   useEffect(() => {

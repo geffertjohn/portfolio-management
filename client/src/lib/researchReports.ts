@@ -126,6 +126,13 @@ export interface ReviewRecommendation {
   /** Target weight in that portfolio at the time the brief was written. */
   weightPct: number | null
   recommendation: ReviewAction
+  /**
+   * How firmly the committee holds that recommendation, same vocabulary as
+   * `review_log.conviction`. Per-portfolio like the recommendation it qualifies:
+   * the same call can be firm at one weight and marginal at another. Optional,
+   * because briefs written before Oct 2026 carry no conviction.
+   */
+  conviction?: Conviction | null
   /** Why — reconciling the scorecard against the thesis and this print. */
   rationale: string
   /** How the Monitor scorecard read, and which moves the print explains. */
