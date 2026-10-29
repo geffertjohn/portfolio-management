@@ -646,17 +646,19 @@ export function SecurityDetailPage() {
 
       {/* ── Stock: Commentary tab ───────────────────────────────────────────── */}
       {/*
-        Everything said ABOUT the security, in descending order of how processed
-        it is: our own briefs, then management's own words, then the raw filings
-        and notes. Renamed from "Documents" (Oct 2026) when the briefs and
-        transcripts moved here off Monitor — Monitor is the measurement surface
-        (scorecard, alternatives, financials) and this is the narrative one.
+        Everything said ABOUT the security. Renamed from "Documents" (Oct 2026)
+        when the briefs and transcripts moved here off Monitor — Monitor is the
+        measurement surface (scorecard, alternatives, financials) and this is the
+        narrative one.
+
+        Transcripts lead. The ordering was briefly "most processed first" — our
+        briefs, then management's words, then raw files — but the call is the
+        primary source the briefs are written FROM, and it carries the committee's
+        own summary at its head. Reading our conclusions before the evidence for
+        them is the wrong way round.
       */}
       {!isFundOrEtfSecurity(security) && activeTab === 'commentary' && (
         <div className="space-y-6">
-
-          {/* AI research reports + pre/post-earnings briefs */}
-          <SecurityResearchPanel securityId={security.security_id} />
 
           {/* Transcripts: our read of the call, then the call itself. The
               summary comes first because it is the part that is read every
@@ -701,6 +703,9 @@ export function SecurityDetailPage() {
               </div>
             )}
           </div>
+
+          {/* AI research reports + pre/post-earnings briefs */}
+          <SecurityResearchPanel securityId={security.security_id} />
 
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <DocumentsFolderPanel
