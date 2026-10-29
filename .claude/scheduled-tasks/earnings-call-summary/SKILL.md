@@ -69,6 +69,15 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 
    > **Separate an industry constraint from a company problem.** This is where a mechanical summary goes wrong. For a memory maker in a tight market, "industry DRAM supply growth is decelerating" and "clean room space is the binding constraint" are what *sustain pricing* — they belong on the bull side or nowhere, however negative they sound. What cuts against the company is narrower and specific to it: its own bit growth trailing the industry, its own segment shipments falling, its own cost per bit rising faster than its own volume. Count the second kind, not the first.
 
+   > **Write so each sentence stands alone.** This summary is rendered verbatim
+   > into the **quarterly brief** (`lib/quarterlyBrief.ts`), a document shaped to
+   > be handed to a client; it strips the internal FIELDS but cannot reach inside
+   > free text. So never refer to one of our own documents as a bare noun — not
+   > "where the thesis lives" or "against the bar", which mean nothing to a
+   > reader who cannot see them. Name the business fact instead. You are
+   > describing the call, not grading our view of the company, so you should
+   > rarely need to mention the thesis at all.
+
    **`guidance`** — prose, what management guided to on this call: the figures, the periods they cover, and the conditions attached. Include the housekeeping asides; they are often the most concrete numbers on the call and are easy to miss because they arrive last. Null only if no forward-looking statement was made.
 
    **`highlights` / `lowlights`** — `[{title, detail}]` each. **No fixed count** — a call has as many as it has, and forcing symmetry is how a summary starts lying. `title` is a claim in a few words; `detail` is two or three sentences with the figure and what management actually said. Prefer what was *disclosed* over what was *asserted*: a number given under questioning is worth more than an adjective in an opening statement.

@@ -680,11 +680,19 @@ tripwire is not), estimate ranges and analyst counts, and `street_questions`.
 - **`canBuildQuarterlyBrief` requires a post-brief OR a call summary.** A
   pre-brief alone is expectations for a call that has not happened, so a brief
   built from it would describe a quarter nobody has lived through.
-- **Not yet client-ready, and the gap is the PROSE.** The structural exclusions
-  hold, but the text the committee wrote carries internal vocabulary — a GOOGL
-  `finding` reads "The test is met on its first leg." No field filter can reach
-  inside free text; closing it means a plain-language rule in the post-earnings
-  prompt (applying to future briefs only), not a change here.
+- **The structural exclusions are enforced here; the PROSE is enforced at the
+  source.** No field filter can reach inside free text, so both writing jobs now
+  carry a *How to write the prose fields* rule: **every sentence must stand on
+  its own**, naming the measure and the threshold rather than referring to one of
+  our documents as a bare noun. "The test is met on its first leg" (GOOGL) and
+  "where the thesis lives" (MSFT, a call summary) are the failures it targets.
+  **It is a readability rule, not a softening one** — a tripped break test is
+  still the single most valuable sentence the post-earnings job produces, and the
+  rule only governs how it is phrased. This is a correctness fix before it is a
+  client-facing one: a finding unreadable without a second document open fails at
+  the audit job the record exists for. Applies to briefs written from here on;
+  existing rows are the record as written and are **not** rewritten, so expect
+  older findings to still read internally.
 - **Saving is an explicit act**, for when the point IS to freeze a version: the
   PDF goes to `Security Documents/<ticker>` via `uploadFile`, which date-prefixes
   the name (gotcha 15), and the mutation invalidates

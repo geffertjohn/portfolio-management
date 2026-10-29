@@ -85,6 +85,41 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
    - **EBITDA: prefer the company's own reported figure from the release.** FMP's `ebitda` is derived from its `operatingIncome`, which disagrees with the as-filed statement on roughly one name in three — a sign flip in the worst case. If you must use the vendor figure, say so in `note`.
    - Resolve EVERY row the pre-brief listed.
 
+### How to write the prose fields (`answer`, `finding`, the commentary)
+
+**Every sentence must stand on its own.** A reader with none of our other
+documents in front of them — a reviewer a year from now, a regulator, a client —
+must be able to follow it. This is a readability rule, not a softening rule:
+keep every figure, every verdict and every tripped test.
+
+The failure is referring to one of our documents instead of naming the thing
+inside it. Bare "the test", "the bar", "the pre-brief", "the thesis", "the break
+line" are all unreadable to someone who cannot see what they point at.
+
+> ✗ "The test is met on its first leg. Q3 FCF was -$9.1B."
+> ✓ "Free cash flow was -$9.1B, the second negative quarter running. We own this
+>    company on the view that it funds its own capital spending out of
+>    operations, and two consecutive negative quarters is the first of the two
+>    conditions that would break that view."
+
+> ✗ "Matched the pre-brief's revenue bar and missed the rest of it."
+> ✓ "Revenue of $127.6B matched the $127.9B consensus; EPS and EBITDA did not."
+
+**Keep saying that a break test tripped — that is still the single most valuable
+sentence this job produces.** Say WHAT tripped and against which threshold, not
+that "the test" did.
+
+Two reasons this is a correctness rule rather than a presentational one. The
+briefs are the audit record, and a finding that cannot be read without a second
+document open fails at the one job the record exists for. And the **quarterly
+brief** (`lib/quarterlyBrief.ts`) renders `finding` and the commentary verbatim
+into a document shaped to be handed to a client — it strips the internal FIELDS
+(the recommendations, the break tests, the open questions) but it cannot reach
+inside free text, so the prose has to be clean at the source.
+
+This applies to briefs written from here on; existing rows are the record as it
+was written and are not rewritten.
+
 5. **SECTION 1 — `street_questions`.** Copy each entry's `key`/`question`/`why` unchanged and add:
 
    ```json
@@ -103,7 +138,7 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 
    - `supported` — the print moves the measure the way the thesis needs.
    - `mixed` — genuinely cuts both ways; say both ways in `finding`.
-   - `undermined` — the print moves against the thesis. **If a break test was actually TRIPPED, say so explicitly in `finding`** ("the test is met: combined growth printed 11.4% against the 15% floor, second consecutive quarter") — that is the single most valuable sentence this job produces.
+   - `undermined` — the print moves against the thesis. **If a break test was actually TRIPPED, say so explicitly in `finding`** — that is the single most valuable sentence this job produces. Name the measure and the threshold rather than the test: "combined growth printed 11.4% against the 15% floor the thesis set, the second consecutive quarter below it", not "the test is met". See *How to write the prose fields*.
    - `not_addressed` — the quarter did not speak to it. Legitimate and common; do not force a verdict.
 
    One print rarely settles a durable multi-year thesis, which is why these are not hit/miss. Grade the measure, not the mood.
@@ -152,7 +187,7 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
    - If a weight differs enough between books to change the call, **say so and differ** — do not average them into one answer.
    - If the security is in no `positions` row, write an empty array and say why in the commentary.
 
-7. **PROSE (`thesis` column) — the commentary.** ~6-10 sentences: what printed against the bar, how the stock reacted, and what is now different. No timing caveat. Note the current price.
+7. **PROSE (`thesis` column) — the commentary.** ~6-10 sentences: what printed against consensus, how the stock reacted, and what is now different. No timing caveat. Note the current price. Name figures rather than referring to our own documents — "against the $127.9B consensus", never "against the pre-brief's bar" (see *How to write the prose fields*).
 
 8. **UPDATE `bull_case` / `bear_case`.** Not a copy of the pre-brief's — what the bull and bear cases are NOW, saying which prior items the print retired, confirmed, or left open.
 
