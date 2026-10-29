@@ -82,9 +82,16 @@ export const QUERY_KEYS = {
   modelPortfolioBenchmarkOptions: ['model-portfolio-benchmark-options'] as const,
   securitySearch: (prefix: string) => ['security-search', prefix] as const,
   transcript: (securityId: string) => ['transcript', 'latest', securityId] as const,
+  /** Every transcribed call for a symbol — the Commentary timeline's row source. */
+  transcriptDates: (securityId: string) => ['transcript', 'dates', securityId] as const,
+  /** One historical call's transcript, fetched when its row is opened. */
+  transcriptForCall: (securityId: string, year: number, quarter: number) =>
+    ['transcript', 'call', securityId, year, quarter] as const,
   /** The committee's read of ONE call — keyed to it, since the page shows the latest. */
   callSummary: (securityId: string, year: number, quarter: number) =>
     ['earnings_call_summary', securityId, year, quarter] as const,
+  /** All of a security's call summaries, for the eight-quarter timeline. */
+  callSummaries: (securityId: string) => ['earnings_call_summary', 'all', securityId] as const,
   firmComplianceRules: ['firm_compliance_rules'] as const,
   allPortfolioPositions: ['all_portfolio_positions'] as const,
   clientPortfolioNames: ['client_portfolio_names'] as const,

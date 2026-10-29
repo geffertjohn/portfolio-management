@@ -39,6 +39,18 @@ The brief has two sections, and each field below is filled from BOTH ends: you s
      and created_at >= now() - interval '7 days';
    ```
 
+   **Resolve the fiscal period you are briefing**, because the brief is stored
+   against the CALL, not against the day you wrote it. `earningsTranscript` →
+   `transcripts-dates-by-symbol` (symbol), take the newest entry and increment
+   it: `Q1→Q2`, `Q2→Q3`, `Q3→Q4`, and `Q4` rolls to `Q1` of `fiscalYear + 1`.
+   That is the call about to be held.
+
+   Use the FISCAL labels the transcript list gives, never the calendar quarter —
+   TJX's August call is its Q2 **2027**, and dating it 2026 would file the brief
+   under a quarter that already happened. If a symbol has no transcript history
+   at all, leave the period null rather than guessing; the post-earnings job
+   fills it in once the call is transcribed.
+
 3. **Load the thesis of record** for each qualifying ticker — this is what Section 2 grades:
 
    ```sql
@@ -97,7 +109,7 @@ The brief has two sections, and each field below is filled from BOTH ends: you s
 
 10. **`bull_case` / `bear_case` columns.** Always populate both as their own columns — the bull and bear watch-items for this print in prose. Earlier briefs left these null on more than half the rows, which made them impossible to compare after the fact.
 
-11. **Persist** as a DRAFT via execute_sql into `research_reports`. Use PostgreSQL dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb to avoid escaping issues. Columns: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'pre_earnings'`, `status = 'draft'`, `thesis_id` (from step 3), `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, `thesis` (the commentary), `bull_case`, `bear_case`, `current_price`, `sources`. Leave `portfolio_name`, `addition_id`, `parent_report_id`, `thesis_status` and `watch_items` null — `thesis_status` belongs to the post-earnings brief, and `watch_items` is the superseded pre-Oct-2026 shape.
+11. **Persist** as a DRAFT via execute_sql into `research_reports`. Use PostgreSQL dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb to avoid escaping issues. Columns: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'pre_earnings'`, `status = 'draft'`, **`fiscal_year` and `quarter` (the upcoming call, from step 2 — both or neither; a CHECK enforces the pair)**, `thesis_id` (from step 3), `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, `thesis` (the commentary), `bull_case`, `bear_case`, `current_price`, `sources`. Leave `portfolio_name`, `addition_id`, `parent_report_id`, `thesis_status` and `watch_items` null — `thesis_status` belongs to the post-earnings brief, and `watch_items` is the superseded pre-Oct-2026 shape.
 
 12. **Digest.** Per name: TICKER, earnings date, whether a thesis was found, and a one-line takeaway.
 

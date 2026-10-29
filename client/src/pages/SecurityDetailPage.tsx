@@ -22,8 +22,6 @@ import { fetchPortfoliosHoldingSecurity } from '@/lib/positions'
 import { useSecurityDetail } from '@/hooks/useSecurityDetail'
 import { useSecurityBackLink } from '@/hooks/useSecurityBackLink'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import { useLatestTranscript } from '@/hooks/useTranscript'
-import { fetchKeyExecutives } from '@/lib/fmpTranscripts'
 import { fetchEarningsDates, fetchProfile, fetchQuote } from '@/lib/fmpMarket'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { fmtUsd, EMPTY } from '@/lib/formatters'
@@ -33,9 +31,6 @@ import { DocumentsFolderPanel } from '@/components/DocumentsFolderPanel'
 import { SecurityResearchPanel } from '@/components/SecurityResearchPanel'
 import { TipRanksPanel } from '@/components/TipRanksPanel'
 import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
-import { TranscriptViewer } from '@/components/TranscriptViewer'
-import { EarningsCallSummaryPanel } from '@/components/EarningsCallSummaryPanel'
-import { fetchCallSummary } from '@/lib/earningsCallSummaries'
 import { SecurityThesisPanel } from '@/components/SecurityThesisPanel'
 
 /**
@@ -78,30 +73,11 @@ export function SecurityDetailPage() {
 
   const { data: security, isLoading, error } = useSecurityDetail(id)
 
-  // Only fetch for stocks — funds/ETFs don't have earnings transcripts
   const isStock = security ? !isFundOrEtfSecurity(security) : false
-  const { data: transcript, isLoading: transcriptLoading } = useLatestTranscript(
-    isStock ? (security?.security_id ?? null) : null
-  )
-  // The committee's read of THIS call. Keyed on the transcript's own
-  // year/quarter so the summary can never drift onto a different call than the
-  // one rendered beside it.
-  const { data: callSummary } = useQuery({
-    queryKey: QUERY_KEYS.callSummary(
-      security?.security_id ?? '', transcript?.year ?? 0, transcript?.quarter ?? 0,
-    ),
-    queryFn: () => fetchCallSummary(security!.security_id, transcript!.year, transcript!.quarter),
-    enabled: isStock && !!security?.security_id && !!transcript,
-    staleTime: 1000 * 60 * 5,
-  })
-
-  const { data: executives } = useQuery({
-    queryKey: QUERY_KEYS.keyExecutives(security?.security_id ?? ''),
-    queryFn: () => fetchKeyExecutives(security!.security_id),
-    enabled: isStock && !!security?.security_id,
-    staleTime: 1000 * 60 * 60 * 24, // 24 hours — executive list changes rarely
-    retry: false,
-  })
+  // Transcripts and call summaries are now per-quarter inside the Commentary
+  // timeline, which fetches the one call it is asked to open. The page no longer
+  // pulls the latest transcript up front — eight quarters of them is tens of
+  // thousands of words, and the advisor opens one.
 
   const { data: reviewSchedule } = useQuery({
     queryKey: QUERY_KEYS.reviewSchedule(security?.security_id ?? ''),
@@ -651,58 +627,26 @@ export function SecurityDetailPage() {
         measurement surface (scorecard, alternatives, financials) and this is the
         narrative one.
 
-        Transcripts lead. The ordering was briefly "most processed first" — our
-        briefs, then management's words, then raw files — but the call is the
-        primary source the briefs are written FROM, and it carries the committee's
-        own summary at its head. Reading our conclusions before the evidence for
-        them is the wrong way round.
+        The separate Transcripts block is gone (Oct 2026). It could only ever
+        show the LATEST call, so the moment a brief was more than a quarter old
+        the evidence behind it was unreachable from this page. Every document
+        written around a call — both briefs, the committee's summary, the
+        transcript — now sits on that call's own row in one table, and the call
+        is still read before our conclusions: the summary leads the modal the
+        transcript opens in.
       */}
       {!isFundOrEtfSecurity(security) && activeTab === 'commentary' && (
         <div className="space-y-6">
 
-          {/* Transcripts: our read of the call, then the call itself. The
-              summary comes first because it is the part that is read every
-              time; the transcript is what you open when the summary raises a
-              question. */}
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-base font-semibold text-gray-900">Transcripts</h2>
-
-            {transcriptLoading && (
-              <p className="text-sm text-gray-400">Loading transcript…</p>
-            )}
-
-            {!transcriptLoading && !transcript && (
-              <p className="text-sm text-gray-400">No transcript available.</p>
-            )}
-
-            {!transcriptLoading && transcript && (
-              <div className="space-y-6">
-                <section>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Earnings Summary
-                  </h3>
-                  {callSummary ? (
-                    <EarningsCallSummaryPanel summary={callSummary} />
-                  ) : (
-                    <p className="text-sm italic text-gray-400">
-                      No committee summary for the Q{transcript.quarter} {transcript.year} call yet.
-                    </p>
-                  )}
-                </section>
-
-                <section>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Earnings Transcript
-                  </h3>
-                  <TranscriptViewer
-                    transcript={transcript}
-                    companyName={companyName}
-                    executives={executives ?? []}
-                  />
-                </section>
-              </div>
-            )}
-          </div>
+          {/* The commentary record: standing research, then eight quarters of
+              briefs, call summaries and transcripts as one table. The latest-only
+              Transcripts block that used to lead this tab is folded in — every
+              quarter's call is now reachable, not just the most recent. */}
+          <SecurityResearchPanel
+            securityId={security.security_id}
+            companyName={companyName}
+            nextEarningsDate={nextEarnings}
+          />
 
           {/* AI research reports + pre/post-earnings briefs */}
           <SecurityResearchPanel securityId={security.security_id} />

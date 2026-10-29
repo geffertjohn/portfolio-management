@@ -178,6 +178,19 @@ export interface ResearchReport {
   parent_report_id: number | null
   /** Which `security_theses` version Section 2 was graded against. */
   thesis_id: number | null
+  /**
+   * The earnings call this brief concerns — the same identity as
+   * `earnings_call_summaries`, so briefs, the committee's call summary and the
+   * transcript all line up on one key in the Commentary timeline.
+   *
+   * Null for `initial` / `update` reports: standing research belongs to no
+   * quarter. A CHECK keeps the pair whole (both set or both null), and a
+   * pre-brief written for a call that has not happened yet carries the UPCOMING
+   * period — otherwise the brief would be invisible until the transcript landed,
+   * which is exactly when it is most wanted.
+   */
+  fiscal_year: number | null
+  quarter: number | null
   /** Section 1 — the street. */
   estimates: EstimateRow[] | null
   street_questions: StreetQuestion[] | null
@@ -205,7 +218,7 @@ export interface ResearchReport {
 }
 
 const COLS =
-  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, thesis_id, estimates, street_questions, thesis_checks, risk_checks, review_recommendations, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
+  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, thesis_id, fiscal_year, quarter, estimates, street_questions, thesis_checks, risk_checks, review_recommendations, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
 
 function mapRow(r: Record<string, unknown>): ResearchReport {
   return {
@@ -217,6 +230,8 @@ function mapRow(r: Record<string, unknown>): ResearchReport {
     report_type: r.report_type as ReportType,
     parent_report_id: (r.parent_report_id as number | null) ?? null,
     thesis_id: (r.thesis_id as number | null) ?? null,
+    fiscal_year: (r.fiscal_year as number | null) ?? null,
+    quarter: (r.quarter as number | null) ?? null,
     estimates: (r.estimates as EstimateRow[] | null) ?? null,
     street_questions: (r.street_questions as StreetQuestion[] | null) ?? null,
     thesis_checks: (r.thesis_checks as ThesisCheck[] | null) ?? null,
@@ -330,6 +345,8 @@ export interface NewResearchReport {
   report_type?: ReportType
   parent_report_id?: number | null
   thesis_id?: number | null
+  fiscal_year?: number | null
+  quarter?: number | null
   estimates?: EstimateRow[] | null
   street_questions?: StreetQuestion[] | null
   thesis_checks?: ThesisCheck[] | null
@@ -361,6 +378,8 @@ export async function insertResearchReport(input: NewResearchReport): Promise<nu
       report_type: input.report_type ?? 'initial',
       parent_report_id: input.parent_report_id ?? null,
       thesis_id: input.thesis_id ?? null,
+      fiscal_year: input.fiscal_year ?? null,
+      quarter: input.quarter ?? null,
       estimates: (input.estimates ?? null) as unknown as Json,
       street_questions: (input.street_questions ?? null) as unknown as Json,
       thesis_checks: (input.thesis_checks ?? null) as unknown as Json,

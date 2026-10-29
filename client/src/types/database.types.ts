@@ -2480,9 +2480,11 @@ export type Database = {
           deleted_at: string | null
           estimates: Json | null
           fair_value: number | null
+          fiscal_year: number | null
           id: number
           parent_report_id: number | null
           portfolio_name: string | null
+          quarter: number | null
           rating: string | null
           report_type: string
           review_recommendations: Json | null
@@ -2510,9 +2512,11 @@ export type Database = {
           deleted_at?: string | null
           estimates?: Json | null
           fair_value?: number | null
+          fiscal_year?: number | null
           id?: never
           parent_report_id?: number | null
           portfolio_name?: string | null
+          quarter?: number | null
           rating?: string | null
           report_type?: string
           review_recommendations?: Json | null
@@ -2540,9 +2544,11 @@ export type Database = {
           deleted_at?: string | null
           estimates?: Json | null
           fair_value?: number | null
+          fiscal_year?: number | null
           id?: never
           parent_report_id?: number | null
           portfolio_name?: string | null
+          quarter?: number | null
           rating?: string | null
           report_type?: string
           review_recommendations?: Json | null

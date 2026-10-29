@@ -329,7 +329,7 @@ For **stocks** (not funds), the detail page pulls these live via `useQuery` rath
 Tabs are **Overview · Monitor · Commentary** (no Alternatives tab; the Research tab was removed and its blocks redistributed). The third tab was called **Documents** until Oct 2026, when the earnings briefs and transcripts moved into it off Monitor and it was renamed — the split is now **Monitor = measurement** (scorecard, alternatives, financials) and **Commentary = what is said about the security**.
 - **Overview (stocks): Street Coverage, then the Investment Thesis card.** The Scorecard, Total Performance, News, Alerts and the Review Schedule / Review History blocks were **removed from the stock Overview (Oct 2026)** — they live on Monitor, and the tab is the ownership case. **`TipRanksPanel` was moved back here (Oct 2026), deliberately ABOVE the thesis**: the outside view is context for our own, and placing it second invites anchoring the thesis on the street rather than measuring the street against the thesis. Two consequences worth knowing: the price moved to the **header** as the first cell of the stock metrics row (so that row is `grid-cols-6`, funds stay `grid-cols-3`). It keeps the documented seam — TanStack owns the REST `fetchQuote` baseline, `quoteStream` owns the live last-trade leg via `useLiveQuote`, and a "Live" dot shows only while ticks arrive; `useLiveQuote` is passed `null` for funds, which is how they opt out of a stream FMP does not serve them. `AnalystCoveragePanel` was **deleted** — the header covers the price, and the 52-week range and vendor price-target consensus it added on top were reviewed on the page and not wanted. `RangeBar` survives as a shared primitive (`TipRanksPanel` uses it); and `StockReturnTable` / `NewsAlertsPanel` are **still live** via `ResearchPage`, so neither is dead code. **Funds are untouched** and keep their own (untabbed) layout.
 - **Monitor:** Scorecard cards (with Review button) · the two **Alternatives comparison tables** · **Financials**. (Street Coverage, AI Research & Briefs and Transcripts all used to sit here; the first is on Overview now, the other two on Commentary.)
-- **Commentary** (the renamed Documents tab): **Transcripts** · **AI Research & Briefs** (`SecurityResearchPanel`) · **Documents** (`DocumentsFolderPanel`, `Security Documents`/`<ticker>`). **Transcripts lead.** The order was briefly most-processed-first (briefs, then the call, then raw files) and was inverted (Oct 2026): the call is the primary source the briefs are written FROM, and it now carries the committee's own summary at its head, so reading the conclusions before the evidence was the wrong way round. **Transcripts itself has two subsections — Earnings Summary, then Earnings Transcript** (see Earnings call summaries). The tab id in `activeTab` is `'commentary'`, and the nav label is derived from the id by capitalising it, so renaming the id renames the tab.
+- **Commentary** (the renamed Documents tab): **AI Research & Briefs** (`SecurityResearchPanel`) · **Documents** (`DocumentsFolderPanel`, `Security Documents`/`<ticker>`). **The separate Transcripts block is GONE (Oct 2026)** — it could only ever show the LATEST call, so the evidence behind any brief older than a quarter was unreachable from the page. Everything written around a call now sits on that call's own row in the **Commentary timeline** (below), and the transcript opens in a modal with the committee's summary above it — the call is still read before our conclusions. The tab id in `activeTab` is `'commentary'`, and the nav label is derived from the id by capitalising it, so renaming the id renames the tab.
 
 ### Alternatives comparison tables (`AlternativesPanel.tsx`)
 
@@ -528,7 +528,7 @@ Seven subagents, each with hard recommend-only guardrails: **research-analyst** 
 
 ### Deliverable tables + UI
 
-`research_reports` · `risk_reports` · `ic_memos` — RLS open, soft-delete via `deleted_at`; `security_id` = text ticker (no FK); `addition_id` links to the candidate. Data layer `lib/{researchReports,riskReports,icMemos}.ts` + query keys. Read-only viewers: **`ICReviewPanel`** (candidate-workspace section — memo + research + risk cards, with the CIO **approve/watchlist/reject** action via `recordIcDecision`), **`SecurityResearchPanel`** (security Monitor tab), **`PortfolioRiskPanel`** (portfolio Reviews tab). Shared cards in `components/icReviewCards.tsx`.
+`research_reports` · `risk_reports` · `ic_memos` — RLS open, soft-delete via `deleted_at`; `security_id` = text ticker (no FK); `addition_id` links to the candidate. Data layer `lib/{researchReports,riskReports,icMemos}.ts` + query keys. Read-only viewers: **`ICReviewPanel`** (candidate-workspace section — memo + research + risk cards, with the CIO **approve/watchlist/reject** action via `recordIcDecision`), **`SecurityResearchPanel`** (security Commentary tab), **`PortfolioRiskPanel`** (portfolio Reviews tab). Shared cards in `components/icReviewCards.tsx`.
 
 ### Section-drafter (`.claude/agents/addition-drafter.md`)
 
@@ -606,6 +606,52 @@ This is the payoff of the thesis/brief split: an earnings call becomes a schedul
 - **`thesis_status`** (`intact`/`at_risk`/`broken`) is the post-brief's verdict, deliberately the same vocabulary as `holding_reviews.thesis_status`. It must reconcile with Section 2 — `intact` alongside an `undermined` check with a tripped test needs explaining.
 - **`watch_items` is SUPERSEDED** by the four fields above. It was never populated on any row; the column and its renderer are kept only so a legacy brief would still display.
 - **EBITDA caution:** FMP's `ebitda` is derived from its `operatingIncome`, which disagrees with the filing on ~1 name in 3 — the post-brief takes EBITDA from the company's own release.
+
+### The Commentary timeline — briefs keyed to the CALL, not to the day they were written
+
+`research_reports.fiscal_year` / `.quarter` (Oct 2026) record which earnings call
+a brief concerns. Same identity as `earnings_call_summaries`, so briefs, the
+committee's call summary and the transcript all line up on one key. A CHECK keeps
+the pair whole (both set or both null) and another bounds the quarter to 1–4;
+`initial` and `update` reports are **standing research** and carry neither.
+
+`SecurityResearchPanel` renders standing research, then `CommentaryTimeline` —
+eight quarters, newest first, one row per call with its pre-brief, post-brief,
+quarterly brief (**a placeholder; not built**) and transcript. Rows are built by
+the pure `buildCommentaryTimeline()` in `lib/commentaryTimeline.ts`. Four things
+there are load-bearing:
+
+- **Transcript dates are the row source, not the briefs** —
+  `fetchTranscriptDates()` (`/stable/earning-call-transcript-dates`). Most
+  quarters have no brief, so keying off briefs would hide every quarter whose
+  transcript is still servable. FMP's list carries mislabelled historical rows
+  (GOOGL reports a "Q1 2023" call dated 2014-12-02), so it dedupes on
+  `(fiscalYear, quarter)` keeping the newest date.
+- **A period with only a pre-brief still gets a row.** A pre-brief is written
+  BEFORE the call, so the newest quarter has no transcript yet; a row with no
+  call date sorts to the TOP (sentinel `9999-12-31`) and shows the page's
+  next-earnings date as "(expected)". Dropping it would hide the forward-looking
+  document at exactly the moment it is the only one that exists.
+- **Several briefs of one type in one period are NOT collapsed.** The
+  pre-earnings dedupe guard has slipped before — TJX carries three pre-briefs for
+  Q2 2027 — and showing one icon while dropping two would misreport the record.
+- **Empty cells are the point.** No icon means no document, so a print that was
+  never graded reads as a pre-brief with nothing beside it. GOOGL's Q2 2026 brief
+  (id 18) is the standing example.
+
+**Both jobs write the period, and the post-earnings job CORRECTS its parent's.**
+The pre-brief's period is a forecast (increment the newest transcript entry;
+`Q4` rolls to `Q1` of `fiscalYear + 1`); the post-brief's is observed, taken from
+the transcript entry it matched. Because the timeline puts a pair on one row
+keyed by period, a disagreement would split them across two rows and the
+post-brief would appear to answer nothing — so the post job updates the parent.
+Use the **fiscal** labels the transcript list gives: TJX's August call is Q2
+**2027**.
+
+Transcripts are fetched **per row, on open** (`fetchTranscript(symbol, fy, q)` —
+v3, which returns the exact `EarningsTranscript` shape `TranscriptViewer` wants).
+Eight transcripts are tens of thousands of words each and the advisor opens one.
+The transcript icon is tinted indigo when a call summary exists.
 
 **`review_recommendations` — what the stock review pre-fills from.** Reviews are
 earnings-driven (`next_review_at` = `next_earnings_release + 1 day`), so the post-brief

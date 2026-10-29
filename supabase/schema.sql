@@ -1477,8 +1477,12 @@ CREATE TABLE IF NOT EXISTS "public"."research_reports" (
     "risk_checks" "jsonb",
     "thesis_id" bigint,
     "review_recommendations" "jsonb",
+    "fiscal_year" integer,
+    "quarter" integer,
     CONSTRAINT "research_reports_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
+    CONSTRAINT "research_reports_period_complete" CHECK ((("fiscal_year" IS NULL) = ("quarter" IS NULL))),
     CONSTRAINT "research_reports_post_needs_parent" CHECK ((("report_type" <> 'post_earnings'::"text") OR ("parent_report_id" IS NOT NULL))),
+    CONSTRAINT "research_reports_quarter_check" CHECK ((("quarter" IS NULL) OR (("quarter" >= 1) AND ("quarter" <= 4)))),
     CONSTRAINT "research_reports_rating_check" CHECK (("rating" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))),
     CONSTRAINT "research_reports_report_type_check" CHECK (("report_type" = ANY (ARRAY['initial'::"text", 'pre_earnings'::"text", 'post_earnings'::"text", 'update'::"text"]))),
     CONSTRAINT "research_reports_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'final'::"text"]))),
@@ -1510,6 +1514,14 @@ COMMENT ON COLUMN "public"."research_reports"."risk_checks" IS 'Section 2, bear 
 
 
 COMMENT ON COLUMN "public"."research_reports"."review_recommendations" IS 'ReviewRecommendation[] produced by the post-earnings job, one entry per portfolio holding the security: {portfolioName, weightPct, recommendation: add|hold|trim|sell, rationale, scorecardRead, openQuestions[]}. Pre-fills the stock review modal; the advisor still records the decision. NOTE: no `buy` — a security under review is already held, so adding to it is `add`.';
+
+
+
+COMMENT ON COLUMN "public"."research_reports"."fiscal_year" IS 'Fiscal year of the earnings call this brief concerns; null for initial/update reports.';
+
+
+
+COMMENT ON COLUMN "public"."research_reports"."quarter" IS 'Fiscal quarter (1-4) of the earnings call this brief concerns; null for initial/update reports.';
 
 
 
@@ -2544,6 +2556,10 @@ CREATE UNIQUE INDEX "research_reports_one_post_per_parent" ON "public"."research
 
 
 CREATE INDEX "research_reports_parent_idx" ON "public"."research_reports" USING "btree" ("parent_report_id") WHERE ("parent_report_id" IS NOT NULL);
+
+
+
+CREATE INDEX "research_reports_period_idx" ON "public"."research_reports" USING "btree" ("security_id", "fiscal_year" DESC, "quarter" DESC) WHERE (("deleted_at" IS NULL) AND ("fiscal_year" IS NOT NULL));
 
 
 

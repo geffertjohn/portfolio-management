@@ -113,3 +113,22 @@ export async function fetchCallSummary(
   if (error) throw error
   return data ? mapRow(data as unknown as Row) : null
 }
+
+/**
+ * Every live summary for a security, newest call first.
+ *
+ * The Commentary timeline shows eight quarters at once, so it indexes this by
+ * `(fiscal_year, quarter)` rather than firing `fetchCallSummary` eight times.
+ */
+export async function fetchCallSummaries(securityId: string): Promise<EarningsCallSummary[]> {
+  const { data, error } = await supabase
+    .from('earnings_call_summaries')
+    .select(SELECT)
+    .eq('security_id', securityId.toUpperCase())
+    .is('deleted_at', null)
+    .order('fiscal_year', { ascending: false })
+    .order('quarter', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map((r) => mapRow(r as unknown as Row))
+}
