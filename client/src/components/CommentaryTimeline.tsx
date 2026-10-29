@@ -298,7 +298,19 @@ export function CommentaryTimeline({
                   </td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">
                     {row.callDate ? (
-                      fmtDate(row.callDate)
+                      row.dateSuspect ? (
+                        /* FMP contradicts itself here — the date falls before a
+                           call of an earlier period. Show it, but do not assert
+                           it: the fiscal period is the reliable half of the row. */
+                        <span
+                          className="text-gray-400 underline decoration-dotted underline-offset-2"
+                          title={`FMP dates this call ${fmtDate(row.callDate)}, which falls before an earlier quarter's call — the vendor date disagrees with the fiscal period, so treat it as unreliable.`}
+                        >
+                          {fmtDate(row.callDate)}?
+                        </span>
+                      ) : (
+                        fmtDate(row.callDate)
+                      )
                     ) : isUpcoming && nextEarningsDate ? (
                       <span className="text-gray-500">{fmtDate(nextEarningsDate)} <span className="text-xs text-gray-400">(expected)</span></span>
                     ) : (
