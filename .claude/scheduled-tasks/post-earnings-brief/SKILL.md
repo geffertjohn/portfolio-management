@@ -219,8 +219,38 @@ was written and are not rewritten.
 
     A unique index allows only ONE post-earnings brief per parent, so a duplicate insert fails loudly rather than piling up — if that happens the name was already briefed; skip it.
 
+11b. **AT-RISK STATUS — report it, never change it.**
+
+    The At-Risk list is run by the `at-risk-review` job, which grades the six
+    scorecard metrics on its own schedule. This brief does **not** flag or clear
+    anything — but a print is exactly when the advisor is reading about the name,
+    so if its at-risk standing changed since the pre-brief, say so in the
+    commentary:
+
+    ```sql
+    select id, date_added::date, removal_date::date, removed_at::date,
+           removed_by, removal_reason, metrics
+    from at_risk
+    where security_id = 'TICKER'
+      and (removed_at is null or removed_at >= <pre-brief created_at>)
+    order by date_added desc;
+    ```
+
+    - **Added since the pre-brief** — one sentence: which metrics went red and
+      how long the sell timer runs.
+    - **Cleared since the pre-brief** — one sentence: which recovered, and to
+      what.
+    - **On the list and unchanged** — a clause, not a paragraph: that it is
+      flagged, and the days remaining.
+    - **Not on the list** — say nothing. Silence is the normal case and a line
+      saying so in sixty briefs is noise.
+
+    Keep it in the commentary prose rather than inventing a field, and write it
+    so it stands on its own (see *How to write the prose fields*) — "three of six
+    scorecard metrics were red in June and two still are" , not "it is at-risk".
+
 12. **DIGEST.** Per name: TICKER, report date, the estimate beat/miss line (EPS and revenue), the street-question tally (e.g. "2 answered / 1 partial"), the Section 2 tally (e.g. "1 supported / 1 undermined"), the thesis verdict, and a one-line takeaway. **Call out any tripped break test at the top of the digest** — that is the thing the CIO needs to see first. List skipped names separately, in two groups, so it is clear they were considered, not missed: **"awaiting actuals"**, and **"awaiting transcript"** (actuals posted, no call transcript yet; give the report date and how many business days remain before the fallback writes it). Mark any brief written under the fallback as **"no transcript"** in its digest line.
 
 ## Guardrails
 
-Recommend-only, DRAFT-only. Never write to `positions` or `portfolio_allocations`, never place or stage trades, never flag At-Risk or touch the watchlist. These briefs are decision support for the CIO. Nothing here writes to `security_theses` either — a tripped break test is *reported*, and revising the thesis stays the advisor's act.
+Recommend-only, DRAFT-only. Never write to `positions` or `portfolio_allocations`, never place or stage trades, never flag or clear At-Risk (that is the `at-risk-review` job's job — this brief only reports what it did), never touch the watchlist. These briefs are decision support for the CIO. Nothing here writes to `security_theses` either — a tripped break test is *reported*, and revising the thesis stays the advisor's act.

@@ -253,17 +253,26 @@ ALTER SEQUENCE "public"."action_items_id_seq" OWNED BY "public"."action_items"."
 
 CREATE TABLE IF NOT EXISTS "public"."alert_events" (
     "id" bigint NOT NULL,
-    "rule_id" bigint NOT NULL,
+    "rule_id" bigint,
     "metric_field" "text" NOT NULL,
     "actual_value" numeric,
-    "threshold_value" numeric NOT NULL,
+    "threshold_value" numeric,
     "triggered_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "acknowledged_at" timestamp with time zone,
-    "security_id" "text" NOT NULL
+    "security_id" "text" NOT NULL,
+    "source" "text" DEFAULT 'rule'::"text" NOT NULL,
+    "message" "text",
+    "at_risk_id" bigint,
+    CONSTRAINT "alert_events_shape_check" CHECK (((("source" = 'rule'::"text") AND ("threshold_value" IS NOT NULL)) OR (("source" = 'at_risk'::"text") AND ("message" IS NOT NULL) AND ("at_risk_id" IS NOT NULL)))),
+    CONSTRAINT "alert_events_source_check" CHECK (("source" = ANY (ARRAY['rule'::"text", 'at_risk'::"text"])))
 );
 
 
 ALTER TABLE "public"."alert_events" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."alert_events"."source" IS 'Which producer raised it: rule (the deleted threshold engine) or at_risk (sell timer breached with a metric still red).';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."alert_events_id_seq"
@@ -319,11 +328,27 @@ CREATE TABLE IF NOT EXISTS "public"."at_risk" (
     "notes" "text",
     "removed_at" timestamp with time zone,
     "removal_date" timestamp with time zone,
-    "security_id" "text" NOT NULL
+    "security_id" "text" NOT NULL,
+    "metrics_detail" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "source" "text" DEFAULT 'manual'::"text" NOT NULL,
+    "last_reviewed_at" timestamp with time zone,
+    "removal_reason" "text",
+    "removed_by" "text",
+    "breach_alerted_at" timestamp with time zone,
+    CONSTRAINT "at_risk_removed_by_check" CHECK ((("removed_by" IS NULL) OR ("removed_by" = ANY (ARRAY['manual'::"text", 'committee'::"text"])))),
+    CONSTRAINT "at_risk_source_check" CHECK (("source" = ANY (ARRAY['manual'::"text", 'committee'::"text"])))
 );
 
 
 ALTER TABLE "public"."at_risk" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."at_risk"."metrics_detail" IS 'AtRiskMetric[] — per flagged metric: the reading and comparators frozen at flag time, plus the latest re-measurement. Margin metrics are graded against the FROZEN comparators; growth metrics against live benchmarks.';
+
+
+
+COMMENT ON COLUMN "public"."at_risk"."breach_alerted_at" IS 'When the sell timer expired with a metric still red and the alert fired. Idempotency guard.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."audit_log" (
@@ -2143,6 +2168,11 @@ ALTER TABLE ONLY "public"."alert_rules"
 
 
 
+ALTER TABLE "public"."at_risk"
+    ADD CONSTRAINT "at_risk_removal_is_explained" CHECK ((("removed_at" IS NULL) OR (("removal_reason" IS NOT NULL) AND ("removed_by" IS NOT NULL)))) NOT VALID;
+
+
+
 ALTER TABLE ONLY "public"."audit_log"
     ADD CONSTRAINT "audit_log_pkey" PRIMARY KEY ("id");
 
@@ -2400,6 +2430,10 @@ CREATE INDEX "action_items_security_id_idx" ON "public"."action_items" USING "bt
 
 
 CREATE INDEX "action_items_status_idx" ON "public"."action_items" USING "btree" ("status");
+
+
+
+CREATE UNIQUE INDEX "alert_events_one_live_at_risk" ON "public"."alert_events" USING "btree" ("at_risk_id") WHERE (("source" = 'at_risk'::"text") AND ("acknowledged_at" IS NULL));
 
 
 
@@ -2767,6 +2801,11 @@ ALTER TABLE ONLY "public"."action_items"
 
 ALTER TABLE ONLY "public"."action_items"
     ADD CONSTRAINT "action_items_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id");
+
+
+
+ALTER TABLE ONLY "public"."alert_events"
+    ADD CONSTRAINT "alert_events_at_risk_id_fkey" FOREIGN KEY ("at_risk_id") REFERENCES "public"."at_risk"("id") ON DELETE CASCADE;
 
 
 

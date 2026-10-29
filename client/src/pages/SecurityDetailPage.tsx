@@ -8,7 +8,8 @@ import {
   setScorecardCohort,
 } from '@/lib/securities'
 import type { ScorecardCohort } from '@/lib/fundScorecard'
-import { fetchAtRiskBySecurity, removeFromAtRisk } from '@/lib/atRisk'
+import { fetchAtRiskBySecurity } from '@/lib/atRisk'
+import { RemoveFromAtRiskModal } from '@/components/RemoveFromAtRiskModal'
 import { FundHeaderMetricsRow } from '@/components/FundHeaderMetricsRow'
 import { DetailPageState } from '@/components/DetailPageState'
 import { FundMonitoringPanel } from '@/components/FundMonitoringPanel'
@@ -185,16 +186,9 @@ export function SecurityDetailPage() {
   const isAtRisk = atRiskEntries.length > 0
   const activeAtRiskEntry = atRiskEntries[0] ?? null
 
-  const removeAtRiskMutation = useMutation({
-    mutationFn: () => {
-      if (!activeAtRiskEntry) throw new Error('No active at-risk entry to remove')
-      return removeFromAtRisk(activeAtRiskEntry.id)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRiskBySecurity(security!.security_id) })
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRisk })
-    },
-  })
+  // Clearing a flag needs a recorded reason, so the badge opens the modal
+  // rather than removing on click.
+  const [removeAtRiskOpen, setRemoveAtRiskOpen] = useState(false)
 
   const invalidId = Number.isNaN(id) || !Number.isInteger(id) || id <= 0
   if (invalidId || isLoading || error || !security) {
@@ -230,12 +224,11 @@ export function SecurityDetailPage() {
               {isAtRisk && (
                 <button
                   type="button"
-                  onClick={() => removeAtRiskMutation.mutate()}
-                  disabled={removeAtRiskMutation.isPending}
-                  className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-200 disabled:opacity-50"
-                  title="Click to remove from at-risk list"
+                  onClick={() => setRemoveAtRiskOpen(true)}
+                  className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-200"
+                  title="Click to remove from the at-risk list"
                 >
-                  {removeAtRiskMutation.isPending ? 'Removing…' : 'At-Risk'}
+                  At-Risk
                 </button>
               )}
               {reviewSchedule && isOverdue(reviewSchedule.next_review_at) && (
@@ -659,6 +652,15 @@ export function SecurityDetailPage() {
           </div>
 
         </div>
+      )}
+
+      {removeAtRiskOpen && activeAtRiskEntry && (
+        <RemoveFromAtRiskModal
+          entryId={activeAtRiskEntry.id}
+          symbol={security.security_id}
+          metrics={activeAtRiskEntry.metrics_detail}
+          onClose={() => setRemoveAtRiskOpen(false)}
+        />
       )}
 
       <CreateActionItemModal
