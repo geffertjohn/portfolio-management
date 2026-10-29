@@ -49,6 +49,11 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
       - If actuals are NOT available, SKIP silently and persist nothing. The row stays unanswered and a later run picks it up — that is the design, not a failure. FMP has been observed lagging a confirmed pre-market release by more than a day.
 
    b. **Transcript.** `earningsTranscript` → `transcripts-dates-by-symbol` (symbol). The newest entry must be dated **on or after the report date**. Match on the **date**, never on the quarter number — fiscal and calendar quarters differ (Visa's quarter ended 30 September is its fiscal Q4). Then fetch it with `search-transcripts` using that entry's `fiscalYear` and `quarter`.
+
+      **Keep that entry's `fiscalYear` and `quarter`** — they are the period
+      this brief is stored against, and they are authoritative: the call has
+      happened, so this is the real period rather than the pre-brief's forecast
+      of it.
       - **Why this gate exists:** this job runs at ~7:25 AM ET. A **pre-market** reporter's release, and therefore its actuals, is already in FMP by then, but its call (typically 8:00–8:30 AM ET) has not happened yet. Gating on actuals alone writes a brief from headline numbers, and because only one post-earnings brief is allowed per parent, that thin brief can never be replaced. (Oct 2026: BSX and GEV released at ~6:30 AM; neither call had been held when the job ran.) After-close reporters are normally transcribed by the next morning, so in practice both kinds land on the next weekday's run.
       - If actuals are in but the transcript is NOT, SKIP and persist nothing — **unless the fallback below applies.**
 
@@ -160,7 +165,22 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 
 10. **LEGACY PARENTS.** Briefs written before Oct 2026 have `estimates`/`street_questions`/`thesis_checks`/`risk_checks` all null and are prose-only (some have a `watch_items` array in the superseded shape). For those: reconstruct what you reasonably can from the parent's prose into the new fields, keep the same object shapes, and **say in the commentary that the items were reconstructed from prose**. If the parent's security now has a `security_theses` row, use it to populate Section 2 properly and note that you did.
 
-11. **PERSIST** as a DRAFT via execute_sql. Dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb. Columns: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'post_earnings'`, `status = 'draft'`, **`parent_report_id` = the pre-brief's id (REQUIRED — a CHECK constraint rejects a post-earnings row without it)**, `thesis_id` (carry the parent's), `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, **`review_recommendations`**, `thesis`, `bull_case`, `bear_case`, `thesis_status`, `current_price`, `sources`. Leave `portfolio_name`, `addition_id`, `watch_items` null.
+11. **PERSIST** as a DRAFT via execute_sql. Dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb. Columns: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'post_earnings'`, `status = 'draft'`, **`parent_report_id` = the pre-brief's id (REQUIRED — a CHECK constraint rejects a post-earnings row without it)**, `thesis_id` (carry the parent's), **`fiscal_year` and `quarter` from the transcript entry (step 5b)**, `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, **`review_recommendations`**, `thesis`, `bull_case`, `bear_case`, `thesis_status`, `current_price`, `sources`. Leave `portfolio_name`, `addition_id`, `watch_items` null.
+
+    **Then correct the parent pre-brief's period to match:**
+
+    ```sql
+    update research_reports
+    set fiscal_year = <fy>, quarter = <q>
+    where id = <parent_report_id>
+      and (fiscal_year is distinct from <fy> or quarter is distinct from <q>);
+    ```
+
+    The pre-brief's period was a forecast made before the call; this one is
+    observed. The Commentary timeline puts the pair on ONE row keyed by period,
+    so if they disagree the brief and its answer split across two rows and the
+    post-brief appears to answer nothing. Correcting it here is what keeps a pair
+    together without anyone having to get the forecast right.
 
     A unique index allows only ONE post-earnings brief per parent, so a duplicate insert fails loudly rather than piling up — if that happens the name was already briefed; skip it.
 
