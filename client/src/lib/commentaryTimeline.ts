@@ -15,6 +15,15 @@
  *   days BEFORE the call, so for the newest quarter there is no transcript yet;
  *   dropping that row would hide the forward-looking document at exactly the
  *   moment it is the only one that exists.
+ * - **Rows are ordered by FISCAL PERIOD, never by call date.** FMP stamps the
+ *   wrong calendar year on some Q4/Q1 dates — it dates Alphabet's FY2024 Q4 call
+ *   `2024-02-04` and its FY2025 Q1 call `2024-04-24`, both a year early, though
+ *   the transcripts themselves say "Fourth Quarter 2024" and "First Quarter
+ *   2025". Sorting by date pushed those two below 2024's calls, and the
+ *   eight-row cut then dropped them: GOOGL's table jumped Q2 2025 -> Q3 2024.
+ *   2 of 42 held symbols carry the defect (also APP's FY2023 Q4). The period is
+ *   the identity every row is keyed on anyway, so ordering by it is both correct
+ *   and immune.
  * - **Several briefs of one type in one period is normal and is not collapsed.**
  *   The pre-earnings job's dedupe guard has slipped before (TJX carries three
  *   pre-briefs for Q2 2027), and showing one icon while silently dropping two
@@ -34,6 +43,12 @@ export interface CommentaryRow {
   quarter: number
   /** The call date, or null when the call has not happened or is not transcribed. */
   callDate: string | null
+  /**
+   * FMP's date for this call contradicts its own fiscal period — it falls before
+   * a call of an EARLIER period. The date is shown but not asserted; see the
+   * ordering note above.
+   */
+  dateSuspect: boolean
   pre: ResearchReport[]
   post: ResearchReport[]
   summary: EarningsCallSummary | null
@@ -47,11 +62,27 @@ export function standingReports(reports: ResearchReport[]): ResearchReport[] {
 const periodKey = (fy: number, q: number) => `${fy}-Q${q}`
 
 /**
- * Sort newest-first. A row with no call date is an UPCOMING quarter, so it sorts
- * above every dated row — hence the sentinel rather than treating null as empty.
+ * Newest fiscal period first. No date sentinel is needed for an upcoming
+ * quarter: it is simply the highest period, so it sorts to the top on its own.
  */
-function sortKey(r: CommentaryRow): string {
-  return `${r.callDate ?? '9999-12-31'}|${r.fiscalYear}|${r.quarter}`
+function byPeriodDesc(a: CommentaryRow, b: CommentaryRow): number {
+  return b.fiscalYear - a.fiscalYear || b.quarter - a.quarter
+}
+
+/**
+ * Flag any row whose date falls before a call of an earlier period.
+ *
+ * Compares against the running MAX of all lower periods, not just the previous
+ * one — on GOOGL the bad FY2024 Q4 date drags the (also wrong) FY2025 Q1 date
+ * back above it, so a neighbour-only check would clear the second of the pair.
+ */
+function markSuspectDates(ascending: CommentaryRow[]): void {
+  let highest: string | null = null
+  for (const r of ascending) {
+    if (!r.callDate) continue
+    if (highest && r.callDate < highest) r.dateSuspect = true
+    else highest = r.callDate
+  }
 }
 
 export function buildCommentaryTimeline(
@@ -66,7 +97,7 @@ export function buildCommentaryTimeline(
     const key = periodKey(fy, q)
     let r = rows.get(key)
     if (!r) {
-      r = { key, fiscalYear: fy, quarter: q, callDate: null, pre: [], post: [], summary: null }
+      r = { key, fiscalYear: fy, quarter: q, callDate: null, dateSuspect: false, pre: [], post: [], summary: null }
       rows.set(key, r)
     }
     return r
@@ -91,7 +122,7 @@ export function buildCommentaryTimeline(
     r.post.sort(newestFirst)
   }
 
-  return [...rows.values()]
-    .sort((a, b) => sortKey(b).localeCompare(sortKey(a)))
-    .slice(0, limit)
+  const ordered = [...rows.values()].sort(byPeriodDesc)
+  markSuspectDates([...ordered].reverse())
+  return ordered.slice(0, limit)
 }

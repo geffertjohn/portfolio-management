@@ -627,6 +627,14 @@ there are load-bearing:
   transcript is still servable. FMP's list carries mislabelled historical rows
   (GOOGL reports a "Q1 2023" call dated 2014-12-02), so it dedupes on
   `(fiscalYear, quarter)` keeping the newest date.
+- **Rows sort by FISCAL PERIOD, never by call date** (gotcha 22). FMP stamps the
+  wrong calendar year on some Q4/Q1 dates, so a date sort silently drops recent
+  quarters off the bottom of the eight. `markSuspectDates()` flags a date that
+  falls before a call of an EARLIER period — compared against the running max of
+  all lower periods, not just the previous one, because on GOOGL the bad Q4 date
+  drags the equally-wrong Q1 date back above it and a neighbour-only check clears
+  the second of the pair. A flagged date renders dotted-underlined with a `?`;
+  it is shown but not asserted, and never silently "corrected" by adding a year.
 - **A period with only a pre-brief still gets a row.** A pre-brief is written
   BEFORE the call, so the newest quarter has no transcript yet; a row with no
   call date sorts to the TOP (sentinel `9999-12-31`) and shows the page's
@@ -917,5 +925,7 @@ Identity fields (`security_name`, `long_description`, `morningstar_sector`, `mor
 19. **FMP's annual `operatingIncome` disagrees with the filing on ~1 name in 3** — a charge is relocated out of the operating line while `incomeBeforeTax` ties, so no internal check catches it, and `ratios.operatingProfitMargin` is derived from the same number. BSX FY2020 reads +$601M against a filed **-$80M loss**. Read it from SEC XBRL via `lib/secOperatingIncome.ts`, and never conclude the feed is sound because two adjacent years agree with each other (see FMP Financial Metrics).
 
 20. **TipRanks `stockReturn` is a GAP TO SPOT, not a return** — it is exactly `price / target - 1` (verified on 272 of 272 rows across three symbols), so it has no time dimension and no outcome; the same analyst's $325 and $705 targets on one name read -16.6% and -61.6% against one spot price. Never label it a return and never colour it green/red: positive just means the target sits below the price. The per-row `beatTarget` flag is likewise unreliable (on WMT it marks ~half the rows as beats against a symbol record of 6 in 259) and is deliberately not rendered -- use `beatRate()` on the summary aggregate, which gates on `MIN_RATINGS_FOR_ACCURACY`.
+
+22. **FMP's transcript-date list stamps the wrong calendar YEAR on some Q4/Q1 rows** — the fiscal labels are right and the transcript itself is right, only the `date` is a year early. It dates Alphabet's **FY2024 Q4** call `2024-02-04` and its **FY2025 Q1** call `2024-04-24`, though those transcripts open with "Fourth Quarter 2024" and "First Quarter 2025"; `search-transcripts`/`earning_call_transcript` by `(year, quarter)` return the correct call regardless. **2 of 42 held symbols** carry it (also APP FY2023 Q4) — a fiscal-year-boundary bug, so expect it at Q4/Q1. Anything ordering calls must sort by **`(fiscalYear, quarter)`**, not by `date`: the Commentary timeline sorted by date and GOOGL's table jumped Q2 2025 → Q3 2024, dropping two real quarters off the bottom of its eight-row window. Do not "fix" a bad date by adding a year — that is inventing a figure; flag it (`CommentaryRow.dateSuspect`) and show it unasserted.
 
 21. **`totalDebt` folds operating leases in as `capitalLeaseObligations`** (13+ names; TJX 4.7x overstated at $13,489M vs a filed $2,869M). On HWM and RDDT it is wrong **in kind** -- neither has any finance leases, and RDDT has no borrowings at all, so any feed-derived leverage ratio there is meaningless rather than merely wrong. It also breaks multi-year EV comparisons across the ASC 842 boundary (TJX net debt/EBITDA flips -0.11x to +1.55x). **`propertyPlantEquipmentNet`** folds in the ROU asset, with the mirror error visible in `otherNonCurrentAssets`.
