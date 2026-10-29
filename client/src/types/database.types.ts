@@ -553,6 +553,57 @@ export type Database = {
           },
         ]
       }
+      earnings_call_summaries: {
+        Row: {
+          call_date: string | null
+          created_at: string
+          deleted_at: string | null
+          fiscal_year: number
+          guidance: string | null
+          highlights: Json
+          id: number
+          lowlights: Json
+          quarter: number
+          security_id: string
+          sentiment: string
+          sentiment_summary: string
+          status: string
+          transcript_date: string | null
+        }
+        Insert: {
+          call_date?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          fiscal_year: number
+          guidance?: string | null
+          highlights?: Json
+          id?: never
+          lowlights?: Json
+          quarter: number
+          security_id: string
+          sentiment: string
+          sentiment_summary: string
+          status?: string
+          transcript_date?: string | null
+        }
+        Update: {
+          call_date?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          fiscal_year?: number
+          guidance?: string | null
+          highlights?: Json
+          id?: never
+          lowlights?: Json
+          quarter?: number
+          security_id?: string
+          sentiment?: string
+          sentiment_summary?: string
+          status?: string
+          transcript_date?: string | null
+        }
+        Relationships: []
+      }
       firm_compliance_rules: {
         Row: {
           deleted_at: string | null

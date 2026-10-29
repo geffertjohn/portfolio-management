@@ -82,6 +82,9 @@ export const QUERY_KEYS = {
   modelPortfolioBenchmarkOptions: ['model-portfolio-benchmark-options'] as const,
   securitySearch: (prefix: string) => ['security-search', prefix] as const,
   transcript: (securityId: string) => ['transcript', 'latest', securityId] as const,
+  /** The committee's read of ONE call — keyed to it, since the page shows the latest. */
+  callSummary: (securityId: string, year: number, quarter: number) =>
+    ['earnings_call_summary', securityId, year, quarter] as const,
   firmComplianceRules: ['firm_compliance_rules'] as const,
   allPortfolioPositions: ['all_portfolio_positions'] as const,
   clientPortfolioNames: ['client_portfolio_names'] as const,
