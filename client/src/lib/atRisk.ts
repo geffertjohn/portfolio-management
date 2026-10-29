@@ -6,11 +6,10 @@
  * Formerly the "watchlist" table — renamed so "watchlist" can mean buy candidates
  * (see lib/prospects.ts). Backed by the Supabase `at_risk` table.
  *
- * Removal date rules (based on number of red metrics):
- *   5 metrics → 30 days  (Replace)
- *   4 metrics → 90 days  (Monitor)
- *   3 metrics → 180 days (Monitor)
- *   2 metrics → 365 days (Monitor)
+ * The sell timer is counted in EARNINGS REPORTS, not days (see
+ * `reportsToRecover`): 5+ red metrics get 1 report, 3-4 get 2, 1-2 get 4. The
+ * six metrics are TTM figures that only move when the company reports, so a
+ * timer shorter than one earnings cycle cannot be satisfied.
  */
 
 import { supabase } from './supabase'
@@ -204,22 +203,71 @@ export interface AtRiskEntry {
   breach_alerted_at: string | null
 }
 
-/** Days on the clock, by how many metrics were red when the flag was raised. */
-export function sellTimerDays(redCount: number): number {
-  return redCount >= 5 ? 30 : redCount === 4 ? 90 : redCount === 3 ? 180 : 365
+/**
+ * How many earnings reports the position gets to recover, by how many metrics
+ * were red when the flag was raised.
+ *
+ * **Reports, not days — because the six metrics are TTM figures that only move
+ * when the company reports.** A timer shorter than one earnings cycle cannot be
+ * satisfied: nothing the business does can change the readings before it
+ * expires. On the 29 Oct 2026 book that was not hypothetical — VZ, MSFT, TSLA
+ * and PG were all given 30 days while reporting in 84 to 92, so all four were
+ * unsatisfiable by construction.
+ *
+ * Three tiers rather than the old four. The 30-day and 90-day rungs both
+ * amounted to "one quarter or less", a distinction with no mechanism behind it;
+ * severity now shows in how many prints the position gets.
+ */
+export function reportsToRecover(redCount: number): number {
+  if (redCount >= 5) return 1
+  if (redCount >= 3) return 2
+  return 4
 }
+
+/** Fallback day counts, used only when no earnings date is known. */
+export function sellTimerDays(redCount: number): number {
+  return redCount >= 5 ? 90 : redCount >= 3 ? 180 : 365
+}
+
+/** Typical gap between reports, for projecting beyond the one known date. */
+const DAYS_PER_QUARTER = 91
+
+/**
+ * Days after a report before its figures are usable. FMP posts the statements
+ * the metrics are derived from a little after the release, so a sell-by landing
+ * the morning after an earnings call would still read the previous quarter.
+ */
+const FILING_LAG_DAYS = 14
 
 /**
  * The sell-by date, set ONCE when the flag is raised and never recalculated.
  *
  * Re-deriving it each review would let a position move its own deadline: three
- * reds recovering to two would reset the clock from 180 days to 365, so partial
- * improvement would buy six months. The date is a commitment made when the
- * problem was found.
+ * reds recovering to two would reset the clock from 2 reports to 4, so partial
+ * improvement would buy a year. The date is a commitment made when the problem
+ * was found.
+ *
+ * Only the NEXT earnings date is known, so later ones are projected a quarter
+ * apart. That is an estimate, and deliberately a generous one — the cost of
+ * being a fortnight late is a flag that lingers, while the cost of being early
+ * is a timer that expires before the evidence exists.
  */
-function calcRemovalDate(redCount: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + sellTimerDays(redCount))
+export function calcRemovalDate(
+  redCount: number,
+  nextEarnings?: string | null,
+): string {
+  const reports = reportsToRecover(redCount)
+  const next = nextEarnings ? new Date(nextEarnings) : null
+
+  if (!next || Number.isNaN(next.getTime()) || next.getTime() <= Date.now()) {
+    // No usable earnings date: fall back to the day table rather than guess.
+    const d = new Date()
+    d.setDate(d.getDate() + sellTimerDays(redCount))
+    return d.toISOString()
+  }
+
+  const d = new Date(next)
+  d.setDate(d.getDate() + (reports - 1) * DAYS_PER_QUARTER + FILING_LAG_DAYS)
   return d.toISOString()
 }
 
@@ -272,6 +320,8 @@ export async function addToAtRisk(
   metrics: AtRiskMetric[],
   notes: string | null,
   source: 'manual' | 'committee' = 'manual',
+  /** `securities2.next_earnings_release` — anchors the sell timer to a report. */
+  nextEarnings?: string | null,
 ): Promise<void> {
   const { error } = await supabase
     .from('at_risk')
@@ -282,7 +332,7 @@ export async function addToAtRisk(
       notes: notes?.trim() || null,
       source,
       // Sized on the count that raised the flag, then fixed. See calcRemovalDate.
-      removal_date: calcRemovalDate(metrics.length),
+      removal_date: calcRemovalDate(metrics.length, nextEarnings),
     })
   if (error) throw error
 }

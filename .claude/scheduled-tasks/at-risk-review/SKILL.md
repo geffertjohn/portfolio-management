@@ -148,7 +148,17 @@ So when you flag a name, record the two prior-year figures in `flaggedBenchmark`
 
    - `metrics` carries the labels of the **red** metrics only; `metrics_detail` carries those same metrics as objects. They must agree.
    - Set `currentValue`/`currentBenchmark*` equal to the flagged values on insert, so the entry grades correctly before its first re-measurement.
-   - **Sell timer, set once and never recalculated:** 5+ red -> 30 days, 4 -> 90, 3 -> 180, 1-2 -> 365. Recalculating it later would let a name that improved from 3 reds to 2 push its own deadline out by six months.
+   - **The sell timer is counted in EARNINGS REPORTS, not days**, because the six metrics are TTM figures that only move when the company reports. A timer shorter than one earnings cycle cannot be satisfied — nothing the business does can change the readings before it expires. On the first run that was not hypothetical: VZ, MSFT, TSLA and PG were each given 30 days while reporting in 84 to 92.
+
+     **5+ red -> 1 report, 3-4 red -> 2 reports, 1-2 red -> 4 reports.** Compute the date as `securities2.next_earnings_release + (reports - 1) x 91 days + 14 days`, the last being the lag before FMP posts the statements the metrics come from. Only the next date is known, so later ones are projected a quarter apart; the estimate is deliberately generous, since a flag lingering a fortnight costs less than a timer expiring before the evidence exists.
+
+     ```sql
+     select security_id, next_earnings_release::date from securities2 where security_id = 'TICKER';
+     ```
+
+     If `next_earnings_release` is null or already past, fall back to the day table — 5+ -> 90 days, 3-4 -> 180, 1-2 -> 365 — and say in the digest that the name had no usable earnings date.
+
+   - **Set once and never recalculated.** Recalculating later would let a name that improved from 3 reds to 2 push its own deadline from 2 reports out to 4.
 
 5. **DIGEST.** Per section: **flagged** (ticker, which metrics went red with figures, the timer in days), **recovered and cleared** (ticker, metric, flagged figure -> current figure), **breached** (ticker, days overdue, which metrics are still red — **lead with these**), and **still monitored** (ticker, reds remaining, days left). Name anything you could not measure and why.
 

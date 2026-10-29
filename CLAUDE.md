@@ -382,9 +382,20 @@ act is an override removal, which requires a reason.
   the market *as it is now* is the real test. `gradeAtRiskMetric()` encodes the
   split; **the At-Risk card will therefore disagree with the live Monitor card on
   margins, by design.**
-- **The sell timer is set once and never recalculated** (5+ red → 30d, 4 → 90,
-  3 → 180, 1–2 → 365). Re-deriving it would let a name that improved from 3 reds
-  to 2 push its own deadline out by six months.
+- **The sell timer counts EARNINGS REPORTS, not days** (`reportsToRecover`):
+  5+ red → 1 report, 3–4 → 2, 1–2 → 4, as
+  `next_earnings_release + (reports−1)×91 + 14` (the 14 being the lag before FMP
+  posts the statements the metrics derive from). **The six metrics are TTM
+  figures that only move when the company reports, so a timer shorter than one
+  earnings cycle cannot be satisfied** — on the first run VZ, MSFT, TSLA and PG
+  were each given 30 days while reporting in 84–92, unsatisfiable by
+  construction. The old four rungs collapsed to three: 30d and 90d both meant
+  "a quarter or less", a distinction with no mechanism behind it. No usable
+  earnings date falls back to a day table (90/180/365). **Still set once and
+  never recalculated** — re-deriving would let a name improving from 3 reds to 2
+  push its deadline from 2 reports to 4. (The 13 live rows were re-anchored once
+  on 29 Oct 2026 as a correction of the defective formula, each recording its
+  original date in its notes; that is not licence to re-derive on new readings.)
 - **A flag needs 3+ reds AND at least one MARGIN red** (`qualifiesForFlag` in
   `lib/atRisk.ts`; the job applies it). **A count alone cannot tell deterioration
   from slower growth.** The four growth metrics are graded against the category
