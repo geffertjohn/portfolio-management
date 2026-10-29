@@ -156,9 +156,17 @@ function ProspectCard({
               {analysts.length} analyst views
             </span>
           )}
+          {/* "Pending" was describing an absence as if something were coming:
+              adding a ticker writes a prospects row and nothing else, so before
+              the watchlist-research job existed FCX sat here 23 days with
+              nothing behind it. The job now picks these up, so the badge names
+              what is true — queued, and what will clear it. */}
           {research.length === 0 && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-              AI research pending
+            <span
+              className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+              title="The watchlist-research job runs the lean investment committee over ideas with no research yet. It runs weekday mornings and takes the three oldest."
+            >
+              Awaiting committee
             </span>
           )}
         </div>
