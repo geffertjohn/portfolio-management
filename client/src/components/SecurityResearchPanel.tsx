@@ -25,10 +25,14 @@ import { CommentaryTimeline } from '@/components/CommentaryTimeline'
 export function SecurityResearchPanel({
   securityId,
   companyName = null,
+  lastEarningsDate = null,
   nextEarningsDate = null,
 }: {
   securityId: string
   companyName?: string | null
+  /** Dates the newest row when its call has reported but is not transcribed. */
+  lastEarningsDate?: string | null
+  /** Dates the newest row when its call has not been held yet. */
   nextEarningsDate?: string | null
 }) {
   const enabled = !!securityId
@@ -54,7 +58,10 @@ export function SecurityResearchPanel({
   })
 
   const standing = standingReports(reports)
-  const rows = buildCommentaryTimeline(dates, reports, summaries)
+  const rows = buildCommentaryTimeline(dates, reports, summaries, {
+    lastEarnings: lastEarningsDate,
+    nextEarnings: nextEarningsDate,
+  })
   const byId = new Map(reports.map((r) => [r.id, r.created_at]))
 
   return (
@@ -86,7 +93,6 @@ export function SecurityResearchPanel({
           companyName={companyName}
           rows={rows}
           isLoading={reportsLoading || datesLoading}
-          nextEarningsDate={nextEarningsDate}
         />
       </div>
     </div>

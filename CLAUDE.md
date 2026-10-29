@@ -636,10 +636,21 @@ there are load-bearing:
   the second of the pair. A flagged date renders dotted-underlined with a `?`;
   it is shown but not asserted, and never silently "corrected" by adding a year.
 - **A period with only a pre-brief still gets a row.** A pre-brief is written
-  BEFORE the call, so the newest quarter has no transcript yet; a row with no
-  call date sorts to the TOP (sentinel `9999-12-31`) and shows the page's
-  next-earnings date as "(expected)". Dropping it would hide the forward-looking
-  document at exactly the moment it is the only one that exists.
+  BEFORE the call, so the newest quarter has no transcript yet. Dropping it would
+  hide the forward-looking document at exactly the moment it is the only one that
+  exists. (It needs no date sentinel to sort first — ordering is by period, and
+  it is the highest one.)
+- **A dateless newest row is TWO states, and `dateBasis` separates them.** The
+  call may not have been held (`expected`, dated from `next_earnings_release`),
+  or it may have **reported days ago and simply not been transcribed yet**
+  (`reported`, dated from `last_earnings_release`) — routine, because FMP posts
+  actuals well before the transcript. `dateNewestRow()` picks between them by
+  comparing the last release against the newest transcript: a release newer than
+  any transcript is a quarter awaiting transcription. Collapsing the two dated
+  ORLY's Q3 2026 row **"Feb 3, 2027 (expected)"** — the NEXT call — when that
+  quarter had already reported on 28 October. **The transcript icon gates on
+  `dateBasis === 'transcript'`**, not on `callDate` being set, or both of those
+  rows would offer a transcript that does not exist.
 - **Several briefs of one type in one period are NOT collapsed.** The
   pre-earnings dedupe guard has slipped before — TJX carries three pre-briefs for
   Q2 2027 — and showing one icon while dropping two would misreport the record.

@@ -645,6 +645,7 @@ export function SecurityDetailPage() {
           <SecurityResearchPanel
             securityId={security.security_id}
             companyName={companyName}
+            lastEarningsDate={lastEarnings}
             nextEarningsDate={nextEarnings}
           />
 
