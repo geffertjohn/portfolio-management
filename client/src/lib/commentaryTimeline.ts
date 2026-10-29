@@ -15,6 +15,12 @@
  *   days BEFORE the call, so for the newest quarter there is no transcript yet;
  *   dropping that row would hide the forward-looking document at exactly the
  *   moment it is the only one that exists.
+ * - **A dateless newest row is one of TWO states, not one.** The call may not
+ *   have happened — or it may have reported days ago and simply not been
+ *   transcribed yet, which is routine: FMP posts actuals well before the
+ *   transcript. `dateBasis` distinguishes them, because treating the second as
+ *   the first dated ORLY's Q3 2026 row "Feb 3, 2027 (expected)" when that
+ *   quarter had reported on 28 October.
  * - **Rows are ordered by FISCAL PERIOD, never by call date.** FMP stamps the
  *   wrong calendar year on some Q4/Q1 dates — it dates Alphabet's FY2024 Q4 call
  *   `2024-02-04` and its FY2025 Q1 call `2024-04-24`, both a year early, though
@@ -36,13 +42,25 @@ import type { TranscriptDate } from './fmpTranscripts'
 /** How many quarters the timeline shows; older ones drop off. */
 export const TIMELINE_QUARTERS = 8
 
+export type DateBasis = 'transcript' | 'reported' | 'expected'
+
 export interface CommentaryRow {
   /** `${fiscalYear}-Q${quarter}` — unique per row. */
   key: string
   fiscalYear: number
   quarter: number
-  /** The call date, or null when the call has not happened or is not transcribed. */
+  /** The call date, or null when nothing dates it. See `dateBasis` for what it means. */
   callDate: string | null
+  /**
+   * Where `callDate` came from, which is what the date MEANS:
+   * - `transcript` — the call is transcribed; this is its recorded date.
+   * - `reported`   — the quarter has reported but FMP has no transcript yet.
+   * - `expected`   — the call has not been held; this is the scheduled date.
+   *
+   * Only a `transcript` row can open a transcript, so the icon gates on this
+   * rather than on `callDate` being set.
+   */
+  dateBasis: DateBasis | null
   /**
    * FMP's date for this call contradicts its own fiscal period — it falls before
    * a call of an EARLIER period. The date is shown but not asserted; see the
@@ -85,10 +103,45 @@ function markSuspectDates(ascending: CommentaryRow[]): void {
   }
 }
 
+export interface TimelineDating {
+  /** Most recent release on/before today, from FMP's earnings calendar. */
+  lastEarnings?: string | null
+  /** Soonest scheduled release after today. */
+  nextEarnings?: string | null
+}
+
+/**
+ * Date the newest row when no transcript does.
+ *
+ * Only the newest row can be in this state, because the earnings calendar
+ * describes exactly one past release and one future one. Which of the two
+ * applies is settled by comparing the last release against the newest
+ * transcript we have: a release NEWER than any transcript is a quarter that has
+ * reported and is still waiting to be transcribed.
+ */
+function dateNewestRow(ordered: CommentaryRow[], dating: TimelineDating): void {
+  const top = ordered[0]
+  if (!top || top.callDate) return
+
+  const newestTranscript = ordered.find((r) => r.dateBasis === 'transcript')?.callDate ?? null
+  const { lastEarnings, nextEarnings } = dating
+
+  if (lastEarnings && (!newestTranscript || lastEarnings > newestTranscript)) {
+    top.callDate = lastEarnings
+    top.dateBasis = 'reported'
+    return
+  }
+  if (nextEarnings) {
+    top.callDate = nextEarnings
+    top.dateBasis = 'expected'
+  }
+}
+
 export function buildCommentaryTimeline(
   dates: TranscriptDate[],
   reports: ResearchReport[],
   summaries: EarningsCallSummary[],
+  dating: TimelineDating = {},
   limit: number = TIMELINE_QUARTERS,
 ): CommentaryRow[] {
   const rows = new Map<string, CommentaryRow>()
@@ -97,13 +150,21 @@ export function buildCommentaryTimeline(
     const key = periodKey(fy, q)
     let r = rows.get(key)
     if (!r) {
-      r = { key, fiscalYear: fy, quarter: q, callDate: null, dateSuspect: false, pre: [], post: [], summary: null }
+      r = {
+        key, fiscalYear: fy, quarter: q,
+        callDate: null, dateBasis: null, dateSuspect: false,
+        pre: [], post: [], summary: null,
+      }
       rows.set(key, r)
     }
     return r
   }
 
-  for (const d of dates) row(d.fiscalYear, d.quarter).callDate = d.date
+  for (const d of dates) {
+    const r = row(d.fiscalYear, d.quarter)
+    r.callDate = d.date
+    r.dateBasis = 'transcript'
+  }
 
   for (const rep of reports) {
     if (rep.fiscal_year == null || rep.quarter == null) continue
@@ -124,5 +185,6 @@ export function buildCommentaryTimeline(
 
   const ordered = [...rows.values()].sort(byPeriodDesc)
   markSuspectDates([...ordered].reverse())
+  dateNewestRow(ordered, dating)
   return ordered.slice(0, limit)
 }

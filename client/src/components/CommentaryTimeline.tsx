@@ -349,14 +349,11 @@ export function CommentaryTimeline({
   companyName,
   rows,
   isLoading,
-  nextEarningsDate,
 }: {
   securityId: string
   companyName: string | null
   rows: CommentaryRow[]
   isLoading: boolean
-  /** Used to date the newest row when its call has not happened yet. */
-  nextEarningsDate?: string | null
 }) {
   const [openReport, setOpenReport] = useState<ResearchReport | null>(null)
   const [openCall, setOpenCall] = useState<CommentaryRow | null>(null)
@@ -390,9 +387,6 @@ export function CommentaryTimeline({
             {rows.map((row) => {
               const status = row.post[0]?.thesis_status ?? null
               const dot = status ? THESIS_DOT[status] : null
-              // Only the newest row can be an upcoming call, and only then is the
-              // page's next-earnings date the right stand-in for a missing one.
-              const isUpcoming = !row.callDate && row === rows[0]
               return (
                 <tr key={row.key} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/60">
                   <td className="whitespace-nowrap py-2.5 pr-4 font-medium text-gray-900">
@@ -408,7 +402,18 @@ export function CommentaryTimeline({
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">
-                    {row.callDate ? (
+                    {row.callDate && row.dateBasis !== 'transcript' ? (
+                      /* The call is dated by the earnings calendar, not a
+                         transcript — say which, because "reported, not yet
+                         transcribed" and "not yet held" look identical
+                         otherwise and only one of them is still to come. */
+                      <span className="text-gray-500">
+                        {fmtDate(row.callDate)}{' '}
+                        <span className="text-xs text-gray-400">
+                          {row.dateBasis === 'reported' ? '(awaiting transcript)' : '(expected)'}
+                        </span>
+                      </span>
+                    ) : row.callDate ? (
                       row.dateSuspect ? (
                         /* FMP contradicts itself here — the date falls before a
                            call of an earlier period. Show it, but do not assert
@@ -422,8 +427,6 @@ export function CommentaryTimeline({
                       ) : (
                         fmtDate(row.callDate)
                       )
-                    ) : isUpcoming && nextEarningsDate ? (
-                      <span className="text-gray-500">{fmtDate(nextEarningsDate)} <span className="text-xs text-gray-400">(expected)</span></span>
                     ) : (
                       <span className="text-xs text-gray-400">Awaiting call</span>
                     )}
@@ -450,7 +453,7 @@ export function CommentaryTimeline({
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-center">
-                    {row.callDate ? (
+                    {row.dateBasis === 'transcript' ? (
                       <button
                         type="button"
                         onClick={() => setOpenCall(row)}
