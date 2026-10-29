@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchAllFiles, uploadFile, deleteFile, getSignedUrl, formatBytes, isServerUnreachable,
-  type StoredFile,
+  PORTFOLIO_DOCS_BUCKET, type StoredFile,
 } from '@/lib/documents'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { formatDate } from '@/lib/fundFormat'
@@ -43,7 +43,27 @@ export function DocumentsFolderPanel({
   })
   const files: StoredFile[] = (data?.files ?? []).filter((f) => f.folder === folder)
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(bucket) })
+  /**
+   * Refresh everything an upload or delete changes, not just the file list.
+   *
+   * Invalidating only `documentsFiles` is why a freshly uploaded allocation file
+   * showed in this panel while the portfolio's Positions table kept reporting
+   * last month's book: that table reads `latestActualAllocation`, a different
+   * query with a 5-minute staleTime that nothing was busting. The same read
+   * backs the drift actions and the risk manager's compliance check, so a stale
+   * one grades the current book against an old file.
+   *
+   * The whole `latest_actual_allocation` prefix goes, not just this folder's
+   * key — a blended portfolio (Equity Income & Core Growth) derives its weights
+   * from OTHER portfolios' files, so an upload to Core Growth changes a
+   * portfolio that shares no name with this folder.
+   */
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(bucket) })
+    if (bucket === PORTFOLIO_DOCS_BUCKET) {
+      queryClient.invalidateQueries({ queryKey: ['latest_actual_allocation'] })
+    }
+  }
   const resetInput = () => { if (inputRef.current) inputRef.current.value = '' }
 
   const uploadMut = useMutation({
