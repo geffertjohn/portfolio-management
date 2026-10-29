@@ -3,6 +3,7 @@
  */
 
 import type { ReactNode } from 'react'
+import { scorecardColor, SCORECARD_TEXT_CLASS } from '@/lib/scorecardColor'
 
 // ── Diverging reference bar ───────────────────────────────────────────────────
 
@@ -51,12 +52,6 @@ export function DivergingBar({
 
 // ── Individual metric card ────────────────────────────────────────────────────
 
-function rankQuartileColor(rankPct: number): { text: string; bar: string } {
-  if (rankPct < 0.25) return { text: 'text-green-600', bar: '#22c55e' }
-  if (rankPct < 0.50) return { text: 'text-yellow-500', bar: '#eab308' }
-  return { text: 'text-red-600', bar: '#ef4444' }
-}
-
 export function MetricCard({
   title,
   subtitle,
@@ -81,31 +76,17 @@ export function MetricCard({
   rankPct?: number | null
   components: { label: string; value: string }[]
 }) {
-  const hasValue = rawValue !== null && Number.isFinite(rawValue)
-
-  const beats = (v: number, b: number) => higherIsBetter ? v >= b : v <= b
-
-  const quartile = rankPct != null && Number.isFinite(rankPct) ? rankQuartileColor(rankPct) : null
-
-  const valueColor = (() => {
-    if (!hasValue) return 'text-gray-400'
-    if (quartile) return quartile.text
-    const v = rawValue!
-    const b1 = benchmarkValue ?? null
-    const b2 = benchmark2Value ?? null
-
-    if (b1 != null && b2 != null) {
-      if (beats(v, b1) && beats(v, b2)) return 'text-green-600'
-      if (!beats(v, b1) && !beats(v, b2)) return 'text-red-600'
-      return 'text-yellow-500'
-    }
-
-    if (b1 != null) return beats(v, b1) ? 'text-green-600' : 'text-red-600'
-    if (b2 != null) return beats(v, b2) ? 'text-green-600' : 'text-red-600'
-
-    const threshold = neutral
-    return beats(v, threshold) ? 'text-green-600' : 'text-red-600'
-  })()
+  // The rule itself lives in lib/scorecardColor.ts — the At-Risk list grades the
+  // same six metrics and must not restate it.
+  const color = scorecardColor({
+    value: rawValue,
+    benchmark: benchmarkValue,
+    benchmark2: benchmark2Value,
+    neutral,
+    higherIsBetter,
+    rankPct,
+  })
+  const valueColor = SCORECARD_TEXT_CLASS[color]
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4">

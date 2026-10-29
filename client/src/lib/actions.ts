@@ -29,7 +29,7 @@ import {
   fetchDirectModelPortfolioId, fetchModelPortfolioById, fetchModelPortfolioByObjective,
   fetchModelPortfolios,
 } from './modelPortfolios'
-import { fetchActiveAtRisk } from './atRisk'
+import { fetchActiveAtRisk, isBreached, failingMetrics } from './atRisk'
 import {
   daysSince, fetchLatestImportRuns, fmtImportDate, missedScheduledRefresh,
   refreshDueLabel, YCHARTS_DATA_SOURCES, ychartsAsOf,
@@ -501,21 +501,34 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     isManual: false,
   }))
 
-  const atRiskActions: UnifiedAction[] = atRisk.map((r) => {
-    const due = r.removal_date ? r.removal_date.slice(0, 10) : null
-    return {
-      key: `atrisk:${r.id}`,
-      category: 'security',
-      source: 'at_risk',
-      title: `At-risk — ${r.securities2?.security_id ?? r.security_id}`,
-      subtitle: `${r.metrics.length} deteriorated metric${r.metrics.length === 1 ? '' : 's'} · sell timer`,
-      linkedLabel: r.securities2?.security_id ?? r.security_id,
-      route: '/at-risk',
-      dueDate: due,
-      priority: due && (isOverdue(due) || isDueSoon(due)) ? 'high' : 'medium',
-      isManual: false,
-    }
-  })
+  // Only a BREACHED entry is an action.
+  //
+  // Every at-risk row used to appear here, which made sense while flagging was
+  // manual: the list was a standing to-do. The committee now raises, re-measures
+  // and clears these on its own, so a running timer needs nothing from the
+  // advisor — surfacing them all would bury the one row that does. An entry
+  // earns a place only when the timer has expired with a metric still red,
+  // which is precisely the moment a decision falls to the CIO.
+  const atRiskActions: UnifiedAction[] = atRisk
+    .filter((r) => isBreached(r))
+    .map((r) => {
+      const due = r.removal_date ? r.removal_date.slice(0, 10) : null
+      const stillRed = failingMetrics(r.metrics_detail)
+      return {
+        key: `atrisk:${r.id}`,
+        category: 'security',
+        source: 'at_risk',
+        title: `Sell timer expired — ${r.securities2?.security_id ?? r.security_id}`,
+        subtitle: stillRed.length > 0
+          ? `Still red: ${stillRed.map((m) => m.label).join(', ')}`
+          : 'Sell timer expired',
+        linkedLabel: r.securities2?.security_id ?? r.security_id,
+        route: '/at-risk',
+        dueDate: due,
+        priority: 'high',
+        isManual: false,
+      }
+    })
 
   return [
     ...manualActions,

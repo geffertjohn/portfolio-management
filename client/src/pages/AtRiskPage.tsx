@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { fetchActiveAtRisk, removeFromAtRisk } from '@/lib/atRisk'
+import { fetchActiveAtRisk, gradeAtRiskMetric, isBreached } from '@/lib/atRisk'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { ProposeSubstitutionModal } from '@/components/ProposeSubstitutionModal'
 import { SubstitutionsList } from '@/components/SubstitutionsList'
-import { AddToAtRiskModal } from '@/components/AddToAtRiskModal'
+import { RemoveFromAtRiskModal } from '@/components/RemoveFromAtRiskModal'
 import { getSecurityDisplayType, type SecurityDisplayType } from '@/lib/securities'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { fmtUsd } from '@/lib/formatters'
-import type { AtRiskEntryWithSecurity } from '@/lib/atRisk'
+import type { AtRiskEntryWithSecurity, AtRiskMetric } from '@/lib/atRisk'
 
 const METRIC_LABELS: Record<string, string> = {
   'Revenue Growth QoQ': 'QoQ',
@@ -65,14 +65,46 @@ function AtRiskCard({
               </span>
             )}
             {entry.removal_date && (
-              <p className="text-xs tabular-nums text-gray-400">
+              <p className={`text-xs tabular-nums ${isBreached(entry) ? 'font-semibold text-red-600' : 'text-gray-400'}`}>
+                {isBreached(entry) ? 'Expired ' : ''}
                 {new Date(entry.removal_date).toLocaleDateString()}
               </p>
             )}
           </div>
         </div>
 
-        {entry.metrics.length > 0 && (
+        {/* Graded as they stand now, not as they were when flagged — a recovered
+            metric is the thing the advisor is actually watching for. Amber
+            counts as recovered (see isMetricFailing). Rows from before the
+            committee process carry no readings, so they fall back to labels. */}
+        {entry.metrics_detail.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {entry.metrics_detail.map((m) => {
+              const color = gradeAtRiskMetric(m)
+              const cls = color === 'red'
+                ? 'bg-red-50 text-red-700'
+                : color === 'yellow'
+                  ? 'bg-amber-50 text-amber-700'
+                  : color === 'green'
+                    ? 'bg-green-50 text-green-700'
+                    : 'bg-gray-100 text-gray-500'
+              return (
+                <span
+                  key={m.key}
+                  className={`rounded-full px-2 py-0.5 text-xs ${cls}`}
+                  title={
+                    m.measuredAt
+                      ? `${m.label} — last re-measured ${new Date(m.measuredAt).toLocaleDateString()}`
+                      : `${m.label} — not yet re-measured since flagging`
+                  }
+                >
+                  {m.label}
+                  {color !== 'red' && ' ✓'}
+                </span>
+              )
+            })}
+          </div>
+        ) : entry.metrics.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1">
             {entry.metrics.map((m) => (
               <span key={m} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
@@ -80,7 +112,7 @@ function AtRiskCard({
               </span>
             ))}
           </div>
-        )}
+        ) : null}
 
         {entry.notes && (
           <p className="mt-2 text-xs text-gray-400 line-clamp-2">{entry.notes}</p>
@@ -137,8 +169,13 @@ function AtRiskCard({
 
 export function AtRiskPage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [addOpen, setAddOpen] = useState(false)
+  // Entries are raised and cleared by the at-risk-review job; the advisor can
+  // still override a removal, which is what this modal captures.
+  const [removeFor, setRemoveFor] = useState<{
+    entryId: number
+    symbol: string
+    metrics: AtRiskMetric[]
+  } | null>(null)
   const [proposeFor, setProposeFor] = useState<{
     atRiskId: number
     securityId: string
@@ -148,11 +185,6 @@ export function AtRiskPage() {
   const { data: entries = [], isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.atRisk,
     queryFn: fetchActiveAtRisk,
-  })
-
-  const removeMutation = useMutation({
-    mutationFn: (entryId: number) => removeFromAtRisk(entryId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRisk }),
   })
 
   const grouped = COLUMNS.map(({ type, label, badge }) => ({
@@ -180,13 +212,6 @@ export function AtRiskPage() {
           <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">
             {entries.length} active
           </span>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
-          >
-            + Add stock
-          </button>
         </div>
       </div>
 
@@ -234,8 +259,12 @@ export function AtRiskPage() {
                           streamable={type !== 'Mutual fund'}
                           onNavigate={() => { if (sec?.id != null) navigate(`/security/${sec.id}`, { state: { tab: 'monitoring' } }) }}
                           onPropose={() => sec && setProposeFor({ atRiskId: entry.id, securityId: sec.security_id, symbol: sec.security_id })}
-                          onRemove={() => removeMutation.mutate(entry.id)}
-                          removePending={removeMutation.isPending}
+                          onRemove={() => sec && setRemoveFor({
+                            entryId: entry.id,
+                            symbol: sec.security_id,
+                            metrics: entry.metrics_detail,
+                          })}
+                          removePending={false}
                         />
                       )
                     })
@@ -247,7 +276,14 @@ export function AtRiskPage() {
         )}
       </div>
 
-      <AddToAtRiskModal open={addOpen} onClose={() => setAddOpen(false)} />
+      {removeFor && (
+        <RemoveFromAtRiskModal
+          entryId={removeFor.entryId}
+          symbol={removeFor.symbol}
+          metrics={removeFor.metrics}
+          onClose={() => setRemoveFor(null)}
+        />
+      )}
 
       {proposeFor && (
         <ProposeSubstitutionModal

@@ -231,7 +231,7 @@ export function HomePage() {
                       {alert.security_symbol ?? alert.security_id}
                     </button>
                     <p className="text-xs text-gray-600">
-                      {alert.metric_field} = {alert.actual_value ?? '—'} (threshold: {alert.threshold_value})
+                      {alert.message ?? `${alert.metric_field} = ${alert.actual_value ?? '—'} (threshold: ${alert.threshold_value})`}
                     </p>
                     <p className="text-xs text-gray-400">{formatDate(alert.triggered_at)}</p>
                   </div>

@@ -137,34 +137,50 @@ export type Database = {
         Row: {
           acknowledged_at: string | null
           actual_value: number | null
+          at_risk_id: number | null
           id: number
+          message: string | null
           metric_field: string
-          rule_id: number
+          rule_id: number | null
           security_id: string
-          threshold_value: number
+          source: string
+          threshold_value: number | null
           triggered_at: string
         }
         Insert: {
           acknowledged_at?: string | null
           actual_value?: number | null
+          at_risk_id?: number | null
           id?: number
+          message?: string | null
           metric_field: string
-          rule_id: number
+          rule_id?: number | null
           security_id: string
-          threshold_value: number
+          source?: string
+          threshold_value?: number | null
           triggered_at?: string
         }
         Update: {
           acknowledged_at?: string | null
           actual_value?: number | null
+          at_risk_id?: number | null
           id?: number
+          message?: string | null
           metric_field?: string
-          rule_id?: number
+          rule_id?: number | null
           security_id?: string
-          threshold_value?: number
+          source?: string
+          threshold_value?: number | null
           triggered_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "alert_events_at_risk_id_fkey"
+            columns: ["at_risk_id"]
+            isOneToOne: false
+            referencedRelation: "at_risk"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "alert_events_rule_id_fkey"
             columns: ["rule_id"]
@@ -224,31 +240,49 @@ export type Database = {
       }
       at_risk: {
         Row: {
+          breach_alerted_at: string | null
           date_added: string
           id: number
+          last_reviewed_at: string | null
           metrics: string[]
+          metrics_detail: Json
           notes: string | null
           removal_date: string | null
+          removal_reason: string | null
           removed_at: string | null
+          removed_by: string | null
           security_id: string
+          source: string
         }
         Insert: {
+          breach_alerted_at?: string | null
           date_added?: string
           id?: number
+          last_reviewed_at?: string | null
           metrics?: string[]
+          metrics_detail?: Json
           notes?: string | null
           removal_date?: string | null
+          removal_reason?: string | null
           removed_at?: string | null
+          removed_by?: string | null
           security_id: string
+          source?: string
         }
         Update: {
+          breach_alerted_at?: string | null
           date_added?: string
           id?: number
+          last_reviewed_at?: string | null
           metrics?: string[]
+          metrics_detail?: Json
           notes?: string | null
           removal_date?: string | null
+          removal_reason?: string | null
           removed_at?: string | null
+          removed_by?: string | null
           security_id?: string
+          source?: string
         }
         Relationships: [
           {

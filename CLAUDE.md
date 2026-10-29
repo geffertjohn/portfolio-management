@@ -351,9 +351,58 @@ On the Overview tab. News and Press Releases are company-specific feeds, side by
 - "Alerts" is a separate placeholder card under Analysts (not part of `NewsAlertsPanel`).
 - **Alert-rules management was removed as dead code.** The `alert_rules` table still exists, but the rule CRUD UI (`AlertRulesSection`) and the firing engine (`fireAlertIfBreached`) were never wired up and are deleted. `lib/alertRules.ts` keeps only the live path: `fetchUnacknowledgedAlerts` + `acknowledgeAlert` (the HomePage "Performance Alerts" list reads/acks `alert_events`). Rebuild the rule/fire side deliberately if alerts are wanted — don't assume it exists.
 
-### At-Risk criteria mirror the scorecard
+### At-Risk is run by the committee, not by hand (Oct 2026)
 
-`AT_RISK_METRICS_BY_ASSET_CLASS.stock` in `lib/atRisk.ts` lists the same six metrics as the stock Scorecard cards (Operating Margin TTM, FCF Margin TTM, Revenue/EPS Growth TTM, Revenue/EPS Growth 3Y). Keep them in sync when the scorecard changes. Funds use the `equity` / `fixed income` sets.
+`AT_RISK_METRICS_BY_ASSET_CLASS.stock` in `lib/atRisk.ts` lists the same six
+metrics as the stock Scorecard cards. Funds use the `equity` / `fixed income`
+sets and are **unchanged** — everything below is stocks only.
+
+**The `at-risk-review` job owns the list.** Weekdays at 09:25, *before* the
+post-earnings brief, because the brief reports any same-day change and there is
+only ever one brief per print. It flags, re-measures, clears, and raises a breach
+alert. The manual "+ Add stock" modal was **deleted**; the advisor's remaining
+act is an override removal, which requires a reason.
+
+- **The red/amber/green rule lives in `lib/scorecardColor.ts`**, extracted from
+  `MetricCard`. A colour rule inside a React component cannot be read by anything
+  else, and the second reader restates it — which is how a metric ends up red on
+  the scorecard and green on the At-Risk card. **The job writes readings, never
+  colours**; the app grades them, so the two cannot disagree.
+- **Amber clears the flag.** Green beats both comparators, red beats neither,
+  amber beats one. `isMetricFailing` is `=== 'red'`. Beating both a benchmark and
+  a peer is a high bar under pressure, and a flag nobody can escape stops being
+  information.
+- **Margin comparators are FROZEN at flag time; growth comparators stay live.**
+  A margin card is graded against the security's OWN prior two fiscal years, so
+  its bar moves on its own — roll a weak year into the window and the metric goes
+  green having improved nothing. Fine on a card you glance at, not fine as a sell
+  trigger, so `flaggedBenchmark`/`flaggedBenchmark2` are captured in
+  `metrics_detail` and every re-measurement grades against those same numbers.
+  Growth benchmarks are external and move for reasons unrelated to us, so beating
+  the market *as it is now* is the real test. `gradeAtRiskMetric()` encodes the
+  split; **the At-Risk card will therefore disagree with the live Monitor card on
+  margins, by design.**
+- **The sell timer is set once and never recalculated** (5+ red → 30d, 4 → 90,
+  3 → 180, 1–2 → 365). Re-deriving it would let a name that improved from 3 reds
+  to 2 push its own deadline out by six months.
+- **Flag threshold is 3+ red metrics**, stated in the job prompt. The timer table
+  runs down to 2, so lowering it needs one number changed — but one red metric out
+  of six is common and the list would grow sharply.
+- **A breach notifies; it never removes.** Timer expired with a metric still red →
+  one row in `alert_events` (`source='at_risk'`, prose `message`, FK `at_risk_id`),
+  guarded by `breach_alerted_at` and a partial unique index so it fires once.
+  `alert_events` gained `source`/`message`/`at_risk_id` and `rule_id` +
+  `threshold_value` became nullable — it was the HomePage alert surface with no
+  writer since the rule engine was deleted, and this is its first real producer.
+- **The Actions hub shows ONLY breached entries.** Every at-risk row used to
+  appear there, which fitted a manual list; now that the committee re-measures on
+  its own, a running timer needs nothing from the advisor and surfacing them all
+  would bury the one row that does.
+- **Removal requires a reason** (`removal_reason` + `removed_by`,
+  CHECK-enforced). Added `NOT VALID` so the 31 rows removed before this process
+  keep their history rather than having a reason invented for them.
+- **Nothing in `substitutions.ts` clears the flag** — completing a swap leaves the
+  entry standing. Still true, still the likeliest way one gets stranded.
 
 ### Field-name conventions (stable vs v3)
 
@@ -567,7 +616,7 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 ### Scheduled jobs (draft-only) — prompts live in this repo
 
-Four routines: **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
+Five routines: **at-risk-review** (weekdays 09:25 → `at_risk` + `alert_events`, see At-Risk below), **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
 
 **The prompts are version-controlled at `.claude/scheduled-tasks/<taskId>/SKILL.md`** — that is the source of truth. The scheduler, however, reads each task from a fixed path it owns (`~/.claude/scheduled-tasks/<taskId>/SKILL.md`) and nothing repoints it, so the two must be kept in step by copying:
 
