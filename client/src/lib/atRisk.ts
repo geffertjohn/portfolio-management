@@ -117,6 +117,37 @@ export function isMetricFailing(m: AtRiskMetric): boolean {
   return gradeAtRiskMetric(m) === 'red'
 }
 
+/**
+ * The two metrics graded against the security's OWN prior two fiscal years.
+ *
+ * These are the only ones that can show a business getting worse than it was.
+ * The other four are graded against the category and sector benchmarks, so they
+ * go red whenever the company grows more slowly than its market — routine for a
+ * large steady compounder and no evidence of deterioration at all.
+ */
+export const MARGIN_METRIC_KEYS = new Set(['operating_margin_ttm', 'fcf_margin_ttm'])
+
+/** How many reds are needed before a name can be flagged. */
+export const MIN_REDS_TO_FLAG = 3
+
+/**
+ * Does this reading qualify a held stock for the At-Risk list?
+ *
+ * **A count alone is not enough.** On the 29 Oct 2026 book, 16 names had 3+ reds
+ * but three of them (AAPL, MSI, UBER) were pure growth-vs-benchmark with both
+ * margins healthy — slower than their market, not deteriorating. Requiring at
+ * least one margin red separates the two, and keeps the cases that matter: MSFT
+ * qualifies on FCF margin falling 25.4% -> 20.2% -> 17.3%.
+ *
+ * The `at-risk-review` job applies this rule; it lives here so the rule has one
+ * definition and the app can explain a flag rather than restate the reasoning.
+ */
+export function qualifiesForFlag(metrics: AtRiskMetric[]): boolean {
+  const reds = failingMetrics(metrics)
+  if (reds.length < MIN_REDS_TO_FLAG) return false
+  return reds.some((m) => MARGIN_METRIC_KEYS.has(m.key))
+}
+
 /** The metrics still red — what the committee has to see recover. */
 export function failingMetrics(metrics: AtRiskMetric[]): AtRiskMetric[] {
   return metrics.filter(isMetricFailing)

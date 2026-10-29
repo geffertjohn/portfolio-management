@@ -385,9 +385,16 @@ act is an override removal, which requires a reason.
 - **The sell timer is set once and never recalculated** (5+ red → 30d, 4 → 90,
   3 → 180, 1–2 → 365). Re-deriving it would let a name that improved from 3 reds
   to 2 push its own deadline out by six months.
-- **Flag threshold is 3+ red metrics**, stated in the job prompt. The timer table
-  runs down to 2, so lowering it needs one number changed — but one red metric out
-  of six is common and the list would grow sharply.
+- **A flag needs 3+ reds AND at least one MARGIN red** (`qualifiesForFlag` in
+  `lib/atRisk.ts`; the job applies it). **A count alone cannot tell deterioration
+  from slower growth.** The four growth metrics are graded against the category
+  and sector benchmarks, so they go red whenever the company grows more slowly
+  than its market — routine for a large compounder. Only the two margin metrics
+  are graded against the security's own prior years, so only they show a business
+  getting worse than it was. On the 29 Oct 2026 book this was 16 names vs 13: the
+  three excluded (AAPL, MSI, UBER) were pure growth-vs-benchmark with healthy
+  margins, while MSFT stayed on FCF margin falling 25.4% → 20.2% → 17.3%. Count
+  and margin gate are separate dials.
 - **A breach notifies; it never removes.** Timer expired with a metric still red →
   one row in `alert_events` (`source='at_risk'`, prose `message`, FK `at_risk_id`),
   guarded by `breach_alerted_at` and a partial unique index so it fires once.

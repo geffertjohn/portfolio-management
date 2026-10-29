@@ -13,7 +13,8 @@ Nobody is at the keyboard. **Any tool call that asks for approval stalls the run
 
 - **Do not use Bash, or any shell command, at all.** Everything here is Supabase MCP `execute_sql` plus the FMP MCP tools.
 - Do date arithmetic in SQL (`select current_date`), never by shelling out.
-- **Warm the connectors with ONE call before any fan-out.** A catch-up run seconds after the machine wakes hits a cold transport, and a parallel burst then fails *every* call rather than one. Make the first FMP call alone and wait for it. Then fan out a few at a time.
+- **Warm the connectors with ONE call before any batch.** A catch-up run seconds after the machine wakes hits a cold transport, and a burst of parallel calls then fails *every* one rather than one. Make the first FMP call alone and wait for it. After that, issue the FMP calls yourself in small batches — several tool calls in one message is fine.
+- **The run is over only when the rows are written and the digest is printed.** Delegating the measuring to subagents is fine — the first run split 54 names across six of them and every one came back clean. What matters is that you stay with it: collect what they return, grade it, write the rows, print the digest. Nobody is here to ask you to continue.
 - If a tool errors twice, stop and write the digest saying what failed. If several calls fail at once, retry ONE alone first — that distinguishes a dead connector from a cold one.
 
 ## What counts as red — do not restate this rule, apply it
@@ -92,6 +93,8 @@ So when you flag a name, record the two prior-year figures in `flaggedBenchmark`
 
 2. **MEASURE** all six metrics for every candidate. One FMP call per distinct endpoint per symbol — `ratios-ttm`, `cash-flow-statement-ttm`, `income-statement-ttm`, and annual income statements (limit 4) — and derive all six from those rows. Four calls per name, not seven.
 
+   Fifty-odd names is a lot of calls. Batching them across a few subagents works well and is what the first run did; so does calling them yourself a handful of symbols at a time. Either way, keep going until every candidate is measured — a long run is expected and fine.
+
 3. **RE-MEASURE the names already flagged.** For each entry, update every object in `metrics_detail` with `currentValue`, `currentBenchmark`, `currentBenchmark2` (live pair for growth; **copy the frozen pair** for margins) and `measuredAt`, then set `last_reviewed_at = now()`.
 
    Grade each one by the rule above.
@@ -123,9 +126,13 @@ So when you flag a name, record the two prior-year figures in `flaggedBenchmark`
 
    - **Still red, timer not yet expired** -> leave it. Say so in the digest with the days remaining.
 
-4. **FLAG the newly deteriorated.** A held stock with **3 or more red metrics** and no live entry goes on the list.
+4. **FLAG the newly deteriorated.** A held stock goes on the list when it has **3 or more red metrics AND at least one of those reds is a MARGIN metric** (`operating_margin_ttm` or `fcf_margin_ttm`). Both conditions, every time. It must also have no live entry.
 
-   > The threshold is 3 because that is the point at which deterioration is broad rather than one bad line. The sell-timer table runs down to 2 metrics (365 days), so lowering it to 2 or 1 needs only this number changed — but expect the list to grow sharply, since one red metric out of six is common.
+   > **Why a margin red is required, and not just a count.** The four growth metrics are graded against the category and sector benchmarks, so they go red whenever the company grows more slowly than its market — routine for a large steady compounder, and no evidence at all that anything is deteriorating. The two margin metrics are graded against the security's OWN prior two fiscal years, so a red there means the business got worse than it was. Counting alone cannot tell those apart.
+   >
+   > Measured on the 29 Oct 2026 book this is the difference between 16 names and 13. The three it excludes — AAPL, MSI and UBER — were each 3–4 reds of pure growth-vs-benchmark with both margins healthy. The ones it keeps all show own-history deterioration: MSFT's FCF margin fell 25.4% → 20.2% → 17.3%, which is exactly what the list is for.
+   >
+   > The count and the margin gate are separate dials. Raising the count to 4 trims the tail; dropping the margin requirement re-admits names that are merely growing slower than their benchmark.
 
    ```sql
    insert into at_risk (security_id, source, metrics, metrics_detail, notes, removal_date)
