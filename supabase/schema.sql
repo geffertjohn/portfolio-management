@@ -528,6 +528,43 @@ ALTER SEQUENCE "public"."compliance_rules_id_seq" OWNED BY "public"."compliance_
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."earnings_call_summaries" (
+    "id" bigint NOT NULL,
+    "security_id" "text" NOT NULL,
+    "fiscal_year" integer NOT NULL,
+    "quarter" integer NOT NULL,
+    "call_date" "date",
+    "sentiment" "text" NOT NULL,
+    "sentiment_summary" "text" NOT NULL,
+    "guidance" "text",
+    "highlights" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "lowlights" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "transcript_date" "date",
+    "status" "text" DEFAULT 'draft'::"text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "deleted_at" timestamp with time zone,
+    CONSTRAINT "earnings_call_summaries_highlights_is_array" CHECK (("jsonb_typeof"("highlights") = 'array'::"text")),
+    CONSTRAINT "earnings_call_summaries_lowlights_is_array" CHECK (("jsonb_typeof"("lowlights") = 'array'::"text")),
+    CONSTRAINT "earnings_call_summaries_quarter_check" CHECK ((("quarter" >= 1) AND ("quarter" <= 4))),
+    CONSTRAINT "earnings_call_summaries_sentiment_check" CHECK (("sentiment" = ANY (ARRAY['positive'::"text", 'neutral'::"text", 'negative'::"text"]))),
+    CONSTRAINT "earnings_call_summaries_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'final'::"text"])))
+);
+
+
+ALTER TABLE "public"."earnings_call_summaries" OWNER TO "postgres";
+
+
+ALTER TABLE "public"."earnings_call_summaries" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."earnings_call_summaries_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."firm_compliance_rules" (
     "id" integer NOT NULL,
     "rule_type" "text" NOT NULL,
@@ -1438,8 +1475,8 @@ CREATE TABLE IF NOT EXISTS "public"."research_reports" (
     "street_questions" "jsonb",
     "thesis_checks" "jsonb",
     "risk_checks" "jsonb",
-    "review_recommendations" "jsonb",
     "thesis_id" bigint,
+    "review_recommendations" "jsonb",
     CONSTRAINT "research_reports_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
     CONSTRAINT "research_reports_post_needs_parent" CHECK ((("report_type" <> 'post_earnings'::"text") OR ("parent_report_id" IS NOT NULL))),
     CONSTRAINT "research_reports_rating_check" CHECK (("rating" = ANY (ARRAY['buy'::"text", 'add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))),
@@ -1470,8 +1507,9 @@ COMMENT ON COLUMN "public"."research_reports"."thesis_checks" IS 'Section 2, bul
 
 COMMENT ON COLUMN "public"."research_reports"."risk_checks" IS 'Section 2, bear half. ThesisCheck[] carried from security_theses.bear_case: {key,title,metric,test,watchFor}; the post-brief adds {status,finding}. `test` is the bear point''s breaksIf (the "worsens if"), verbatim.';
 
-COMMENT ON COLUMN "public"."research_reports"."review_recommendations" IS 'ReviewRecommendation[] produced by the post-earnings job, one entry per portfolio holding the security: {portfolioName, weightPct, recommendation: add|hold|trim|sell, rationale, scorecardRead, openQuestions[]}. Pre-fills the stock review modal; the advisor still records the decision. NOTE: no `buy` — a security under review is already held, so adding to it is `add`.';
 
+
+COMMENT ON COLUMN "public"."research_reports"."review_recommendations" IS 'ReviewRecommendation[] produced by the post-earnings job, one entry per portfolio holding the security: {portfolioName, weightPct, recommendation: add|hold|trim|sell, rationale, scorecardRead, openQuestions[]}. Pre-fills the stock review modal; the advisor still records the decision. NOTE: no `buy` — a security under review is already held, so adding to it is `add`.';
 
 
 
@@ -2128,6 +2166,11 @@ ALTER TABLE ONLY "public"."compliance_rules"
 
 
 
+ALTER TABLE ONLY "public"."earnings_call_summaries"
+    ADD CONSTRAINT "earnings_call_summaries_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."firm_compliance_rules"
     ADD CONSTRAINT "firm_compliance_rules_pkey" PRIMARY KEY ("id");
 
@@ -2389,6 +2432,14 @@ CREATE INDEX "communication_log_security_id_idx" ON "public"."communication_log"
 
 
 CREATE INDEX "compliance_rules_strategy_idx" ON "public"."compliance_rules" USING "btree" ("portfolio_strategy") WHERE ("deleted_at" IS NULL);
+
+
+
+CREATE UNIQUE INDEX "earnings_call_summaries_one_per_call" ON "public"."earnings_call_summaries" USING "btree" ("security_id", "fiscal_year", "quarter") WHERE ("deleted_at" IS NULL);
+
+
+
+CREATE INDEX "earnings_call_summaries_security_idx" ON "public"."earnings_call_summaries" USING "btree" ("security_id", "fiscal_year" DESC, "quarter" DESC) WHERE ("deleted_at" IS NULL);
 
 
 
@@ -3367,6 +3418,10 @@ CREATE POLICY "allow all audit_log" ON "public"."audit_log" USING (true) WITH CH
 
 
 
+CREATE POLICY "anon rw" ON "public"."earnings_call_summaries" TO "anon" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "anon rw" ON "public"."ic_memos" TO "anon" USING (true) WITH CHECK (true);
 
 
@@ -3409,6 +3464,10 @@ CREATE POLICY "audit_log_select" ON "public"."audit_log" FOR SELECT USING (true)
 
 
 
+CREATE POLICY "auth rw" ON "public"."earnings_call_summaries" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 CREATE POLICY "auth rw" ON "public"."ic_memos" TO "authenticated" USING (true) WITH CHECK (true);
 
 
@@ -3434,6 +3493,9 @@ ALTER TABLE "public"."communication_log" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."compliance_rules" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."earnings_call_summaries" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."firm_compliance_rules" ENABLE ROW LEVEL SECURITY;
@@ -3887,6 +3949,18 @@ GRANT ALL ON TABLE "public"."compliance_rules" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."compliance_rules_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."compliance_rules_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."compliance_rules_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."earnings_call_summaries" TO "anon";
+GRANT ALL ON TABLE "public"."earnings_call_summaries" TO "authenticated";
+GRANT ALL ON TABLE "public"."earnings_call_summaries" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."earnings_call_summaries_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."earnings_call_summaries_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."earnings_call_summaries_id_seq" TO "service_role";
 
 
 

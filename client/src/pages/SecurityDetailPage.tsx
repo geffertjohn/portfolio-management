@@ -34,6 +34,8 @@ import { SecurityResearchPanel } from '@/components/SecurityResearchPanel'
 import { TipRanksPanel } from '@/components/TipRanksPanel'
 import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
+import { EarningsCallSummaryPanel } from '@/components/EarningsCallSummaryPanel'
+import { fetchCallSummary } from '@/lib/earningsCallSummaries'
 import { SecurityThesisPanel } from '@/components/SecurityThesisPanel'
 
 /**
@@ -81,6 +83,18 @@ export function SecurityDetailPage() {
   const { data: transcript, isLoading: transcriptLoading } = useLatestTranscript(
     isStock ? (security?.security_id ?? null) : null
   )
+  // The committee's read of THIS call. Keyed on the transcript's own
+  // year/quarter so the summary can never drift onto a different call than the
+  // one rendered beside it.
+  const { data: callSummary } = useQuery({
+    queryKey: QUERY_KEYS.callSummary(
+      security?.security_id ?? '', transcript?.year ?? 0, transcript?.quarter ?? 0,
+    ),
+    queryFn: () => fetchCallSummary(security!.security_id, transcript!.year, transcript!.quarter),
+    enabled: isStock && !!security?.security_id && !!transcript,
+    staleTime: 1000 * 60 * 5,
+  })
+
   const { data: executives } = useQuery({
     queryKey: QUERY_KEYS.keyExecutives(security?.security_id ?? ''),
     queryFn: () => fetchKeyExecutives(security!.security_id),
@@ -644,7 +658,10 @@ export function SecurityDetailPage() {
           {/* AI research reports + pre/post-earnings briefs */}
           <SecurityResearchPanel securityId={security.security_id} />
 
-          {/* Transcripts (moved from Monitor) */}
+          {/* Transcripts: our read of the call, then the call itself. The
+              summary comes first because it is the part that is read every
+              time; the transcript is what you open when the summary raises a
+              question. */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-gray-900">Transcripts</h2>
 
@@ -657,11 +674,31 @@ export function SecurityDetailPage() {
             )}
 
             {!transcriptLoading && transcript && (
-              <TranscriptViewer
-                transcript={transcript}
-                companyName={companyName}
-                executives={executives ?? []}
-              />
+              <div className="space-y-6">
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Earnings Summary
+                  </h3>
+                  {callSummary ? (
+                    <EarningsCallSummaryPanel summary={callSummary} />
+                  ) : (
+                    <p className="text-sm italic text-gray-400">
+                      No committee summary for the Q{transcript.quarter} {transcript.year} call yet.
+                    </p>
+                  )}
+                </section>
+
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Earnings Transcript
+                  </h3>
+                  <TranscriptViewer
+                    transcript={transcript}
+                    companyName={companyName}
+                    executives={executives ?? []}
+                  />
+                </section>
+              </div>
             )}
           </div>
 
