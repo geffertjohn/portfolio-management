@@ -616,7 +616,7 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 ### Scheduled jobs (draft-only) — prompts live in this repo
 
-Five routines: **at-risk-review** (weekdays 09:25 → `at_risk` + `alert_events`, see At-Risk below), **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
+Six routines: **watchlist-research** (weekdays 10:05 → the lean IC over unresearched watchlist ideas, see below), **at-risk-review** (weekdays 09:25 → `at_risk` + `alert_events`, see At-Risk below), **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
 
 **The prompts are version-controlled at `.claude/scheduled-tasks/<taskId>/SKILL.md`** — that is the source of truth. The scheduler, however, reads each task from a fixed path it owns (`~/.claude/scheduled-tasks/<taskId>/SKILL.md`) and nothing repoints it, so the two must be kept in step by copying:
 
@@ -629,6 +629,40 @@ node scripts/scheduled-tasks/sync.mjs --from-home # scheduler → repo (capture 
 **Do NOT symlink the scheduler's path at the repo file.** It fails silently and in the worst possible way: the task stays registered, enabled and on schedule, but its frontmatter reads back empty because the reader does not follow symlinks — and the prompt is that file, so the job runs with nothing to do while every listing looks healthy. This was tried and reverted; `sync.mjs --check` detects and repairs a symlink for exactly this reason.
 
 Editing a prompt through the app, or with `update_scheduled_task`, rewrites the **scheduler's** copy — run `--from-home` afterwards or the repo silently goes stale.
+
+### Watchlist research — the job that was missing
+
+**Adding a ticker to the Watchlist fires nothing.** `addProspect` writes
+`prospects` + `prospect_portfolios` and returns; the only triggers on the table
+are `audit` and `updated_at`, and the committee runs in Claude Code with no
+bridge from the React app. The card's badge was `research.length === 0` labelled
+"AI research pending" — describing an absence as if something were coming, and
+FCX sat there 23 days with nothing behind it. (HWM looked like it worked only
+because its three reports came from a **candidate** committee run months earlier,
+`addition_id: 4`, and the card matched them by ticker.)
+
+**`watchlist-research`** closes it: weekdays, finds prospects with no
+`research_reports` at all, and runs the **lean** committee for the three oldest.
+The badge now reads **"Awaiting committee"**.
+
+- **Lean always** (`args.lean: true`). A watchlist idea asks "is this ownable",
+  which the four roles answer; the quant screen and compliance gate belong to the
+  candidate workflow, where a purchase is actually decided.
+- **`portfolioName` only when the idea names exactly ONE portfolio** — it gives
+  the PM a book to size against for free. Naming several, or none, runs
+  **unscoped**: picking one of three arbitrarily would put a proposed weight
+  against a book nobody chose, and sizing for a specific book is the candidate
+  workflow's question.
+- **`report_type` is `initial` with `fiscal_year`/`quarter` null** — standing
+  research tied to no call. Status `draft`.
+- **The job persists; the workflow does not.** Same split as the new-buy
+  committee — analyst/bear → `research_reports`, risk → `risk_reports`, memo →
+  `ic_memos` as `pending_cio`. It must never set `decision`/`decided_by`.
+- **Keep `portfolio_name` consistent across all four rows of a run.** The card
+  filters research to the portfolios the idea names *plus any unscoped report*,
+  so a mismatch makes the work invisible on the card that asked for it.
+- The `not exists` guard is what makes it idempotent — an idea carrying any
+  research, from any source, is left alone.
 
 ### Earnings briefs — a matched pair, in two sections
 
