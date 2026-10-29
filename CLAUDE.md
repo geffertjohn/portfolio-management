@@ -617,7 +617,7 @@ the pair whole (both set or both null) and another bounds the quarter to 1–4;
 
 `SecurityResearchPanel` renders standing research, then `CommentaryTimeline` —
 eight quarters, newest first, one row per call with its pre-brief, post-brief,
-quarterly brief (**a placeholder; not built**) and transcript. Rows are built by
+quarterly brief and transcript. Rows are built by
 the pure `buildCommentaryTimeline()` in `lib/commentaryTimeline.ts`. Four things
 there are load-bearing:
 
@@ -655,6 +655,43 @@ keyed by period, a disagreement would split them across two rows and the
 post-brief would appear to answer nothing — so the post job updates the parent.
 Use the **fiscal** labels the transcript list gives: TJX's August call is Q2
 **2027**.
+
+### The quarterly brief is a RENDERING, not a record
+
+`lib/quarterlyBrief.ts` assembles one quarter's story from the three documents
+already written around its call — the pre-brief (expected), the call summary
+(said), the post-brief (meant). **It has no table and is not stored**, because it
+contains no new information: a saved copy could only drift from the rows it was
+built from. The icon generates it on open.
+
+`buildQuarterlyBrief()` is pure and React-free and is the single source for BOTH
+`QuarterlyBriefView` (on screen) and `buildQuarterlyBriefPdf` (the document) —
+the `lib/fundScorecard.ts` split. Decide what a reader sees in the lib, never in
+one of the two renderers, or the page and the PDF diverge.
+
+**It is shaped to be safe to hand to a client**, which is the entire reason it is
+not the internal brief with a new cover. Held back deliberately, documented at
+the top of the lib: **`review_recommendations`** (per-portfolio add/trim/sell with
+target weights — our allocation decision, never a client's business),
+`openQuestions`, conviction, the thesis **break tests** (`ThesisCheck.test` /
+`watchFor` — the `finding` they produced is plain English and is kept, the
+tripwire is not), estimate ranges and analyst counts, and `street_questions`.
+
+- **`canBuildQuarterlyBrief` requires a post-brief OR a call summary.** A
+  pre-brief alone is expectations for a call that has not happened, so a brief
+  built from it would describe a quarter nobody has lived through.
+- **Not yet client-ready, and the gap is the PROSE.** The structural exclusions
+  hold, but the text the committee wrote carries internal vocabulary — a GOOGL
+  `finding` reads "The test is met on its first leg." No field filter can reach
+  inside free text; closing it means a plain-language rule in the post-earnings
+  prompt (applying to future briefs only), not a change here.
+- **Saving is an explicit act**, for when the point IS to freeze a version: the
+  PDF goes to `Security Documents/<ticker>` via `uploadFile`, which date-prefixes
+  the name (gotcha 15), and the mutation invalidates
+  `documentsFiles(SECURITY_DOCS_BUCKET)` so it appears in the panel below.
+- **`fmtEstimate` moved to `lib/formatters.ts`** when this landed — three
+  surfaces render those rows now (research card, brief on screen, brief as PDF)
+  and a second copy is how a percentage starts rendering as dollars in one.
 
 Transcripts are fetched **per row, on open** (`fetchTranscript(symbol, fy, q)` —
 v3, which returns the exact `EarningsTranscript` shape `TranscriptViewer` wants).

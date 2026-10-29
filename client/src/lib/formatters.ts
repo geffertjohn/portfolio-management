@@ -10,6 +10,8 @@
  *   'num'        – plain number          (1.23 → "1.23")
  *   'integer'    – whole number          (42 → "42")
  */
+import type { EstimateUnit } from './researchReports'
+
 
 export const EMPTY = '—'
 
@@ -118,4 +120,19 @@ export function consensusColor(label: string | null | undefined): string {
  */
 export function toLocalDateInputValue(date: Date): string {
   return date.toLocaleDateString('en-CA')
+}
+
+/**
+ * One figure from an earnings brief's estimates table, rendered by the unit the
+ * brief recorded against it.
+ *
+ * Lives here because three surfaces show these rows — the research card, the
+ * quarterly brief on screen, and the same brief as a PDF — and a second copy is
+ * how a percentage starts rendering as dollars in one of them.
+ */
+export function fmtEstimate(v: number | null | undefined, unit: EstimateUnit): string {
+  if (v == null) return EMPTY
+  if (unit === 'pct') return fmtDecimalPct(v)
+  if (unit === 'usd_large') return fmtUsdCompact(v)
+  return fmtUsd(v)
 }
