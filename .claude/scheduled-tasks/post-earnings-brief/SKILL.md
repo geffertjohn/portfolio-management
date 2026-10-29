@@ -14,7 +14,8 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 - **Do not use Bash, or any shell command, at all** — no `node`, `python3`, `curl`, `jq`, `date`, or scripts. Every step here is doable with the Supabase MCP `execute_sql` tool and the FMP MCP tools (load via ToolSearch).
 - Do date arithmetic in SQL (`select current_date, current_date + 2`) and filter or join API results yourself, or in SQL with a `values (...)` list — never by piping output through a shell.
 - Do not Read or Write files outside this project, and do not edit any repo file. Reading `.claude/agents/*.md` and `docs/*.md` is fine.
-- If a required tool is unavailable or errors twice, stop and write the digest saying what failed. Never retry in a loop.
+- **Warm the connectors with ONE call before any fan-out.** Step 2 tempts you to open with a dozen parallel FMP calls, one per unanswered brief. Do not. A scheduled run that fires before the working day usually runs as a **catch-up seconds after the machine wakes**, and the connector transport has not re-established yet — a parallel burst then fails *every* call at the tool-call hook instead of one. (2026-10-29: the Mac was asleep at 07:25 ET and both jobs fired 24 seconds after a 09:15 wake; 14 of 14 `calendar` calls failed, while the pre-earnings job's single call at the same instant succeeded.) So make the **first** FMP call on its own and wait for it to return. Only then fan out, and keep the fan-out to a few at a time.
+- If a required tool is unavailable or errors twice, stop and write the digest saying what failed. Never retry in a loop. **If the failure looks like a cold transport — several calls failing at once with timeouts — retry ONE call on its own first; that distinguishes a dead connector from a cold one.**
 
 ## The rule that governs everything here
 
