@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 import type {
   ResearchReport, Rating, Conviction, ReportType, ThesisStatus, WatchVerdict, WatchItem,
-  EstimateRow, EstimateUnit, StreetQuestion, ThesisCheck, AnswerState, CheckStatus,
+  EstimateRow, StreetQuestion, ThesisCheck, AnswerState, CheckStatus,
 } from '@/lib/researchReports'
 import type { RiskReport, RiskVerdict } from '@/lib/riskReports'
 import type { IcMemo, IcDecision } from '@/lib/icMemos'
-import { fmtUsd, fmtUsdCompact, fmtDecimalPct, fmtSignedPct, EMPTY } from '@/lib/formatters'
+import { fmtUsd, fmtSignedPct, fmtEstimate, EMPTY } from '@/lib/formatters'
 import { formatDate } from '@/lib/fundFormat'
 
 /**
@@ -88,13 +88,6 @@ function SectionHeading({ n, title }: { n: number; title: string }) {
 
 function SubHeading({ children }: { children: ReactNode }) {
   return <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{children}</p>
-}
-
-function fmtEstimate(v: number | null | undefined, unit: EstimateUnit): string {
-  if (v == null) return EMPTY
-  if (unit === 'pct') return fmtDecimalPct(v)
-  if (unit === 'usd_large') return fmtUsdCompact(v)
-  return fmtUsd(v)
 }
 
 /**

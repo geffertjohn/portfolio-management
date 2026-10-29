@@ -15,13 +15,17 @@
  * top one.
  */
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ResearchReport, ThesisStatus } from '@/lib/researchReports'
 import { fetchTranscript, fetchKeyExecutives } from '@/lib/fmpTranscripts'
 import { fetchCallSummary } from '@/lib/earningsCallSummaries'
 import type { CommentaryRow } from '@/lib/commentaryTimeline'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { EMPTY } from '@/lib/formatters'
+import { buildQuarterlyBrief, canBuildQuarterlyBrief } from '@/lib/quarterlyBrief'
+import { buildQuarterlyBriefPdf } from '@/lib/quarterlyBriefPdf'
+import { uploadFile, SECURITY_DOCS_BUCKET, isServerUnreachable } from '@/lib/documents'
+import { QuarterlyBriefView } from '@/components/QuarterlyBriefView'
 import { ResearchCard } from '@/components/icReviewCards'
 import { TranscriptViewer } from '@/components/TranscriptViewer'
 import { EarningsCallSummaryPanel } from '@/components/EarningsCallSummaryPanel'
@@ -63,11 +67,14 @@ function Modal({
   subtitle,
   onClose,
   children,
+  actions,
 }: {
   title: string
   subtitle?: string | null
   onClose: () => void
   children: React.ReactNode
+  /** Buttons pinned to a footer bar, out of the scrolling body. */
+  actions?: React.ReactNode
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -99,6 +106,11 @@ function Modal({
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50/60 p-6">{children}</div>
+        {actions && (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-gray-100 px-6 py-3">
+            {actions}
+          </div>
+        )}
       </div>
     </dialog>
   )
@@ -179,6 +191,104 @@ function TranscriptModal({
   )
 }
 
+/**
+ * The quarterly brief — generated from the record on open, not stored.
+ *
+ * It contains no new information: every line is drawn from the pre-brief, the
+ * call summary and the post-brief, so a stored copy could only go stale against
+ * the rows it was built from. Saving is therefore an explicit act, for when the
+ * point IS to freeze a version — a document sent to a client has to stay exactly
+ * what was sent, and that copy lands in the security's Documents folder where
+ * the rest of the audit trail lives.
+ */
+function QuarterlyBriefModal({
+  securityId,
+  companyName,
+  row,
+  onClose,
+}: {
+  securityId: string
+  companyName: string | null
+  row: CommentaryRow
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [saved, setSaved] = useState<string | null>(null)
+
+  const brief = buildQuarterlyBrief({
+    ticker: securityId,
+    companyName,
+    fiscalYear: row.fiscalYear,
+    quarter: row.quarter,
+    callDate: row.callDate ? fmtDate(row.callDate) : null,
+    preBrief: row.pre[0] ?? null,
+    postBrief: row.post[0] ?? null,
+    summary: row.summary,
+  })
+
+  const download = () => {
+    const { blob, filename } = buildQuarterlyBriefPdf(brief)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    // Revoke on the next tick — revoking synchronously races the download in
+    // Safari and the file arrives empty.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const { blob, filename } = buildQuarterlyBriefPdf(brief)
+      const file = new File([blob], filename, { type: 'application/pdf' })
+      // Keep the path the server returns — it date-prefixes and sanitises.
+      return uploadFile(securityId, file, SECURITY_DOCS_BUCKET)
+    },
+    onSuccess: (path) => {
+      setSaved(path)
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(SECURITY_DOCS_BUCKET) })
+    },
+  })
+
+  const saveError = save.error
+    ? isServerUnreachable(save.error)
+      ? 'Could not save — the Express file server is not reachable (cd server && npm run dev).'
+      : (save.error as Error).message
+    : null
+
+  return (
+    <Modal
+      title={`Quarterly brief · Q${row.quarter} ${row.fiscalYear}`}
+      subtitle={`${securityId} — generated from the record, not stored`}
+      onClose={onClose}
+      actions={
+        <>
+          {saved && <span className="text-xs text-green-700">Saved to Documents</span>}
+          {saveError && <span className="text-xs text-red-600">{saveError}</span>}
+          <button
+            type="button"
+            onClick={() => save.mutate()}
+            disabled={save.isPending}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {save.isPending ? 'Saving…' : 'Save to Documents'}
+          </button>
+          <button
+            type="button"
+            onClick={download}
+            className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800"
+          >
+            Download PDF
+          </button>
+        </>
+      }
+    >
+      <QuarterlyBriefView brief={brief} />
+    </Modal>
+  )
+}
+
 function ReportModal({
   report,
   parentDate,
@@ -250,6 +360,7 @@ export function CommentaryTimeline({
 }) {
   const [openReport, setOpenReport] = useState<ResearchReport | null>(null)
   const [openCall, setOpenCall] = useState<CommentaryRow | null>(null)
+  const [openQuarterly, setOpenQuarterly] = useState<CommentaryRow | null>(null)
 
   // A post-brief names the pre-brief it answers; both are in `rows`, so resolve
   // the date here rather than making the card fetch its own parent.
@@ -324,7 +435,19 @@ export function CommentaryTimeline({
                     <DocCell reports={row.post} onOpen={setOpenReport} label="Post-earnings brief" />
                   </td>
                   <td className="px-4 py-2.5 text-center">
-                    <span className="text-sm text-gray-300">{EMPTY}</span>
+                    {canBuildQuarterlyBrief(row) ? (
+                      <button
+                        type="button"
+                        onClick={() => setOpenQuarterly(row)}
+                        title={`Open the Q${row.quarter} ${row.fiscalYear} quarterly brief`}
+                        aria-label={`Open the Q${row.quarter} ${row.fiscalYear} quarterly brief`}
+                        className="rounded p-1 text-teal-600 transition-colors hover:bg-teal-50 hover:text-teal-800"
+                      >
+                        <DocIcon />
+                      </button>
+                    ) : (
+                      <span className="text-sm text-gray-300">{EMPTY}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     {row.callDate ? (
@@ -360,8 +483,8 @@ export function CommentaryTimeline({
       </div>
 
       <p className="mt-3 text-xs text-gray-400">
-        The quarterly brief — a client-facing summary drawing on the pre-earnings brief, the
-        call and the post-earnings brief — is not built yet.
+        The quarterly brief is generated from that quarter's documents when you open it, so it
+        is never stale; save it to Documents when you need a frozen copy.
       </p>
 
       {openReport && (
@@ -371,6 +494,14 @@ export function CommentaryTimeline({
             openReport.parent_report_id != null ? dateById.get(openReport.parent_report_id) ?? null : null
           }
           onClose={() => setOpenReport(null)}
+        />
+      )}
+      {openQuarterly && (
+        <QuarterlyBriefModal
+          securityId={securityId}
+          companyName={companyName}
+          row={openQuarterly}
+          onClose={() => setOpenQuarterly(null)}
         />
       )}
       {openCall && (
