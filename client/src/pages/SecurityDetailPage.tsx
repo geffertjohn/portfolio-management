@@ -648,6 +648,9 @@ export function SecurityDetailPage() {
             nextEarningsDate={nextEarnings}
           />
 
+          {/* AI research reports + pre/post-earnings briefs */}
+          <SecurityResearchPanel securityId={security.security_id} />
+
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <DocumentsFolderPanel
               bucket={SECURITY_DOCS_BUCKET}
