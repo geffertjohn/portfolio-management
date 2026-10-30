@@ -21,6 +21,7 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
 - Do date arithmetic in SQL (`select current_date - 45`), never by piping output through a shell.
 - Do not Read or Write files outside this project, and do not edit any repo file. Reading `.claude/agents/*.md` and `docs/*.md` is fine.
 - **Warm the connectors with ONE call before any fan-out.** A scheduled run that fires before the working day often runs as a catch-up seconds after the machine wakes, and the connector transport has not re-established — a parallel burst then fails *every* call at the tool-call hook instead of one. Make the first FMP call on its own and wait for it. Only then fan out, a few at a time.
+- **The run is over only when the summary rows are written and the digest is printed.** "Fan out" above means issuing several FMP calls yourself in one message — it is not licence to hand the work to subagents and end the turn. Delegating a transcript read is fine, but stay with it: collect what comes back, write the rows, print the digest. Nobody is here to ask you to continue.
 - If a required tool is unavailable or errors twice, stop and write the digest saying what failed. Never retry in a loop. If several calls fail at once with timeouts, retry ONE on its own first — that distinguishes a dead connector from a cold one.
 
 ## Steps
