@@ -1504,6 +1504,7 @@ CREATE TABLE IF NOT EXISTS "public"."research_reports" (
     "review_recommendations" "jsonb",
     "fiscal_year" integer,
     "quarter" integer,
+    "price_targets" "jsonb",
     CONSTRAINT "research_reports_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
     CONSTRAINT "research_reports_period_complete" CHECK ((("fiscal_year" IS NULL) = ("quarter" IS NULL))),
     CONSTRAINT "research_reports_post_needs_parent" CHECK ((("report_type" <> 'post_earnings'::"text") OR ("parent_report_id" IS NOT NULL))),
@@ -1547,6 +1548,10 @@ COMMENT ON COLUMN "public"."research_reports"."fiscal_year" IS 'Fiscal year of t
 
 
 COMMENT ON COLUMN "public"."research_reports"."quarter" IS 'Fiscal quarter (1-4) of the earnings call this brief concerns; null for initial/update reports.';
+
+
+
+COMMENT ON COLUMN "public"."research_reports"."price_targets" IS 'Scenario price targets for a standalone watchlist read: {scenarios:[{case,value,probability,premise}], weighted, method, buyBelow, buyBelowBasis, priceLimited}. buyBelow is the price at which the rating would become a buy; it is null with priceLimited=false when the rating is held back by something other than price (an unresolved deal, a pending disclosure), where inventing a number would misstate why the name is a hold.';
 
 
 
@@ -2334,6 +2339,11 @@ ALTER TABLE ONLY "public"."prospects"
 
 ALTER TABLE ONLY "public"."research_reports"
     ADD CONSTRAINT "research_reports_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE "public"."research_reports"
+    ADD CONSTRAINT "research_reports_price_targets_is_object" CHECK ((("price_targets" IS NULL) OR ("jsonb_typeof"("price_targets") = 'object'::"text"))) NOT VALID;
 
 
 

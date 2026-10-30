@@ -15,7 +15,8 @@ import { AddProspectModal } from '@/components/AddProspectModal'
 import { ResearchCard } from '@/components/icReviewCards'
 import { getSecurityDisplayType, type SecurityDisplayType } from '@/lib/securities'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
-import { fmtUsd } from '@/lib/formatters'
+import { fmtUsd, fmtDecimalPct } from '@/lib/formatters'
+import { PRICE_CASE_LABEL, gapToBuy } from '@/lib/priceTargets'
 
 const ROLE_ORDER: Record<string, number> = {
   research_analyst: 0, devils_advocate: 1, quant_analyst: 2,
@@ -93,6 +94,10 @@ function ProspectCard({
   // With several portfolios the analyst ratings can legitimately disagree, so a
   // single headline pill would have to pick a winner. Say how many instead.
   const soleAnalyst = analysts.length === 1 ? analysts[0] : null
+  // Targets ride on the single analyst view, for the same reason the rating
+  // badge does: with two views there is no one answer to show on the face.
+  const targets = soleAnalyst?.price_targets ?? null
+  const buyGap = targets ? gapToBuy(targets, live?.price ?? soleAnalyst?.current_price ?? null) : null
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -111,9 +116,6 @@ function ProspectCard({
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
                 {fmtUsd(live.price)}
               </span>
-            )}
-            {entry.target_price != null && (
-              <p className="text-xs tabular-nums text-gray-400">Target {fmtUsd(entry.target_price)}</p>
             )}
           </div>
         </div>
@@ -170,6 +172,48 @@ function ProspectCard({
             </span>
           )}
         </div>
+
+        {/* Bear · base · bull at a glance, so the list answers "what would I
+            pay?" without opening anything. Only when there is ONE analyst view:
+            two sets of targets cannot honestly collapse onto a single line, and
+            the drawer shows them both. */}
+        {targets && (
+          <div className="mt-2 border-t border-gray-100 pt-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+              {targets.scenarios.map((sc) => (
+                <span key={sc.case} className="text-gray-500">
+                  {PRICE_CASE_LABEL[sc.case]}{' '}
+                  <span className="font-medium tabular-nums text-gray-900">{fmtUsd(sc.value)}</span>
+                </span>
+              ))}
+              {targets.weighted != null && (
+                <span className="text-gray-400">
+                  wtd <span className="tabular-nums">{fmtUsd(targets.weighted)}</span>
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs">
+              {targets.buyBelow != null ? (
+                <>
+                  <span className="text-gray-500">Buy below </span>
+                  <span className="font-semibold tabular-nums text-emerald-700">
+                    {fmtUsd(targets.buyBelow)}
+                  </span>
+                  {buyGap != null && (
+                    <span className="text-gray-400">
+                      {' '}
+                      {buyGap >= 0
+                        ? '· at or below today'
+                        : `· ${fmtDecimalPct(Math.abs(buyGap))} below today`}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-400">Not price-limited</span>
+              )}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* AI research disclosure */}

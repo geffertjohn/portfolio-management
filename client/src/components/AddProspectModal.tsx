@@ -1,7 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchSecurities } from '@/lib/securities'
 import { fetchPortfolios } from '@/lib/portfolio'
+
+/**
+ * Portfolios you cannot consider a security *for*, because they hold nothing
+ * of their own. Equity Income & Core Growth is a 50/50 derived blend of the
+ * two books named in it — its positions and history are computed, never
+ * uploaded — so a stock enters it only by being bought in Core Growth or in
+ * Equity Income. Offering it here invites an idea that no book can act on.
+ */
+const DERIVED_BLEND_PORTFOLIOS = new Set(['Equity Income & Core Growth'])
 import { addProspect } from '@/lib/prospects'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
@@ -19,7 +28,6 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedPortfolios, setSelectedPortfolios] = useState<string[]>([])
-  const [targetPrice, setTargetPrice] = useState('')
 
   const { data: securities = [] } = useQuery({
     queryKey: QUERY_KEYS.securities,
@@ -32,6 +40,10 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
     queryFn: fetchPortfolios,
     enabled: open,
   })
+  const selectablePortfolios = useMemo(
+    () => portfolios.filter((p) => !DERIVED_BLEND_PORTFOLIOS.has(p.name)),
+    [portfolios],
+  )
 
   useEffect(() => {
     const d = dialogRef.current
@@ -41,7 +53,6 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
       setSearch('')
       setSelectedId(presetSecurityId ?? null)
       setSelectedPortfolios([])
-      setTargetPrice('')
       mutation.reset()
     } else {
       d.close()
@@ -60,11 +71,9 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
     // ticker that is already watched attaches the new portfolios to it.
     mutationFn: async () => {
       if (!selectedId) throw new Error('No security selected')
-      const price = targetPrice.trim() ? Number(targetPrice) : null
       await addProspect({
         securityId: selectedId,
         portfolios: selectedPortfolios,
-        targetPrice: price != null && Number.isFinite(price) ? price : null,
       })
     },
     onSuccess: () => {
@@ -179,10 +188,10 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
                 <span className="font-normal normal-case text-gray-400">(optional)</span>
               </label>
               <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-1">
-                {portfolios.length === 0 ? (
+                {selectablePortfolios.length === 0 ? (
                   <p className="px-2 py-2 text-sm text-gray-400">No portfolios found.</p>
                 ) : (
-                  portfolios.map((p) => (
+                  selectablePortfolios.map((p) => (
                     <label
                       key={p.name}
                       className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50"
@@ -200,25 +209,10 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="prospect-price" className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Target price <span className="font-normal normal-case text-gray-400">(optional)</span>
-              </label>
-              <input
-                id="prospect-price"
-                type="number"
-                step="0.01"
-                min="0"
-                value={targetPrice}
-                onChange={(e) => setTargetPrice(e.target.value)}
-                placeholder="0.00"
-                className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-              />
-            </div>
-
             <p className="rounded-md bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-              The AI research team will draft the thesis, bull &amp; bear case, conviction, and
-              recommendation for each selected portfolio. You can add portfolios later.
+              The AI research team will rate the company on its own merits — thesis, bull &amp;
+              bear case, conviction and a buy/hold/sell — not against any one book. Sizing and
+              the comparison with current holdings happen later, when you move it to a candidate.
             </p>
           </>
         )}

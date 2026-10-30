@@ -2518,6 +2518,7 @@ export type Database = {
           id: number
           parent_report_id: number | null
           portfolio_name: string | null
+          price_targets: Json | null
           quarter: number | null
           rating: string | null
           report_type: string
@@ -2550,6 +2551,7 @@ export type Database = {
           id?: never
           parent_report_id?: number | null
           portfolio_name?: string | null
+          price_targets?: Json | null
           quarter?: number | null
           rating?: string | null
           report_type?: string
@@ -2582,6 +2584,7 @@ export type Database = {
           id?: never
           parent_report_id?: number | null
           portfolio_name?: string | null
+          price_targets?: Json | null
           quarter?: number | null
           rating?: string | null
           report_type?: string

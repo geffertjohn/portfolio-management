@@ -11,6 +11,7 @@
  */
 import { supabase } from './supabase'
 import type { Json } from '@/types/database.types'
+import { parsePriceTargets, type PriceTargets } from './priceTargets'
 
 /**
  * `pre_earnings` was called `earnings_review` until Oct 2026, when the
@@ -199,6 +200,12 @@ export interface ResearchReport {
   risk_checks: ThesisCheck[] | null
   /** Per-portfolio review recommendations; pre-fills the stock review modal. */
   review_recommendations: ReviewRecommendation[] | null
+  /**
+   * Bear / base / bull targets and the price at which a hold becomes a buy.
+   * Only `initial` (standing watchlist) reports carry these — see
+   * `lib/priceTargets.ts` for the shape and for why `buyBelow` may be null.
+   */
+  price_targets: PriceTargets | null
   /** @deprecated superseded by the four fields above. */
   watch_items: WatchItem[] | null
   thesis_status: ThesisStatus | null
@@ -218,7 +225,7 @@ export interface ResearchReport {
 }
 
 const COLS =
-  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, thesis_id, fiscal_year, quarter, estimates, street_questions, thesis_checks, risk_checks, review_recommendations, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
+  'id, security_id, portfolio_name, addition_id, author_role, report_type, parent_report_id, thesis_id, fiscal_year, quarter, estimates, street_questions, thesis_checks, risk_checks, review_recommendations, price_targets, watch_items, thesis_status, thesis, bull_case, bear_case, rating, conviction, fair_value, current_price, dcf_inputs, valuation_summary, sources, status, created_at, deleted_at'
 
 function mapRow(r: Record<string, unknown>): ResearchReport {
   return {
@@ -237,6 +244,7 @@ function mapRow(r: Record<string, unknown>): ResearchReport {
     thesis_checks: (r.thesis_checks as ThesisCheck[] | null) ?? null,
     risk_checks: (r.risk_checks as ThesisCheck[] | null) ?? null,
     review_recommendations: (r.review_recommendations as ReviewRecommendation[] | null) ?? null,
+    price_targets: parsePriceTargets(r.price_targets),
     watch_items: (r.watch_items as WatchItem[] | null) ?? null,
     thesis_status: (r.thesis_status as ThesisStatus | null) ?? null,
     thesis: (r.thesis as string | null) ?? null,
@@ -352,6 +360,7 @@ export interface NewResearchReport {
   thesis_checks?: ThesisCheck[] | null
   risk_checks?: ThesisCheck[] | null
   review_recommendations?: ReviewRecommendation[] | null
+  price_targets?: PriceTargets | null
   watch_items?: WatchItem[] | null
   thesis_status?: ThesisStatus | null
   thesis?: string | null
@@ -385,6 +394,7 @@ export async function insertResearchReport(input: NewResearchReport): Promise<nu
       thesis_checks: (input.thesis_checks ?? null) as unknown as Json,
       risk_checks: (input.risk_checks ?? null) as unknown as Json,
       review_recommendations: (input.review_recommendations ?? null) as unknown as Json,
+      price_targets: (input.price_targets ?? null) as unknown as Json,
       watch_items: (input.watch_items ?? null) as unknown as Json,
       thesis_status: input.thesis_status ?? null,
       thesis: input.thesis ?? null,
