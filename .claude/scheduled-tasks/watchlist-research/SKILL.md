@@ -18,6 +18,7 @@ Nobody is at the keyboard. **Any tool call that asks for approval stalls the run
 - **Do not use Bash, or any shell command.** Supabase MCP `execute_sql` plus the Workflow tool and FMP MCP tools are enough.
 - Do date arithmetic in SQL, never by shelling out.
 - **Warm the connectors with ONE call before any fan-out** — a catch-up run seconds after the machine wakes hits a cold transport, and a burst then fails *every* call rather than one.
+- **The run is over only when all four rows of every committee run are persisted and the digest is printed.** "Fan out" above means issuing several tool calls yourself in one message; the committee in step 3 is a Workflow call that returns its bundle to you. Neither is licence to end the turn early — **the workflow writes nothing**, so a run that stops when the workflow returns has produced nothing at all. Stay with it: persist each run's rows, then print the digest. Nobody is here to ask you to continue.
 - If a tool errors twice, stop and write the digest saying what failed.
 
 ## Steps
