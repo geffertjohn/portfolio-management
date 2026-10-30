@@ -280,10 +280,12 @@ export function SecurityDetailPage() {
               )}
 
               {/* "+ Watchlist" and "Flag at-risk" were removed from this header
-                  (Oct 2026). Neither capability is lost: /watchlist opens
-                  AddProspectModal and /at-risk opens AddToAtRiskModal, both of
-                  which pick their own ticker. The At-Risk badge above still
-                  clears the flag, which is the action you take from this page. */}
+                  (Oct 2026). The watchlist capability is not lost — /watchlist
+                  opens AddProspectModal, which picks its own ticker. Flagging
+                  at-risk is no longer a manual act anywhere: the at-risk-review
+                  job owns that list, and AddToAtRiskModal was deleted with it.
+                  The advisor's remaining act is an override removal, which the
+                  At-Risk badge above still offers and which requires a reason. */}
               {isStock && (
                 <button
                   type="button"
