@@ -63,7 +63,11 @@ export const ASSET_CLASS_BY_CATEGORY: Record<string, AssetClassKey> = {
   'Small Cap Growth':             'us_small_cap',
   // ── Non-US equity ──────────────────────────────────────────────────────────
   'Foreign Large Blend':          'non_us_developed',
+  // Both spellings are live in the book — VEMAX carries the abbreviated form,
+  // EICOX / EMMF / EYLD the spelled-out one. Keep both: dropping either sends
+  // real holdings to the unclassified row.
   'Diversified Emerging Mkts':    'emerging_market',
+  'Diversified Emerging Markets': 'emerging_market',
   // ── Fixed income ───────────────────────────────────────────────────────────
   'Intermediate Core Bond':       'ig_intermediate_fixed_income',
   'Intermediate Core-Plus Bond':  'ig_intermediate_fixed_income',
