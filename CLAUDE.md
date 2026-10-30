@@ -94,7 +94,8 @@ These are different features and **must not be conflated**:
   - **One row per ticker, portfolios attached through `prospect_portfolios`** (Oct 2026). `prospects.target_portfolio` used to put the portfolio *in the idea's identity*, so one ticker under three portfolios was three rows and three cards, and an idea you had not placed yet could not be recorded at all. A partial unique index `(security_id) WHERE removed_at IS NULL` keeps one live idea per ticker; removed rows are exempt so a ticker can be watched, dropped and watched again. **Re-adding a watched ticker merges** — `addProspect` attaches the new portfolios to the open idea rather than failing on the index. **Zero portfolios is valid.**
   - **`security_id` has no FK** — watching a ticker you do not own is the normal case, so `securities2` is resolved through a separate lookup and is often null. Identity and asset type for those come from **FMP `/profile` (`companyName`, `isEtf`, `isFund`)**, because the `securities2` classifier has no columns to read and would call every unheld idea a stock.
   - **A card opens `/research/:ticker`** — the on-demand research page, which runs on a bare ticker. `ResearchPage` is **stock-only** (its scorecard is margins/growth, which FMP does not serve for funds), so an ETF/fund idea opens its `securities2` detail page instead when it has one. Do not point a stock idea at `/security/:id`: that is the held-security surface (positions, review schedule, documents, at-risk).
-  - `prospects.thesis` and `prospects.conviction` are **dead columns** — the manual fields were removed when AI research took over. The displayed thesis/rating/conviction come from `research_reports`, filtered to the portfolios the idea names plus any unscoped report.
+  - `prospects.thesis`, `prospects.conviction` and `prospects.target_price` are **dead columns** — the manual thesis/conviction went when AI research took over, and the target price went from the Add form and the card in Oct 2026 (a price you mean to pay is a sizing decision, which belongs to the candidate stage). The columns and their stored values are kept; nothing writes them. The displayed thesis/rating/conviction come from `research_reports`, filtered to the portfolios the idea names plus any unscoped report — and since `watchlist-research` now always writes unscoped, new research shows on every card regardless of the books an idea names.
+  - **The Add-to-watchlist portfolio picker hides derived blends** (`DERIVED_BLEND_PORTFOLIOS` in `AddProspectModal`). Equity Income & Core Growth is a computed 50/50 of the two books it names, so a stock enters it only by being bought in one of them; offering it would invite an idea no book can act on.
 
 `substitutions.at_risk_id` is a `BIGINT → at_risk.id` FK (not a `security_id`).
 
@@ -673,27 +674,43 @@ because its three reports came from a **candidate** committee run months earlier
 `addition_id: 4`, and the card matched them by ticker.)
 
 **`watchlist-research`** closes it: weekdays, finds prospects with no
-`research_reports` at all, and runs the **lean** committee for the three oldest.
-The badge now reads **"Awaiting committee"**.
+`research_reports` at all, and reads the **five** oldest. The badge now reads
+**"Awaiting committee"**.
 
-- **Lean always** (`args.lean: true`). A watchlist idea asks "is this ownable",
-  which the four roles answer; the quant screen and compliance gate belong to the
-  candidate workflow, where a purchase is actually decided.
-- **`portfolioName` only when the idea names exactly ONE portfolio** — it gives
-  the PM a book to size against for free. Naming several, or none, runs
-  **unscoped**: picking one of three arbitrarily would put a proposed weight
-  against a book nobody chose, and sizing for a specific book is the candidate
-  workflow's question.
+**The watchlist stage asks ONE question: is this company worth owning, on its
+own merits?** A buy/hold/sell with a bull and a bear case, the way a sell-side
+analyst rates a name — and nothing portfolio-relative. Weight, correlation to
+current holdings, opportunity cost against the incumbents in a sector,
+concentration and factor exposure are all real questions asked **later**, in the
+candidate workflow, where a purchase is decided against an actual book.
+
+- **Two roles only: `research-analyst` + `devils-advocate`**, via the **Agent
+  tool** (those subagent types resolve `.claude/agents/*.md`, so there is no
+  inlined copy to keep in sync). **Not** the `new-buy-ic-review` workflow — that
+  is the candidate committee, and its PM sizing and portfolio risk gate are
+  exactly the questions this stage does not ask.
+- **`portfolio_name` is ALWAYS null**, with no exception for an idea naming
+  exactly one portfolio. The earlier design passed one through to give the PM a
+  book to size against; what it actually produced was MRVL coming back
+  **"watchlist at 0%"** — a proposed weight against a book nobody had decided to
+  buy into, which is an answer to a question nobody asked. The portfolios an
+  idea names are **recorded on the idea, not used here**; the job's query does
+  not even read `prospect_portfolios`, so there is nothing to be tempted by.
+- **No `ic_memos` row and no `risk_reports` row.** A memo is a recommendation to
+  buy something *at a size*, and there is no size here. The analyst's rating is
+  the deliverable.
+- **The two roles are independent** — the devil's advocate is never handed the
+  analyst's thesis, or it writes a rebuttal instead of a bear case.
+- **If one role returns nothing, neither row is written for that ticker.** Half a
+  read is not a rating: a thesis with no bear case against it is the most
+  misleading thing this job could leave behind.
 - **`report_type` is `initial` with `fiscal_year`/`quarter` null** — standing
   research tied to no call. Status `draft`.
-- **The job persists; the workflow does not.** Same split as the new-buy
-  committee — analyst/bear → `research_reports`, risk → `risk_reports`, memo →
-  `ic_memos` as `pending_cio`. It must never set `decision`/`decided_by`.
-- **Keep `portfolio_name` consistent across all four rows of a run.** The card
-  filters research to the portfolios the idea names *plus any unscoped report*,
-  so a mismatch makes the work invisible on the card that asked for it.
 - The `not exists` guard is what makes it idempotent — an idea carrying any
   research, from any source, is left alone.
+- **Rows written before Oct 30 2026 are portfolio-scoped** (FCX → Equity Income,
+  LRCX → Core Growth) and some carry a memo and a risk report. They are the
+  record as written and are not migrated.
 
 ### Earnings briefs — a matched pair, in two sections
 

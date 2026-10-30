@@ -23,6 +23,13 @@ import type { Conviction } from './reviewLog'
 export interface ProspectEntry {
   id: number
   security_id: string
+  /**
+   * Retained READ-ONLY. The field was dropped from the Add-to-watchlist form and
+   * the card in Oct 2026 — a watchlist idea is a view on the company, and a price
+   * you meant to pay is a sizing decision that belongs to the candidate stage.
+   * The column and its stored values are kept rather than migrated away, so the
+   * handful of rows carrying one are not destroyed; nothing writes it any more.
+   */
   target_price: number | null
   conviction: Conviction | null
   thesis: string | null
@@ -48,7 +55,6 @@ export interface NewProspect {
   securityId: string
   /** Optional — an idea with no portfolio yet is a valid idea. */
   portfolios?: string[]
-  targetPrice?: number | null
 }
 
 /** All active (not removed) ideas, newest first, with portfolios and securities2 info. */
@@ -113,17 +119,11 @@ export async function addProspect(p: NewProspect): Promise<void> {
   if (prospectId == null) {
     const { data, error } = await supabase
       .from('prospects')
-      .insert({ security_id: sym, target_price: p.targetPrice ?? null })
+      .insert({ security_id: sym })
       .select('id')
       .single()
     if (error) throw error
     prospectId = data.id
-  } else if (p.targetPrice != null) {
-    const { error } = await supabase
-      .from('prospects')
-      .update({ target_price: p.targetPrice })
-      .eq('id', prospectId)
-    if (error) throw error
   }
 
   const names = [...new Set((p.portfolios ?? []).map((n) => n.trim()).filter(Boolean))]

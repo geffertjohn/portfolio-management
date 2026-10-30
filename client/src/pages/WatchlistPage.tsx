@@ -112,9 +112,6 @@ function ProspectCard({
                 {fmtUsd(live.price)}
               </span>
             )}
-            {entry.target_price != null && (
-              <p className="text-xs tabular-nums text-gray-400">Target {fmtUsd(entry.target_price)}</p>
-            )}
           </div>
         </div>
 
