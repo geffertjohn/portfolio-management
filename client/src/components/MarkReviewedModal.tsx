@@ -6,12 +6,14 @@ import {
   CONVICTION_OPTIONS, CONVICTION_LABELS, OUTCOME_LABELS,
   type ReviewOutcome, type Recommendation, type Conviction, type ReviewMetricsSnapshot,
 } from '@/lib/reviewLog'
-import { addToAtRisk } from '@/lib/atRisk'
+import {
+  addToAtRisk, fetchAtRiskBySecurity, isBreached, failingMetrics,
+} from '@/lib/atRisk'
 import { fetchScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { beatRate, fetchTipRanksSymbolSummary } from '@/lib/fmpTipranks'
-import { fmtDecimalPct, fmtUsd, toLocalDateInputValue, EMPTY } from '@/lib/formatters'
+import { fmtDecimalPct, fmtUsd, fmtUtcLongDate, toLocalDateInputValue, EMPTY } from '@/lib/formatters'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fetchLatestPostEarningsBrief, composeReviewRationale } from '@/lib/researchReports'
 import type { SecurityDetail } from '@/lib/securities'
@@ -118,6 +120,17 @@ export function MarkReviewedModal({
     staleTime: 1000 * 60 * 5,
     retry: false,
   })
+  // The live At-Risk entry, so the review states what the committee flagged
+  // and how long the position has left. Stocks only — funds reach the list by
+  // a different route and the modal's fund path has its own At-Risk checkbox.
+  const { data: atRiskEntries } = useQuery({
+    queryKey: QUERY_KEYS.atRiskBySecurity(securityId),
+    queryFn: () => fetchAtRiskBySecurity(securityId),
+    enabled: open && !isFund,
+    staleTime: 1000 * 60 * 5,
+  })
+  const atRisk = atRiskEntries?.[0] ?? null
+
   // Memoised: a fresh [] every render would change the pre-fill effect's deps
   // on every render.
   const recs = useMemo(() => brief?.review_recommendations ?? [], [brief])
@@ -131,6 +144,32 @@ export function MarkReviewedModal({
     if (!first) return null
     return recs.every((r) => r.conviction === first) ? first : null
   }, [recs])
+
+  // Rendered only when the books agree on the call but not on how firmly, so
+  // the empty conviction row reads as a decision rather than an oversight.
+  const convictionSplit = useMemo<string | null>(() => {
+    const stated = recs.filter((r) => r.conviction)
+    if (stated.length < 2) return null
+    if (new Set(stated.map((r) => r.conviction)).size < 2) return null
+    return stated
+      .map((r) => `${r.portfolioName}: ${CONVICTION_LABELS[r.conviction as Conviction].replace(/ conviction$/i, '').toLowerCase()}`)
+      .join(' · ')
+  }, [recs])
+
+  // Days are counted from the stored removal_date, never recomputed — the
+  // timer is set once at flag time and re-deriving it here would let a name
+  // that improved quietly buy itself a later deadline.
+  const atRiskTimerLine = useMemo<string>(() => {
+    if (!atRisk) return ''
+    if (!atRisk.removal_date) return 'No sell timer set.'
+    const due = new Date(atRisk.removal_date)
+    const days = Math.ceil((due.getTime() - Date.now()) / 86_400_000)
+    if (isBreached(atRisk)) {
+      return `Sell timer expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago (${fmtUtcLongDate(due)}) with a metric still red — this review is the action.`
+    }
+    if (days < 0) return `Sell timer ran out on ${fmtUtcLongDate(due)}; the flagged metrics have recovered.`
+    return `${days} day${days === 1 ? '' : 's'} left on the sell timer — expires ${fmtUtcLongDate(due)}.`
+  }, [atRisk])
 
   // Applied ONCE per opening. The brief arrives asynchronously, so without this
   // guard a background refetch (TanStack refetches on window focus) would
@@ -177,7 +216,14 @@ export function MarkReviewedModal({
   useEffect(() => {
     const d = dialogRef.current
     if (!d) return
-    if (open) d.showModal(); else d.close()
+    if (open) {
+      d.showModal()
+      // A native <dialog> moves focus to its first focusable descendant, which
+      // here is the "Add" recommendation button — so the UA focus ring landed
+      // on Add while "Hold" was the pre-selected answer, and the blue ring read
+      // as the selection. Take focus onto the dialog itself instead.
+      d.focus()
+    } else d.close()
   }, [open])
 
   // Stock (non-fund) review dates, all earnings-driven:
@@ -398,7 +444,7 @@ export function MarkReviewedModal({
   const scheduleReady = mode !== 'schedule' || !!nextReviewOverride
 
   return (
-    <dialog ref={dialogRef} onCancel={handleClose}
+    <dialog ref={dialogRef} tabIndex={-1} onCancel={handleClose}
       className={`max-h-[90vh] w-full rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30 ${
         mode === 'review' ? (isFund ? 'max-w-3xl' : 'max-w-2xl') : 'max-w-md'
       }`}>
@@ -583,9 +629,10 @@ export function MarkReviewedModal({
                           key={r}
                           type="button"
                           onClick={() => setRecommendation(recommendation === r ? '' : r)}
-                          className={`flex-1 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors ${
+                          aria-pressed={recommendation === r}
+                          className={`flex-1 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${
                             recommendation === r
-                              ? RECOMMENDATION_COLORS[r].replace('bg-', 'border-current bg-')
+                              ? `${RECOMMENDATION_COLORS[r].replace('bg-', 'border-current bg-')} ring-2 ring-current ring-offset-1`
                               : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
                           }`}
                         >
@@ -600,9 +647,10 @@ export function MarkReviewedModal({
                           key={c}
                           type="button"
                           onClick={() => setConviction(conviction === c ? '' : c)}
-                          className={`flex-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                          aria-pressed={conviction === c}
+                          className={`flex-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${
                             conviction === c
-                              ? 'border-gray-700 bg-gray-800 text-white'
+                              ? 'border-gray-700 bg-gray-800 text-white ring-2 ring-gray-700 ring-offset-1'
                               : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
                           }`}
                         >
@@ -610,6 +658,38 @@ export function MarkReviewedModal({
                         </button>
                       ))}
                     </div>
+
+                    {/* A unanimous recommendation can still carry different
+                        conviction per book (ORLY, Oct 2026: hold/high in Equity
+                        Income, hold/medium in the blend). The row then sits
+                        empty with nothing saying why, which reads as a missing
+                        value rather than a judgement call. Name the split. */}
+                    {unanimous && !unanimousConviction && convictionSplit && (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        Same call, different conviction — {convictionSplit}. Nothing pre-selected; choose one.
+                      </p>
+                    )}
+
+                    {/* What the committee flagged, and how long is left on it.
+                        The advisor is being asked to sign a recommendation on a
+                        position already under a sell timer; that belongs on the
+                        form, not a tab away. */}
+                    {atRisk && (
+                      <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                        <p className="font-semibold">
+                          On the At-Risk list since {fmtLongDate(new Date(atRisk.date_added))}
+                          {atRisk.source === 'committee' ? ' (committee)' : ' (manual)'}
+                        </p>
+                        {atRisk.metrics.length > 0 && (
+                          <p className="mt-0.5">
+                            Metrics tripped: {atRisk.metrics.join(' · ')}
+                            {atRisk.metrics_detail.length > 0 &&
+                              ` — ${failingMetrics(atRisk.metrics_detail).length} of ${atRisk.metrics_detail.length} still red`}
+                          </p>
+                        )}
+                        <p className="mt-0.5 font-medium">{atRiskTimerLine}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
