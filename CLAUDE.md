@@ -42,6 +42,34 @@ The legacy `securities` table is retired. Always use `securities2`.
 
 `classifySecurity()` in `lib/securities.ts` is the **single source of truth** for stock vs ETF vs mutual fund. `getSecurityDisplayType()` (badge text) and `isFundOrEtfSecurity()` (fund-specific UI branches) both derive from it, so they can't disagree. Never re-implement the detection inline — call one of those two helpers. `detailed_security_type` wins when present; otherwise fund-only signals (peer group, fund company/family, expense ratio) classify ambiguous rows.
 
+### Resolving a security's asset class
+
+`resolveAssetClass()` in `lib/assetClass.ts` is the **single source of truth** for
+which of the firm's asset classes a security belongs to — the same kind of
+convention as `classifySecurity()` above. Never re-implement it inline.
+
+It is **derived from the vendor `category_name`, not stored on `securities2`**, so
+the rules live in git and a mapping change shows up in a PR diff. Three
+classification columns exist and they disagree (FLCSX is Morningstar "Large Blend",
+Lipper "Large-Cap Value Funds", YCharts "US Large Cap Value"); **`category_name` is
+the chosen authority**, while `peer_group_name` and `ycharts_benchmark_category`
+stay load-bearing for the peer scorecard and the `category_benchmarks` lookup
+respectively. Don't repurpose them.
+
+- **`null` is a real answer.** A security that can't be placed surfaces as
+  *unclassified weight* beneath the allocation table rather than being dropped from
+  the rollup — otherwise the tiers stop summing to 100% with nothing saying why.
+  That row is a feature, and it is how the gap in gotcha 23 was caught.
+- **The vendor vocabulary is not consistent, and two spellings of one category can
+  be live at once.** `ASSET_CLASS_BY_CATEGORY` must carry every form actually
+  present in `securities2`, not just the documented one — see gotcha 23.
+- `ASSET_CLASS_OVERRIDES` is a per-ticker escape hatch (currently only `BRK.B`,
+  for which Morningstar publishes no category). **Keep it short** — a growing list
+  means the category map is wrong.
+- **Known gap:** securities created by ticker (`createSecurityBySymbol`) are seeded
+  from FMP, which supplies no Morningstar category, so they resolve to `null` until
+  a YCharts workbook import fills `category_name`.
+
 ### Two identifiers — use the right one for the right purpose
 
 | Field | Type | Purpose |
@@ -193,13 +221,14 @@ const mp = modelPortfolio as Record<string, unknown>
 Use helpers from `lib/formatters` — never format inline:
 
 ```ts
-import { fmtDecimalPct, fmtNum, fmtInt, fmtUsd, fmtSignedPct, EMPTY } from '@/lib/formatters'
+import { fmtDecimalPct, fmtNum, fmtInt, fmtUsd, fmtSignedPct, fmtUtcLongDate, EMPTY } from '@/lib/formatters'
 
 fmtDecimalPct(value)   // 0.0831 → "8.31%"
 fmtNum(value)          // 1.234 → "1.23"
 fmtInt(value)          // 42.7 → "43"
 fmtUsd(value)          // 1234.5 → "$1,234.50"
 fmtSignedPct(value)    // 0.0123 → "+1.23%"  (decimal-stored, always signed)
+fmtUtcLongDate(value)  // '2027-02-11T00:00:00Z' → "February 11, 2027"  (see gotcha 24)
 EMPTY                  // '—' — use for null/missing display values
 ```
 
@@ -1133,3 +1162,7 @@ Identity fields (`security_name`, `long_description`, `morningstar_sector`, `mor
 22. **FMP's transcript-date list stamps the wrong calendar YEAR on some Q4/Q1 rows** — the fiscal labels are right and the transcript itself is right, only the `date` is a year early. It dates Alphabet's **FY2024 Q4** call `2024-02-04` and its **FY2025 Q1** call `2024-04-24`, though those transcripts open with "Fourth Quarter 2024" and "First Quarter 2025"; `search-transcripts`/`earning_call_transcript` by `(year, quarter)` return the correct call regardless. **2 of 42 held symbols** carry it (also APP FY2023 Q4) — a fiscal-year-boundary bug, so expect it at Q4/Q1. Anything ordering calls must sort by **`(fiscalYear, quarter)`**, not by `date`: the Commentary timeline sorted by date and GOOGL's table jumped Q2 2025 → Q3 2024, dropping two real quarters off the bottom of its eight-row window. Do not "fix" a bad date by adding a year — that is inventing a figure; flag it (`CommentaryRow.dateSuspect`) and show it unasserted.
 
 21. **`totalDebt` folds operating leases in as `capitalLeaseObligations`** (13+ names; TJX 4.7x overstated at $13,489M vs a filed $2,869M). On HWM and RDDT it is wrong **in kind** -- neither has any finance leases, and RDDT has no borrowings at all, so any feed-derived leverage ratio there is meaningless rather than merely wrong. It also breaks multi-year EV comparisons across the ASC 842 boundary (TJX net debt/EBITDA flips -0.11x to +1.55x). **`propertyPlantEquipmentNet`** folds in the ROU asset, with the mirror error visible in `otherNonCurrentAssets`.
+
+23. **A `category_name` missing from `ASSET_CLASS_BY_CATEGORY` becomes silent unclassified weight — and TWO SPELLINGS of one category can be live at once.** The lookup normalizes case and whitespace but is otherwise exact. VEMAX carries Morningstar's abbreviated `Diversified Emerging Mkts`; EICOX / EMMF / EYLD carry the spelled-out `Diversified Emerging Markets`. Only the abbreviation was mapped, so three of the four emerging-market holdings resolved to `null` across **six portfolios** (the three Hybrid and three ETF books). The three Foundation books hold VEMAX and looked correct, which is exactly why it survived — the sleeve appeared to work. On Hybrid Balanced the Equity legend read 66.00% target against 62.00% holdings, with `4.00% unclassified — EICOX` beneath the table. **Before adding a category, read the DB for every spelling in use** (`select distinct category_name from securities2`) rather than trusting the vendor's documented form, and never delete an existing key to "tidy up" a duplicate — both may be carrying real holdings.
+
+24. **A `timestamptz` column holding a calendar DATE renders a day early.** `at_risk.removal_date` and its kin are stored at UTC midnight, so `new Date(v).toLocaleDateString()` in a negative-UTC-offset zone shows the previous day. COIN's At-Risk card read "expires February 10, 2027" against a row holding the 11th — contradicting its own brief on the same screen. Use **`fmtUtcLongDate(value)`** from `lib/formatters` for any column that is a date rather than an instant; reserve local-time formatting for true timestamps (`reviewed_at`, `triggered_at`).
