@@ -123,6 +123,28 @@ export function toLocalDateInputValue(date: Date): string {
 }
 
 /**
+ * A column that stores a CALENDAR DATE in a `timestamptz`, rendered as that
+ * date — `2027-02-11 00:00+00` → "February 11, 2027".
+ *
+ * The mirror image of `toLocalDateInputValue` above, and needed for the same
+ * reason in reverse. `at_risk.removal_date` is a deadline the committee wrote
+ * as a bare day and Postgres widened to UTC midnight; passing it through the
+ * viewer's zone reads it back as a moment, so west of UTC it renders as the day
+ * BEFORE. COIN's sell timer showed "expires February 10, 2027" on a row holding
+ * the 11th, contradicting the brief that had just said "runs to 11 February".
+ * Use this for a stored day; use local formatting for a real instant like
+ * `date_added`.
+ */
+export function fmtUtcLongDate(value: string | Date | null | undefined): string {
+  if (!value) return EMPTY
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return EMPTY
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
+  })
+}
+
+/**
  * One figure from an earnings brief's estimates table, rendered by the unit the
  * brief recorded against it.
  *

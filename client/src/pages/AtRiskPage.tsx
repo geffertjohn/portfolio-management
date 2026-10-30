@@ -8,7 +8,7 @@ import { SubstitutionsList } from '@/components/SubstitutionsList'
 import { RemoveFromAtRiskModal } from '@/components/RemoveFromAtRiskModal'
 import { getSecurityDisplayType, type SecurityDisplayType } from '@/lib/securities'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
-import { fmtUsd } from '@/lib/formatters'
+import { fmtUsd, fmtUtcLongDate } from '@/lib/formatters'
 import type { AtRiskEntryWithSecurity, AtRiskMetric } from '@/lib/atRisk'
 
 const METRIC_LABELS: Record<string, string> = {
@@ -67,7 +67,7 @@ function AtRiskCard({
             {entry.removal_date && (
               <p className={`text-xs tabular-nums ${isBreached(entry) ? 'font-semibold text-red-600' : 'text-gray-400'}`}>
                 {isBreached(entry) ? 'Expired ' : ''}
-                {new Date(entry.removal_date).toLocaleDateString()}
+                {fmtUtcLongDate(entry.removal_date)}
               </p>
             )}
           </div>
