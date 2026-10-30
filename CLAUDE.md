@@ -706,6 +706,23 @@ candidate workflow, where a purchase is decided against an actual book.
   misleading thing this job could leave behind.
 - **`report_type` is `initial` with `fiscal_year`/`quarter` null** — standing
   research tied to no call. Status `draft`.
+- **Bear / base / bull targets live in `research_reports.price_targets`**, on the
+  research analyst's row only, parsed by **`lib/priceTargets.ts`** — pure and
+  React-free, feeding both the compact line on the Watchlist card and the full
+  per-scenario table in the research drawer, so the two cannot disagree. Each
+  scenario carries a probability and a premise; the weighted value is recomputed
+  only when every scenario states a probability and they sum to ~1, since
+  averaging a partial set would quietly under-weight the cases that happen to
+  give a number.
+- **`buyBelow` may be null, and that is an ANSWER.** A hold is not always a
+  valuation call. MRVL was a hold at $200 against a $240 fair value because an
+  unresolved all-stock acquisition of a company worth nearly half its market cap
+  changed what was being bought — no lower price made that a buy while the terms
+  were unknown. `priceLimited: false` says so and `buyBelowBasis` says what
+  WOULD change the rating. A computed buy-below price on an event-driven hold
+  reads as "cheap but not cheap enough" when the real blocker is that nobody
+  knows what they are buying. The card prints "Not price-limited" rather than a
+  number, and `gapToBuy` returns null so no caller can render "0% away".
 - The `not exists` guard is what makes it idempotent — an idea carrying any
   research, from any source, is left alone.
 - **Rows written before Oct 30 2026 are portfolio-scoped** (FCX → Equity Income,

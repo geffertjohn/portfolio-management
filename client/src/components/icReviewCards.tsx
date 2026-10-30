@@ -5,7 +5,8 @@ import type {
 } from '@/lib/researchReports'
 import type { RiskReport, RiskVerdict } from '@/lib/riskReports'
 import type { IcMemo, IcDecision } from '@/lib/icMemos'
-import { fmtUsd, fmtSignedPct, fmtEstimate, EMPTY } from '@/lib/formatters'
+import { fmtUsd, fmtSignedPct, fmtEstimate, fmtDecimalPct, EMPTY } from '@/lib/formatters'
+import { PRICE_CASE_LABEL, gapToBuy, type PriceTargets } from '@/lib/priceTargets'
 import { formatDate } from '@/lib/fundFormat'
 
 /**
@@ -356,6 +357,77 @@ export function MemoCard({
   )
 }
 
+/**
+ * Bear / base / bull with the premise behind each, and the price at which the
+ * rating would become a buy.
+ *
+ * The probability column renders only when the scenarios actually carry
+ * probabilities — a blank there is honest, whereas defaulting to equal weights
+ * would invent a view the analyst did not express.
+ */
+function PriceTargetBlock({ t, price }: { t: PriceTargets; price: number | null }) {
+  const gap = gapToBuy(t, price)
+  const hasProb = t.scenarios.every((s) => s.probability != null)
+  return (
+    <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Price targets</p>
+      <table className="mt-2 w-full text-xs">
+        <thead>
+          <tr className="text-left text-gray-500">
+            <th className="pb-1 font-medium">Case</th>
+            <th className="pb-1 text-right font-medium">Target</th>
+            {hasProb && <th className="pb-1 text-right font-medium">Prob.</th>}
+            <th className="pb-1 pl-3 font-medium">Premise</th>
+          </tr>
+        </thead>
+        <tbody className="align-top">
+          {t.scenarios.map((s) => (
+            <tr key={s.case} className="border-t border-gray-200">
+              <td className="py-1 font-medium text-gray-700">{PRICE_CASE_LABEL[s.case]}</td>
+              <td className="py-1 text-right tabular-nums text-gray-900">{fmtUsd(s.value)}</td>
+              {hasProb && (
+                <td className="py-1 text-right tabular-nums text-gray-500">
+                  {fmtDecimalPct(s.probability)}
+                </td>
+              )}
+              <td className="py-1 pl-3 text-gray-600">{s.premise || EMPTY}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {t.weighted != null && (
+        <p className="mt-2 text-xs text-gray-600">
+          Probability-weighted <span className="font-medium tabular-nums text-gray-900">{fmtUsd(t.weighted)}</span>
+          {price != null && <> · price <span className="tabular-nums">{fmtUsd(price)}</span></>}
+        </p>
+      )}
+      {t.method && <p className="mt-1 text-xs text-gray-500">{t.method}</p>}
+      {/* Null buyBelow is an ANSWER, not missing data — a hold can be held back
+          by an unresolved event rather than by price, and saying so beats
+          printing a number that misstates the reason. */}
+      <p className="mt-2 border-t border-gray-200 pt-2 text-xs">
+        {t.buyBelow != null ? (
+          <>
+            <span className="font-medium text-gray-700">Becomes a buy below </span>
+            <span className="font-semibold tabular-nums text-emerald-700">{fmtUsd(t.buyBelow)}</span>
+            {gap != null && (
+              <span className="text-gray-500">
+                {' '}({gap >= 0 ? 'at or below today' : `${fmtDecimalPct(Math.abs(gap))} below today`})
+              </span>
+            )}
+            {t.buyBelowBasis && <span className="text-gray-500"> — {t.buyBelowBasis}</span>}
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-gray-700">Not price-limited.</span>{' '}
+            <span className="text-gray-500">{t.buyBelowBasis || 'No price stated at which the rating would change.'}</span>
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
 export function ResearchCard({
   r,
   showTicker = false,
@@ -393,6 +465,9 @@ export function ResearchCard({
         </p>
       )}
       <div className="mt-3 space-y-3">
+        {r.price_targets && (
+          <PriceTargetBlock t={r.price_targets} price={r.current_price} />
+        )}
         {isEarnings ? (
           <>
             {/* SECTION 1 — what the market expects and wants settled. */}
