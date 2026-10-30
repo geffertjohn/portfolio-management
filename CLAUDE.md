@@ -593,6 +593,19 @@ Seven subagents, each with hard recommend-only guardrails: **research-analyst** 
 
 `Workflow({ scriptPath: '…/new-buy-ic-review.js', args: { ticker, portfolioName, additionId } })`. Six-role run: research analyst + devil's advocate + quant (parallel) → PM sizing → risk + compliance (parallel) → memo synthesis. `args.lean: true` runs the original 4 (no quant/compliance). **A risk `veto` OR a compliance `unsuitable` forces the committee recommendation to `reject`.** The workflow RETURNS the bundle; the **orchestrator persists** it (no writes inside the workflow) — analyst/bear/quant → `research_reports` (`author_role` = `research_analyst`/`devils_advocate`/`quant_analyst`), risk → `risk_reports`, memo → `ic_memos` (compliance folded into the memo rationale). Custom `.claude/agents` types don't resolve inside `agent()`, so the workflow **inlines** each role's prompt — keep the inline copy and the `.md` in sync. (Two gotchas: `args` may arrive as a JSON string — parse it; run via `scriptPath`, not `name`.)
 
+**Every role is `required()`, and the control gate fails closed.** `agent()`
+resolves to **null** when a subagent dies on a terminal API error after its
+retries — it does not throw. An expired OAuth token killed the risk agent on
+30 Oct 2026 and `risk.verdict` threw a `TypeError` three lines on, losing the
+whole LRCX committee including the three roles that had already answered, and
+stopping the job before the next ticker. `required()` now turns that into a
+named error naming the dead role. It throws rather than carrying the null
+through, deliberately: **a control leg that never ran must not read as one that
+raised no objection.** For the same reason the gate is written as "only `pass`
+or `warn` clear the name" rather than "`veto` blocks it", so an unrecognised or
+empty verdict blocks too — a verdict we cannot read is not consent. The
+pass/warn/veto and suitable/caution/unsuitable behaviours are unchanged.
+
 ### Deliverable tables + UI
 
 `research_reports` · `risk_reports` · `ic_memos` — RLS open, soft-delete via `deleted_at`; `security_id` = text ticker (no FK); `addition_id` links to the candidate. Data layer `lib/{researchReports,riskReports,icMemos}.ts` + query keys. Read-only viewers: **`ICReviewPanel`** (candidate-workspace section — memo + research + risk cards, with the CIO **approve/watchlist/reject** action via `recordIcDecision`), **`SecurityResearchPanel`** (security Commentary tab), **`PortfolioRiskPanel`** (portfolio Reviews tab). Shared cards in `components/icReviewCards.tsx`.

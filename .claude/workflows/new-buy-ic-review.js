@@ -268,14 +268,41 @@ if (!lean) {
     { schema: QUANT_SCHEMA, label: `quant:${ticker}`, phase: 'Research' },
   ))
 }
+/**
+ * A role that came back with nothing.
+ *
+ * `agent()` resolves to **null** when a subagent dies on a terminal API error
+ * after its retries, or when the user skips it mid-run — it does not throw. On
+ * 30 Oct 2026 an expired OAuth token killed the risk agent and `risk.verdict`
+ * threw a TypeError three lines later, losing the entire LRCX committee
+ * including the three roles that had already succeeded, and stopping the job
+ * before it reached the next ticker.
+ *
+ * Throwing here is deliberate, and it fails CLOSED. The tempting alternative —
+ * carrying the null through — makes a control leg that never ran look like one
+ * that raised no objection. A committee output missing its risk verdict is not
+ * a weaker recommendation; it is not a recommendation. Better to lose the
+ * ticker loudly, with the dead role named, than to persist a memo whose
+ * silence the reader would mistake for consent.
+ */
+function required(value, role) {
+  if (value == null) {
+    throw new Error(
+      `${role} returned nothing for ${ticker} — the subagent died before answering ` +
+      `(commonly an expired token or a terminal API error). No memo was written; re-run this ticker.`,
+    )
+  }
+  return value
+}
+
 const researchResults = await parallel(researchThunks)
-const research = researchResults[0]
-const bear = researchResults[1]
-const quant = lean ? null : researchResults[2]
+const research = required(researchResults[0], 'research-analyst')
+const bear = required(researchResults[1], 'devils-advocate')
+const quant = lean ? null : required(researchResults[2], 'quant-analyst')
 
 // ── Phase 2: Construct (sizing) ─────────────────────────────────────────────
 phase('Construct')
-const pm = await agent(
+const pm = required(await agent(
   `${PM_ROLE}\n\nYou are sizing a potential new position in ${ticker}${forCtx}.\n\n` +
   `Research summary:\n${JSON.stringify(research)}\n\nBear case:\n${JSON.stringify(bear)}\n\n` +
   (quant ? `Quant screen:\n${JSON.stringify(quant)}\n\n` : '') +
@@ -285,7 +312,7 @@ const pm = await agent(
   `vs the existing names there — a high-merit stock can still be watchlist/reject if keeping the incumbents is ` +
   `the better allocation. Respect the model bands; if a sensible size would breach them, recommend watchlist/reject. Return structured data.`,
   { schema: SIZING_SCHEMA, label: `pm:${ticker}`, phase: 'Construct' },
-)
+), 'portfolio-manager')
 
 // ── Phase 3: Control (risk verdict + compliance) ────────────────────────────
 phase('Control')
@@ -307,16 +334,23 @@ if (!lean) {
   ))
 }
 const controlResults = await parallel(controlThunks)
-const risk = controlResults[0]
-const compliance = lean ? null : controlResults[1]
+const risk = required(controlResults[0], 'risk-manager')
+const compliance = lean ? null : required(controlResults[1], 'compliance-ips')
 
 // ── Phase 4: Synthesize the IC memo ─────────────────────────────────────────
 phase('Synthesize')
-// A risk veto or an 'unsuitable' compliance finding forces the committee recommendation to 'reject'.
-const blocked = risk.verdict === 'veto' || (compliance && compliance.suitability === 'unsuitable')
+// A risk veto or an 'unsuitable' compliance finding forces the committee
+// recommendation to 'reject'.
+//
+// Written as "only these two clear it" rather than "veto blocks it", so the
+// gate fails closed on anything else the risk manager might return. A verdict
+// we cannot read is not consent, and an unrecognised string silently passing
+// through a control gate is the failure mode worth engineering against here.
+const riskClears = risk.verdict === 'pass' || risk.verdict === 'warn'
+const blocked = !riskClears || (compliance && compliance.suitability === 'unsuitable')
 const recommendation = blocked ? 'reject' : pm.recommendation
 
-const rationale = await agent(
+const rationale = required(await agent(
   `Write a concise Investment Committee memo (5-8 sentences) for ${ticker}${forCtx} that a CIO can act on. ` +
   `Synthesize — do not just concatenate — the analyst thesis, the bear case, ` +
   (quant ? `the quant screen, ` : '') + `the PM's sizing proposal, the risk verdict, ` +
@@ -333,7 +367,7 @@ const rationale = await agent(
   `PM: ${JSON.stringify(pm)}\nRisk: ${JSON.stringify(risk)}\n` +
   (compliance ? `Compliance: ${JSON.stringify(compliance)}\n` : ''),
   { label: `memo:${ticker}`, phase: 'Synthesize' },
-)
+), 'memo synthesis')
 
 // Return the full deliverable bundle. The orchestrator persists it after the run —
 // no writes happen inside the workflow.
