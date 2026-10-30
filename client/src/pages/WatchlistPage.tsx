@@ -188,7 +188,7 @@ function ProspectCard({
               ))}
               {targets.weighted != null && (
                 <span className="text-gray-400">
-                  wtd <span className="tabular-nums">{fmtUsd(targets.weighted)}</span>
+                  Weighted <span className="tabular-nums">{fmtUsd(targets.weighted)}</span>
                 </span>
               )}
             </div>
