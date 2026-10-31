@@ -200,6 +200,30 @@ export function hasSectorAllocations(name: string | null | undefined): boolean {
   return name != null && EQUITY_MODEL_NAMES.has(name)
 }
 
+/**
+ * Conviction tiers are not maintained for the Foundation family.
+ *
+ * A tier ranks individual holdings by conviction and gives each a target weight
+ * band — 5-7% for a best idea, 0-1% for an exit candidate. Those numbers only
+ * mean something in a book of twenty-odd single stocks. A Foundation portfolio
+ * holds a handful of funds at twenty to forty percent each, so every holding
+ * sits above the Tier 1 band by construction and the ranking has nothing to
+ * say. The editor offered four rows of inputs that could never be answered.
+ *
+ * Matched on the family PREFIX rather than a fixed set of names, unlike
+ * `EQUITY_MODEL_NAMES` above: the equity models are three known books, while
+ * Foundation is a family that gains members (five today), and a sixth added
+ * later should not quietly get the tier table back.
+ *
+ * The stored `tier{1..4}_{lower,upper}` columns are LEFT ALONE — hiding the
+ * editor does not clear them, and `resolveTierInfo` still reads them for the
+ * annual review's conviction-ranking section, falling back to the framework
+ * defaults as it always has.
+ */
+export function hasConvictionTiers(name: string | null | undefined): boolean {
+  return !(name ?? '').startsWith('Foundation ')
+}
+
 export async function fetchModelPortfolioById(id: number): Promise<ModelPortfolio | null> {
   const { data, error } = await supabase
     .from('model_portfolio_data')
