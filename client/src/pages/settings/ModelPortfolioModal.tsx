@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ASSET_CLASS_ROWS, SECTOR_ROWS, hasSectorAllocations, EQUITY_MODEL_HIDDEN_ASSET_CLASSES } from '@/lib/modelPortfolios'
+import { ASSET_CLASS_ROWS, SECTOR_ROWS, hasSectorAllocations, hasConvictionTiers, EQUITY_MODEL_HIDDEN_ASSET_CLASSES } from '@/lib/modelPortfolios'
 import type { ModelPortfolio, ModelPortfolioInput, SectorAllocations } from '@/lib/modelPortfolios'
 import { fetchSp500SectorWeights } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -119,6 +119,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
 
   // Per-sector target weight bands — only shown for the all-equity stock models.
   const showSectors = hasSectorAllocations(initial?.name)
+  const showTiers = hasConvictionTiers(initial?.name)
   // Those same models hide the international / fixed-income asset-class rows.
   const visibleAssetClassRows = showSectors
     ? ASSET_CLASS_ROWS.filter((r) => !EQUITY_MODEL_HIDDEN_ASSET_CLASSES.has(r.key))
@@ -238,10 +239,20 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       cash_lower_limit:              n(cash.lower),
       cash_target:                   n(cash.target),
       cash_upper_limit:              n(cash.upper),
-      tier1_lower: n(tiers.t1l), tier1_upper: n(tiers.t1u),
-      tier2_lower: n(tiers.t2l), tier2_upper: n(tiers.t2u),
-      tier3_lower: n(tiers.t3l), tier3_upper: n(tiers.t3u),
-      tier4_lower: n(tiers.t4l), tier4_upper: n(tiers.t4u),
+      // A hidden tier editor must not write: `tiers` is seeded with framework
+      // defaults when a column is null, so saving a Foundation model through a
+      // form that never showed those inputs would invent values for them.
+      ...(showTiers ? {
+        tier1_lower: n(tiers.t1l), tier1_upper: n(tiers.t1u),
+        tier2_lower: n(tiers.t2l), tier2_upper: n(tiers.t2u),
+        tier3_lower: n(tiers.t3l), tier3_upper: n(tiers.t3u),
+        tier4_lower: n(tiers.t4l), tier4_upper: n(tiers.t4u),
+      } : {
+        tier1_lower: initial?.tier1_lower ?? null, tier1_upper: initial?.tier1_upper ?? null,
+        tier2_lower: initial?.tier2_lower ?? null, tier2_upper: initial?.tier2_upper ?? null,
+        tier3_lower: initial?.tier3_lower ?? null, tier3_upper: initial?.tier3_upper ?? null,
+        tier4_lower: initial?.tier4_lower ?? null, tier4_upper: initial?.tier4_upper ?? null,
+      }),
       sector_allocations: showSectors
         ? Object.fromEntries(SECTOR_ROWS.map(({ key }) => [
             key,
@@ -517,7 +528,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
               {showSectors && (
                 <div className="mt-5 space-y-5">
                   {positionDriftBlock}
-                  {convictionTiersBlock}
+                  {showTiers && convictionTiersBlock}
                 </div>
               )}
             </div>
@@ -648,7 +659,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
             {!showSectors && (
               <>
                 {positionDriftBlock}
-                {convictionTiersBlock}
+                {showTiers && convictionTiersBlock}
               </>
             )}
 
