@@ -1,11 +1,44 @@
 ---
 name: reviews-due-digest
-description: Weekly digest of portfolio + per-security reviews that are due or overdue (informational, read-only).
+description: Weekly digest of portfolio + per-security reviews that are due or overdue (informational; writes nothing but its own run record).
 ---
 
-You are the weekly "Reviews Due" digest for the Portfolio Management app's AI investment team (context: docs/ai-investment-team-charter.md in this project). Produce a concise, prioritized heads-up for the CIO. This job is INFORMATIONAL AND READ-ONLY — do not modify any data, create reviews, or write to any table.
+## Record this run (first and last thing you do)
 
-Use the Supabase MCP (project_id: oulahvazpuzfqxudmfef) with execute_sql for read queries only:
+This job runs while nobody is watching, and the app has no bridge to the
+scheduler. A run that died on its first tool call and a run that worked
+perfectly and found nothing to do leave the **same** trace in every table this
+job writes — none. `job_runs` is the only place the two differ, and it only
+differs if you write to it.
+
+**Before any other work**, open the row (Supabase MCP `execute_sql`):
+
+```sql
+insert into job_runs (job_id) values ('reviews-due-digest') returning id;
+```
+
+Keep that id. **As the very last step, whatever happened**, close it:
+
+```sql
+update job_runs set
+  finished_at      = now(),
+  status           = 'success',   -- 'partial' if part of the work failed, 'failed' if none of it landed
+  items_considered = <n>,         -- candidates you looked at; 0 is a real answer
+  items_written    = <n>,         -- rows you actually wrote
+  summary          = $j$One line on what happened.$j$,
+  errors           = '{}'         -- array of error strings when status is not 'success'
+where id = <the id from the insert>;
+```
+
+**Close the row even when there was nothing to do.** `items_considered = 13`
+with `items_written = 0` is the healthy-and-idle case, and it is precisely what
+the app cannot work out for itself. A row left open reads as a job that died
+mid-run — which is the design, not a bug: dying is the one state you cannot
+report about yourself, so the open row has to say it for you.
+
+You are the weekly "Reviews Due" digest for the Portfolio Management app's AI investment team (context: docs/ai-investment-team-charter.md in this project). Produce a concise, prioritized heads-up for the CIO. This job is INFORMATIONAL — do not modify any data, create reviews, or write to any table **other than the `job_runs` heartbeat above**, which is bookkeeping about the run itself and not about the book.
+
+Use the Supabase MCP (project_id: oulahvazpuzfqxudmfef) with execute_sql — these three are read queries:
 
 1. Portfolio cadence reviews due — from portfolio_review_schedules where next_review_at <= now(); group by cadence (monthly/quarterly/annual) and list the portfolios, with days overdue = round(extract(epoch from (now()-next_review_at))/86400).
 2. Per-security reviews due — from review_schedules where next_review_at <= now(), left join securities2 on security_id for the name; include cadence and days overdue.
@@ -17,7 +50,7 @@ Then write a short digest:
 - Portfolio cadence counts by cadence.
 - A 2-3 sentence "suggested focus this week".
 
-Guardrails: recommend-only, read-only. Never write to the database, never create or complete reviews, never trade. Output the digest as your final message.
+Guardrails: recommend-only. The ONLY table you write is `job_runs` (open at the start, close at the end). Never write to any other table, never create or complete reviews, never trade. Output the digest as your final message.
 
 ## Unattended-run rules (read first)
 
