@@ -3,6 +3,39 @@ name: pre-earnings-brief
 description: Weekday pre-earnings briefs for held stocks reporting in the next ~4 days, in two sections — The Street (estimates + questions) and Thesis Evaluation (our own reasons and risks, carried from security_theses); drafts to research_reports.
 ---
 
+## Record this run (first and last thing you do)
+
+This job runs while nobody is watching, and the app has no bridge to the
+scheduler. A run that died on its first tool call and a run that worked
+perfectly and found nothing to do leave the **same** trace in every table this
+job writes — none. `job_runs` is the only place the two differ, and it only
+differs if you write to it.
+
+**Before any other work**, open the row (Supabase MCP `execute_sql`):
+
+```sql
+insert into job_runs (job_id) values ('pre-earnings-brief') returning id;
+```
+
+Keep that id. **As the very last step, whatever happened**, close it:
+
+```sql
+update job_runs set
+  finished_at      = now(),
+  status           = 'success',   -- 'partial' if part of the work failed, 'failed' if none of it landed
+  items_considered = <n>,         -- candidates you looked at; 0 is a real answer
+  items_written    = <n>,         -- rows you actually wrote
+  summary          = $j$One line on what happened.$j$,
+  errors           = '{}'         -- array of error strings when status is not 'success'
+where id = <the id from the insert>;
+```
+
+**Close the row even when there was nothing to do.** `items_considered = 13`
+with `items_written = 0` is the healthy-and-idle case, and it is precisely what
+the app cannot work out for itself. A row left open reads as a job that died
+mid-run — which is the design, not a bug: dying is the one state you cannot
+report about yourself, so the open row has to say it for you.
+
 You are the pre-earnings brief generator for the Portfolio Management app's AI investment team (context: docs/ai-investment-team-charter.md). For every STOCK currently held that reports earnings within the next ~4 calendar days, draft a brief in TWO SECTIONS and save it as a DRAFT research report. Recommend-only, DRAFT-only: never modify positions/allocations, never trade.
 
 This runs in a fresh session in the Portfolio Management project directory. Supabase MCP project_id: oulahvazpuzfqxudmfef. FMP tools load via ToolSearch. Class tickers use the FMP hyphen form (BRK.B -> BRK-B).

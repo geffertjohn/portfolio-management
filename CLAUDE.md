@@ -679,6 +679,40 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 Six routines: **watchlist-research** (weekdays 10:05 → the lean IC over unresearched watchlist ideas, see below), **at-risk-review** (weekdays 09:25 → `at_risk` + `alert_events`, see At-Risk below), **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
 
+#### Every job writes a `job_runs` heartbeat — it is the only health signal there is
+
+The jobs run in Claude Code; **the React app has no bridge to the scheduler** and
+cannot read its task list, its run history, or whether this morning's run is in
+flight. Health therefore cannot be inferred from what a job produced: a run that
+died on its first tool call and a run that correctly found nothing to do leave
+the **same** trace in `research_reports`, `at_risk` and the rest — none. Two jobs
+read as `running` all day in Oct 2026 while doing nothing, which is what this is
+for.
+
+So each prompt opens a `job_runs` row before any other work and closes it as its
+last step, whatever happened (`status` · `items_considered` · `items_written` ·
+`summary` · `errors`). Three things carry the design:
+
+- **A row left open IS the death signal**, not a defect to clean up. Dying is the
+  one state a job cannot report about itself, so the open row says it for it;
+  `gradeJob` reads a `running` row older than 3h as `stalled`.
+- **Close the row even when there was nothing to do.** `items_considered = 13`
+  with `items_written = 0` is the healthy-and-idle case, and distinguishing it
+  from a death is the entire point.
+- **`never_run` raises no action** (`needsAttention` in `lib/jobRuns.ts`). It
+  cannot be told apart from a heartbeat that was only just added, so treating it
+  as a problem would have put one action per job into the hub on day one and
+  taught the reader to dismiss the source.
+
+`reviews-due-digest` had to have its blanket "do not write to any table" guardrail
+narrowed — a prompt that forbids all writes will not write its own heartbeat.
+Same shape as `import_runs`, deliberately: that table already solves this for the
+spreadsheet importers and already feeds an action when a refresh does not land.
+Data layer `lib/jobRuns.ts` (React-free; `JOB_DEFINITIONS` is a *description* of
+the scheduler's list, never an authority — `job_id` is plain text so a new job can
+log before anything here knows its name). Surfaced by `AutomationPanel` and by the
+`job_health` action source.
+
 **The prompts are version-controlled at `.claude/scheduled-tasks/<taskId>/SKILL.md`** — that is the source of truth. The scheduler, however, reads each task from a fixed path it owns (`~/.claude/scheduled-tasks/<taskId>/SKILL.md`) and nothing repoints it, so the two must be kept in step by copying:
 
 ```bash
@@ -1000,9 +1034,14 @@ it before touching anything here. The split that makes the system work:
 
 The Actions page is a **unified command center**, not a plain to-do list. It shows one `UnifiedAction[]` assembled by **per-source adapters** in **`lib/actions.ts`** (`fetchAllActions`), keeping each domain single-sourced.
 
-- **Two kinds of action.** **Manual** tasks are real `action_items` rows (created, completed, snoozed, recurring). **Derived** actions are projected **READ-ONLY** from their own authoritative tables and carry a **route into their own workflow** — they are completed **THERE, never from the Actions page** (no derived state is duplicated into `action_items`). Sources: `review_schedules`, `portfolio_review_schedules`, `ic_memos` (`pending_cio`), `security_additions` (`draft`), `alert_events`, `at_risk` (sell timer), and drift breaches (computed from `positions`).
+- **Two kinds of action.** **Manual** tasks are real `action_items` rows (created, completed, snoozed, recurring). **Derived** actions are projected **READ-ONLY** from their own authoritative tables and carry a **route into their own workflow** — they are completed **THERE, never from the Actions page** (no derived state is duplicated into `action_items`). Sources: `review_schedules`, `portfolio_review_schedules`, `ic_memos` (`pending_cio`), `security_additions` (`draft`), `alert_events`, `at_risk` (sell timer), drift breaches (computed from `positions`), `import_runs` (a YCharts refresh that failed or did not fire) and `job_runs` (a scheduled routine that died or missed a run — see the heartbeat convention above).
 - **`action_items` is the manual-task backbone** (extended Jul 2026): `category` (`security`/`portfolio`/`ic`/`compliance`/`client`/`trade`/`operational`), `source` (always `manual` here), polymorphic **`linked_type`/`linked_id`** (e.g. `client`), `recurrence` + `recurrence_interval`, `snoozed_until`, and a widened `status` (`open`/`in_progress`/`waiting`/`blocked`/`snoozed`/`closed`). CHECK constraints enforce the category/recurrence/status sets. Data layer + labels + `advanceDate`/`snoozeActionItem`/recurrence-on-complete live in **`lib/actionItems.ts`**. **Closing a recurring task spawns the next occurrence** (due date advanced by the cadence). Still soft-deleted (`deleted_at`); status transitions audited in `action_item_events` (`ActionItemTimeline`).
-- **Page** (`ActionItemsPage`): category + source filters, **date-bucket grouping** (Overdue/Due Today/This Week/Upcoming/No Date) or group-by-category, auto-priority, snooze, bulk close/snooze, recurring **Templates**, CSV export, and **persisted filters** (localStorage — device-local UI state, OK). Manual rows are editable; derived rows show **"Open →"**.
+- **Page** (`ActionItemsPage`): a summary band over sidebar facets (category + source, with counts) and a column table, **date-bucket grouping** (Overdue/Due Today/This Week/Upcoming/No Date) or group-by-category, auto-priority, snooze, bulk close/snooze, recurring **Templates**, CSV export, an **Automation** button opening `AutomationPanel` (also reachable at `/actions?automation=1`, which is where the `job_health` action routes), and **persisted filters** (localStorage — device-local UI state, OK). Manual rows are editable; derived rows show **"Open →"**.
+- **The page mixes a worklist and a calendar, and the calendar is the bigger half.** Every `review_schedules` and `portfolio_review_schedules` row is projected whether or not it is due, so 98 of 171 actions were future-dated reviews reading "this reports in six weeks". Two devices keep that from burying the ~15 rows that need doing, and **neither hides anything without a count saying so**:
+  - **Upcoming and No Date are collapsed by default** (`DEFAULT_COLLAPSED`), and the group header carries the full count. A **horizon** control (7/30/90/all days) trims how far the list reaches; overdue rows always pass it, since a negative `daysUntil` is within any horizon.
+  - **`clusterActions` collapses repeated DERIVED actions** sharing a source and a day into one line — "Portfolio Review — 37 due Jun 29, 2026". One fact printed 37 times is not 37 facts. Manual tasks never cluster (two sharing a date is coincidence, not a common cause), and a group under `COLLAPSE_MIN` (3) renders as itself.
+  - **The cluster key is the LOCAL calendar day** (`localDayKey`), not the raw `dueDate`. These sources store `timestamptz` while the whole page treats a due date as a day — `bucketOf`/`daysUntil` round to local midnight and `formatDate` renders a bare date at local noon. Two Equity Income reviews stamped `2026-06-30T00:08Z` fall on 29 June here: keying on the raw string split them out of a cluster showing their own date, and keying on the UTC prefix would have labelled the cluster a day after the rows inside it. The label is built with `formatDate` for the same reason.
+- **Overdue rows are marked on the edge and on the date, not washed red.** 48 red rows is a red page. They also carry an **aging** line (`agingLabel` — "124d overdue"): in an audit-defense tool, how late a thing is is a different fact from whether it is late.
 - **Create-from-context.** `CreateActionItemModal` takes `defaultSecurityId`/`defaultPortfolioName`/`defaultClientId` and auto-sets the category; **"+ Action" buttons** live on the security detail, portfolio detail, and client detail pages. A client-linked task uses `linked_type='client'`; `fetchActionItemsByClient` scopes the client page's list (client-linked **plus** its portfolios' actions).
 - **Convergence.** The Home **Action Center** band shows bucket + category counts from the same `fetchAllActions` model; the **Review Calendar** stays the review-completion workflow and cross-links to `/actions`.
 

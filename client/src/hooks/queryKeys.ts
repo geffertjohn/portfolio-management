@@ -40,6 +40,8 @@ export const QUERY_KEYS = {
   portfoliosHoldingSecurity: (securityId: string) => ['portfolios_holding_security', securityId] as const,
   benchmarks: ['benchmarks', 'v5'] as const,
   importRuns: ['import_runs'] as const,
+  jobRuns: ['job_runs'] as const,
+  jobRunHistory: (jobId: string) => ['job_runs', 'history', jobId] as const,
   sectorBenchmarks: ['sector_benchmarks', 'v3'] as const,
   categoryBenchmarkById: (id: number) => ['category_benchmark_by_id', id] as const,
   categoryBenchmarkRow: (category: string) => ['category_benchmark_row', category] as const,

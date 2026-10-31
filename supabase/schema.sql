@@ -818,6 +818,42 @@ ALTER TABLE "public"."investment_policy_statements" ALTER COLUMN "id" ADD GENERA
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."job_runs" (
+    "id" bigint NOT NULL,
+    "job_id" "text" NOT NULL,
+    "started_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "finished_at" timestamp with time zone,
+    "status" "text" DEFAULT 'running'::"text" NOT NULL,
+    "items_considered" integer,
+    "items_written" integer,
+    "summary" "text",
+    "errors" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    CONSTRAINT "job_runs_status_check" CHECK (("status" = ANY (ARRAY['running'::"text", 'success'::"text", 'partial'::"text", 'failed'::"text"])))
+);
+
+
+ALTER TABLE "public"."job_runs" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."job_runs" IS 'Heartbeat per scheduled-job run. Written by the Claude Code routines themselves; a stale status=running row is how a silent death surfaces.';
+
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."job_runs_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."job_runs_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."job_runs_id_seq" OWNED BY "public"."job_runs"."id";
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."model_portfolio_benchmarks" (
     "id" bigint NOT NULL,
     "security_id" "text" NOT NULL,
@@ -2117,6 +2153,10 @@ ALTER TABLE ONLY "public"."holdings_change_log" ALTER COLUMN "id" SET DEFAULT "n
 
 
 
+ALTER TABLE ONLY "public"."job_runs" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."job_runs_id_seq"'::"regclass");
+
+
+
 ALTER TABLE ONLY "public"."model_portfolio_benchmarks" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."model_portfolio_benchmarks_id_seq"'::"regclass");
 
 
@@ -2250,6 +2290,11 @@ ALTER TABLE ONLY "public"."import_runs"
 
 ALTER TABLE ONLY "public"."investment_policy_statements"
     ADD CONSTRAINT "investment_policy_statements_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."job_runs"
+    ADD CONSTRAINT "job_runs_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2564,6 +2609,10 @@ CREATE INDEX "idx_securities2_active" ON "public"."securities2" USING "btree" ("
 
 
 CREATE INDEX "import_runs_source_imported_at_idx" ON "public"."import_runs" USING "btree" ("source", "imported_at" DESC);
+
+
+
+CREATE INDEX "job_runs_job_started_idx" ON "public"."job_runs" USING "btree" ("job_id", "started_at" DESC);
 
 
 
@@ -3589,6 +3638,17 @@ CREATE POLICY "import_runs are writable by anon" ON "public"."import_runs" FOR I
 ALTER TABLE "public"."investment_policy_statements" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."job_runs" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "job_runs_all_anon" ON "public"."job_runs" TO "anon" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "job_runs_all_authenticated" ON "public"."job_runs" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."model_portfolio_benchmarks" ENABLE ROW LEVEL SECURITY;
 
 
@@ -4098,6 +4158,18 @@ GRANT ALL ON TABLE "public"."investment_policy_statements" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."investment_policy_statements_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."investment_policy_statements_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."investment_policy_statements_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."job_runs" TO "anon";
+GRANT ALL ON TABLE "public"."job_runs" TO "authenticated";
+GRANT ALL ON TABLE "public"."job_runs" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."job_runs_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."job_runs_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."job_runs_id_seq" TO "service_role";
 
 
 

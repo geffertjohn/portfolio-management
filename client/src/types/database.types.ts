@@ -1002,6 +1002,42 @@ export type Database = {
           },
         ]
       }
+      job_runs: {
+        Row: {
+          errors: string[]
+          finished_at: string | null
+          id: number
+          items_considered: number | null
+          items_written: number | null
+          job_id: string
+          started_at: string
+          status: string
+          summary: string | null
+        }
+        Insert: {
+          errors?: string[]
+          finished_at?: string | null
+          id?: number
+          items_considered?: number | null
+          items_written?: number | null
+          job_id: string
+          started_at?: string
+          status?: string
+          summary?: string | null
+        }
+        Update: {
+          errors?: string[]
+          finished_at?: string | null
+          id?: number
+          items_considered?: number | null
+          items_written?: number | null
+          job_id?: string
+          started_at?: string
+          status?: string
+          summary?: string | null
+        }
+        Relationships: []
+      }
       model_portfolio_benchmarks: {
         Row: {
           "1_to_3_years_maturity_bond_exposure": number | null

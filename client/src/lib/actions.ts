@@ -16,6 +16,7 @@ import {
   type ActionPriority,
 } from './actionItems'
 import { fetchReviewSchedules, isOverdue, isDueSoon } from './reviewSchedules'
+import { formatDate } from './fundFormat'
 import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReviews'
 import { fetchUnacknowledgedAlerts } from './alertRules'
 import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET } from './documents'
@@ -34,6 +35,10 @@ import {
   daysSince, fetchLatestImportRuns, fmtImportDate, missedScheduledRefresh,
   refreshDueLabel, YCHARTS_DATA_SOURCES, ychartsAsOf,
 } from './importRuns'
+import {
+  fetchLatestJobRuns, fmtRunTime, gradeAllJobs, JOB_HEALTH_LABELS, needsAttention,
+  type JobStatus,
+} from './jobRuns'
 
 export type ActionSource =
   | 'manual'
@@ -47,6 +52,7 @@ export type ActionSource =
   | 'allocation_band'
   | 'scheduled_rebalance'
   | 'data_refresh'
+  | 'job_health'
 
 export const SOURCE_LABELS: Record<ActionSource, string> = {
   manual: 'Manual',
@@ -60,6 +66,7 @@ export const SOURCE_LABELS: Record<ActionSource, string> = {
   allocation_band: 'Allocation',
   scheduled_rebalance: 'Rebalance',
   data_refresh: 'Data',
+  job_health: 'Automation',
 }
 
 export interface UnifiedAction {
@@ -391,6 +398,57 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
   }]
 }
 
+/**
+ * The scheduled Claude Code routines, surfaced when one stops working.
+ *
+ * Exactly the `data_refresh` argument one layer up: these jobs run before
+ * anyone is looking, and a job that dies leaves the deliverable tables looking
+ * identical to a job that ran and found nothing to do. `job_runs` is the only
+ * place the difference is recorded, and a health panel nobody opens is not
+ * monitoring — so an unhealthy job comes to the advisor here.
+ *
+ * `never_run` raises nothing (see `needsAttention`): it cannot be told apart
+ * from a heartbeat that was only just added.
+ */
+async function fetchJobHealthActions(): Promise<UnifiedAction[]> {
+  let statuses: JobStatus[]
+  try {
+    statuses = gradeAllJobs(await fetchLatestJobRuns())
+  } catch {
+    // A missing heartbeat table must not take out the whole hub.
+    return []
+  }
+
+  return statuses.filter(needsAttention).map((s) => ({
+    key: `job:${s.def.id}`,
+    category: 'operational' as const,
+    source: 'job_health' as const,
+    title: `${s.def.label} — ${JOB_HEALTH_LABELS[s.health].toLowerCase()}`,
+    subtitle: jobHealthDetail(s),
+    linkedLabel: null,
+    route: '/actions?automation=1',
+    dueDate: null,
+    // A job that died or wrote nothing is a hole in the record; one that did
+    // part of its work still produced something to read.
+    priority: (s.health === 'partial' ? 'medium' : 'high') as ActionPriority,
+    isManual: false,
+  }))
+}
+
+function jobHealthDetail(s: JobStatus): string {
+  const run = s.latest
+  if (s.health === 'overdue') {
+    return run
+      ? `Last finished ${fmtRunTime(run.finished_at ?? run.started_at)} — a run was due ${fmtRunTime(s.expected.toISOString())}`
+      : 'No run on record'
+  }
+  if (!run) return 'No run on record'
+  if (s.health === 'stalled') {
+    return `Started ${fmtRunTime(run.started_at)} and never recorded an end — it died mid-run`
+  }
+  return run.errors[0] ?? run.summary ?? `Reported ${run.status} at ${fmtRunTime(run.finished_at ?? run.started_at)}`
+}
+
 // ── Scheduled rebalance (the time-based trigger) ────────────────────────────
 // Every schedule is projected, due or not, matching the portfolio_review source
 // — the hub's date buckets sort them and its filters hide them. The route is the
@@ -445,7 +503,7 @@ function fmtScheduleDate(isoDate: string): string {
 
 // ── Assemble everything ─────────────────────────────────────────────────────
 export async function fetchAllActions(): Promise<UnifiedAction[]> {
-  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh, allocationBands, scheduledRebalances] = await Promise.all([
+  const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh, allocationBands, scheduledRebalances, jobHealth] = await Promise.all([
     fetchActionItems(),
     fetchReviewSchedules(),
     fetchPortfolioReviewSchedules(),
@@ -457,6 +515,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     fetchDataRefreshActions(),
     fetchAllocationBandActions(),
     fetchScheduledRebalanceActions(),
+    fetchJobHealthActions(),
   ])
 
   // Include closed manual items too; the Actions page decides what to show.
@@ -542,6 +601,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     ...allocationBands,
     ...scheduledRebalances,
     ...dataRefresh,
+    ...jobHealth,
   ]
 }
 
@@ -557,6 +617,110 @@ export const BUCKET_LABELS: Record<DateBucket, string> = {
 }
 
 export const BUCKET_ORDER: DateBucket[] = ['overdue', 'today', 'this_week', 'upcoming', 'no_date']
+
+/**
+ * How far ahead the list looks. Dated actions beyond the horizon are dropped
+ * from the view entirely — the group header keeps the count, so nothing goes
+ * missing without a number saying so.
+ */
+export const HORIZON_OPTIONS = [7, 30, 90, 0] as const
+export type Horizon = typeof HORIZON_OPTIONS[number]
+
+/** `0` means no horizon. Undated actions are never filtered out by it. */
+export function withinHorizon(dueDate: string | null, days: Horizon): boolean {
+  if (days === 0 || !dueDate) return true
+  return daysUntil(dueDate) <= days
+}
+
+/** Whole days from today to a due date; negative when it has passed. */
+export function daysUntil(dueDate: string): number {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const d = new Date(dueDate.length <= 10 ? dueDate + 'T00:00:00' : dueDate); d.setHours(0, 0, 0, 0)
+  return Math.round((d.getTime() - today.getTime()) / 86_400_000)
+}
+
+/** "124d overdue" / "in 6d" / "today" — the aging column. */
+export function agingLabel(dueDate: string | null): string | null {
+  if (!dueDate) return null
+  const n = daysUntil(dueDate)
+  if (n === 0) return 'today'
+  return n < 0 ? `${-n}d overdue` : `in ${n}d`
+}
+
+// ── Collapsing repeated derived actions ─────────────────────────────────────
+//
+// One fact printed many times is not many facts. 36 portfolio reviews all due
+// the same day say one thing — the portfolio review process has not run since
+// June — and printing it 36 times buries every other row in the bucket.
+//
+// Only DERIVED actions cluster. A manual task is individually actionable, and
+// two of them sharing a due date is a coincidence rather than a common cause.
+
+/** Below this, the rows are easier to read as themselves. */
+const COLLAPSE_MIN = 3
+
+export interface ActionCluster {
+  key: string
+  /** Set when the rows collapse behind one summary line; null renders the row. */
+  label: string | null
+  items: UnifiedAction[]
+}
+
+/**
+ * The LOCAL calendar day a due date falls on, as YYYY-MM-DD.
+ *
+ * Everything on this page treats a due date as a day: `bucketOf` and
+ * `daysUntil` round to local midnight, and `formatDate` renders a bare date at
+ * local noon. Several of these sources store a `timestamptz`, so the UTC prefix
+ * of the string is NOT that day — two Equity Income reviews stamped
+ * `2026-06-30T00:08Z` fall on 29 June here. Keying on the raw string split them
+ * out of a cluster whose header showed their own date; keying on the UTC prefix
+ * would have put them in a cluster labelled a day after the rows inside it.
+ */
+function localDayKey(dueDate: string): string {
+  const d = new Date(dueDate.length <= 10 ? dueDate + 'T12:00:00' : dueDate)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** The cluster a derived action belongs to; null for one that never clusters. */
+function clusterKeyOf(a: UnifiedAction): string | null {
+  return a.isManual ? null : `${a.source}|${a.dueDate ? localDayKey(a.dueDate) : 'none'}`
+}
+
+/**
+ * Walked in one pass over the caller's order, so a cluster lands exactly where
+ * its first member was and the sort the page applied still holds.
+ */
+export function clusterActions(items: UnifiedAction[]): ActionCluster[] {
+  const counts = new Map<string, number>()
+  for (const a of items) {
+    const k = clusterKeyOf(a)
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+
+  const out: ActionCluster[] = []
+  const emitted = new Set<string>()
+  for (const a of items) {
+    const k = clusterKeyOf(a)
+    if (k == null || (counts.get(k) ?? 0) < COLLAPSE_MIN) {
+      out.push({ key: a.key, label: null, items: [a] })
+      continue
+    }
+    if (emitted.has(k)) continue
+    emitted.add(k)
+    const group = items.filter((x) => clusterKeyOf(x) === k)
+    const due = group[0].dueDate
+    out.push({
+      key: `cluster:${k}`,
+      // Formatted by the same helper the rows use, so a header can never
+      // disagree with the dates printed under it.
+      label: `${SOURCE_LABELS[group[0].source]} — ${group.length} ${due ? `due ${formatDate(due)}` : 'open'}`,
+      items: group,
+    })
+  }
+  return out
+}
 
 export function bucketOf(dueDate: string | null): DateBucket {
   if (!dueDate) return 'no_date'
