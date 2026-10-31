@@ -713,7 +713,38 @@ the scheduler's list, never an authority — `job_id` is plain text so a new job
 log before anything here knows its name). Surfaced by `AutomationPanel` and by the
 `job_health` action source.
 
-**The prompts are version-controlled at `.claude/scheduled-tasks/<taskId>/SKILL.md`** — that is the source of truth. The scheduler, however, reads each task from a fixed path it owns (`~/.claude/scheduled-tasks/<taskId>/SKILL.md`) and nothing repoints it, so the two must be kept in step by copying:
+#### They run from launchd, not the app scheduler (Oct 2026)
+
+The seven routines are **LaunchAgents** — `scripts/scheduled-jobs/` (runner,
+plist generator, install script, README). The app scheduler's copies are
+**disabled, not deleted**, so a revert is one call; re-enabling them without
+unloading the agents would run everything twice.
+
+Three things changed, and each closes a failure mode that had already bitten:
+
+- **They no longer need the app open.** The app scheduler only fires while
+  Claude Code is running, which is how two jobs read as `running` all day while
+  doing nothing.
+- **The prompt is read from `git show main:.claude/scheduled-tasks/…`, not the
+  working tree.** That kills the `sync.mjs` drift problem — there is now one
+  copy and the repo IS it — and it means a job cannot run a half-finished prompt
+  off whatever branch is checked out. Caught exactly that way: a test run
+  produced no heartbeat because the tree sat on a branch predating it.
+  `JOB_PROMPT_REF` overrides for testing.
+- **`CLAUDE_CODE_OAUTH_TOKEN` must stay unset.** It outranks the stored
+  claude.ai login, and a session authenticated by that token **cannot load
+  claude.ai MCP connectors** — which is where Supabase and FMP live, since only
+  `tipranks` is configured project-locally. Setting it leaves every job with no
+  data access at all. A malformed one in `~/.claude/settings.json`'s `env` block
+  (a pasted token with embedded newlines) broke every `claude` CLI invocation on
+  this machine; the desktop app ignores env vars, so nothing surfaced it.
+
+**Test with `install.sh run <id>`, never by calling `run-job.sh` from a shell** —
+a shell cannot reproduce launchd's PATH or TCC context, the same trap that hid
+the YCharts refresh failure for weeks. Full detail, including the tool allowlist
+and why `Bash` is excluded from it, is in `scripts/scheduled-jobs/README.md`.
+
+**The prompts are version-controlled at `.claude/scheduled-tasks/<taskId>/SKILL.md`** — that is the source of truth, and now the only copy the live path reads. `sync.mjs` remains only for reverting to the app scheduler, which reads a fixed path it owns (`~/.claude/scheduled-tasks/<taskId>/SKILL.md`) that nothing repoints:
 
 ```bash
 node scripts/scheduled-tasks/sync.mjs            # repo → scheduler (deploy)
