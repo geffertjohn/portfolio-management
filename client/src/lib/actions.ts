@@ -116,6 +116,31 @@ export function actionLabel(a: UnifiedAction): string {
   return [a.subject, a.title].filter(Boolean).join(' — ') || SOURCE_LABELS[a.source]
 }
 
+/**
+ * `review_schedules.next_review_at` as the calendar DAY it means.
+ *
+ * It IS a date — the earnings date plus one — but the column is `timestamptz`
+ * and its writers disagree on the time of day: the review modal stores LOCAL
+ * midnight (`2026-08-04T04:00:00Z` in EDT) while other paths store UTC midnight
+ * (`2026-11-05T00:00:00Z`). Read back through this page's local-time helpers, a
+ * UTC-midnight value lands on the PREVIOUS day anywhere west of Greenwich: MSI
+ * rendered "Oct 29 · 4d overdue" from a row holding Oct 30 (gotcha 24).
+ *
+ * Taking the UTC date part resolves BOTH conventions, because local midnight in
+ * a negative-offset zone falls later on the same UTC day. Downstream every
+ * helper then sees a bare `YYYY-MM-DD` and treats it as a calendar day, which is
+ * what `formatDate`, `daysUntil` and `localDayKey` are written for — and what
+ * the at-risk adapter below already does with `removal_date`.
+ *
+ * Deliberately NOT applied to `portfolio_review_schedules.next_review_at`: that
+ * column holds real INSTANTS — the seed trigger writes `now()`, microseconds and
+ * all (`2026-06-30T00:08:28.751295Z`) — so its local day is the intended day,
+ * and forcing it to UTC would move those rows a day forward. See `localDayKey`.
+ */
+function reviewDueDay(ts: string | null | undefined): string | null {
+  return ts ? ts.slice(0, 10) : null
+}
+
 function duePriority(dueDate: string | null): ActionPriority {
   if (dueDate && isOverdue(dueDate)) return 'high'
   if (dueDate && isDueSoon(dueDate)) return 'medium'
@@ -561,19 +586,22 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
   // Include closed manual items too; the Actions page decides what to show.
   const manualActions = manual.map(manualToAction)
 
-  const reviewActions: UnifiedAction[] = reviews.map((s) => ({
-    key: `review:${s.security_id}`,
-    category: 'security',
-    source: 'security_review',
-    subject: s.symbol,
-    title: null,
-    subtitle: s.name,
-    context: null,
-    route: s.security_numeric_id != null ? `/security/${s.security_numeric_id}` : null,
-    dueDate: s.next_review_at,
-    priority: duePriority(s.next_review_at),
-    isManual: false,
-  }))
+  const reviewActions: UnifiedAction[] = reviews.map((s) => {
+    const due = reviewDueDay(s.next_review_at)
+    return {
+      key: `review:${s.security_id}`,
+      category: 'security',
+      source: 'security_review',
+      subject: s.symbol,
+      title: null,
+      subtitle: s.name,
+      context: null,
+      route: s.security_numeric_id != null ? `/security/${s.security_numeric_id}` : null,
+      dueDate: due,
+      priority: duePriority(due),
+      isManual: false,
+    }
+  })
 
   const portfolioReviewActions: UnifiedAction[] = portfolioReviews.map((s) => ({
     key: `preview:${s.portfolio_name}:${s.cadence}`,
