@@ -69,15 +69,39 @@ export const SOURCE_LABELS: Record<ActionSource, string> = {
   job_health: 'Automation',
 }
 
+/**
+ * One row of the hub.
+ *
+ * The three text fields carry each fact ONCE, because a row that prints the
+ * same thing three ways is harder to read than one that prints it once:
+ *
+ *   subject  the entity the action is about, and the row's lead text
+ *   title    only what the Type COLUMN does not already say
+ *   context  a second entity, when it is not the subject
+ *
+ * The Type column is the act. A security review that is simply due therefore
+ * has no `title` at all — "Review MSI" beside a "Review" badge and an "MSI"
+ * column said one fact three times, which is what this shape replaced. Reserve
+ * `title` for a state the type cannot express: "Sell timer expired", "Out of
+ * band", the cadence of a portfolio review.
+ *
+ * NOTE: the Actions table renders `title` in the TYPE column ("Portfolio
+ * Review · Quarterly"), not beside the subject, which read as clutter. It also
+ * leads the Task cell for rows that have no subject (manual tasks, firm-wide
+ * operations), and `actionLabel` composes it for export.
+ */
 export interface UnifiedAction {
   /** Stable unique key, prefixed by source (e.g. "manual:12", "review:AAPL"). */
   key: string
   category: ActionCategory
   source: ActionSource
-  title: string
+  /** The entity acted on. Null for firm-wide operations, where `title` leads. */
+  subject: string | null
+  /** The distinguishing state, or null when the badge alone says it. */
+  title: string | null
   subtitle: string | null
-  /** Short label for the linked entity (ticker / portfolio / client). */
-  linkedLabel: string | null
+  /** A second entity — e.g. the portfolio an IC memo on a security is for. */
+  context: string | null
   /** Where "Open" navigates — the source workflow for derived actions. */
   route: string | null
   dueDate: string | null
@@ -85,6 +109,11 @@ export interface UnifiedAction {
   /** Manual actions are editable here; derived ones are completed in their workflow. */
   isManual: boolean
   manual?: ActionItem
+}
+
+/** The row as one line — CSV export, and anywhere a single string is wanted. */
+export function actionLabel(a: UnifiedAction): string {
+  return [a.subject, a.title].filter(Boolean).join(' — ') || SOURCE_LABELS[a.source]
 }
 
 function duePriority(dueDate: string | null): ActionPriority {
@@ -106,9 +135,11 @@ function manualToAction(item: ActionItem): UnifiedAction {
     key: `manual:${item.id}`,
     category: item.category,
     source: 'manual',
+    // A manual task is free text: its title IS its subject, so it leads.
+    subject: null,
     title: item.title,
     subtitle: item.description,
-    linkedLabel: item.security_symbol ?? item.portfolio_name ?? null,
+    context: item.security_symbol ?? item.portfolio_name ?? null,
     route,
     dueDate: item.due_date,
     priority: item.priority,
@@ -134,9 +165,10 @@ async function fetchIcActions(): Promise<UnifiedAction[]> {
       key: `ic:${m.id}`,
       category: 'ic' as const,
       source: 'ic' as const,
-      title: `IC decision pending — ${m.security_id}`,
+      subject: m.security_id,
+      title: 'Decision pending',
       subtitle: `Committee recommends ${m.recommendation ?? '—'} · awaiting CIO sign-off`,
-      linkedLabel: pname || null,
+      context: pname || null,
       route,
       dueDate: null,
       priority: 'high' as const,
@@ -156,9 +188,10 @@ async function fetchCandidateActions(): Promise<UnifiedAction[]> {
     key: `candidate:${c.id}`,
     category: 'ic' as const,
     source: 'candidate' as const,
-    title: `Finish candidate review — ${c.security_id}`,
-    subtitle: 'Add-security workflow in draft',
-    linkedLabel: c.portfolio_name,
+    subject: c.security_id,
+    title: 'Unfinished draft',
+    subtitle: 'Add-security workflow',
+    context: c.portfolio_name,
     route: `/portfolio/${encodeURIComponent(c.portfolio_name)}/candidate/${c.id}`,
     dueDate: null,
     priority: 'medium' as const,
@@ -212,9 +245,10 @@ async function fetchDriftActions(): Promise<UnifiedAction[]> {
         key: `drift:${name}`,
         category: 'trade' as const,
         source: 'drift' as const,
-        title: `Rebalance ${name}`,
+        subject: name,
+        title: null,
         subtitle: `${breaches} position${breaches > 1 ? 's' : ''} outside drift tolerance`,
-        linkedLabel: name,
+        context: null,
         route: `/portfolio/${encodeURIComponent(name)}`,
         dueDate: null,
         priority: 'medium' as const,
@@ -307,10 +341,11 @@ async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
       key: `allocation_band:${name}`,
       category: 'portfolio' as const,
       source: 'allocation_band' as const,
-      title: `Allocation out of band — ${name}`,
+      subject: name,
+      title: 'Out of band',
       subtitle: `${named.length > 0 ? named.join(', ') : `${breached.length} band(s)`}` +
         ` · vs ${basis === 'actual' ? 'actual holdings' : 'position targets'}`,
-      linkedLabel: name,
+      context: null,
       route: `/portfolio/${encodeURIComponent(name)}`,
       dueDate: null,
       priority: 'medium' as const,
@@ -362,11 +397,12 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
       key: 'refresh:failed',
       category: 'operational',
       source: 'data_refresh',
+      subject: null,
       title: 'YCharts refresh needs attention',
       subtitle: failed > 0
         ? `${failed} dataset${failed > 1 ? 's' : ''} wrote nothing on the last run — ${broken[0]!.errors[0] ?? 'no error recorded'}`
         : `Last run reported errors — ${broken[0]!.errors[0] ?? 'see the import log'}`,
-      linkedLabel: null,
+      context: null,
       route: '/settings/import-export',
       dueDate: null,
       priority: 'high',
@@ -387,9 +423,10 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
     key: 'refresh:missed',
     category: 'operational',
     source: 'data_refresh',
+    subject: null,
     title: `YCharts refresh did not run ${refreshDueLabel(missed)}`,
     subtitle: `Last landed ${fmtImportDate(oldest)} — check the launchd agent, or import the workbook by hand`,
-    linkedLabel: null,
+    context: null,
     route: '/settings/import-export',
     dueDate: null,
     // One missed morning is often just a machine asleep; several is a break.
@@ -423,9 +460,10 @@ async function fetchJobHealthActions(): Promise<UnifiedAction[]> {
     key: `job:${s.def.id}`,
     category: 'operational' as const,
     source: 'job_health' as const,
-    title: `${s.def.label} — ${JOB_HEALTH_LABELS[s.health].toLowerCase()}`,
+    subject: s.def.label,
+    title: JOB_HEALTH_LABELS[s.health],
     subtitle: jobHealthDetail(s),
-    linkedLabel: null,
+    context: null,
     route: '/actions?automation=1',
     dueDate: null,
     // A job that died or wrote nothing is a hole in the record; one that did
@@ -469,9 +507,10 @@ async function fetchScheduledRebalanceActions(): Promise<UnifiedAction[]> {
         key: `rebalance:${s.portfolioName}`,
         category: 'trade' as const,
         source: 'scheduled_rebalance' as const,
-        title: `Rebalance schedule unknown — ${s.portfolioName}`,
+        subject: s.portfolioName,
+        title: 'Schedule unknown',
         subtitle: `${s.frequency} cadence · no allocation history to date it from`,
-        linkedLabel: s.portfolioName,
+        context: null,
         route,
         dueDate: null,
         priority: 'low' as const,
@@ -483,9 +522,10 @@ async function fetchScheduledRebalanceActions(): Promise<UnifiedAction[]> {
       key: `rebalance:${s.portfolioName}`,
       category: 'trade' as const,
       source: 'scheduled_rebalance' as const,
-      title: `Rebalance due — ${s.portfolioName}`,
+      subject: s.portfolioName,
+      title: null,
       subtitle: `${s.frequency} · last rebalanced ${fmtScheduleDate(s.anchor)}`,
-      linkedLabel: s.portfolioName,
+      context: null,
       route,
       dueDate: s.due,
       priority: duePriority(s.due),
@@ -525,9 +565,10 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     key: `review:${s.security_id}`,
     category: 'security',
     source: 'security_review',
-    title: `Review ${s.symbol}`,
+    subject: s.symbol,
+    title: null,
     subtitle: s.name,
-    linkedLabel: s.symbol,
+    context: null,
     route: s.security_numeric_id != null ? `/security/${s.security_numeric_id}` : null,
     dueDate: s.next_review_at,
     priority: duePriority(s.next_review_at),
@@ -538,9 +579,10 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     key: `preview:${s.portfolio_name}:${s.cadence}`,
     category: 'portfolio',
     source: 'portfolio_review',
-    title: `${CADENCE_LABELS[s.cadence]} review — ${s.portfolio_name}`,
-    subtitle: 'Portfolio review due',
-    linkedLabel: s.portfolio_name,
+    subject: s.portfolio_name,
+    title: CADENCE_LABELS[s.cadence],
+    subtitle: null,
+    context: null,
     route: `/portfolio/${encodeURIComponent(s.portfolio_name)}/review/${s.cadence}`,
     dueDate: s.next_review_at,
     priority: duePriority(s.next_review_at),
@@ -551,9 +593,10 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     key: `alert:${a.id}`,
     category: 'security',
     source: 'alert',
-    title: `Performance alert — ${a.security_symbol ?? a.security_id}`,
+    subject: a.security_symbol ?? a.security_id,
+    title: null,
     subtitle: `${a.metric_field} breached threshold`,
-    linkedLabel: a.security_symbol ?? a.security_id,
+    context: null,
     route: a.security_numeric_id != null ? `/security/${a.security_numeric_id}` : null,
     dueDate: null,
     priority: 'high',
@@ -577,11 +620,10 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
         key: `atrisk:${r.id}`,
         category: 'security',
         source: 'at_risk',
-        title: `Sell timer expired — ${r.securities2?.security_id ?? r.security_id}`,
-        subtitle: stillRed.length > 0
-          ? `Still red: ${stillRed.map((m) => m.label).join(', ')}`
-          : 'Sell timer expired',
-        linkedLabel: r.securities2?.security_id ?? r.security_id,
+        subject: r.securities2?.security_id ?? r.security_id,
+        title: 'Sell timer expired',
+        subtitle: stillRed.length > 0 ? `Still red: ${stillRed.map((m) => m.label).join(', ')}` : null,
+        context: null,
         route: '/at-risk',
         dueDate: due,
         priority: 'high',
