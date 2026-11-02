@@ -256,14 +256,46 @@ export async function applyScheduleRedates(redates: ScheduleRedate[]): Promise<n
   return redates.length
 }
 
+/**
+ * A bare `YYYY-MM-DD` is a calendar DAY; anything longer is a real instant.
+ *
+ * Both forms reach these helpers. A SECURITY review is a day — callers pass it
+ * through `reviewDueDay` — while a PORTFOLIO review schedule holds an instant,
+ * because its seed trigger writes `now()` with microseconds. Comparing a day as
+ * an instant is what made a UTC-midnight date read overdue from 20:00 local the
+ * evening before it was due. Same split `formatDate` and `daysUntil` use.
+ */
+function isCalendarDay(value: string): boolean {
+  return value.length <= 10
+}
+
+/** Local midnight today — the boundary a calendar day is measured against. */
+function startOfToday(): Date {
+  const t = new Date()
+  t.setHours(0, 0, 0, 0)
+  return t
+}
+
 export function isOverdue(nextReviewAt: string): boolean {
+  if (isCalendarDay(nextReviewAt)) {
+    // A review due TODAY is not overdue — it is due.
+    return new Date(`${nextReviewAt}T00:00:00`) < startOfToday()
+  }
   return new Date(nextReviewAt) < new Date()
 }
 
 /** Returns true if the next review date falls within `withinDays` days from today (default 14). */
 export function isDueSoon(nextReviewAt: string, withinDays = 14): boolean {
-  const d = new Date(nextReviewAt)
-  const soon = new Date()
+  if (isCalendarDay(nextReviewAt)) {
+    const today = startOfToday()
+    const soon = new Date(today)
+    soon.setDate(soon.getDate() + withinDays)
+    const d = new Date(`${nextReviewAt}T00:00:00`)
+    return d >= today && d <= soon
+  }
+  const now = new Date()
+  const soon = new Date(now)
   soon.setDate(soon.getDate() + withinDays)
-  return d >= new Date() && d <= soon
+  const d = new Date(nextReviewAt)
+  return d >= now && d <= soon
 }

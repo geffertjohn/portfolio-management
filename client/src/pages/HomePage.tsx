@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { fetchReviewSchedules, isOverdue, isDueSoon } from '@/lib/reviewSchedules'
+import { fetchReviewSchedules, isOverdue, isDueSoon, reviewDueDay } from '@/lib/reviewSchedules'
 import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from '@/lib/portfolioReviews'
 import { fetchActionItems } from '@/lib/actionItems'
 import { fetchUnacknowledgedAlerts, acknowledgeAlert } from '@/lib/alertRules'
@@ -68,8 +68,9 @@ export function HomePage() {
     .map((c) => ({ category: c, label: CATEGORY_LABELS[c], count: activeActions.filter((a) => a.category === c).length }))
     .filter((x) => x.count > 0)
 
-  const overdueReviews = schedules.filter((s) => isOverdue(s.next_review_at))
-  const dueSoonReviews = schedules.filter((s) => isDueSoon(s.next_review_at) && !isOverdue(s.next_review_at))
+  const overdueReviews = schedules.filter((s) => isOverdue(reviewDueDay(s.next_review_at)))
+  const dueSoonReviews = schedules.filter((s) =>
+    isDueSoon(reviewDueDay(s.next_review_at)) && !isOverdue(reviewDueDay(s.next_review_at)))
   const highPriorityActions = actionItems.filter((a) => a.priority === 'high')
 
   const overduePortfolioReviews = portfolioSchedules.filter((s) => isOverdue(s.next_review_at))

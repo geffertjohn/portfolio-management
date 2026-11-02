@@ -74,15 +74,16 @@ export function ReviewCalendarPage() {
   }, [schedules, queryClient])
 
   const filtered = schedules.filter((s) => {
-    if (filter === 'overdue') return isOverdue(s.next_review_at)
-    if (filter === 'due_soon') return isDueSoon(s.next_review_at) && !isOverdue(s.next_review_at)
+    if (filter === 'overdue') return isOverdue(reviewDueDay(s.next_review_at))
+    if (filter === 'due_soon') return isDueSoon(reviewDueDay(s.next_review_at)) && !isOverdue(reviewDueDay(s.next_review_at))
     return true
   })
 
-  const overdueCount = schedules.filter((s) => isOverdue(s.next_review_at)).length
-  const dueSoonCount = schedules.filter((s) => isDueSoon(s.next_review_at) && !isOverdue(s.next_review_at)).length
+  const overdueCount = schedules.filter((s) => isOverdue(reviewDueDay(s.next_review_at))).length
+  const dueSoonCount = schedules.filter((s) => isDueSoon(reviewDueDay(s.next_review_at)) && !isOverdue(reviewDueDay(s.next_review_at))).length
 
-  function rowStatus(nextReview: string) {
+  function rowStatus(nextReviewAt: string) {
+    const nextReview = reviewDueDay(nextReviewAt)
     if (isOverdue(nextReview)) return 'overdue'
     if (isDueSoon(nextReview)) return 'due_soon'
     return null
