@@ -97,42 +97,58 @@ rm -f "$OUTPUT" "$VM_ERROR" "$TRIGGER" "$UNATTENDED"
 log "dropping trigger for the guest watcher"
 date '+%Y-%m-%d %H:%M:%S' > "$TRIGGER"
 
+# ── Shutting the worker down ────────────────────────────────────────────────
+# Excel must be gone BEFORE the VM is suspended, on EVERY path out of the wait
+# below — not just the one where the output file turned up.
+#
+# A suspend freezes whatever is running, so a hung Excel is still sitting there
+# at ~600MB when the VM next resumes, and the next morning's open finds the
+# workbook already held. That is how ONE hang costs TWO runs: on 2026-11-02 the
+# VM was suspended with EXCEL.EXE 10920 alive from the 05:56 timeout, and the
+# next run had to be cleared by hand. This block used to live after the success
+# path, so both FATAL exits skipped it — the very thing its own comment warned
+# about.
+#
+# The grace period is the caller's, because the paths differ: a macro that
+# aborted cleanly may still be quitting Excel itself, while one that has not
+# written a file in 25 minutes is hung by definition and will never exit.
+excel_gone() { ! prlctl exec "$VM" tasklist.exe 2>/dev/null | grep -qi '^EXCEL.EXE'; }
+
+close_excel_and_suspend() {
+  grace_max="${1:-60}"; grace=0
+  until excel_gone || [ "$grace" -ge "$grace_max" ]; do sleep 5; grace=$((grace + 5)); done
+  if excel_gone; then
+    log "Excel exited on its own after ${grace}s"
+  else
+    log "WARN: Excel still running after ${grace}s — forcing it"
+    prlctl exec "$VM" taskkill.exe /IM EXCEL.EXE /F >>"$LOG" 2>&1
+    # A stale ~$ lock makes the next open read-only, which breaks the run
+    # silently rather than loudly.
+    prlctl exec "$VM" cmd.exe /c 'del /f /q "C:\portfolio\~$Ycharts.xlsm"' >>"$LOG" 2>&1
+  fi
+  prlctl suspend "$VM" >>"$LOG" 2>&1 && log "VM suspended" || log "WARN: suspend failed"
+}
+
 # ── Wait for the macro to produce the file ──────────────────────────────────
 waited=0
 while [ ! -f "$OUTPUT" ]; do
   if [ -f "$VM_ERROR" ]; then
     log "FATAL: the macro aborted — $(cat "$VM_ERROR")"
-    prlctl suspend "$VM" >>"$LOG" 2>&1
+    close_excel_and_suspend 15
     exit 1
   fi
   if [ "$waited" -ge "$WAIT_SECS" ]; then
     log "FATAL: no output after ${WAIT_SECS}s — Excel is hung, or the macro never fired"
-    prlctl suspend "$VM" >>"$LOG" 2>&1
+    close_excel_and_suspend 0
     exit 1
   fi
   sleep "$POLL_SECS"; waited=$((waited + POLL_SECS))
 done
 log "output appeared after ${waited}s"
 
-# ── Make sure Excel actually exited before suspending ───────────────────────
-# The macro quits itself, but a botched quit used to leave EXCEL.EXE alive at
-# ~500MB, and suspending would freeze it there for the next run to trip over.
-# Give it a grace period, then force it and clear the lock file it leaves behind
-# — a stale ~$ lock makes the next open read-only, which would break the run
-# silently.
-excel_gone() { ! prlctl exec "$VM" tasklist.exe 2>/dev/null | grep -qi '^EXCEL.EXE'; }
-grace=0
-until excel_gone || [ "$grace" -ge 60 ]; do sleep 5; grace=$((grace + 5)); done
-if excel_gone; then
-  log "Excel exited on its own after ${grace}s"
-else
-  log "WARN: Excel still running after ${grace}s — forcing it"
-  prlctl exec "$VM" taskkill.exe /IM EXCEL.EXE /F >>"$LOG" 2>&1
-  prlctl exec "$VM" cmd.exe /c 'del /f /q "C:\portfolio\~$Ycharts.xlsm"' >>"$LOG" 2>&1
-fi
-
-# ── Give the RAM back before importing ──────────────────────────────────────
-prlctl suspend "$VM" >>"$LOG" 2>&1 && log "VM suspended" || log "WARN: suspend failed"
+# ── Shut the worker down and give the RAM back before importing ─────────────
+# The macro quits Excel itself; the grace period covers a botched quit.
+close_excel_and_suspend 60
 
 # ── Import ──────────────────────────────────────────────────────────────────
 STAMPED="$(date +%Y-%m-%d_%H%M%S)"
