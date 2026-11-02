@@ -97,7 +97,6 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
   const [riskProfile,  setRiskProfile]  = useState(initial?.risk_profile ?? '')
   const [benchmark,           setBenchmark]           = useState(initial?.benchmark ?? '')
   const [rebalanceFrequency, setRebalanceFrequency]   = useState(initial?.rebalance_frequency ?? '')
-  const [reviewFrequency,    setReviewFrequency]      = useState(initial?.review_frequency ?? '')
   const [description,        setDescription]          = useState(initial?.description ?? '')
   const [objectiveStatement,   setObjectiveStatement]   = useState(initial?.objective_statement ?? '')
   const [investmentPhilosophy, setInvestmentPhilosophy] = useState(initial?.investment_philosophy ?? '')
@@ -220,7 +219,6 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       risk_profile:                  riskProfile  || null,
       benchmark:                     benchmark           || null,
       rebalance_frequency:           rebalanceFrequency  || null,
-      review_frequency:              reviewFrequency     || null,
       description:                   description         || null,
       objective_statement:           objectiveStatement    || null,
       investment_philosophy:         investmentPhilosophy  || null,
@@ -365,16 +363,6 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
               <div>
                 <label className="block text-sm font-medium text-gray-700">Rebalance Frequency</label>
                 <select value={rebalanceFrequency} onChange={(e) => setRebalanceFrequency(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
-                  <option value="">— Select —</option>
-                  <option value="Quarterly">Quarterly</option>
-                  <option value="Semi-Annual">Semi-Annual</option>
-                  <option value="Annual">Annual</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Review Frequency</label>
-                <select value={reviewFrequency} onChange={(e) => setReviewFrequency(e.target.value)}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
                   <option value="">— Select —</option>
                   <option value="Quarterly">Quarterly</option>

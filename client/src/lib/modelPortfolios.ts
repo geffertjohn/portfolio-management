@@ -9,6 +9,21 @@ export interface ModelPortfolio {
   risk_profile: string | null
   benchmark: string | null
   rebalance_frequency: string | null
+  /**
+   * RETIRED — nothing reads or writes this. Kept so the domain type still
+   * matches the generated row type; the column and its values stay in the DB.
+   *
+   * Review cadence is not a model-level setting. It comes from the portfolio's
+   * STRATEGY: `cadencesForStrategy()` and the `seed_portfolio_review_schedules`
+   * trigger give an Equity (individual-stock) book monthly + quarterly + annual
+   * timers, and everything else quarterly + annual, as rows in
+   * `portfolio_review_schedules`. This column drove nothing — it was read only
+   * by the editor that wrote it — while sitting one page away from the real
+   * timers and appearing to contradict them: the model editor showed
+   * "Quarterly" for Core Growth while the Actions hub correctly showed a
+   * monthly review due. Contrast `rebalance_frequency` above, which IS live
+   * (read by lib/rebalanceSchedule.ts to date the rebalance timers).
+   */
   review_frequency: string | null
   description: string | null
   objective_statement: string | null
