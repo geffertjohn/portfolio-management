@@ -108,7 +108,6 @@ export function ModelPortfoliosPage() {
                     <p className="text-xs text-gray-500">Risk Profile: {mp.risk_profile ?? '—'}</p>
                     <p className="text-xs text-gray-500">Benchmark: {mp.benchmark ?? '—'}</p>
                     <p className="text-xs text-gray-500">Rebalance Frequency: {mp.rebalance_frequency ?? '—'}</p>
-                    <p className="text-xs text-gray-500">Review Frequency: {mp.review_frequency ?? '—'}</p>
                   </div>
                 </button>
                 <div className="flex shrink-0 gap-2">
