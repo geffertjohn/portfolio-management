@@ -440,14 +440,15 @@ export function ResearchCard({
   parentDate?: string | null
   /**
    * Whether the card states WHAT it is — the author role, the pre/post-earnings
-   * badge and the draft badge.
+   * badge, the draft badge and the written date.
    *
    * Default true, because the three list surfaces (IC review, watchlist
    * research, the security's standing research) stack several reports and the
    * role is the only thing telling an analyst's note from the devil's
    * advocate's. Pass false where the surrounding chrome already says it: the
-   * timeline's modal is titled "Pre-earnings brief · Q3 2026", so repeating
-   * the type and the role inside it is the same fact three times.
+   * timeline's modal is titled "Pre-earnings brief · Q3 2026" over the
+   * subtitle "CVX · written Oct 28, 2026", so repeating the type, the role
+   * and the date inside it is the same handful of facts printed twice over.
    */
   showIdentity?: boolean
 }) {
@@ -472,7 +473,9 @@ export function ResearchCard({
             {' · '}Price {r.current_price != null ? fmtUsd(r.current_price) : EMPTY}
           </span>
         )}
-        <span className="ml-auto text-xs text-gray-400">{formatDate(r.created_at)}</span>
+        {showIdentity && (
+          <span className="ml-auto text-xs text-gray-400">{formatDate(r.created_at)}</span>
+        )}
       </div>
       {r.report_type === 'post_earnings' && parentDate && (
         <p className="mt-1 text-xs text-gray-400">
