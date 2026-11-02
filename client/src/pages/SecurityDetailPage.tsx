@@ -18,7 +18,7 @@ import { AlternativesPanel } from '@/components/AlternativesPanel'
 import { CreateActionItemModal } from '@/components/CreateActionItemModal'
 import { MarkReviewedModal } from '@/components/MarkReviewedModal'
 import { ReviewLogSection } from '@/components/ReviewLogSection'
-import { fetchReviewScheduleBySecurity, isOverdue, isDueSoon } from '@/lib/reviewSchedules'
+import { fetchReviewScheduleBySecurity, isOverdue, isDueSoon, reviewDueDay } from '@/lib/reviewSchedules'
 import { fetchPortfoliosHoldingSecurity } from '@/lib/positions'
 import { useSecurityDetail } from '@/hooks/useSecurityDetail'
 import { useSecurityBackLink } from '@/hooks/useSecurityBackLink'
@@ -231,14 +231,14 @@ export function SecurityDetailPage() {
                   At-Risk
                 </button>
               )}
-              {reviewSchedule && isOverdue(reviewSchedule.next_review_at) && (
+              {reviewSchedule && isOverdue(reviewDueDay(reviewSchedule.next_review_at)) && (
                 <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
                   Review Overdue
                 </span>
               )}
               {reviewSchedule &&
-                !isOverdue(reviewSchedule.next_review_at) &&
-                isDueSoon(reviewSchedule.next_review_at) && (
+                !isOverdue(reviewDueDay(reviewSchedule.next_review_at)) &&
+                isDueSoon(reviewDueDay(reviewSchedule.next_review_at)) && (
                   <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
                     Review Due Soon
                   </span>
@@ -501,7 +501,7 @@ export function SecurityDetailPage() {
                     </div>
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Next Review</p>
-                      <p className={`mt-1 font-medium ${isOverdue(reviewSchedule.next_review_at) ? 'text-red-600' : isDueSoon(reviewSchedule.next_review_at) ? 'text-amber-600' : 'text-gray-900'}`}>
+                      <p className={`mt-1 font-medium ${isOverdue(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-red-600' : isDueSoon(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-amber-600' : 'text-gray-900'}`}>
                         {new Date(reviewSchedule.next_review_at).toLocaleDateString()}
                       </p>
                     </div>
