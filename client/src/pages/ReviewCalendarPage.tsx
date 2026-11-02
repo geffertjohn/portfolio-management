@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { fetchReviewSchedules, isOverdue, isDueSoon, type ReviewCadence } from '@/lib/reviewSchedules'
+import {
+  fetchReviewSchedules, isOverdue, isDueSoon, redatedStockSchedules, applyScheduleRedates,
+  reviewDueDay, type ReviewCadence,
+} from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { isFundOrEtfSecurity, refreshSecuritiesFromFMP } from '@/lib/securities'
 import { MarkReviewedModal } from '@/components/MarkReviewedModal'
@@ -29,24 +32,43 @@ export function ReviewCalendarPage() {
   // have gone stale, once per mount, then refetch so the dates shown are right.
   const [refreshing, setRefreshing] = useState(false)
   const [refreshedCount, setRefreshedCount] = useState<number | null>(null)
+  const [redatedCount, setRedatedCount] = useState<number | null>(null)
   const didRefresh = useRef(false)
 
+  // Two corrections, and the second does NOT depend on the first.
+  //
+  // Topping up a stale earnings date only fires for a date that is null or in
+  // the past. MSI's was already correct at Nov 4 while its SCHEDULE still read
+  // Oct 30 from a superseded estimate — so gating the re-date on "the refresh
+  // changed something" would have left exactly the row that prompted this.
   useEffect(() => {
     if (didRefresh.current || schedules.length === 0) return
+    didRefresh.current = true
+
+    const stocksIn = (rows: typeof schedules) => rows.filter((s) => s.symbol && !isFundOrEtfSecurity(s))
     const today = new Date().toISOString().slice(0, 10)
-    const stale = schedules
-      .filter((s) => s.symbol && !isFundOrEtfSecurity(s))
+    const stale = stocksIn(schedules)
       .filter((s) => s.next_earnings_release == null || s.next_earnings_release < today)
       .map((s) => s.symbol)
-    if (stale.length === 0) { didRefresh.current = true; return }
 
-    didRefresh.current = true
     setRefreshing(true)
-    void refreshSecuritiesFromFMP(stale)
-      .then(async (n) => {
+    void (async () => {
+      let rows = schedules
+      if (stale.length > 0) {
+        const n = await refreshSecuritiesFromFMP(stale)
         setRefreshedCount(n)
-        if (n > 0) await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedules })
-      })
+        // Re-read so the re-date below sees the dates FMP just supplied.
+        if (n > 0) rows = await fetchReviewSchedules()
+      }
+      const redates = redatedStockSchedules(stocksIn(rows))
+      if (redates.length > 0) {
+        await applyScheduleRedates(redates)
+        setRedatedCount(redates.length)
+      }
+      if (stale.length > 0 || redates.length > 0) {
+        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedules })
+      }
+    })()
       .catch(() => {})
       .finally(() => setRefreshing(false))
   }, [schedules, queryClient])
@@ -81,6 +103,13 @@ export function ReviewCalendarPage() {
           {!refreshing && refreshedCount != null && refreshedCount > 0 && (
             <p className="mt-1 text-xs text-gray-400">
               Updated earnings dates for {refreshedCount} stock{refreshedCount === 1 ? '' : 's'}.
+            </p>
+          )}
+          {/* Said separately from the line above: a re-dated review is a date
+              the advisor was being shown wrongly, not routine data upkeep. */}
+          {!refreshing && redatedCount != null && redatedCount > 0 && (
+            <p className="mt-1 text-xs text-gray-400">
+              Re-dated {redatedCount} review{redatedCount === 1 ? '' : 's'} whose earnings date had moved.
             </p>
           )}
         </div>
@@ -141,7 +170,7 @@ export function ReviewCalendarPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-gray-500">
                       {s.last_reviewed_at ? formatDate(s.last_reviewed_at) : <span className="text-gray-400">Never</span>}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">{formatDate(s.next_review_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">{formatDate(reviewDueDay(s.next_review_at))}</td>
                     <td className="px-4 py-3">
                       {status ? <StatusBadge variant={status} /> : <span className="text-xs text-gray-400">On track</span>}
                     </td>
