@@ -26,8 +26,9 @@
  */
 import { fetchDailyAdjustedSeries, type DailyPrice } from './fmpMarket'
 import { fetchPositionsByPortfolioId } from './positions'
+import { fetchLatestActualAllocation } from './currentAllocation'
+import { isCashTicker } from './positionBands'
 
-const CASH = '$Cash'
 
 /** Latest adjusted close on or before `date` (walks back over weekends/holidays). */
 function priceOnOrBefore(series: DailyPrice[], date: string): number | null {
@@ -48,12 +49,33 @@ export interface HoldingMover {
   numericId: number | null
   /** Trailing-window total return as a decimal (0.0123 = +1.23%). */
   ret: number
+  /** Portfolio weight as a decimal (0.34 = 34%), on whichever basis was used. */
+  weight: number
+  /**
+   * `weight × ret` — the holding's share of the portfolio's move, as a decimal.
+   *
+   * This, not `ret`, is what the ranking is for. A 5% sleeve down 3.51% costs
+   * the book 0.18pp while a 22% sleeve down 1.80% costs 0.40pp, so ranking by
+   * return alone puts the smaller problem at the bottom of the list and files
+   * the real drag in the middle.
+   */
+  contribution: number
 }
 
-/** Cash / non-priceable tickers excluded from the movers ranking. */
-function isCashLike(ticker: string): boolean {
-  const t = ticker.trim().toUpperCase()
-  return t === '' || t === CASH.toUpperCase() || t === 'CASH' || t === '$:CASH'
+export interface PortfolioMovers {
+  /**
+   * Which weights the contributions were computed from.
+   *
+   * `actual` is the allocation file uploaded to `Portfolio Documents` — the one
+   * the review's position-sizing step saves. `targets` is
+   * `positions.allocation_pct`, used when no file exists. The caller shows
+   * which, because a contribution measured against targets describes a book
+   * nobody necessarily holds.
+   */
+  basis: 'actual' | 'targets'
+  /** Upload timestamp of the actual-allocation file; null on the targets basis. */
+  asOf: string | null
+  rows: HoldingMover[]
 }
 
 /**
@@ -65,10 +87,40 @@ function isCashLike(ticker: string): boolean {
 export async function fetchPortfolioMovers(
   portfolioName: string,
   days = 30,
-): Promise<HoldingMover[]> {
+): Promise<PortfolioMovers> {
   const positions = await fetchPositionsByPortfolioId(portfolioName)
-  const holdings = positions.filter((p) => p.ticker && !isCashLike(p.ticker))
-  if (holdings.length === 0) return []
+  // Keyed UPPER because the uploaded file and the positions table do not agree
+  // on case, and the file is the side without a securities2 join.
+  const meta = new Map(
+    positions.filter((p) => p.ticker).map((p) => [p.ticker.trim().toUpperCase(), p]),
+  )
+
+  // Prefer the book actually held over the book intended. A file that fails to
+  // load must not take the block out — fall back and say so.
+  let basis: PortfolioMovers['basis'] = 'targets'
+  let asOf: string | null = null
+  let weights = new Map<string, number>()
+  try {
+    const actual = await fetchLatestActualAllocation(portfolioName)
+    if (actual && actual.weights.size > 0) {
+      basis = 'actual'
+      asOf = actual.asOf
+      weights = actual.weights
+    }
+  } catch { /* fall through to the stored targets */ }
+  if (basis === 'targets') {
+    weights = new Map(
+      positions
+        .filter((p) => p.ticker)
+        .map((p) => [p.ticker.trim().toUpperCase(), Number(p.weight) || 0]),
+    )
+  }
+
+  // Cash carries no return and cannot be priced, so it is not a mover — but its
+  // weight is deliberately NOT redistributed: a 1% cash sleeve really did
+  // contribute nothing, and renormalising would overstate everything else.
+  const holdings = [...weights.entries()].filter(([t]) => !isCashTicker(t))
+  if (holdings.length === 0) return { basis, asOf, rows: [] }
 
   const today = new Date()
   // Buffer the fetch window so a base price exists across weekends/holidays.
@@ -78,21 +130,35 @@ export async function fetchPortfolioMovers(
   const baseStr = base.toISOString().slice(0, 10)
 
   const rows = await Promise.all(
-    holdings.map(async (p): Promise<HoldingMover | null> => {
+    holdings.map(async ([symbol, pct]): Promise<HoldingMover | null> => {
       try {
-        const series = await fetchDailyAdjustedSeries(p.ticker, fromStr)
+        const series = await fetchDailyAdjustedSeries(symbol, fromStr)
         if (series.length === 0) return null
         const latest = series[series.length - 1].adjClose
         const basePrice = priceOnOrBefore(series, baseStr)
         if (basePrice == null || basePrice === 0) return null
-        return { symbol: p.ticker, name: p.name, numericId: p.numericId, ret: latest / basePrice - 1 }
+        const ret = latest / basePrice - 1
+        const weight = pct / 100
+        const p = meta.get(symbol)
+        return {
+          symbol,
+          name: p?.name ?? null,
+          numericId: p?.numericId ?? null,
+          ret,
+          weight,
+          contribution: weight * ret,
+        }
       } catch {
         return null
       }
     }),
   )
 
-  return rows
-    .filter((r): r is HoldingMover => r !== null)
-    .sort((a, b) => b.ret - a.ret)
+  return {
+    basis,
+    asOf,
+    rows: rows
+      .filter((r): r is HoldingMover => r !== null)
+      .sort((a, b) => b.contribution - a.contribution),
+  }
 }
