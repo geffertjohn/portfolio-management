@@ -156,6 +156,106 @@ export async function markReviewed(opts: MarkReviewedOptions): Promise<void> {
 }
 
 /** Returns true if the next review date is in the past. */
+/**
+ * Re-dating a stock review whose earnings date has moved.
+ *
+ * A stock review is due the day after the company reports, and that date is
+ * STORED when the review is recorded — nothing re-reads it. FMP routinely moves
+ * an estimated date, and when it does the schedule keeps pointing at the old
+ * one: MSI was set on 2026-10-28 to Oct 30 from an estimate of ~Oct 29, the call
+ * moved to Nov 4, and the row sat 4 days "overdue" for a company that had not
+ * reported. The Review Calendar already tops up the stored EARNINGS dates; this
+ * carries that correction through to the SCHEDULE, which it never did.
+ *
+ * THE DANGEROUS CASE IS AN OUTSTANDING REVIEW. A row sitting at
+ * `last_earnings + 1` is overdue because the company HAS reported and nobody has
+ * reviewed it yet — ABBV and CVX both read exactly that on 2026-11-02. Re-dating
+ * those to `next_earnings + 1` would fling a real, pending review three months
+ * into the future and silently erase it from every due list. So a row is only
+ * moved when it points PAST the last reported call, i.e. when it was aimed at a
+ * future call in the first place; an overdue or missed review is never touched.
+ *
+ * Safe to apply because stock schedules are always derived: `markReviewed`
+ * writes `next_earnings + 1` and the modal's manual-override path (`mode:
+ * 'schedule'`) has no caller, so there is no hand-set date to clobber. If an
+ * override UI is ever reintroduced, this needs a flag to recognise it.
+ */
+export interface ScheduleRedateInput {
+  security_id: string
+  next_review_at: string
+  last_earnings_release: string | null
+  next_earnings_release: string | null
+}
+
+export interface ScheduleRedate {
+  securityId: string
+  /** Current stored day, for logging what moved. */
+  from: string
+  nextReviewAt: string
+}
+
+/**
+ * The calendar DAY a `review_schedules.next_review_at` means.
+ *
+ * The column is a date — earnings date plus one — stored as `timestamptz` by
+ * writers that disagree on the time of day: local midnight from the review
+ * modal (`2027-01-28T05:00:00Z` in EST), UTC midnight from everything else
+ * (`2027-01-28T00:00:00Z`). Formatted in local time a UTC-midnight value renders
+ * as the PREVIOUS day west of Greenwich — which is how MSI read "Oct 29" from a
+ * row holding Oct 30 (gotcha 24). The UTC date part resolves both, because local
+ * midnight in a negative-offset zone falls later on the same UTC day.
+ *
+ * Pass the result to `formatDate`, which treats a bare date as local noon.
+ */
+export function reviewDueDay(nextReviewAt: string): string {
+  return nextReviewAt.slice(0, 10)
+}
+
+/** A bare `YYYY-MM-DD` shifted by whole days, in UTC so it cannot slip one. */
+function addUtcDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Which STOCK schedules disagree with the earnings date they are derived from.
+ *
+ * Pure — pass it rows already filtered to stocks (funds are cadence-driven and
+ * have no earnings date to derive from). Returns only the rows that must change.
+ */
+export function redatedStockSchedules(rows: ScheduleRedateInput[]): ScheduleRedate[] {
+  const out: ScheduleRedate[] = []
+  for (const r of rows) {
+    if (!r.next_earnings_release || !r.next_review_at) continue
+    // The same UTC-date-part convention the Actions adapter uses: this column is
+    // a calendar day stored as `timestamptz`, by writers that disagree on the
+    // time of day (local midnight vs UTC midnight).
+    const current = reviewDueDay(r.next_review_at)
+    const target = addUtcDays(r.next_earnings_release, 1)
+    if (current === target) continue
+    // Outstanding review for a call that already happened — leave it alone.
+    if (r.last_earnings_release && current <= addUtcDays(r.last_earnings_release, 1)) continue
+    out.push({ securityId: r.security_id, from: current, nextReviewAt: `${target}T00:00:00Z` })
+  }
+  return out
+}
+
+/**
+ * Writes the re-dates. Per-row `update`, not an upsert: a conflict target needs
+ * a matching unique constraint (gotcha 8), and these rows all exist already.
+ */
+export async function applyScheduleRedates(redates: ScheduleRedate[]): Promise<number> {
+  for (const r of redates) {
+    const { error } = await supabase
+      .from('review_schedules')
+      .update({ next_review_at: r.nextReviewAt, updated_at: new Date().toISOString() })
+      .eq('security_id', r.securityId)
+    if (error) throw error
+  }
+  return redates.length
+}
+
 export function isOverdue(nextReviewAt: string): boolean {
   return new Date(nextReviewAt) < new Date()
 }
