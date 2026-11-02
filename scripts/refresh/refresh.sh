@@ -123,8 +123,10 @@ close_excel_and_suspend() {
     log "WARN: Excel still running after ${grace}s — forcing it"
     prlctl exec "$VM" taskkill.exe /IM EXCEL.EXE /F >>"$LOG" 2>&1
     # A stale ~$ lock makes the next open read-only, which breaks the run
-    # silently rather than loudly.
-    prlctl exec "$VM" cmd.exe /c 'del /f /q "C:\portfolio\~$Ycharts.xlsm"' >>"$LOG" 2>&1
+    # silently rather than loudly — and the lock is HIDDEN + SYSTEM, which
+    # plain `del` refuses with "Could Not Find" while leaving the file in
+    # place. Clear the attributes first, or this line only looks like it works.
+    prlctl exec "$VM" cmd.exe /c 'attrib -h -s -r "C:\portfolio\~$Ycharts.xlsm" & del /f /q "C:\portfolio\~$Ycharts.xlsm"' >>"$LOG" 2>&1
   fi
   prlctl suspend "$VM" >>"$LOG" 2>&1 && log "VM suspended" || log "WARN: suspend failed"
 }
