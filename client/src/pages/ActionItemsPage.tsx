@@ -7,7 +7,7 @@ import {
   type ActionStatus, type ActionCategory, type ActionPriority, type ActionRecurrence,
 } from '@/lib/actionItems'
 import {
-  fetchAllActions, bucketOf, clusterActions, agingLabel, withinHorizon,
+  fetchAllActions, actionLabel, bucketOf, clusterActions, agingLabel, withinHorizon,
   BUCKET_LABELS, BUCKET_ORDER, SOURCE_LABELS, HORIZON_OPTIONS,
   type UnifiedAction, type DateBucket, type ActionCluster, type Horizon,
 } from '@/lib/actions'
@@ -239,10 +239,10 @@ export function ActionItemsPage() {
   }
 
   const exportCsv = () => {
-    const rows = [['Category', 'Source', 'Title', 'Linked', 'Due', 'Priority', 'Status']]
+    const rows = [['Category', 'Source', 'Task', 'Context', 'Due', 'Priority', 'Status']]
     for (const a of filtered) rows.push([
-      CATEGORY_LABELS[a.category], SOURCE_LABELS[a.source], a.title,
-      a.linkedLabel ?? '', a.dueDate ?? '', a.priority,
+      CATEGORY_LABELS[a.category], SOURCE_LABELS[a.source], actionLabel(a),
+      a.context ?? '', a.dueDate ?? '', a.priority,
       a.isManual ? a.manual!.status : 'active',
     ])
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -428,7 +428,7 @@ export function ActionItemsPage() {
                             <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                               <th className="w-8" />
                               <th className="px-3 py-2">Task</th>
-                              <th className="hidden px-3 py-2 md:table-cell">Linked</th>
+                              <th className="px-3 py-2">Type</th>
                               <th className="px-3 py-2">Due</th>
                               <th className="px-3 py-2">Priority</th>
                               <th className="px-3 py-2" />
@@ -558,6 +558,7 @@ function ActionRow({
   const recurrence = a.isManual ? a.manual!.recurrence : 'none'
   const expanded = id != null && expandedId === id
   const aging = agingLabel(a.dueDate)
+  const lead = a.subject ?? a.title ?? SOURCE_LABELS[a.source]
 
   return (
     <>
@@ -582,10 +583,8 @@ function ActionRow({
             )}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`font-medium ${closed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{a.title}</span>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-                  {SOURCE_LABELS[a.source]}
-                </span>
+                <span className={`font-medium ${closed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{lead}</span>
+                {a.context && <span className="text-xs text-gray-400">{a.context}</span>}
                 {recurrence !== 'none' && (
                   <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
                     ↻ {RECURRENCE_LABELS[recurrence]}
@@ -596,8 +595,12 @@ function ActionRow({
             </div>
           </div>
         </td>
-        <td className="hidden whitespace-nowrap px-3 py-2 align-top text-xs text-gray-500 md:table-cell">
-          <span className="mt-0.5 block">{a.linkedLabel ?? '—'}</span>
+        <td className="whitespace-nowrap px-3 py-2 align-top text-xs text-gray-500">
+          {SOURCE_LABELS[a.source]}
+          {/* The qualifier lives here, not beside the name: two Foundation
+              Conservative reviews falling on one date are otherwise identical
+              rows pointing at different workspaces. */}
+          {a.subject && a.title && <span className="text-gray-400"> · {a.title}</span>}
         </td>
         <td className="whitespace-nowrap px-3 py-2 align-top text-xs">
           {a.dueDate ? (
