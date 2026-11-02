@@ -76,6 +76,21 @@ export interface PortfolioMovers {
   /** Upload timestamp of the actual-allocation file; null on the targets basis. */
   asOf: string | null
   rows: HoldingMover[]
+  /**
+   * The weight that produced no contribution, so the book reconciles to 100%.
+   *
+   * Without this the block silently described a minority of some portfolios:
+   * Hybrid Conservative holds 13 positions totalling 100%, of which FMP prices
+   * six — the other 57%, including the LARGEST holding at 21%, simply vanished
+   * from the ranking with nothing on screen saying so. A contribution column
+   * that cannot be reconciled is worse than one that admits what it omits.
+   *
+   * Cash is separated from unpriced holdings because the two are not the same
+   * claim: cash genuinely contributed nothing, while an unpriced fund
+   * contributed something nobody here can measure.
+   */
+  cashWeight: number
+  unpriced: { symbol: string; weight: number }[]
 }
 
 /**
@@ -119,8 +134,11 @@ export async function fetchPortfolioMovers(
   // Cash carries no return and cannot be priced, so it is not a mover — but its
   // weight is deliberately NOT redistributed: a 1% cash sleeve really did
   // contribute nothing, and renormalising would overstate everything else.
+  const cashWeight = [...weights.entries()]
+    .filter(([t]) => isCashTicker(t))
+    .reduce((sum, [, pct]) => sum + pct / 100, 0)
   const holdings = [...weights.entries()].filter(([t]) => !isCashTicker(t))
-  if (holdings.length === 0) return { basis, asOf, rows: [] }
+  if (holdings.length === 0) return { basis, asOf, rows: [], cashWeight, unpriced: [] }
 
   const today = new Date()
   // Buffer the fetch window so a base price exists across weekends/holidays.
@@ -129,16 +147,18 @@ export async function fetchPortfolioMovers(
   const base = new Date(today); base.setDate(base.getDate() - days)
   const baseStr = base.toISOString().slice(0, 10)
 
-  const rows = await Promise.all(
-    holdings.map(async ([symbol, pct]): Promise<HoldingMover | null> => {
+  // A holding that cannot be priced keeps its WEIGHT here rather than being
+  // dropped, so the caller can account for it instead of losing it.
+  const settled = await Promise.all(
+    holdings.map(async ([symbol, pct]): Promise<HoldingMover | { symbol: string; weight: number }> => {
+      const weight = pct / 100
       try {
         const series = await fetchDailyAdjustedSeries(symbol, fromStr)
-        if (series.length === 0) return null
+        if (series.length === 0) return { symbol, weight }
         const latest = series[series.length - 1].adjClose
         const basePrice = priceOnOrBefore(series, baseStr)
-        if (basePrice == null || basePrice === 0) return null
+        if (basePrice == null || basePrice === 0) return { symbol, weight }
         const ret = latest / basePrice - 1
-        const weight = pct / 100
         const p = meta.get(symbol)
         return {
           symbol,
@@ -149,16 +169,21 @@ export async function fetchPortfolioMovers(
           contribution: weight * ret,
         }
       } catch {
-        return null
+        return { symbol, weight }
       }
     }),
   )
 
+  const isPriced = (r: HoldingMover | { symbol: string; weight: number }): r is HoldingMover =>
+    'contribution' in r
+
   return {
     basis,
     asOf,
-    rows: rows
-      .filter((r): r is HoldingMover => r !== null)
-      .sort((a, b) => b.contribution - a.contribution),
+    rows: settled.filter(isPriced).sort((a, b) => b.contribution - a.contribution),
+    cashWeight,
+    unpriced: settled
+      .filter((r): r is { symbol: string; weight: number } => !isPriced(r))
+      .sort((a, b) => b.weight - a.weight),
   }
 }

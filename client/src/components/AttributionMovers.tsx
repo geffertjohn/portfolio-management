@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchPortfolioMovers, type HoldingMover } from '@/lib/portfolioPerformance'
+import {
+  fetchPortfolioMovers, type HoldingMover, type PortfolioMovers,
+} from '@/lib/portfolioPerformance'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fmtSignedPct, fmtDecimalPct } from '@/lib/formatters'
 import { formatDate } from '@/lib/fundFormat'
@@ -60,6 +62,44 @@ function MoverList({ title, rows }: { title: string; rows: HoldingMover[] }) {
 }
 
 /**
+ * What the ranking does NOT account for, so the weights reconcile to 100%.
+ *
+ * Rendered once per window rather than inside a list: in the split view the
+ * residual belongs to the window, and putting it in both columns would state
+ * it twice. The contribution total is labelled with the weight it covers,
+ * because on a book with unpriced holdings it is emphatically not the
+ * portfolio's return — Hybrid Conservative prices 42% of itself.
+ */
+function Reconciliation({ data }: { data: PortfolioMovers }) {
+  const priced = data.rows.reduce((sum, r) => sum + r.weight, 0)
+  const unpricedWeight = data.unpriced.reduce((sum, r) => sum + r.weight, 0)
+  const total = data.rows.reduce((sum, r) => sum + r.contribution, 0)
+  return (
+    <div className="mt-2 border-t border-gray-200 pt-1.5 text-xs">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-gray-500">
+          Accounts for {fmtDecimalPct(priced)} of the book
+        </span>
+        <span className={`tabular-nums font-medium ${total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {fmtSignedPct(total)}
+        </span>
+      </div>
+      {data.cashWeight > 0 && (
+        <p className="mt-0.5 text-gray-400">
+          Cash {fmtDecimalPct(data.cashWeight)} — contributed nothing
+        </p>
+      )}
+      {data.unpriced.length > 0 && (
+        <p className="mt-0.5 text-amber-700">
+          Not priced, contribution unknown — {fmtDecimalPct(unpricedWeight)} of the book:{' '}
+          {data.unpriced.map((u) => `${u.symbol} ${fmtDecimalPct(u.weight)}`).join(', ')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
  * Below this many holdings, a top/bottom split is not worth making.
  *
  * Splitting only tells the reader something when it HIDES something. At ten
@@ -102,7 +142,10 @@ function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: 
     // so no holding is filed under a heading that misdescribes it.
     if (movers.length < SPLIT_MIN_HOLDINGS) {
       return (
-        <MoverList title={`All ${movers.length} holdings · by contribution`} rows={movers} />
+        <>
+          <MoverList title={`All ${movers.length} holdings · by contribution`} rows={movers} />
+          <Reconciliation data={data!} />
+        </>
       )
     }
     const top = movers.slice(0, 5)
@@ -110,10 +153,13 @@ function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: 
     const bottomStart = Math.max(5, movers.length - 5)
     const bottom = movers.slice(bottomStart).reverse()
     return (
-      <div className="grid grid-cols-2 gap-4">
-        <MoverList title="Top 5 by contribution" rows={top} />
-        <MoverList title="Bottom 5 by contribution" rows={bottom} />
-      </div>
+      <>
+        <div className="grid grid-cols-2 gap-4">
+          <MoverList title="Top 5 by contribution" rows={top} />
+          <MoverList title="Bottom 5 by contribution" rows={bottom} />
+        </div>
+        <Reconciliation data={data!} />
+      </>
     )
   }
 
