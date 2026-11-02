@@ -432,11 +432,24 @@ export function ResearchCard({
   r,
   showTicker = false,
   parentDate,
+  showIdentity = true,
 }: {
   r: ResearchReport
   showTicker?: boolean
   /** `created_at` of the pre-brief this one answers, when the caller can resolve it. */
   parentDate?: string | null
+  /**
+   * Whether the card states WHAT it is — the author role, the pre/post-earnings
+   * badge and the draft badge.
+   *
+   * Default true, because the three list surfaces (IC review, watchlist
+   * research, the security's standing research) stack several reports and the
+   * role is the only thing telling an analyst's note from the devil's
+   * advocate's. Pass false where the surrounding chrome already says it: the
+   * timeline's modal is titled "Pre-earnings brief · Q3 2026", so repeating
+   * the type and the role inside it is the same fact three times.
+   */
+  showIdentity?: boolean
 }) {
   const typeBadge = REPORT_TYPE_BADGE[r.report_type]
   const status = r.thesis_status ? THESIS_STATUS[r.thesis_status] : null
@@ -444,11 +457,13 @@ export function ResearchCard({
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold text-gray-800">{roleLabel(r.author_role)}</h3>
+        {showIdentity && <h3 className="text-sm font-semibold text-gray-800">{roleLabel(r.author_role)}</h3>}
         {showTicker && <span className="text-xs font-medium text-gray-500">{r.security_id}</span>}
-        {typeBadge && <Badge className={typeBadge.className}>{typeBadge.label}</Badge>}
+        {showIdentity && typeBadge && <Badge className={typeBadge.className}>{typeBadge.label}</Badge>}
+        {/* The thesis verdict stays regardless — it is the post-brief's finding,
+            not a restatement of what kind of document this is. */}
         {status && <Badge className={status.className}>{status.label}</Badge>}
-        {r.status === 'draft' && <Badge className="bg-sky-100 text-sky-700">Draft</Badge>}
+        {showIdentity && r.status === 'draft' && <Badge className="bg-sky-100 text-sky-700">Draft</Badge>}
         {r.rating && <Badge className="bg-gray-100 text-gray-700">{RATING_LABEL[r.rating]}</Badge>}
         {r.conviction && <span className="text-xs text-gray-500">Conviction: {CONVICTION_LABEL[r.conviction]}</span>}
         {(r.fair_value != null || r.current_price != null) && (

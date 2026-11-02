@@ -306,7 +306,9 @@ function ReportModal({
       subtitle={`${report.security_id} · written ${fmtDate(report.created_at)}`}
       onClose={onClose}
     >
-      <ResearchCard r={report} parentDate={parentDate} />
+      {/* The modal's own title and subtitle carry the type, period, ticker and
+          date, so the card does not repeat them. */}
+      <ResearchCard r={report} parentDate={parentDate} showIdentity={false} />
     </Modal>
   )
 }
