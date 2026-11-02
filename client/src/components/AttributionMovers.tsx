@@ -37,6 +37,24 @@ function MoverList({ title, rows }: { title: string; rows: HoldingMover[] }) {
   )
 }
 
+/**
+ * Below this many holdings, a top/bottom split is not worth making.
+ *
+ * Splitting only tells the reader something when it HIDES something. At ten
+ * holdings or fewer the two lists name every position between them, and at
+ * exactly five the bottom list came out EMPTY — `Math.max(5, 5 - 5)` is 5, so
+ * `slice(5)` returns nothing — while the book's worst performers sat under a
+ * heading reading "Top 5". Foundation Conservative showed VFWAX at -3.51%
+ * ranked fifth of five under "Top 5", against a "Bottom 5" column containing a
+ * dash that reads as missing data.
+ *
+ * That is the COMMON case here, not an edge one: a Foundation book holds a
+ * handful of funds at twenty-odd percent each by construction, and this section
+ * is shown on exactly those fund/ETF quarterly reviews. The Equity books that
+ * carry twenty-plus single stocks still get the split.
+ */
+const SPLIT_MIN_HOLDINGS = 11
+
 /** One trailing window: top-5 / bottom-5 holdings by total return over `days`. */
 function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: number; label: string }) {
   const { data: movers = [], isLoading, error } = useQuery({
@@ -56,6 +74,11 @@ function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: 
     }
     if (movers.length === 0) {
       return <p className="text-xs text-gray-400">No priceable holdings to rank.</p>
+    }
+    // Few enough that a split would conceal nothing — rank them all instead,
+    // so no holding is filed under a heading that misdescribes it.
+    if (movers.length < SPLIT_MIN_HOLDINGS) {
+      return <MoverList title={`All ${movers.length} holdings · best to worst`} rows={movers} />
     }
     const top = movers.slice(0, 5)
     // Take the worst up to 5 without overlapping the top slice; show worst-first.
