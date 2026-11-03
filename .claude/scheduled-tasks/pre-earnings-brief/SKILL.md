@@ -58,25 +58,40 @@ The brief has two sections, and each field below is filled from BOTH ends: you s
 
 ## Steps
 
-1. **Held universe.** execute_sql: `select distinct security_id from positions`.
+1. **Held universe.** execute_sql: `select distinct security_id from positions where deleted_at is null`.
+
+   **The `deleted_at` filter is not optional** — `positions` is soft-deleted, and without it the universe includes securities every book has sold.
 
 2. **Upcoming earnings.** Via the FMP earnings calendar, keep only tickers reporting within **~4 calendar days** of today. If none, write "No held stocks report in the next 4 days." and STOP (persist nothing).
 
    **Why 4 and not 2:** a post-earnings brief cannot exist without its pre-brief — a CHECK constraint enforces the pairing — and the review that reads it falls due the day after the print. So a day this job does not run (the app was closed) silently costs that holding its brief, its recommendation, and the aid for a review that will not come round again for a quarter. A wider window gives each print several chances to be caught instead of exactly one.
 
-   **Do not write a second brief for a print you have already covered.** Before writing, check for an existing `pre_earnings` row for that ticker created within the last 7 days and skip it if one exists:
-
-   ```sql
-   select security_id, created_at from research_reports
-   where report_type = 'pre_earnings' and deleted_at is null
-     and created_at >= now() - interval '7 days';
-   ```
-
-   **Resolve the fiscal period you are briefing**, because the brief is stored
-   against the CALL, not against the day you wrote it. `earningsTranscript` →
+   **Resolve the fiscal period you are briefing FIRST**, because the brief is stored
+   against the CALL, not against the day you wrote it — and because the period is
+   what the dedupe below keys on. `earningsTranscript` →
    `transcripts-dates-by-symbol` (symbol), take the newest entry and increment
    it: `Q1→Q2`, `Q2→Q3`, `Q3→Q4`, and `Q4` rolls to `Q1` of `fiscalYear + 1`.
    That is the call about to be held.
+
+   **Do not write a second brief for a call you have already covered.** With the
+   period resolved, skip the ticker if a live brief already exists for that exact
+   call:
+
+   ```sql
+   select id, security_id, fiscal_year, quarter from research_reports
+   where report_type = 'pre_earnings' and deleted_at is null
+     and security_id = 'TICKER' and fiscal_year = <fy> and quarter = <q>;
+   ```
+
+   This replaces an earlier "created in the last 7 days" window. A time window is
+   not the identity a brief has: it let one call accumulate three briefs on three
+   consecutive days (TJX, Q2 2027), and it cannot hold at all when two runs read
+   it before either writes — which is what two live schedulers did on 2 Nov 2026.
+   **The database now enforces this too**, via the partial unique index
+   `research_reports_one_pre_per_period` on
+   `(security_id, fiscal_year, quarter)`, so a duplicate insert fails loudly
+   rather than landing. Treat that failure as "already briefed — skip", not as an
+   error to retry.
 
    Use the FISCAL labels the transcript list gives, never the calendar quarter —
    TJX's August call is its Q2 **2027**, and dating it 2026 would file the brief

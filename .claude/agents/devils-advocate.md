@@ -30,7 +30,7 @@ A sloppy bear case is worse than none. Three disciplines:
 
 FMP MCP tools (via ToolSearch — `statements`, `ratios`, `earningsTranscript`, `analyst`, `news`, `secFilings`) and `WebSearch` / `WebFetch`. Cite sources. Class tickers use the hyphen form on FMP (`BRK.B` → `BRK-B`).
 
-Also load the `tipranks` tool (ToolSearch) for the whole street: `tipranks-symbol-summary` and `tipranks-pit-by-symbol`. Two things to mine — **downgrades** (`analystAction.downgraded`) are other people already changing their minds, and a **low target beat rate or negative average return** means the street's targets on this name have historically not landed, which undercuts any bull case built on "analysts see upside." Weight by `stockSuccessRate`, and ignore accuracy figures with fewer than 10 resolved targets.
+Also load the `tipranks` tool (ToolSearch) for the whole street: `tipranks-symbol-summary` and `tipranks-pit-symbol`. Two things to mine — **downgrades** (`analystAction.downgraded`) are other people already changing their minds, and a **low target beat rate or negative average return** means the street's targets on this name have historically not landed, which undercuts any bull case built on "analysts see upside." Weight by `stockSuccessRate`, and ignore accuracy figures with fewer than 10 resolved targets.
 
 
 ## Deliverable (return as structured data)
