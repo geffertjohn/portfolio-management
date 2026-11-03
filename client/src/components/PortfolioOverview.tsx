@@ -157,15 +157,49 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
   const { data: positions = [] } = usePositions(portfolio.name)
   const { data: securities = [] } = useSecurities()
 
-  const holdingWeights = actualAllocation
-    ? actualAllocation.weights
-    : positions.length > 0
-      ? new Map(positions.map((p) => [p.securityId.trim().toUpperCase(), p.weight]))
-      : null
+  const isFundPortfolio = portfolio.portfolio_strategy !== 'Equity'
+
+  /**
+   * Which book the bands are measured against.
+   *
+   * Equity portfolios prefer the uploaded allocation file — the point there is
+   * "has the market moved me out of band?", which only the actual holdings can
+   * answer. **Fund/ETF portfolios use their POSITIONS**, because those are now
+   * set from the imported allocation snapshot and are the current lineup; the
+   * file sitting in their Documents folder is whatever was last uploaded there
+   * and may describe an older book entirely. Foundation Conservative is the
+   * live case: its positions carry VMSAX from the Nov 2 snapshot while the
+   * newest parseable file in Documents is the six-holding Nov 2 CSV.
+   */
+  const positionWeights = positions.length > 0
+    ? new Map(positions.map((p) => [p.securityId.trim().toUpperCase(), p.weight]))
+    : null
+  const holdingWeights = isFundPortfolio
+    ? positionWeights
+    : actualAllocation
+      ? actualAllocation.weights
+      : positionWeights
   const bands = holdingWeights
     ? computeAllocationBands(holdingWeights, securities, modelPortfolio ?? null)
     : null
   const holdingsLabel = actualAllocation ? 'Actual' : 'Holdings'
+
+  /**
+   * Fund/ETF portfolios show the model's bands and targets ONLY — no actual /
+   * holdings column (Nov 2026).
+   *
+   * Their positions are now set from the uploaded allocation snapshot
+   * (`syncPositionsFromLatestSnapshot`), so the comparison column restates the
+   * target it is being compared against. The same reasoning removed the
+   * "Current" column from the Positions table.
+   *
+   * **This gives up the band-status check on this card for those portfolios** —
+   * `STATUS_CLASS` ambers the actual figure, and nothing else here marks an
+   * out-of-band class. The breach is still raised by the review's position-
+   * sizing step and by the AI risk report, which measure against the uploaded
+   * file; it is this card that stops showing it.
+   */
+  const showHoldingsColumn = !isFundPortfolio
 
   const asOfDays = actualAllocation
     ? Math.floor((Date.now() - new Date(actualAllocation.asOf).getTime()) / 86_400_000)
@@ -197,7 +231,10 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
       <div className="rounded-lg border border-gray-200 bg-white">
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-gray-200 px-5 py-3">
           <h3 className="text-sm font-semibold text-gray-900">Asset Class Allocation</h3>
-          {actualAllocation ? (
+          {/* With no comparison column there is no basis to state — saying
+              "actual holdings as of …" over a table of model targets would
+              describe data the card no longer shows. */}
+          {!showHoldingsColumn ? null : actualAllocation ? (
             <p className={`text-xs ${asOfStale ? 'font-medium text-amber-600' : 'text-gray-400'}`}>
               Actual holdings as of {new Date(actualAllocation.asOf).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               {asOfStale && ` · ${asOfDays} days old`}
@@ -246,7 +283,7 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                           <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
                           <span className="whitespace-nowrap text-gray-600">{item.name}</span>
                           <span className="ml-auto pl-2 font-medium text-gray-900 tabular-nums">{item.value.toFixed(2)}%</span>
-                          {t1 && (
+                          {showHoldingsColumn && t1 && (
                             <span
                               className={`w-16 pl-2 text-right tabular-nums ${STATUS_CLASS[t1.status]}`}
                               title={`${holdingsLabel} ${t1.actual.toFixed(2)}% · ${STATUS_TITLE[t1.status]}`}
@@ -258,7 +295,7 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                       )
                     })}
                   </ul>
-                  {bands && (
+                  {showHoldingsColumn && bands && (
                     <p className="sr-only">
                       First figure in each legend row is the model target, second is {holdingsLabel.toLowerCase()}.
                     </p>
@@ -278,7 +315,7 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                       key: r.label, label: r.label, target: r.target,
                       lower: r.lower, upper: r.upper, actual: 0, status: 'ok' as const,
                     }))}
-                holdingsLabel={bands ? holdingsLabel : null}
+                holdingsLabel={bands && showHoldingsColumn ? holdingsLabel : null}
               />
               {bands && bands.unclassified.length > 0 && (
                 // Never silently dropped: unclassified weight is why the column
@@ -286,6 +323,22 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                 <p className="mt-2 text-xs font-medium text-amber-600">
                   {bands.unclassified.reduce((sum, u) => sum + u.weight, 0).toFixed(2)}% unclassified —{' '}
                   {bands.unclassified.map((u) => u.symbol).join(', ')}
+                </p>
+              )}
+              {/* Holding an asset class the model does not permit is normally
+                  shown as a red figure IN the actual column. Fund/ETF
+                  portfolios no longer have that column, so the one signal it
+                  carried that the targets cannot is restated here — otherwise
+                  removing the column would quietly remove the finding too.
+                  Foundation Conservative is the live case: VMSAX entered a
+                  multi-sector sleeve its model does not fund. */}
+              {bands && !showHoldingsColumn && bands.tier2.some((r) => r.status === 'not_allowed') && (
+                <p className="mt-2 text-xs font-medium text-red-600">
+                  Held outside the model —{' '}
+                  {bands.tier2
+                    .filter((r) => r.status === 'not_allowed')
+                    .map((r) => `${r.label} ${r.actual.toFixed(2)}%`)
+                    .join(', ')}
                 </p>
               )}
             </div>
