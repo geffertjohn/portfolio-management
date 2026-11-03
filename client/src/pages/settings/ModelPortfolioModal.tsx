@@ -3,20 +3,33 @@ import { useQuery } from '@tanstack/react-query'
 import { ASSET_CLASS_ROWS, SECTOR_ROWS, hasSectorAllocations, hasConvictionTiers, EQUITY_MODEL_HIDDEN_ASSET_CLASSES } from '@/lib/modelPortfolios'
 import type { ModelPortfolio, ModelPortfolioInput, SectorAllocations } from '@/lib/modelPortfolios'
 import { fetchSp500SectorWeights } from '@/lib/fmpMarket'
+import { driftBandFor } from '@/lib/positionBands'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { AutoGrowTextarea } from '@/components/AutoGrowTextarea'
 
 // target string → number, defaulting 0
 function n(v: string) { return Number(v) || 0 }
 
-// Round to nearest 0.5%
-function roundHalf(v: number) { return Math.round(v / 0.5) * 0.5 }
-
+/**
+ * The asset-class drift band comes from `lib/positionBands.ts`, not from a copy.
+ *
+ * This form used to round both edges to a flat 0.5, which collapses the band
+ * whole once the target is small: 1.0% ± 20% is 0.8–1.2, and both edges round
+ * to 1.0, so any deviation at all reads as a breach. `driftBandFor` steps the
+ * rounding down only when 0.5 would collapse, so every band that was already
+ * valid still rounds to exactly what it did before.
+ *
+ * It matters here more than anywhere else: what this form computes is WRITTEN
+ * to `model_portfolio_data`, and that stored value is then the authority every
+ * reader uses. A fix in the lib could not reach the data while this file kept
+ * its own copy.
+ *
+ * NOTE the category (equity / fixed income) band above is a different rule —
+ * an ABSOLUTE `target ± category_drift_percentage` clamped to 0..99, with no
+ * rounding — so it is deliberately not routed through here.
+ */
 function applyDrift(target: number, drift: number) {
-  return {
-    lower: roundHalf(target * (1 - drift / 100)),
-    upper: roundHalf(target * (1 + drift / 100)),
-  }
+  return driftBandFor(target, drift) ?? { lower: target, upper: target }
 }
 
 // Only targets stored in draft (lower/upper always computed from drift)
@@ -207,7 +220,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       } else if (acMode === 'manual') {
         lower = n(acManualLimits[key].lower); upper = n(acManualLimits[key].upper)
       } else {
-        lower = applyDrift(target, ad).lower; upper = applyDrift(target, ad).upper
+        const band = applyDrift(target, ad); lower = band.lower; upper = band.upper
       }
       ;(acPayload as unknown as Record<string, unknown>)[`${key}_target`]      = target
       ;(acPayload as unknown as Record<string, unknown>)[`${key}_lower_limit`] = lower
