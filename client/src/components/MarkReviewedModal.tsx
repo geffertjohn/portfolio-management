@@ -34,9 +34,18 @@ interface MarkReviewedModalProps {
   securitySymbol: string
   currentCadence: ReviewCadence
   mode: ReviewModalMode
-  isFund?: boolean
-  /** Full security record — funds/ETFs use it to render the evidence block and build the review PDF. */
-  security?: SecurityDetail
+  /**
+   * The fund/ETF record, or `null` for a stock — this ONE prop selects the path.
+   *
+   * It used to be two: an `isFund` flag and an optional `security`. They could
+   * disagree, and from the Review Calendar they did — it passed neither, so a
+   * fund took the stock path, writing a `recommendation` funds never carry and
+   * skipping the evidence PDF that makes a fund review defensible. Required and
+   * nullable, so a caller cannot omit it and inherit the wrong branch by
+   * default, and a fund cannot be reviewed without the record its PDF needs.
+   * The classifier (`isFundOrEtfSecurity`) still decides, at the call site.
+   */
+  fundSecurity: SecurityDetail | null
   /** Last earnings release date (YYYY-MM-DD). Drives the scheduled Review Date (+1 day). */
   lastEarnings?: string | null
   /** Next earnings release date (YYYY-MM-DD). Drives the Next Review Date (+1 day). */
@@ -93,9 +102,10 @@ function SnapRow({ label, value }: { label: string; value: string }) {
 }
 
 export function MarkReviewedModal({
-  open, onClose, securityId, securitySymbol, currentCadence, mode, isFund = false,
-  security, lastEarnings, nextEarnings,
+  open, onClose, securityId, securitySymbol, currentCadence, mode,
+  fundSecurity, lastEarnings, nextEarnings,
 }: MarkReviewedModalProps) {
+  const isFund = fundSecurity !== null
   const dialogRef = useRef<HTMLDialogElement>(null)
   const queryClient = useQueryClient()
   const [cadence, setCadence] = useState<ReviewCadence>(currentCadence)
@@ -264,16 +274,16 @@ export function MarkReviewedModal({
 
   // Fund evidence — benchmark index names for the PDF header (dedupe with the
   // embedded FundMonitoringPanel's queries via shared keys).
-  const fundSnapEnabled = open && mode === 'review' && isFund && !!security
+  const fundSnapEnabled = open && mode === 'review' && fundSecurity !== null
   const { data: categoryBenchmark } = useQuery({
-    queryKey: QUERY_KEYS.categoryBenchmark(security?.ycharts_benchmark_category ?? ''),
-    queryFn: () => fetchCategoryBenchmark(security!.ycharts_benchmark_category!),
-    enabled: fundSnapEnabled && !!security?.ycharts_benchmark_category,
+    queryKey: QUERY_KEYS.categoryBenchmark(fundSecurity?.ycharts_benchmark_category ?? ''),
+    queryFn: () => fetchCategoryBenchmark(fundSecurity!.ycharts_benchmark_category!),
+    enabled: fundSnapEnabled && !!fundSecurity?.ycharts_benchmark_category,
   })
   const { data: peerGroupBenchmark } = useQuery({
-    queryKey: QUERY_KEYS.peerGroupBenchmark(security?.peer_group_name ?? ''),
-    queryFn: () => fetchPeerGroupBenchmark(security!.peer_group_name!),
-    enabled: fundSnapEnabled && !!security?.peer_group_name,
+    queryKey: QUERY_KEYS.peerGroupBenchmark(fundSecurity?.peer_group_name ?? ''),
+    queryFn: () => fetchPeerGroupBenchmark(fundSecurity!.peer_group_name!),
+    enabled: fundSnapEnabled && !!fundSecurity?.peer_group_name,
   })
 
   function buildSnapshot(): ReviewMetricsSnapshot {
@@ -353,11 +363,11 @@ export function MarkReviewedModal({
    * review is not recorded without its evidence (upload + record are atomic).
    */
   async function uploadFundEvidence(reviewedOn: Date): Promise<string | null> {
-    if (!isFund || !security) return null
+    if (!fundSecurity) return null
     const { blob, filename } = buildFundReviewPdf({
-      security,
+      security: fundSecurity,
       ticker: securitySymbol,
-      fundName: security.security_name ?? null,
+      fundName: fundSecurity.security_name ?? null,
       reviewDate: reviewedOn,
       outcomeLabel: fundOutcomeLabel(),
       notes,
@@ -508,16 +518,16 @@ export function MarkReviewedModal({
 
           {/* Evidence block — funds/ETFs. The on-page Category/Peer group monitoring
               block, frozen into the uploaded PDF as evidence at the review date. */}
-          {mode === 'review' && isFund && security && (
+          {mode === 'review' && fundSecurity && (
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Evidence at review <span className="font-normal text-gray-400">(saved to Documents as a PDF)</span>
               </label>
               <div className="mt-2 max-h-[22rem] overflow-y-auto rounded-md border border-gray-200 bg-gray-50/60 p-3">
                 <FundMonitoringPanel
-                  security={security}
+                  security={fundSecurity}
                   showCohortReference
-                  defaultCohort={security.scorecard_cohort}
+                  defaultCohort={fundSecurity.scorecard_cohort}
                 />
               </div>
             </div>

@@ -679,8 +679,7 @@ export function SecurityDetailPage() {
           securitySymbol={security.security_id}
           currentCadence={reviewSchedule?.cadence ?? 'quarterly'}
           mode="review"
-          isFund={isFundOrEtfSecurity(security)}
-          security={security}
+          fundSecurity={isFundOrEtfSecurity(security) ? security : null}
           lastEarnings={lastEarnings}
           nextEarnings={nextEarnings}
         />

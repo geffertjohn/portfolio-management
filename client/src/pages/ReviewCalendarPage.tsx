@@ -6,7 +6,7 @@ import {
   reviewDueDay, type ReviewCadence,
 } from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import { isFundOrEtfSecurity, refreshSecuritiesFromFMP } from '@/lib/securities'
+import { fetchSecurityById, isFundOrEtfSecurity, refreshSecuritiesFromFMP } from '@/lib/securities'
 import { MarkReviewedModal } from '@/components/MarkReviewedModal'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatDate } from '@/lib/fundFormat'
@@ -19,6 +19,10 @@ export function ReviewCalendarPage() {
   const [reviewing, setReviewing] = useState<{
     securityId: string; symbol: string; cadence: ReviewCadence
     lastEarnings: string | null; nextEarnings: string | null
+    /** Classified from the embedded columns at click time (see `stocksIn` below). */
+    isFund: boolean
+    /** securities2.id — needed to load the full record a fund review's PDF is built from. */
+    numericId: number | null
   } | null>(null)
 
   const queryClient = useQueryClient()
@@ -72,6 +76,27 @@ export function ReviewCalendarPage() {
       .catch(() => {})
       .finally(() => setRefreshing(false))
   }, [schedules, queryClient])
+
+  // A FUND review freezes its scorecard evidence to a PDF, which is built from
+  // the full securities2 record — and `fetchReviewSchedules` embeds only the few
+  // columns the classifier needs. So load the record on demand when a fund row
+  // is picked, and render the modal only once it is in hand: the modal takes one
+  // `fundSecurity` prop precisely so there is no half-configured state to open.
+  // Keyed on QUERY_KEYS.security(id), so this shares the detail page's cache.
+  const fundRecordNeeded = reviewing?.isFund === true && reviewing.numericId != null
+  const {
+    data: fundRecord, isLoading: fundRecordLoading, isError: fundRecordError,
+  } = useQuery({
+    queryKey: QUERY_KEYS.security(reviewing?.numericId ?? -1),
+    queryFn: () => fetchSecurityById(reviewing!.numericId!),
+    enabled: fundRecordNeeded,
+  })
+
+  // Not reachable by the same means as the stock path: a fund with no usable
+  // record must say so, never quietly fall through and be written as a stock.
+  const fundRecordFailed =
+    reviewing?.isFund === true &&
+    (reviewing.numericId == null || fundRecordError || (!fundRecordLoading && fundRecord === null))
 
   const filtered = schedules.filter((s) => {
     if (filter === 'overdue') return isOverdue(reviewDueDay(s.next_review_at))
@@ -177,7 +202,11 @@ export function ReviewCalendarPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <button
-                        onClick={() => setReviewing({ securityId: s.security_id, symbol: s.symbol, cadence: s.cadence, lastEarnings: s.last_earnings_release, nextEarnings: s.next_earnings_release })}
+                        onClick={() => setReviewing({
+                          securityId: s.security_id, symbol: s.symbol, cadence: s.cadence,
+                          lastEarnings: s.last_earnings_release, nextEarnings: s.next_earnings_release,
+                          isFund: isFundOrEtfSecurity(s), numericId: s.security_numeric_id,
+                        })}
                         className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800">
                         Mark Reviewed
                       </button>
@@ -190,7 +219,7 @@ export function ReviewCalendarPage() {
         </div>
       )}
 
-      {reviewing && (
+      {reviewing && (!reviewing.isFund || fundRecord) && (
         <MarkReviewedModal
           open={true}
           onClose={() => setReviewing(null)}
@@ -198,9 +227,46 @@ export function ReviewCalendarPage() {
           securitySymbol={reviewing.symbol}
           currentCadence={reviewing.cadence}
           mode="review"
+          fundSecurity={reviewing.isFund ? fundRecord ?? null : null}
           lastEarnings={reviewing.lastEarnings}
           nextEarnings={reviewing.nextEarnings}
         />
+      )}
+
+      {reviewing?.isFund && !fundRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
+            {fundRecordFailed ? (
+              <>
+                <h2 className="text-sm font-semibold text-gray-900">
+                  Can&rsquo;t review {reviewing.symbol} from here
+                </h2>
+                <p className="mt-2 text-sm text-gray-600">
+                  A fund review saves a scorecard evidence PDF, and {reviewing.symbol}&rsquo;s
+                  full record could not be loaded. Open the security page and review it there.
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button onClick={() => setReviewing(null)}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const id = reviewing.numericId
+                      setReviewing(null)
+                      if (id != null) navigate(`/security/${id}`)
+                    }}
+                    disabled={reviewing.numericId == null}
+                    className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">
+                    Open {reviewing.symbol} →
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-600">Loading {reviewing.symbol} evidence…</p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
