@@ -114,6 +114,62 @@ date '+%Y-%m-%d %H:%M:%S' > "$TRIGGER"
 # written a file in 25 minutes is hung by definition and will never exit.
 excel_gone() { ! prlctl exec "$VM" tasklist.exe 2>/dev/null | grep -qi '^EXCEL.EXE'; }
 
+# Is the stale ~$ lock gone?
+#
+# `if exist` tests the path directly, so unlike a `dir /b` listing it SEES a
+# HIDDEN + SYSTEM file — which this lock is. A listing-based check reports a
+# clean directory while the lock sits there, which is how its absence went
+# unnoticed; do not swap this for one.
+lock_gone() {
+  prlctl exec "$VM" cmd.exe /c 'if exist "C:\portfolio\~$Ycharts.xlsm" (echo LOCK_PRESENT) else (echo LOCK_CLEAR)' 2>/dev/null |
+    grep -q 'LOCK_CLEAR'
+}
+
+# Delete the stale ~$ lock, waiting out the handle Windows has not released.
+#
+# A ~$ lock makes the next open READ-ONLY, which breaks a run silently rather
+# than loudly, so it is worth clearing properly. Two things defeat the obvious
+# one-liner, and both have actually happened:
+#
+#   1. The lock is HIDDEN + SYSTEM, and plain `del` refuses it with "Could Not
+#      Find" while leaving the file in place — so `attrib -h -s -r` runs first.
+#   2. `taskkill /F` returns as soon as the kernel has SIGNALLED the process,
+#      not when its handles are closed. A `del` on the very next line therefore
+#      fails with "being used by another process" — which is exactly what it did
+#      on 2026-11-03, in a log that otherwise read clean.
+#
+# So: wait for Excel to leave tasklist, retry the delete while the handle drains,
+# and then SAY whether it worked. A cleanup that cannot report its own failure is
+# how (1) survived for weeks.
+#
+# Failing here is not fatal: watch-trigger.cmd kills Excel and clears the lock
+# before the next launch, which is the fix that actually saves a run. This one
+# keeps a wedge from sitting on disk all day, and tells the truth either way.
+clear_excel_lock() {
+  waited_proc=0
+  until excel_gone || [ "$waited_proc" -ge 12 ]; do sleep 2; waited_proc=$((waited_proc + 2)); done
+  excel_gone || log "WARN: Excel still in tasklist after ${waited_proc}s — the lock delete may not take"
+
+  attempts=0
+  while [ "$attempts" -lt 6 ]; do
+    if lock_gone; then
+      if [ "$attempts" -eq 0 ]; then log "no stale ~\$ lock to clear"
+      else log "stale ~\$ lock cleared after ${attempts} attempt(s)"
+      fi
+      return 0
+    fi
+    prlctl exec "$VM" cmd.exe /c 'attrib -h -s -r "C:\portfolio\~$Ycharts.xlsm" & del /f /q "C:\portfolio\~$Ycharts.xlsm"' >>"$LOG" 2>&1
+    attempts=$((attempts + 1))
+    sleep 2
+  done
+
+  if lock_gone; then
+    log "stale ~\$ lock cleared after ${attempts} attempt(s)"
+  else
+    log "WARN: stale ~\$ lock SURVIVED ${attempts} attempts — watch-trigger.cmd will clear it before the next launch"
+  fi
+}
+
 close_excel_and_suspend() {
   grace_max="${1:-60}"; grace=0
   until excel_gone || [ "$grace" -ge "$grace_max" ]; do sleep 5; grace=$((grace + 5)); done
@@ -122,11 +178,7 @@ close_excel_and_suspend() {
   else
     log "WARN: Excel still running after ${grace}s — forcing it"
     prlctl exec "$VM" taskkill.exe /IM EXCEL.EXE /F >>"$LOG" 2>&1
-    # A stale ~$ lock makes the next open read-only, which breaks the run
-    # silently rather than loudly — and the lock is HIDDEN + SYSTEM, which
-    # plain `del` refuses with "Could Not Find" while leaving the file in
-    # place. Clear the attributes first, or this line only looks like it works.
-    prlctl exec "$VM" cmd.exe /c 'attrib -h -s -r "C:\portfolio\~$Ycharts.xlsm" & del /f /q "C:\portfolio\~$Ycharts.xlsm"' >>"$LOG" 2>&1
+    clear_excel_lock
   fi
   prlctl suspend "$VM" >>"$LOG" 2>&1 && log "VM suspended" || log "WARN: suspend failed"
 }
