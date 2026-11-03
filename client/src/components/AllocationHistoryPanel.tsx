@@ -1,46 +1,116 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchAllocationGrid, upsertAllocation, addSnapshotDate, deleteSnapshotDate,
-  normalizeSymbol,
+  normalizeSymbol, syncPositionForGridEdit, type GridEditPositionSync,
 } from '@/lib/portfolioAllocations'
+import {
+  comparePositionsToSnapshot, driftCount, isCurrentTargetDate, DERIVED_BLEND_PORTFOLIOS,
+} from '@/lib/positionsDrift'
+import { usePositions } from '@/hooks/usePortfolio'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { ImportAllocationsModal } from './ImportAllocationsModal'
 
 const fmtW = (w: number) => (w === 0 ? '' : w.toFixed(2))
+
+/** What the edit did to Positions — said out loud, because it writes to the DB. */
+function noteFor(sym: string, result: GridEditPositionSync): string {
+  switch (result) {
+    case 'inserted': return `${sym} added to Positions.`
+    case 'updated':  return `${sym} updated in Positions.`
+    case 'removed':  return `${sym} removed from Positions.`
+    // Not a failure — the history edit stands. `positions.security_id` has an
+    // FK to securities2 and this grid deliberately stages symbols that do not.
+    case 'unknown_security':
+      return `History updated. ${sym} is not in the securities list, so Positions was left unchanged.`
+  }
+}
 
 export function AllocationHistoryPanel({ portfolioName }: { portfolioName: string }) {
   const queryClient = useQueryClient()
   const [importing, setImporting] = useState(false)
   const [newDate, setNewDate] = useState('')
   const [newTicker, setNewTicker] = useState('')
+  const [syncNote, setSyncNote] = useState<string | null>(null)
 
   const { data: grid, isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.allocationGrid(portfolioName),
     queryFn: () => fetchAllocationGrid(portfolioName),
   })
+  const { data: positions } = usePositions(portfolioName)
 
+  /**
+   * Does Positions still say what the newest snapshot says? Reported, never
+   * resolved — see `lib/positionsDrift.ts` for why an automatic re-point is
+   * unsafe. A derived blend is skipped: its positions are computed from its
+   * parents, so its history disagreeing is expected rather than a defect.
+   */
+  const drift = useMemo(() => {
+    if (!grid || !positions || DERIVED_BLEND_PORTFOLIOS.has(portfolioName)) return null
+    const latest = grid.dates.at(-1)
+    if (!latest) return null
+    const weights = new Map(
+      grid.rows.map((r) => [r.security_id, r.weights[latest] ?? 0] as const),
+    )
+    const d = comparePositionsToSnapshot(
+      positions.map((p) => ({ security_id: p.securityId, allocation_pct: p.weight })),
+      { effectiveDate: latest, weights },
+    )
+    return d && driftCount(d) > 0 ? d : null
+  }, [grid, positions, portfolioName])
+
+  /**
+   * Everything a grid edit can change.
+   *
+   * `allocationChanges` and `positions` were both missing, and the Change Log's
+   * own docstring says it is derived "so it cannot disagree with the History
+   * grid" — with its cache unbusted the two sibling sub-tabs disagreed for the
+   * rest of the session. `portfolioPeriodReturns` went the other way: it is a
+   * dead key, left behind when the buy-and-hold performance engine was deleted
+   * in Sep 2026, with no reader anywhere in the app.
+   */
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allocationGrid(portfolioName) })
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolioPeriodReturns(portfolioName) })
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allocationChanges(portfolioName) })
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.positions(portfolioName) })
   }
 
+  /**
+   * A cell edit on the NEWEST date is an edit to the current target, so it is
+   * pushed through to that one position. An edit to an older column is history
+   * and writes nothing.
+   */
   const cellMut = useMutation({
-    mutationFn: (v: { date: string; sym: string; weight: number }) =>
-      upsertAllocation(portfolioName, v.date, v.sym, v.weight),
-    onSuccess: invalidate,
+    mutationFn: async (v: { date: string; sym: string; weight: number }) => {
+      await upsertAllocation(portfolioName, v.date, v.sym, v.weight)
+      if (!isCurrentTargetDate(v.date, grid?.dates ?? [])) return null
+      return { sym: v.sym, result: await syncPositionForGridEdit(portfolioName, v.sym, v.weight) }
+    },
+    onSuccess: (synced) => {
+      setSyncNote(synced ? noteFor(synced.sym, synced.result) : null)
+      invalidate()
+    },
   })
+  /**
+   * Adding or deleting a date does NOT re-point positions, and that is the
+   * deliberate half of this. Adding clones the previous column, so the current
+   * weights do not move; deleting the newest column changes which snapshot is
+   * current, but re-pointing a whole book off a destructive click is not a
+   * decision to make silently. The drift banner below reports it instead.
+   */
   const addDateMut = useMutation({
     mutationFn: (d: string) => addSnapshotDate(portfolioName, d, grid?.dates.at(-1)),
-    onSuccess: () => { setNewDate(''); invalidate() },
+    onSuccess: () => { setNewDate(''); setSyncNote(null); invalidate() },
   })
   const delDateMut = useMutation({
     mutationFn: (d: string) => deleteSnapshotDate(portfolioName, d),
-    onSuccess: invalidate,
+    onSuccess: () => { setSyncNote(null); invalidate() },
   })
+  // A new ticker enters at weight 0 — not held yet, so nothing to write to
+  // Positions until it is given a weight.
   const addTickerMut = useMutation({
     mutationFn: (sym: string) => upsertAllocation(portfolioName, grid!.dates.at(-1)!, normalizeSymbol(sym), 0),
-    onSuccess: () => { setNewTicker(''); invalidate() },
+    onSuccess: () => { setNewTicker(''); setSyncNote(null); invalidate() },
   })
   if (isLoading) return <p className="mt-4 text-sm text-gray-500">Loading allocation history…</p>
   if (error) return <p className="mt-4 text-sm text-red-600">{error instanceof Error ? error.message : 'Failed to load allocations'}</p>
@@ -68,6 +138,34 @@ export function AllocationHistoryPanel({ portfolioName }: { portfolioName: strin
       </div>
       {importing && (
         <ImportAllocationsModal portfolioName={portfolioName} onClose={() => { setImporting(false); invalidate() }} />
+      )}
+
+      {/* What the last cell edit did to Positions. It writes to the database,
+          so it says so rather than leaving the advisor to find out later. */}
+      {syncNote && (
+        <p className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          {syncNote}
+        </p>
+      )}
+
+      {/* Positions IS meant to be the newest snapshot. Where it is not, say so
+          and name the fix — never re-point a whole book on its own. */}
+      {drift && (
+        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <span className="font-semibold">Positions does not match the newest snapshot ({drift.effectiveDate}).</span>{' '}
+          {[
+            drift.missing.length && `${drift.missing.length} in the snapshot but not held`,
+            drift.extra.length && `${drift.extra.length} held but not in the snapshot`,
+            drift.reweighted.length && `${drift.reweighted.length} at a different weight`,
+          ].filter(Boolean).join(', ')}.{' '}
+          Import an allocations file to re-point Positions to this history.
+          {(drift.missing.length > 0 || drift.extra.length > 0) && (
+            <span className="mt-1 block text-amber-800">
+              {drift.missing.length > 0 && <>Not held: {drift.missing.join(', ')}. </>}
+              {drift.extra.length > 0 && <>Not in snapshot: {drift.extra.join(', ')}.</>}
+            </span>
+          )}
+        </div>
       )}
 
       {dates.length === 0 ? (
