@@ -1195,9 +1195,21 @@ The one exception is **file-storage uploads**, which are contextual by nature an
 
 ### One workbook, many sheets (Sep 2026)
 
-`YCharts/Ycharts.xlsm` consolidates what used to be three files — the benchmark
-sheets, the fund Securities sheet, and the model-portfolio sheet — into one
-**macro-enabled** workbook. Two shared helpers in `lib/excelImportShared.ts` make
+The workbook consolidates what used to be three files — the benchmark sheets,
+the fund Securities sheet, and the model-portfolio sheet — into one
+**macro-enabled** workbook.
+
+**The master lives on the VM at `C:\portfolio\Ycharts.xlsm` and nowhere else.**
+A copy used to be committed at `YCharts/Ycharts.xlsm`; it is now **deleted and
+gitignored**. It went stale within a day of every refresh while sitting at the
+most obvious path a file picker lands on, and on 3 Nov 2026 an **Oct 5 copy was
+imported by mistake** — it carried 43 securities instead of the current 46, and
+rolled every fund's figures back a month under an `import_runs` stamp reading
+"imported today". Provenance said fresh; the data was four weeks old. Pull the
+file from the VM when you need it (`prlctl exec "Windows 11" cmd.exe /c 'copy
+"C:\portfolio\Ycharts.xlsm" "\\Mac\Home\Downloads\..."'`) rather than
+re-adding a copy here. **Row counts alone will not catch this** — compare a
+known return value against the DB, which is how it was identified. Two shared helpers in `lib/excelImportShared.ts` make
 that work, and every importer uses both:
 
 - **`assertExcelFile(file)`** — the single extension gate, replacing four

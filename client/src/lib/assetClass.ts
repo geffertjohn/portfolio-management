@@ -75,6 +75,11 @@ export const ASSET_CLASS_BY_CATEGORY: Record<string, AssetClassKey> = {
   // A global bond fund is multi-sector here, not non-US fixed income: the sleeve
   // it is bought to fill is sector diversification, not currency exposure.
   'Global Bond-USD Hedged':       'multi_sector_fixed_income',
+  // The literal case of the same idea, added when VMSAX entered Foundation
+  // Conservative (Nov 2026). Its 3% was surfacing as unclassified weight —
+  // which is the map working as designed (gotcha 23), not failing, but the
+  // sleeve it fills is the one above.
+  'Multisector Bond':             'multi_sector_fixed_income',
 }
 
 /**
