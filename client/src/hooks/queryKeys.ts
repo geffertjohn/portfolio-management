@@ -34,7 +34,7 @@ export const QUERY_KEYS = {
   substitutions: (atRiskId: number) => ['substitutions', atRiskId] as const,
   allComplianceRules: ['compliance_rules_all'] as const,
   complianceRules: (portfolioName: string) => ['compliance_rules', portfolioName] as const,
-  holdingsChangeLog: (portfolioName: string) => ['holdings_change_log', portfolioName] as const,
+  allocationChanges: (portfolioName: string) => ['allocation_changes', portfolioName] as const,
   auditLog: (tableName?: string, page?: number) => ['audit_log', tableName ?? 'all', page ?? 0] as const,
   actionItemEvents: (actionItemId: number) => ['action_item_events', actionItemId] as const,
   portfoliosHoldingSecurity: (securityId: string) => ['portfolios_holding_security', securityId] as const,

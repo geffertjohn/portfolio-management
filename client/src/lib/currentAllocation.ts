@@ -104,16 +104,40 @@ async function latestFileFor(
   files: StoredFile[],
   portfolioName: string,
 ): Promise<Omit<CurrentAllocation, 'derivedFrom'> | null> {
-  const mine = files.filter((f) => f.folder === portfolioName)
+  const mine = files
+    .filter((f) => f.folder === portfolioName && isSpreadsheet(f.name))
+    // Most recent upload first.
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   if (mine.length === 0) return null
 
-  // Most recent upload wins.
-  const latest = [...mine].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))[0]
+  // Walk newest-first until one actually PARSES as an allocation.
+  //
+  // This folder is a general document store — review-evidence PDFs, fact
+  // sheets, and the dated long-format history file all live here — and taking
+  // the newest file whatever it was meant any of them silently became "the
+  // actual allocation". A dated history file is the sharp case: its first
+  // column is the date, not a ticker, so every row is skipped and it parses to
+  // an EMPTY map. The Positions tab then read "Current allocation as of
+  // Nov 3, 2026" with every cell blank and a 0.0% total — asserting a date
+  // while showing nothing, which is worse than showing nothing at all.
+  for (const f of mine) {
+    const url = await getSignedUrl(f.fullPath, PORTFOLIO_DOCS_BUCKET)
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Failed to download allocation file (${res.status})`)
+    const weights = parseActualAllocations(await res.arrayBuffer())
+    if (weights.size > 0) return { asOf: f.createdAt, fileName: f.name, weights }
+  }
+  return null
+}
 
-  const url = await getSignedUrl(latest.fullPath, PORTFOLIO_DOCS_BUCKET)
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Failed to download allocation file (${res.status})`)
-  const buf = await res.arrayBuffer()
-
-  return { asOf: latest.createdAt, fileName: latest.name, weights: parseActualAllocations(buf) }
+/**
+ * Could this file be an allocation export at all?
+ *
+ * A cheap first gate so a PDF is never downloaded and parsed. It is NOT
+ * sufficient on its own — the shape check above is what actually decides —
+ * because the dated history file is a perfectly good .xlsx that is simply not
+ * this kind of sheet.
+ */
+function isSpreadsheet(name: string): boolean {
+  return /\.(csv|xls|xlsx|xlsm)$/i.test(name.trim())
 }
