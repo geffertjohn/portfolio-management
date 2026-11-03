@@ -352,7 +352,7 @@ is authoritative and delete the other.
 
 ## P3 — Structure and friction
 
-### 20. There are no tests. At all. `[ ]`
+### 20. There are no tests. At all. `[x] DONE 3 Nov`
 
 No runner, no test file, nothing in CI. Meanwhile ~1,700 lines of pure, React-free
 business logic sit in `lib/` — `allocationBands`, `assetClass`, `scorecardColor`,
@@ -365,6 +365,36 @@ would have caught at write time.
 
 **Recommendation:** add Vitest and test those eleven modules only. No component tests,
 no E2E — the pure layer is where the value is and it needs no harness.
+
+**Done (PR #68). Vitest, 147 tests across those 11 modules**, wired into the
+pre-commit hook and CI. Scope held exactly as recommended: `src/lib/*.ts`, no
+component tests, no E2E, no DOM.
+
+Two things in `vitest.config.ts` are load-bearing rather than boilerplate.
+**`TZ` is pinned to `America/New_York`** — gotcha 24 can only reproduce west of
+Greenwich, so on CI's UTC box those tests would have passed without exercising
+the bug at all; a harness self-check asserts the zone so the pin cannot be
+dropped silently. And **placeholder Supabase/FMP env vars**, because
+`lib/supabase.ts` throws at module load and would otherwise take down any file
+that holds a data-access function beside a pure one.
+
+**The suite was mutation-tested before it was committed**, since a suite that
+cannot fail is decoration. Reverting `roundBand` to the unconditional 0.5 step
+(this report's §3) trips 2 tests; sorting the Commentary timeline by call date
+instead of fiscal period (gotcha 22) trips 7; collapsing amber into red in
+`scorecardColor` trips 2. All restore to 147 green.
+
+Two deliberate choices worth knowing:
+
+- **`fmtUsdCompact` is tested as CORRECT**, including the sub-million and
+  trillion cases. The lib version has no defect — §11 is two components
+  reimplementing it — so those assertions are the spec that fix converges on,
+  not a lock on current behaviour. No test anywhere pins a known bug in place.
+- **`quarterlyBrief.test.ts` holds the one safety property rather than a
+  correctness one**: every held-back field is tagged with a sentinel and one
+  assertion over the serialized brief proves none leaks, so a field added to
+  `ResearchReport` later cannot ride along into a client's hands. It asserts the
+  sentinel is present in the INPUT first, so it cannot pass vacuously.
 
 ### 21. Single-source the job schedule `[ ]`
 

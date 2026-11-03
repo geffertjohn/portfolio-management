@@ -272,12 +272,57 @@ npm run lint        # eslint .    — no-explicit-any, unused vars, hook deps, f
 - **No `any`** — it's lint-enforced; use `unknown` + a type guard or an explicit cast (see "No `any`" above).
 - **Clean up as you go** — if a refactor orphans an import/variable, delete it in the same change; `typecheck` will flag it if you forget.
 
+### Tests — Vitest, over the pure `lib/` layer only
+
+```bash
+npm run test          # vitest run   — from the root or the client workspace
+npm run test:watch    # client only
+```
+
+**147 tests over 11 modules**, added Nov 2026 as audit §20. The repo had no
+runner and no test file at all until then, while ~1,700 lines of React-free
+business logic in `lib/` encoded the rules the tool rests on — verified only by
+driving a browser. Three defects the audit found (§3 band rounding, §11
+`$0.40M`, §13 the pre-earnings dedupe) were the kind a unit test catches at
+write time.
+
+- **Scope is deliberate: `src/lib/*.ts` and nothing else.** No component tests,
+  no E2E, no DOM. The strict `lib → hooks → components → pages` layering above
+  is what makes this possible — lib is pure by rule, so it needs no harness, and
+  that is where the value is concentrated. Don't add a component-testing library
+  without a reason the pure layer cannot serve.
+- **Tests live in `src/lib/__tests__/<module>.test.ts`** and are covered by the
+  same `tsc` and ESLint gates as the app (they are under `src`), so a sloppy
+  fixture is a build error, not a silent pass.
+- **Test the RULE, not the implementation.** Nearly every case here is traceable
+  to a documented gotcha or a real past defect, and says so in a comment. A test
+  that merely restates the code it covers costs maintenance and buys nothing.
+- **`vitest.config.ts` pins two things, both load-bearing:**
+  - **`TZ: 'America/New_York'`** — gotcha 24 (a `timestamptz` holding a calendar
+    DATE rendering a day early) can only reproduce *west* of Greenwich, so on
+    CI's UTC box those tests would pass without exercising the bug. The config's
+    TZ beats the shell's, so `TZ=UTC npm test` still runs them properly. A
+    harness self-check in `reviewSchedules.test.ts` asserts the zone, so the
+    pin cannot be dropped silently.
+  - **Placeholder Supabase/FMP env vars** — `lib/supabase.ts` THROWS at module
+    load when its two vars are missing, so importing any lib that happens to
+    also hold a data-access function would fail before a pure function ran. They
+    point nowhere; no test performs I/O.
+- **The suite is wired into both gates** — the pre-commit hook and CI run it
+  alongside typecheck and lint.
+- **`quarterlyBrief.test.ts` carries the one test that is a safety property, not
+  a correctness one:** every held-back field in the fixture is tagged with a
+  sentinel string, and one assertion over the serialized brief proves none of it
+  leaks. That brief is shaped to be handed to a client, so a field added to
+  `ResearchReport` later must not quietly ride along. It asserts the sentinel is
+  *present in the input* first, so it cannot pass vacuously.
+
 ### Automated gates — now in place
 
 The manual definition-of-done above is still the per-change discipline, but two automated gates now enforce it (the backlog was driven to zero first, so they hold from a clean baseline):
 
-- **Pre-commit hook** — `.githooks/pre-commit` runs client `typecheck` + `lint` whenever staged files include `client/src/**/*.{ts,tsx}`. Dependency-free (no husky); activated by the root `package.json` `prepare` script (`git config core.hooksPath .githooks` on `npm install`). Bypass with `git commit --no-verify`.
-- **CI** — `.github/workflows/ci.yml` runs on push to `main` and every PR: `npm ci`, `npm run lint --workspace=client`, and `npm run build` (client `tsc -b && vite build` + server `tsc`). Build/lint failures should block merge.
+- **Pre-commit hook** — `.githooks/pre-commit` runs client `typecheck` + `lint` + `test` whenever staged files include `client/src/**/*.{ts,tsx}`. Dependency-free (no husky); activated by the root `package.json` `prepare` script (`git config core.hooksPath .githooks` on `npm install`). Bypass with `git commit --no-verify`.
+- **CI** — `.github/workflows/ci.yml` runs on push to `main` and every PR: `npm ci`, `npm run lint --workspace=client`, `npm run test --workspace=client`, and `npm run build` (client `tsc -b && vite build` + server `tsc`). Build/lint failures should block merge.
 - **Keep the baseline at zero.** Treat any real type mismatch (e.g. a property that doesn't exist on a type) as a latent runtime bug, not just noise — fix the code or the type, don't silence it. If CI's `npm ci` ever fails on a lockfile mismatch, run `npm install` and commit the updated `package-lock.json`.
 
 ---

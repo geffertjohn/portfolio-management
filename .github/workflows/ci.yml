@@ -22,6 +22,9 @@ jobs:
       - name: Lint (client)
         run: npm run lint --workspace=client
 
+      - name: Test (client — the pure lib layer)
+        run: npm run test --workspace=client
+
       - name: Build (client + server — includes tsc type-check)
         run: npm run build
 
