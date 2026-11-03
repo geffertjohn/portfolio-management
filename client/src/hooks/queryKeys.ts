@@ -21,7 +21,7 @@ export const QUERY_KEYS = {
   portfolioPeriodReturns: (portfolioName: string) => ['portfolio_period_returns', portfolioName] as const,
   benchmarkPeriodReturns: (symbol: string, inception: string) =>
     ['benchmark_period_returns', symbol, inception] as const,
-  portfolioMovers: (portfolioName: string, days: number) => ['portfolio_movers', portfolioName, days] as const,
+  portfolioMovers: (portfolioName: string, days: number) => ['portfolio_movers', 'v2', portfolioName, days] as const,
   allocationGrid: (portfolioName: string) => ['allocation_grid', portfolioName] as const,
   latestActualAllocation: (portfolioName: string) => ['latest_actual_allocation', portfolioName] as const,
   sp500SectorWeights: ['sp500_sector_weights'] as const,

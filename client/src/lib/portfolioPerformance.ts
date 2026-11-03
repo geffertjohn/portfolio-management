@@ -25,6 +25,7 @@
  * total return on its own.
  */
 import { fetchDailyAdjustedSeries, type DailyPrice } from './fmpMarket'
+import { fetchStoredSecurityReturns, type StoredSecurityReturns } from './securities'
 import { fetchPositionsByPortfolioId } from './positions'
 import { fetchLatestActualAllocation } from './currentAllocation'
 import { isCashTicker } from './positionBands'
@@ -60,7 +61,22 @@ export interface HoldingMover {
    * the real drag in the middle.
    */
   contribution: number
+  /**
+   * Where `ret` came from. `ycharts` is the figure the workbook loaded onto
+   * `securities2`; `fmp` is a ratio of two dividend-adjusted closes.
+   */
+  source: ReturnSource
 }
+
+/**
+ * Who owns a holding's return.
+ *
+ * For a fund or ETF it is YCharts, which publishes the fund's own total return
+ * and is the system of record the advisor reconciles against. For a single
+ * stock there is no such published figure to read, so it is computed from FMP
+ * dividend-adjusted closes.
+ */
+export type ReturnSource = 'ycharts' | 'fmp'
 
 export interface PortfolioMovers {
   /**
@@ -90,14 +106,63 @@ export interface PortfolioMovers {
    * contributed something nobody here can measure.
    */
   cashWeight: number
-  unpriced: { symbol: string; weight: number }[]
+  /**
+   * Holdings that produced no contribution, each saying WHY.
+   *
+   * The two reasons are different problems with different owners: a missing
+   * YCharts figure means the workbook did not carry one for that window, while
+   * a missing FMP series means the price feed does not cover the symbol. Naming
+   * them apart is what makes the gap actionable rather than just visible.
+   */
+  unpriced: { symbol: string; weight: number; reason: UnpricedReason }[]
+  /**
+   * Which feed the returns came from, for the caller to name on screen. Null
+   * when nothing priced. `mixed` cannot occur on today's books — every
+   * portfolio is all-stock or all-fund — but a mixed book would compare a
+   * YCharts calendar-month figure against a rolling 30-day one, so the caller
+   * must be able to say so rather than quietly rank them together.
+   */
+  returnSource: ReturnSource | 'mixed' | null
+  /** As-of for the YCharts figures (newest import stamp read); null if unused. */
+  returnsAsOf: string | null
+}
+
+export type UnpricedReason = 'no_ycharts_figure' | 'no_price_series'
+
+/**
+ * The YCharts column carrying a fund's own total return over `days`.
+ *
+ * Only the two windows the attribution block shows are mapped, because those
+ * are the only ones the workbook's `Securities` sheet carries. An unmapped
+ * window returns null, which makes the fund unpriced rather than quietly
+ * measured over some other period.
+ */
+function storedReturnFor(stored: StoredSecurityReturns, days: number): number | null {
+  if (days === 30) return stored.oneMonth
+  if (days === 90) return stored.threeMonth
+  return null
 }
 
 /**
  * Per-holding total return over the trailing `days` window for the portfolio's
- * current positions, sorted best→worst. Uses FMP dividend-adjusted closes (a
- * ratio of two points is a total return). Cash and anything FMP can't price are
- * dropped. Each holding is one FMP call; results that fail to price are omitted.
+ * holdings, sorted best→worst by contribution.
+ *
+ * **A fund's or ETF's return is READ from YCharts, not recomputed.** The
+ * workbook's `Securities` sheet is the system of record for fund returns, so
+ * this reads `securities2.{one,three}_month_total_return_nav` for anything the
+ * classifier calls a fund or ETF, and falls to FMP dividend-adjusted closes
+ * only for single stocks, which have no published figure to read.
+ *
+ * That split is not a preference, it is a coverage fact: FMP prices none of the
+ * institutional mutual-fund share classes these books hold. Pricing every
+ * holding from FMP left Hybrid Conservative ranking 42% of itself, its largest
+ * holding among the 57% that vanished — while YCharts carried a figure for all
+ * thirteen the whole time.
+ *
+ * A fund with no YCharts figure is reported unpriced rather than quietly
+ * falling back to FMP: the two feeds measure different windows (a calendar
+ * month against a rolling thirty days), so substituting one into a list built
+ * from the other would rank them against each other as if they agreed.
  */
 export async function fetchPortfolioMovers(
   portfolioName: string,
@@ -136,9 +201,19 @@ export async function fetchPortfolioMovers(
   // contribute nothing, and renormalising would overstate everything else.
   const cashWeight = [...weights.entries()]
     .filter(([t]) => isCashTicker(t))
-    .reduce((sum, [, pct]) => sum + pct / 100, 0)
+    .reduce((sum, pct) => sum + pct[1] / 100, 0)
   const holdings = [...weights.entries()].filter(([t]) => !isCashTicker(t))
-  if (holdings.length === 0) return { basis, asOf, rows: [], cashWeight, unpriced: [] }
+  const empty: PortfolioMovers = {
+    basis, asOf, rows: [], cashWeight, unpriced: [], returnSource: null, returnsAsOf: null,
+  }
+  if (holdings.length === 0) return empty
+
+  // One lookup for the whole book — the classifier columns and the YCharts
+  // returns come from the same row, so asking per holding would be 13 queries
+  // for one answer. Keyed on the weights, not on positions, so a ticker that
+  // appears only in the uploaded file is still resolved.
+  const stored = await fetchStoredSecurityReturns(holdings.map(([symbol]) => symbol))
+  let returnsAsOf: string | null = null
 
   const today = new Date()
   // Buffer the fetch window so a base price exists across weekends/holidays.
@@ -149,41 +224,61 @@ export async function fetchPortfolioMovers(
 
   // A holding that cannot be priced keeps its WEIGHT here rather than being
   // dropped, so the caller can account for it instead of losing it.
+  type Unpriced = { symbol: string; weight: number; reason: UnpricedReason }
   const settled = await Promise.all(
-    holdings.map(async ([symbol, pct]): Promise<HoldingMover | { symbol: string; weight: number }> => {
+    holdings.map(async ([symbol, pct]): Promise<HoldingMover | Unpriced> => {
       const weight = pct / 100
+      const p = meta.get(symbol)
+      const sec = stored.get(symbol)
+      const row = (ret: number, source: ReturnSource): HoldingMover => ({
+        symbol,
+        name: sec?.name ?? p?.name ?? null,
+        numericId: sec?.numericId ?? p?.numericId ?? null,
+        ret,
+        weight,
+        contribution: weight * ret,
+        source,
+      })
+
+      // Funds and ETFs: YCharts owns the figure. No fallback to the price feed,
+      // deliberately — see the note above this function.
+      if (sec?.isFund) {
+        const ret = storedReturnFor(sec, days)
+        if (ret == null) return { symbol, weight, reason: 'no_ycharts_figure' }
+        if (sec.updatedAt && (returnsAsOf == null || sec.updatedAt > returnsAsOf)) {
+          returnsAsOf = sec.updatedAt
+        }
+        return row(ret, 'ycharts')
+      }
+
+      // Stocks, and any symbol with no securities2 row to classify: compute it.
       try {
         const series = await fetchDailyAdjustedSeries(symbol, fromStr)
-        if (series.length === 0) return { symbol, weight }
+        if (series.length === 0) return { symbol, weight, reason: 'no_price_series' }
         const latest = series[series.length - 1].adjClose
         const basePrice = priceOnOrBefore(series, baseStr)
-        if (basePrice == null || basePrice === 0) return { symbol, weight }
-        const ret = latest / basePrice - 1
-        const p = meta.get(symbol)
-        return {
-          symbol,
-          name: p?.name ?? null,
-          numericId: p?.numericId ?? null,
-          ret,
-          weight,
-          contribution: weight * ret,
-        }
+        if (basePrice == null || basePrice === 0) return { symbol, weight, reason: 'no_price_series' }
+        return row(latest / basePrice - 1, 'fmp')
       } catch {
-        return { symbol, weight }
+        return { symbol, weight, reason: 'no_price_series' }
       }
     }),
   )
 
-  const isPriced = (r: HoldingMover | { symbol: string; weight: number }): r is HoldingMover =>
-    'contribution' in r
+  const isPriced = (r: HoldingMover | Unpriced): r is HoldingMover => 'contribution' in r
+
+  const rows = settled.filter(isPriced).sort((a, b) => b.contribution - a.contribution)
+  const kinds = new Set(rows.map((r) => r.source))
 
   return {
     basis,
     asOf,
-    rows: settled.filter(isPriced).sort((a, b) => b.contribution - a.contribution),
+    rows,
     cashWeight,
     unpriced: settled
-      .filter((r): r is { symbol: string; weight: number } => !isPriced(r))
+      .filter((r): r is Unpriced => !isPriced(r))
       .sort((a, b) => b.weight - a.weight),
+    returnSource: kinds.size === 0 ? null : kinds.size > 1 ? 'mixed' : [...kinds][0],
+    returnsAsOf: kinds.has('ycharts') ? returnsAsOf : null,
   }
 }

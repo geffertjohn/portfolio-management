@@ -253,6 +253,63 @@ export function isFundOrEtfSecurity(security: SecurityClassInput): boolean {
   return classifySecurity(security) !== 'stock'
 }
 
+/**
+ * YCharts' own trailing total returns for a set of tickers, with the classifier
+ * columns needed to tell a fund from a stock.
+ *
+ * These columns are loaded by the workbook's `Securities` sheet and YCharts is
+ * the system of record for them, so a fund's return is READ here rather than
+ * recomputed from a price feed. The `_nav` figures are the fund ones; note they
+ * are also populated for stocks by a long-deleted sync and are stale there, so
+ * a caller must gate on `isFund` and never read them for a stock.
+ */
+export interface StoredSecurityReturns {
+  securityId: string
+  name: string | null
+  numericId: number | null
+  isFund: boolean
+  /** Decimal (0.0155 = +1.55%), or null when YCharts carries no figure. */
+  oneMonth: number | null
+  threeMonth: number | null
+  /** Import stamp on the row — the as-of for both figures above. */
+  updatedAt: string | null
+}
+
+/** Keyed by UPPER ticker. Symbols with no `securities2` row are simply absent. */
+export async function fetchStoredSecurityReturns(
+  symbols: string[],
+): Promise<Map<string, StoredSecurityReturns>> {
+  const out = new Map<string, StoredSecurityReturns>()
+  if (symbols.length === 0) return out
+
+  const { data, error } = await supabase
+    .from('securities2')
+    .select(
+      'id, security_id, security_name, detailed_security_type, peer_group_name, fund_company_name, fund_family, expense_ratio_generic, one_month_total_return_nav, three_month_total_return_nav, updated_at',
+    )
+    .in('security_id', symbols)
+  if (error) throw error
+
+  for (const row of data ?? []) {
+    out.set(row.security_id.trim().toUpperCase(), {
+      securityId: row.security_id,
+      name: row.security_name?.trim() || null,
+      numericId: row.id ?? null,
+      isFund: isFundOrEtfSecurity(row),
+      oneMonth: num(row.one_month_total_return_nav),
+      threeMonth: num(row.three_month_total_return_nav),
+      updatedAt: row.updated_at ?? null,
+    })
+  }
+  return out
+}
+
+function num(value: number | string | null): number | null {
+  if (value == null) return null
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
 export async function fetchSecurities(): Promise<Security[]> {
   const { data, error } = await supabase
     .from('securities2')
