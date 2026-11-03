@@ -98,7 +98,7 @@ the drift — is exactly the book it bites.
 
 **Fix:** import `driftBandFor`. Highest-value single change in this report.
 
-### 4. A fund review started from the Review Calendar is written through the stock path `[ ]`
+### 4. A fund review started from the Review Calendar is written through the stock path `[x] DONE 3 Nov`
 
 `pages/ReviewCalendarPage.tsx:194` opens `MarkReviewedModal` without `isFund` or
 `security`; both are optional and default undefined. `SecurityDetailPage` passes both.
@@ -114,6 +114,25 @@ still open.
 **Fix:** for fund rows, navigate to the security page instead of opening a
 half-configured modal, and add `if (isFund && !security) throw` so it cannot recur
 silently.
+
+**Done (PR #67) — but NOT by navigating away.** 42 of the 94 schedule rows are
+funds or ETFs, so sending them to the security page would have taken the
+review-completion workflow off the page whose job it is for nearly half its
+contents. The calendar now **loads the record on demand** (`fetchSecurityById`,
+keyed `QUERY_KEYS.security(id)` so it shares the detail page's cache) and opens
+the real fund modal, evidence PDF and all.
+
+The guard is structural rather than a throw: `isFund` and `security` were two
+props encoding one fact, and they could disagree — so they are now **one required
+prop, `fundSecurity: SecurityDetail | null`**. A caller cannot omit it and inherit
+the stock branch by default, and a fund cannot be reviewed without the record its
+PDF is built from. `uploadFundEvidence`'s `if (!isFund || !security) return null`
+— the line that silently skipped the PDF — is now unreachable by construction.
+The classifier still decides, at the call site.
+
+Verified in the running app, all four combinations: calendar/fund now shows
+Outcome + the scorecard evidence block (it showed Recommendation before),
+calendar/stock and both detail-page paths unchanged, no console errors.
 
 ### 5. The benchmark picker writes nothing `[ ]`
 
