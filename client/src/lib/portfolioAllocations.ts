@@ -285,7 +285,22 @@ export async function syncPositionsFromLatestSnapshot(
  * `securities2`. The history edit still stands; the position is simply not
  * written, and the caller must say so rather than let it pass.
  */
-export type GridEditPositionSync = 'updated' | 'inserted' | 'removed' | 'unknown_security'
+export type GridEditPositionSync =
+  | 'updated' | 'inserted' | 'removed' | 'unknown_security' | 'invalid_weight'
+
+/**
+ * Can this weight be stored as a position?
+ *
+ * `positions.allocation_pct` carries `CHECK (>= 0 AND <= 100)` and
+ * `portfolio_allocations.weight` carries no check at all, so the two tables
+ * disagree about what is writable. A grid edit of `150` lands in history and
+ * then fails on the position — leaving History and Positions saying different
+ * things with nothing on screen, which is the very divergence this path exists
+ * to close. Refuse it here and report it, the way an unknown ticker is refused.
+ */
+export function isStorablePositionWeight(weight: number): boolean {
+  return Number.isFinite(weight) && weight >= 0 && weight <= 100
+}
 
 /**
  * Push one newest-date grid edit through to that security's position.
@@ -310,6 +325,9 @@ export async function syncPositionForGridEdit(
   portfolioName: string, securityId: string, weight: number,
 ): Promise<GridEditPositionSync> {
   const sym = normalizeSymbol(securityId)
+  // Checked BEFORE the zero case, so a negative weight is refused rather than
+  // read as "not held" and silently deleting the position.
+  if (!isStorablePositionWeight(weight)) return 'invalid_weight'
 
   // Zero means "not held" — the same reading the importer takes, which skips
   // zero rows rather than writing a position nobody holds. Hard delete, as

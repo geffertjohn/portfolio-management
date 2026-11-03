@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DERIVED_BLEND_PORTFOLIOS, comparePositionsToSnapshot, driftCount, isCurrentTargetDate,
 } from '../positionsDrift'
+import { isStorablePositionWeight } from '../portfolioAllocations'
 
 /**
  * `positions` and the newest allocation snapshot are meant to be the same
@@ -128,5 +129,32 @@ describe('isCurrentTargetDate', () => {
 
   it('handles a single column', () => {
     expect(isCurrentTargetDate('2026-11-02', ['2026-11-02'])).toBe(true)
+  })
+})
+
+describe('isStorablePositionWeight', () => {
+  /**
+   * The two tables disagree about what is writable: `positions.allocation_pct`
+   * carries CHECK (0..100) and `portfolio_allocations.weight` carries no check
+   * at all. Without this guard a grid edit of 150 lands in history and then
+   * throws on the position — History and Positions saying different things,
+   * which is the divergence this whole path exists to close.
+   */
+  it('accepts the range positions can actually store', () => {
+    for (const w of [0, 0.01, 4.5, 99.99, 100]) {
+      expect(isStorablePositionWeight(w), String(w)).toBe(true)
+    }
+  })
+
+  it('refuses what the CHECK constraint would reject', () => {
+    for (const w of [-0.01, -5, 100.01, 150]) {
+      expect(isStorablePositionWeight(w), String(w)).toBe(false)
+    }
+  })
+
+  it('refuses a non-number rather than letting it reach the database', () => {
+    for (const w of [NaN, Infinity, -Infinity]) {
+      expect(isStorablePositionWeight(w), String(w)).toBe(false)
+    }
   })
 })

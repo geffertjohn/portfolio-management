@@ -13,16 +13,27 @@ import { ImportAllocationsModal } from './ImportAllocationsModal'
 
 const fmtW = (w: number) => (w === 0 ? '' : w.toFixed(2))
 
-/** What the edit did to Positions — said out loud, because it writes to the DB. */
-function noteFor(sym: string, result: GridEditPositionSync): string {
+interface SyncNote { text: string; tone: 'info' | 'warn' }
+
+/**
+ * What the edit did to Positions — said out loud, because it writes to the DB.
+ *
+ * The two refusals are warnings, not confirmations: History moved and Positions
+ * did not, so the advisor has to know. Neither is a failure — the history edit
+ * is valid in both cases.
+ */
+function noteFor(sym: string, result: GridEditPositionSync): SyncNote {
   switch (result) {
-    case 'inserted': return `${sym} added to Positions.`
-    case 'updated':  return `${sym} updated in Positions.`
-    case 'removed':  return `${sym} removed from Positions.`
-    // Not a failure — the history edit stands. `positions.security_id` has an
-    // FK to securities2 and this grid deliberately stages symbols that do not.
+    case 'inserted': return { tone: 'info', text: `${sym} added to Positions.` }
+    case 'updated':  return { tone: 'info', text: `${sym} updated in Positions.` }
+    case 'removed':  return { tone: 'info', text: `${sym} removed from Positions.` }
+    // `positions.security_id` has an FK to securities2; this grid deliberately
+    // stages symbols that do not.
     case 'unknown_security':
-      return `History updated. ${sym} is not in the securities list, so Positions was left unchanged.`
+      return { tone: 'warn', text: `History updated. ${sym} is not in the securities list, so Positions was left unchanged.` }
+    // `positions.allocation_pct` is constrained to 0–100; the history column is not.
+    case 'invalid_weight':
+      return { tone: 'warn', text: `History updated. A position weight must be between 0 and 100, so Positions was left unchanged for ${sym}.` }
   }
 }
 
@@ -31,7 +42,7 @@ export function AllocationHistoryPanel({ portfolioName }: { portfolioName: strin
   const [importing, setImporting] = useState(false)
   const [newDate, setNewDate] = useState('')
   const [newTicker, setNewTicker] = useState('')
-  const [syncNote, setSyncNote] = useState<string | null>(null)
+  const [syncNote, setSyncNote] = useState<SyncNote | null>(null)
 
   const { data: grid, isLoading, error } = useQuery({
     queryKey: QUERY_KEYS.allocationGrid(portfolioName),
@@ -90,6 +101,13 @@ export function AllocationHistoryPanel({ portfolioName }: { portfolioName: strin
       setSyncNote(synced ? noteFor(synced.sym, synced.result) : null)
       invalidate()
     },
+    // A write that fails must say so. History may already have moved, so a
+    // swallowed error is the two tables parting company in silence — exactly
+    // what this path exists to prevent.
+    onError: (e) => {
+      setSyncNote({ tone: 'warn', text: `Edit failed: ${e instanceof Error ? e.message : 'unknown error'}` })
+      invalidate()
+    },
   })
   /**
    * Adding or deleting a date does NOT re-point positions, and that is the
@@ -143,8 +161,11 @@ export function AllocationHistoryPanel({ portfolioName }: { portfolioName: strin
       {/* What the last cell edit did to Positions. It writes to the database,
           so it says so rather than leaving the advisor to find out later. */}
       {syncNote && (
-        <p className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-          {syncNote}
+        <p className={`mb-3 rounded-md border px-3 py-2 text-xs ${
+          syncNote.tone === 'warn'
+            ? 'border-amber-200 bg-amber-50 text-amber-900'
+            : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
+          {syncNote.text}
         </p>
       )}
 
