@@ -11,12 +11,14 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fmtDecimalPct, EMPTY, stripTotalReturn } from '@/lib/formatters'
-import type { SecurityDetail } from '@/lib/securities'
-import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions } from '@/lib/benchmarks'
+import { saveSecurityBenchmarks, type SecurityDetail } from '@/lib/securities'
+import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, type BenchmarkOption } from '@/lib/benchmarks'
 import { MetricCard } from './MonitoringPanelShared'
+import { BenchmarkPickerModal } from './BenchmarkPickerModal'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { announceBenchmarkChange, onBenchmarkChange } from '@/lib/benchmarkSelection'
 import { fetchRatiosTTM, fetchAnnualOperatingMargins, fetchFcfMargins, fetchCagr3y, fetchTtmGrowth } from '@/lib/fmpRatios'
 
 /**
@@ -82,10 +84,52 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
   const revGrowthTtm = ttmGrowth?.revenueGrowth ?? null
   const epsGrowthTtm = ttmGrowth?.epsGrowth ?? null
 
+  const queryClient = useQueryClient()
   const [ids, setIds] = useState({
     bench1Id: security.preferred_benchmark1_id ?? null,
     bench2Id: security.preferred_benchmark2_id ?? null,
   })
+  const [picker, setPicker] = useState<1 | 2 | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  /**
+   * These two columns are the comparators for all four growth cards below, the
+   * Alternatives tables, and the at-risk committee's grading — and from 14 Oct
+   * 2026 nothing in the app could change them. `StockReturnTable` carried the
+   * only picker, and the commit that made Overview the ownership case removed
+   * its last host with a real `securities2.id`; the one surviving renderer is
+   * the Research page, whose synthetic `id: 0` is what (correctly) suppresses
+   * the write there. So the control belongs here, beside the cards it grades.
+   *
+   * It matters most for a stock added from here on: `createSecurityBySymbol`
+   * writes no benchmarks, and with both null every card falls back to
+   * `neutral={0}`, so any positive growth reads green and the committee can
+   * only ever flag the name on its margins.
+   */
+  const saveMut = useMutation({
+    mutationFn: (next: { bench1Id: number | null; bench2Id: number | null }) =>
+      saveSecurityBenchmarks(security.id, next.bench1Id, next.bench2Id),
+    onSuccess: (_r, next) => {
+      setSaveError(null)
+      // The stored row feeds the header and the Alternatives tables.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.security(security.id) })
+      announceBenchmarkChange({ securityId: security.id, ...next })
+    },
+    // Never swallowed. This writes a governed number that the committee reads;
+    // a selection that looks applied but was not is worse than a visible error.
+    onError: (e) => setSaveError(e instanceof Error ? e.message : 'Could not save the benchmark'),
+  })
+
+  /**
+   * Apply a selection. The Research page builds a synthetic security with
+   * `id: 0` and states that nothing is saved, so there the change is session
+   * only — announced to the sibling panels, never persisted.
+   */
+  function applyBenchmarks(next: { bench1Id: number | null; bench2Id: number | null }) {
+    setIds(next)
+    if (security.id) saveMut.mutate(next)
+    else announceBenchmarkChange({ securityId: security.id, ...next })
+  }
 
   const { data: allBenchmarks = [] } = useQuery({
     queryKey: QUERY_KEYS.benchmarks,
@@ -105,17 +149,19 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
     })
   }, [security.id, security.preferred_benchmark1_id, security.preferred_benchmark2_id])
 
-  // Live-sync when StockReturnTable changes the selection
-  useEffect(() => {
-    function handleChange(e: Event) {
-      const detail = (e as CustomEvent<{ securityId: number; bench1Id: number | null; bench2Id: number | null }>).detail
-      if (detail.securityId === security.id) {
-        setIds({ bench1Id: detail.bench1Id, bench2Id: detail.bench2Id })
-      }
-    }
-    window.addEventListener('benchmark-changed', handleChange)
-    return () => window.removeEventListener('benchmark-changed', handleChange)
-  }, [security.id])
+  // Live-sync when a sibling view (StockReturnTable, on the Research page)
+  // changes the selection. Our own announcements land here too and are a no-op,
+  // since the state they describe is the state we just set.
+  useEffect(
+    () => onBenchmarkChange((sel) => {
+      if (sel.securityId !== security.id) return
+      setIds((cur) =>
+        sel.bench1Id === cur.bench1Id && sel.bench2Id === cur.bench2Id
+          ? cur
+          : { bench1Id: sel.bench1Id, bench2Id: sel.bench2Id })
+    }),
+    [security.id],
+  )
 
   const bench1 = allBenchmarks.find((b) => b.id === ids.bench1Id) ?? null
   // bench2 for stocks comes from sector_benchmarks
@@ -131,7 +177,65 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
   const bench1Label = bench1 ? stripTotalReturn(bench1.category_benchmark ?? bench1.ticker) : 'Benchmark'
   const bench2Label = bench2 ? stripTotalReturn(bench2.sector ?? bench2.ticker) : 'Peer Group'
 
+  const pickSlot = (slot: 1 | 2) => (bench: BenchmarkOption) =>
+    applyBenchmarks(slot === 1 ? { ...ids, bench1Id: bench.id } : { ...ids, bench2Id: bench.id })
+  const clearSlot = (slot: 1 | 2) => () =>
+    applyBenchmarks(slot === 1 ? { ...ids, bench1Id: null } : { ...ids, bench2Id: null })
+
+  /** One comparator, named and editable. Unset reads as a gap, not a label. */
+  const slotButton = (slot: 1 | 2, label: string, set: boolean) => (
+    <button
+      type="button"
+      onClick={() => setPicker(slot)}
+      title={`Choose the ${slot === 1 ? 'category benchmark' : 'sector benchmark'} these cards are graded against`}
+      className={`rounded border px-2 py-0.5 font-medium ${
+        set
+          ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+          : 'border-dashed border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-500'
+      }`}
+    >
+      {set ? label : `Set ${slot === 1 ? 'benchmark' : 'sector'}`}
+    </button>
+  )
+
   return (
+    <div>
+      {/* Graded-against row. The four growth cards compare TTM and 3Y against
+          these two; the two margin cards use the security's own prior years and
+          are unaffected, which is why an unset comparator is amber rather than
+          an error. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+        <span>Graded against</span>
+        {slotButton(1, bench1Label, bench1 != null)}
+        <span className="text-gray-300">·</span>
+        {slotButton(2, bench2Label, bench2 != null)}
+        {saveMut.isPending && <span className="text-gray-400">Saving…</span>}
+        {!security.id && (
+          <span className="text-gray-400">· this session only — nothing is saved here</span>
+        )}
+        {(bench1 == null || bench2 == null) && security.id !== 0 && (
+          <span className="text-amber-700">
+            · an unset comparator grades every growth card against zero, so any growth reads green
+          </span>
+        )}
+      </div>
+      {saveError && (
+        <p className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {saveError}
+        </p>
+      )}
+
+      {picker != null && (
+        <BenchmarkPickerModal
+          slot={picker}
+          source={picker === 2 ? 'sector_benchmarks' : 'category_benchmarks'}
+          currentId={picker === 1 ? ids.bench1Id : ids.bench2Id}
+          onSelect={pickSlot(picker)}
+          onClear={clearSlot(picker)}
+          onClose={() => setPicker(null)}
+        />
+      )}
+
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
       <MetricCard
         title={<>Operating Margin <span className="font-bold text-gray-700">TTM</span></>}
@@ -238,6 +342,7 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
           { label: bench2Label, value: bench2EpsGrowth3y != null ? fmtDecimalPct(bench2EpsGrowth3y) : '—' },
         ]}
       />
+    </div>
     </div>
   )
 }

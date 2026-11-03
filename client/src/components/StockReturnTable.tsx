@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fmtDecimalPct, stripTotalReturn } from '@/lib/formatters'
 import type { SecurityDetail } from '@/lib/securities'
 import { saveSecurityBenchmarks } from '@/lib/securities'
+import { announceBenchmarkChange } from '@/lib/benchmarkSelection'
 import { BenchmarkPickerModal } from './BenchmarkPickerModal'
 import { fetchBenchmarkOptions, fetchSectorBenchmarkOptions, resolveEtfProxy, type BenchmarkOption } from '@/lib/benchmarks'
 import { fetchStockReturns, type TrailingReturns } from '@/lib/fmpMarket'
@@ -79,6 +80,7 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
   const [bench1Id, setBench1Id] = useState<number | null>(security.preferred_benchmark1_id ?? null)
   const [bench2Id, setBench2Id] = useState<number | null>(security.preferred_benchmark2_id ?? null)
   const [pickerOpen, setPickerOpen] = useState<1 | 2 | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Re-sync only when navigating to a *different* security (by stable id).
   // Depending on the editable benchmark fields would let a background refetch
@@ -140,16 +142,24 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
     return p.benchKey ? fmtDecimalPct(benchVal(bench, p.benchKey)) : '—'
   }
 
+  /**
+   * Persisting and announcing are SEPARATE decisions, and conflating them is
+   * what left the sibling listener permanently dead: both sat behind
+   * `if (security.id)`, and this table's only renderer is the Research page,
+   * whose synthetic security has `id: 0`.
+   *
+   * The announcement now always fires, so the scorecard on the same page
+   * follows the selection. The write stays guarded, because that page saves
+   * nothing by design — and the stock detail page carries its own, persisting
+   * control beside the cards these benchmarks grade.
+   */
   function applyBenchmarks(next1: number | null, next2: number | null) {
     setBench1Id(next1)
     setBench2Id(next2)
+    announceBenchmarkChange({ securityId: security.id, bench1Id: next1, bench2Id: next2 })
     if (security.id) {
-      saveSecurityBenchmarks(security.id, next1, next2).catch(() => {})
-      window.dispatchEvent(
-        new CustomEvent('benchmark-changed', {
-          detail: { securityId: security.id, bench1Id: next1, bench2Id: next2 },
-        })
-      )
+      saveSecurityBenchmarks(security.id, next1, next2)
+        .catch((e) => setSaveError(e instanceof Error ? e.message : 'Could not save the benchmark'))
     }
   }
 
@@ -171,6 +181,12 @@ export function StockReturnTable({ security }: { security: SecurityDetail }) {
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-600">
         Total Performance
       </h3>
+
+      {saveError && (
+        <p className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {saveError}
+        </p>
+      )}
 
       {empty ? (
         <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4 text-sm text-gray-600">

@@ -355,6 +355,38 @@ The primary display primitive for numeric metrics. Use `benchmarkValue`, `rawVal
 
 The stock Scorecard cards (Operating Margin, FCF Margin, Revenue/EPS Growth TTM, Revenue/EPS Growth 3Y) live in `StockScorecardPanels.tsx` and pull derived metrics from `lib/fmpRatios.ts`. When showing a TTM headline plus prior fiscal-year rows, use `priorFullYears()` to drop the latest annual year if it equals the TTM (a fiscal year that just closed is fully captured by the TTM window — otherwise the first row duplicates the headline). Benchmark/peer comparison rows strip the "Total Return" suffix via `stripTotalReturn()` from `lib/formatters`.
 
+### A stock's preferred benchmarks are set on the Monitor tab
+
+`securities2.preferred_benchmark1_id` (→ `category_benchmarks`) and
+`preferred_benchmark2_id` (→ `sector_benchmarks`) are the comparators for the
+**four growth scorecard cards**, the Alternatives tables, `ReturnRanksTable`,
+and the **at-risk committee's grading**. The two MARGIN cards do not use them —
+they grade against the security's own prior fiscal years — which is why an unset
+comparator degrades rather than breaks.
+
+**The picker lives in `StockScorecardPanels`, directly above the cards it
+grades** (a "Graded against" row, Nov 2026). It had no home at all between
+14 Oct and then: `StockReturnTable` carried the only picker, and `77f89ef`
+("the stock Overview tab is the thesis") removed its last host with a real
+`securities2.id`. The only surviving renderer is `ResearchPage`, whose synthetic
+security has `id: 0` — so `if (security.id)` suppressed the write, correctly for
+that page and fatally for everything else. **55 of 56 stocks carry both
+benchmarks** (the 56th is `$Cash`); they were set while the old picker worked.
+
+- **Persisting and announcing are SEPARATE decisions.** Both used to sit behind
+  the same `if (security.id)`, which is why `StockScorecardPanels`' listener
+  never fired once. The announcement now always goes out — so the Research
+  page's two panels agree with each other — while the write stays guarded, since
+  that page states it saves nothing.
+- **A new stock is the live risk.** `createSecurityBySymbol` writes no
+  benchmarks, and with both null every card falls back to `neutral={0}`, so any
+  positive growth reads green and the committee can only ever flag the name on
+  its margins. The control shows an amber prompt when either slot is unset.
+- **The save is never swallowed.** It writes a governed number the committee
+  reads; a selection that looks applied but was not is worse than a visible
+  error. (`.catch(() => {})` was the old behaviour, on a path that could not
+  fire.) On success it invalidates `QUERY_KEYS.security(id)`.
+
 ### Benchmark data
 
 There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`, `peer_group_benchmarks`, `model_portfolio_benchmarks`. The legacy standalone `benchmarks` table was **dropped** (Jun 2026) — it was unused; do not reference it.
@@ -367,7 +399,7 @@ There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`,
 
 ### LocalStorage persistence for UI state
 
-Benchmark selections in return tables are persisted to localStorage with key `fund_benchmarks_${securityId}`. Changes dispatch a `benchmark-changed` CustomEvent so sibling components stay in sync.
+Benchmark selections in return tables are persisted to localStorage with key `fund_benchmarks_${securityId}`. Changes dispatch a `benchmark-changed` CustomEvent so sibling components stay in sync — **declared once in `lib/benchmarkSelection.ts`** (`announceBenchmarkChange` / `onBenchmarkChange`), not inline at each end. It was inline in both, which is how the listener came to be permanently dead (below).
 
 ---
 

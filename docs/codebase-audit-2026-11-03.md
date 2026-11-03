@@ -134,7 +134,7 @@ Verified in the running app, all four combinations: calendar/fund now shows
 Outcome + the scorecard evidence block (it showed Recommendation before),
 calendar/stock and both detail-page paths unchanged, no console errors.
 
-### 5. The benchmark picker writes nothing `[ ]`
+### 5. The benchmark picker writes nothing `[x] DONE 3 Nov`
 
 `components/StockReturnTable.tsx:147` guards `saveSecurityBenchmarks` on
 `if (security.id)`, and its only renderer is `ResearchPage`, which builds a synthetic
@@ -148,6 +148,41 @@ can now only be changed in the database.
 
 **Fix:** give the picker a real `security.id` on the detail page and invalidate
 `QUERY_KEYS.security(id)`, or make it visibly session-only. Stop swallowing the catch.
+
+**Done (PR #71) — but not by patching the id, because the premise was wrong in
+two ways.** `StockReturnTable` is NOT dead code: `ResearchPage` is reachable
+from the top-level Research nav link and from Watchlist cards. And on that page
+`if (security.id)` is not a bug — the page states "nothing is saved" and the
+synthetic `id: 0` is what implements it.
+
+The actual defect is a dated regression. `git log -S` pins it to **`77f89ef`,
+14 Oct 2026** ("the stock Overview tab is the thesis"), which removed
+`StockReturnTable` from `SecurityDetailPage` — its only host with a real id. The
+picker did not break; its home was deleted, and the one surviving renderer is
+the place where persisting would be wrong. So the control now lives in
+`StockScorecardPanels`, above the cards these benchmarks actually grade.
+
+**Severity, corrected:** current grading is NOT broken. 55 of 56 stocks carry
+both benchmarks and the 56th is `$Cash`, so real-stock coverage is 100% — they
+were set while the old picker worked. The damage is **latent and lands on the
+next stock added**: `createSecurityBySymbol` writes no benchmarks, and with both
+null all six cards fall back to `neutral={0}`, so the four growth cards read
+green for any positive growth and the committee could only ever flag that name
+on its two margin cards.
+
+**The dead listener is fixed by separating two decisions that were conflated.**
+Persisting and announcing both sat behind the same guard. The announcement now
+always fires (so the Research page's two panels agree), while the write stays
+guarded. The event is declared once in `lib/benchmarkSelection.ts` rather than
+inline at both ends — being inline in both is how nothing noticed. The catch no
+longer swallows.
+
+**Verified live:** the control renders on Monitor with AAPL's real comparators
+("Russell 1000 Growth · Technology") and opens the picker; on `/research/AAPL`
+it reads "this session only — nothing is saved here", and selecting a benchmark
+in Total Performance now updates the scorecard row — the listener firing for the
+first time. AAPL's stored row was unchanged throughout. The save path itself was
+not executed against the live book, for the same reason as §9.
 
 ### 6. A stock's review history is recorded but rendered nowhere `[ ]`
 
