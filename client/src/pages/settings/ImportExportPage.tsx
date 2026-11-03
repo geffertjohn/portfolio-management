@@ -9,12 +9,11 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { uploadYchartBenchmarks } from '@/lib/ychartBenchmarksUpload'
 import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
-import { importAllocationSnapshots, parseYchartsDynamic, syncPositionsFromLatestSnapshot } from '@/lib/portfolioAllocations'
+import { applyAllocationImport, parseAllocationFile } from '@/lib/allocationImport'
 import {
   fetchLatestImportRuns, fmtImportDate, recordImportRuns,
   type ImportRunInput, type ImportSource,
 } from '@/lib/importRuns'
-import * as XLSX from 'xlsx'
 import type { Portfolio } from '@/types/portfolio'
 
 // ── CSV helpers ─────────────────────────────────────────────────────────────
@@ -276,34 +275,14 @@ export function ImportExportPage() {
               </select>
             }
             run={async (file) => {
-              const parsed = parseYchartsDynamic(await firstSheetRows(file))
-              const r = await importAllocationSnapshots(targetPortfolio, parsed, true)
-              // The newest snapshot IS the current target, so positions follows the
-              // history rather than being maintained separately and drifting from it.
-              const sync = await syncPositionsFromLatestSnapshot(targetPortfolio, parsed)
+              // Shared with the Allocation tab's own import — one path, so the
+              // two surfaces cannot drift (see lib/allocationImport.ts).
+              const parsed = await parseAllocationFile(file)
+              const res = await applyAllocationImport(targetPortfolio, parsed)
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allocationGrid(targetPortfolio) })
               await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.positions(targetPortfolio) })
-
-              const parts = [`Imported ${r.inserted} weights across ${r.dates} dates into ${targetPortfolio}`]
-              const errors: string[] = []
-              if (sync && sync.unknownSecurities.length > 0) {
-                // Reported, not thrown: the history landed and is worth keeping.
-                const msg =
-                  `positions NOT updated — ${sync.unknownSecurities.length} ticker(s) in the ` +
-                  `${sync.effectiveDate} snapshot are not in securities2: ${sync.unknownSecurities.join(', ')}. ` +
-                  `Add them, then re-import.`
-                parts.push(msg)
-                errors.push(msg)
-              } else if (sync) {
-                parts.push(
-                  `positions set from ${sync.effectiveDate} (${sync.added} added, ` +
-                  `${sync.updated} updated, ${sync.removed} removed)`,
-                )
-              }
-              return {
-                runs: [{ source: 'ycharts_allocations', rows: r.inserted, errors }],
-                message: `${parts.join(' · ')}.`,
-              }
+              await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allocationChanges(targetPortfolio) })
+              return { runs: res.runs, message: res.message }
             }}
           />
         </div>
@@ -455,9 +434,3 @@ const SELECT_CLS =
   'rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500'
 
 /** Reads the first worksheet of a workbook as a raw row matrix. */
-async function firstSheetRows(file: File): Promise<unknown[][]> {
-  const buf = await file.arrayBuffer()
-  const wb = XLSX.read(buf, { type: 'array', cellDates: true })
-  const sheet = wb.Sheets[wb.SheetNames[0]]
-  return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, blankrows: false })
-}

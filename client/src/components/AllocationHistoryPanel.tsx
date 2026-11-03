@@ -5,11 +5,13 @@ import {
   normalizeSymbol,
 } from '@/lib/portfolioAllocations'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { ImportAllocationsModal } from './ImportAllocationsModal'
 
 const fmtW = (w: number) => (w === 0 ? '' : w.toFixed(2))
 
 export function AllocationHistoryPanel({ portfolioName }: { portfolioName: string }) {
   const queryClient = useQueryClient()
+  const [importing, setImporting] = useState(false)
   const [newDate, setNewDate] = useState('')
   const [newTicker, setNewTicker] = useState('')
 
@@ -57,8 +59,16 @@ export function AllocationHistoryPanel({ portfolioName }: { portfolioName: strin
             className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500" />
           <button type="button" disabled={!newDate || addDateMut.isPending} onClick={() => addDateMut.mutate(newDate)}
             className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">+ Date</button>
+          {/* An explicit, labelled DATA import — not a document upload. It
+              previews before it writes, because it replaces every date below
+              and re-points the Positions tab. */}
+          <button type="button" onClick={() => setImporting(true)}
+            className="rounded-md bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-gray-800">Import allocations</button>
         </div>
       </div>
+      {importing && (
+        <ImportAllocationsModal portfolioName={portfolioName} onClose={() => { setImporting(false); invalidate() }} />
+      )}
 
       {dates.length === 0 ? (
         <p className="text-sm text-gray-400">No allocation snapshots yet. Import a YCharts file from Settings → Import / Export, or add a date.</p>
