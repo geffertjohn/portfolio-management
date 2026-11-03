@@ -278,6 +278,95 @@ export async function syncPositionsFromLatestSnapshot(
 }
 
 /**
+ * The result of pushing ONE grid cell through to `positions`.
+ *
+ * `unknown_security` is a refusal, not a failure: `portfolio_allocations` has no
+ * FK and stages any symbol, while `positions.security_id` references
+ * `securities2`. The history edit still stands; the position is simply not
+ * written, and the caller must say so rather than let it pass.
+ */
+export type GridEditPositionSync =
+  | 'updated' | 'inserted' | 'removed' | 'unknown_security' | 'invalid_weight'
+
+/**
+ * Can this weight be stored as a position?
+ *
+ * `positions.allocation_pct` carries `CHECK (>= 0 AND <= 100)` and
+ * `portfolio_allocations.weight` carries no check at all, so the two tables
+ * disagree about what is writable. A grid edit of `150` lands in history and
+ * then fails on the position — leaving History and Positions saying different
+ * things with nothing on screen, which is the very divergence this path exists
+ * to close. Refuse it here and report it, the way an unknown ticker is refused.
+ */
+export function isStorablePositionWeight(weight: number): boolean {
+  return Number.isFinite(weight) && weight >= 0 && weight <= 100
+}
+
+/**
+ * Push one newest-date grid edit through to that security's position.
+ *
+ * `positions` IS the newest snapshot, but only the import path kept that true —
+ * a hand edit changed history and left positions stale in the database, so the
+ * Positions and History sub-tabs disagreed with nothing saying why.
+ *
+ * **Targeted on purpose: exactly the one holding the advisor edited.** The
+ * wholesale `syncPositionsFromLatestSnapshot` would be wrong here. It deletes
+ * every position absent from the snapshot, and on the live book two portfolios
+ * would lose rows to that — Equity Income & Core Growth, whose positions are
+ * COMPUTED from its two parents, and ETF Conservative, whose newest snapshot is
+ * sixteen months older than its positions. Editing one cell does not authorise
+ * rewriting a book. The remaining divergence is reported by
+ * `comparePositionsToSnapshot` instead of being silently resolved.
+ *
+ * Per-position settings survive: an existing row has only its weight updated,
+ * so hand-set limits and drift threshold are kept.
+ */
+export async function syncPositionForGridEdit(
+  portfolioName: string, securityId: string, weight: number,
+): Promise<GridEditPositionSync> {
+  const sym = normalizeSymbol(securityId)
+  // Checked BEFORE the zero case, so a negative weight is refused rather than
+  // read as "not held" and silently deleting the position.
+  if (!isStorablePositionWeight(weight)) return 'invalid_weight'
+
+  // Zero means "not held" — the same reading the importer takes, which skips
+  // zero rows rather than writing a position nobody holds. Hard delete, as
+  // `syncPositionsFromLatestSnapshot` does for a holding that left the snapshot.
+  if (weight === 0) {
+    const { error } = await supabase
+      .from('positions').delete().eq('portfolio_name', portfolioName).eq('security_id', sym)
+    if (error) throw error
+    return 'removed'
+  }
+
+  const { data: known, error: kErr } = await supabase
+    .from('securities2').select('security_id').eq('security_id', sym).maybeSingle()
+  if (kErr) throw kErr
+  if (!known) return 'unknown_security'
+
+  // Read through a soft delete: the PK is (portfolio_name, security_id), so a
+  // row left with `deleted_at` set would make an insert collide.
+  const { data: existing, error: eErr } = await supabase
+    .from('positions').select('security_id')
+    .eq('portfolio_name', portfolioName).eq('security_id', sym).maybeSingle()
+  if (eErr) throw eErr
+
+  if (existing) {
+    const { error } = await supabase
+      .from('positions')
+      .update({ allocation_pct: weight, deleted_at: null, updated_at: new Date().toISOString() })
+      .eq('portfolio_name', portfolioName).eq('security_id', sym)
+    if (error) throw error
+    return 'updated'
+  }
+
+  const { error } = await supabase
+    .from('positions').insert({ portfolio_name: portfolioName, security_id: sym, allocation_pct: weight })
+  if (error) throw error
+  return 'inserted'
+}
+
+/**
  * Parse a YCharts dynamic source file. The export is the **long** format —
  * columns `Date · Symbol · Target Weight`, one row per holding per date (weights
  * in decimal, e.g. 0.075). Multiple rows share a date; we pivot to dated snapshots.

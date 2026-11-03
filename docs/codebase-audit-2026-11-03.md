@@ -189,7 +189,7 @@ says otherwise.
 
 **Fix:** add `tools:` frontmatter to each agent (preferred), or correct both lines.
 
-### 9. A grid edit leaves the Change Log and Positions stale — in cache *and* in the DB `[ ]`
+### 9. A grid edit leaves the Change Log and Positions stale — in cache *and* in the DB `[x] DONE 3 Nov`
 
 `AllocationHistoryPanel.tsx:23` invalidates `allocationGrid` and a dead key, but not
 `allocationChanges` or `positions`. The Change Log's own docstring says it is derived
@@ -204,6 +204,35 @@ of the import path only; the manual path is the hole.
 
 **Fix:** add both keys to `invalidate()`, and decide whether a grid edit on the newest
 date should re-sync positions.
+
+**Done (PR #69).** Cache: `allocationChanges` and `positions` added;
+`portfolioPeriodReturns` removed, since it is a dead key with no reader left
+anywhere after the performance engine was deleted in Sep 2026.
+
+**On the second half the answer is "yes, but targeted" — a wholesale re-sync
+would be destructive, and the live data says so.** Querying all 19 portfolios
+before writing any code: **Equity Income & Core Growth** would lose **25 of its
+80 position rows** (it is a derived blend — positions computed from its two
+parents, so its own history is not the authority), and **ETF Conservative**
+would be re-pointed to a snapshot sixteen months older than its positions,
+deleting 7 rows, adding 5 and changing 3 weights — quietly reverting a live book
+to a 2025 lineup. So `syncPositionForGridEdit` writes **one holding, on the
+newest column only**, mirroring exactly the edit made. Adding or deleting a date
+writes nothing.
+
+The gap that leaves is **reported rather than resolved**: `lib/positionsDrift.ts`
+drives an amber banner naming what differs and which tickers, with derived blends
+exempt. Both divergences above are now visible on the History sub-tab; neither
+was before.
+
+**Verified live for the read half** — ETF Conservative's banner matches the SQL
+exactly (5 missing, 7 extra, 3 reweighted, tickers named), Foundation
+Conservative shows none, EI&CG is exempt, no console errors. **The write half
+was NOT executed against the live book**: doing so means mutating real target
+allocations, the sandbox blocked it, and that is the right call to leave to the
+advisor. It is typechecked and reviewed, and the two rules most likely to be
+wrong — which column counts, and what counts as drift — are pure and unit-tested
+(15 new tests, 162 total).
 
 ### 10. `next_review_at` renders a day early on the security page — gotcha 24, recurred `[ ]`
 
