@@ -200,7 +200,8 @@ was written and are not rewritten.
    **One entry per portfolio holding the security** — add/trim is an allocation act, and the same print can mean different things at different weights:
 
    ```sql
-   select portfolio_name, allocation_pct from positions where security_id = 'TICKER';
+   select portfolio_name, allocation_pct from positions
+    where security_id = 'TICKER' and deleted_at is null;
    ```
 
    ```json

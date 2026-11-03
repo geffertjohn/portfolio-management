@@ -57,7 +57,7 @@ const FMP_NOTE =
 // .claude/agents/{research-analyst,devils-advocate}.md.
 const TIPRANKS_NOTE =
   ' Also load the tipranks tool via ToolSearch for whole-street coverage: tipranks-symbol-summary ' +
-  '(buy/hold/sell, upgrades vs downgrades, target beat rate, average return) and tipranks-pit-by-symbol ' +
+  '(buy/hold/sell, upgrades vs downgrades, target beat rate, average return) and tipranks-pit-symbol ' +
   '(every covering analyst with their hit rate ON THIS NAME). WEIGHT OPINIONS BY TRACK RECORD, not head ' +
   'count — a highly ranked analyst with a strong hit rate on this stock outranks a consensus of unrated ' +
   'ones. Suppress any accuracy figure with fewer than 10 resolved targets and report the count instead. ' +

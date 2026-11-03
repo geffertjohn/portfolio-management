@@ -2648,6 +2648,10 @@ CREATE UNIQUE INDEX "research_reports_one_post_per_parent" ON "public"."research
 
 
 
+CREATE UNIQUE INDEX "research_reports_one_pre_per_period" ON "public"."research_reports" USING "btree" ("security_id", "fiscal_year", "quarter") WHERE (("report_type" = 'pre_earnings'::"text") AND ("deleted_at" IS NULL) AND ("fiscal_year" IS NOT NULL) AND ("quarter" IS NOT NULL));
+
+
+
 CREATE INDEX "research_reports_parent_idx" ON "public"."research_reports" USING "btree" ("parent_report_id") WHERE ("parent_report_id" IS NOT NULL);
 
 
