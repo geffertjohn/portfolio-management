@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   fetchPortfolioMovers, type HoldingMover, type PortfolioMovers,
 } from '@/lib/portfolioPerformance'
+import type { UnpricedReason } from '@/lib/portfolioPerformance'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fmtSignedPct, fmtDecimalPct } from '@/lib/formatters'
 import { formatDate } from '@/lib/fundFormat'
@@ -70,6 +71,16 @@ function MoverList({ title, rows }: { title: string; rows: HoldingMover[] }) {
  * because on a book with unpriced holdings it is emphatically not the
  * portfolio's return — Hybrid Conservative prices 42% of itself.
  */
+/**
+ * The two ways a holding can carry no return, worded so the reader knows who
+ * owns the gap. A missing YCharts figure is a workbook problem and is fixable
+ * at the source; a missing price series is a feed coverage limit and is not.
+ */
+const GAPS: [UnpricedReason, string][] = [
+  ['no_ycharts_figure', 'No YCharts figure for this window'],
+  ['no_price_series', 'No price series from FMP'],
+]
+
 function Reconciliation({ data }: { data: PortfolioMovers }) {
   const priced = data.rows.reduce((sum, r) => sum + r.weight, 0)
   const unpricedWeight = data.unpriced.reduce((sum, r) => sum + r.weight, 0)
@@ -90,10 +101,20 @@ function Reconciliation({ data }: { data: PortfolioMovers }) {
         </p>
       )}
       {data.unpriced.length > 0 && (
-        <p className="mt-0.5 text-amber-700">
-          Not priced, contribution unknown — {fmtDecimalPct(unpricedWeight)} of the book:{' '}
-          {data.unpriced.map((u) => `${u.symbol} ${fmtDecimalPct(u.weight)}`).join(', ')}
-        </p>
+        <>
+          <p className="mt-0.5 text-amber-700">
+            No return available, contribution unknown — {fmtDecimalPct(unpricedWeight)} of the book
+          </p>
+          {GAPS.map(([reason, label]) => {
+            const rows = data.unpriced.filter((u) => u.reason === reason)
+            if (rows.length === 0) return null
+            return (
+              <p key={reason} className="mt-0.5 pl-2 text-amber-700">
+                {label}: {rows.map((u) => `${u.symbol} ${fmtDecimalPct(u.weight)}`).join(', ')}
+              </p>
+            )
+          })}
+        </>
       )}
     </div>
   )
@@ -170,11 +191,26 @@ function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: 
       ? `actual holdings uploaded ${formatDate(data.asOf)}`
       : 'position targets — no allocation file uploaded'
 
+  // Name the feed too. These are a fund's own published total return and a
+  // ratio of two stock closes — comparable within a list, not across two, so a
+  // reader comparing this block against YCharts needs to know which they have.
+  const sourceNote = data == null || data.returnSource == null ? null
+    : data.returnSource === 'ycharts'
+      ? `YCharts total return${data.returnsAsOf ? ` as of ${formatDate(data.returnsAsOf)}` : ''}`
+      : data.returnSource === 'fmp'
+        ? 'FMP dividend-adjusted closes'
+        : 'MIXED return sources — fund figures are calendar-period, stock figures rolling'
+
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-2">
         <p className="text-sm font-semibold text-gray-700">{label}</p>
         {basisNote && <span className="text-xs text-gray-400">vs {basisNote}</span>}
+        {sourceNote && (
+          <span className={`text-xs ${data?.returnSource === 'mixed' ? 'text-amber-700' : 'text-gray-400'}`}>
+            · {sourceNote}
+          </span>
+        )}
       </div>
       <div className="mt-1.5">{inner()}</div>
     </div>

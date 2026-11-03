@@ -328,6 +328,42 @@ Benchmark selections in return tables are persisted to localStorage with key `fu
 
 ## FMP Financial Metrics
 
+### YCharts owns fund/ETF data; FMP is for stocks
+
+**For a fund or ETF, the YCharts workbook's `Securities` sheet is the primary
+source for every field it carries — never FMP.** Those columns land on
+`securities2` through `fundBulkUpload.ts` and YCharts is the system of record the
+advisor reconciles against, so a figure the sheet carries is **read**, not
+recomputed from a price feed. FMP's role is the stock side, where there is no
+published fund figure to read.
+
+This is a coverage fact before it is a preference: **FMP prices none of the
+institutional mutual-fund share classes these books hold.** Pricing every
+holding from FMP left Hybrid Conservative's attribution ranking 42% of itself,
+with its largest holding (BIMIX, 21%) among the 57% that silently vanished —
+while YCharts carried a figure for all thirteen the whole time.
+
+- **`fetchPortfolioMovers` is the live example.** It reads
+  `securities2.{one,three}_month_total_return_nav` for anything
+  `isFundOrEtfSecurity` calls a fund or ETF, and computes from
+  `fetchDailyAdjustedSeries` only for stocks. `HoldingMover.source` records
+  which, and `AttributionMovers` prints it.
+- **A fund with no YCharts figure is reported UNPRICED, not fallen back to FMP.**
+  The two feeds measure different windows — a calendar month against a rolling
+  thirty days — so substituting one into a list built from the other would rank
+  them against each other as if they agreed. `UnpricedReason` separates
+  `no_ycharts_figure` (a workbook gap, fixable at the source) from
+  `no_price_series` (a feed limit, not).
+- **`*_total_return_nav` is also populated for STOCKS and is stale there** —
+  residue from the deleted `fmpSync`, last written between Aug and Oct 2026.
+  Always gate on the classifier before reading those columns; a stock's value is
+  not a current figure.
+- **No portfolio mixes stocks and funds today** — every book is all-stock
+  (Core Growth, Equity Income, EI & CG) or all-fund (Foundation / Hybrid / ETF /
+  Fixed Income), so the two window conventions are never compared within one
+  list. `returnSource: 'mixed'` exists to say so loudly if that ever changes
+  rather than quietly ranking them together.
+
 Financial figures are fetched on-demand from Financial Modeling Prep (stable API) in `lib/fmpFinancials.ts` (income statements, estimates, earnings) and `lib/fmpRatios.ts` (margins, growth, CAGR). They are **not** persisted to Supabase. The only FMP data written to `securities2` is identity + earnings dates, via `refreshSecurityFromFMP` (see below).
 
 **Shared FMP plumbing lives in `lib/fmpClient.ts`** — `FMP_STABLE`/`FMP_V3`, the guarded `apiKey()`, `num()`/`str()`/`asArray()`/`firstItem()`, `fmpFetch()`, and `fmpSymbol()`. All `fmp*.ts` modules import from it instead of redefining the boilerplate. `fetchScorecardMetrics` fetches each distinct endpoint at most once (ratios-ttm, cash-flow-ttm, income-statement-ttm, annual income limit=4) and derives all six scorecard metrics from the shared rows — 4 calls, not 7. The standalone exported fetchers (`fetchFcfMargins`/`fetchTtmGrowth`/`fetchCagr3y`/`fetchRatiosTTM`, used by `StockScorecardPanels`) are unchanged.
@@ -590,7 +626,7 @@ Portfolio-level reviews are **separate from per-security reviews** (above) and f
 
 ### Section content
 
-- **`performance_attribution`** (Equity monthly; fund/ETF quarterly & annual) → `AttributionMovers` — a **"Trailing Returns"** block with two windows, **1 Month (30d)** and **3 Month (90d)**, each showing top-5/bottom-5 holdings by total return (`fetchPortfolioMovers`, FMP dividend-adjusted closes; cash/unpriceable dropped, graceful "No priceable holdings to rank" empty state). Each window is its own query; the component takes no `days` prop.
+- **`performance_attribution`** (Equity monthly; fund/ETF quarterly & annual) → `AttributionMovers` — a **"Trailing Returns"** block with two windows, **1 Month** and **3 Month**, each ranking holdings by **contribution** (`fetchPortfolioMovers`) and reconciling to 100% of the book. Returns are **YCharts for funds/ETFs, FMP for stocks** — see "YCharts owns fund/ETF data" above — and the block names both the weight basis and the return source. Each window is its own query; the component takes no `days` prop.
 - **`position_sizing`** (Equity monthly; fund/ETF quarterly & annual) → `PositionSizingCheck` — **allocations file upload** (YCharts export: col A ticker, col B weight %; `.xls/.xlsx/.csv`). `parseActualAllocations` + `compareSizing` (`lib/positionSizingCompare.ts`) compare each holding's actual weight to its effective band and surface **only breaches**. Display-only. Bands from `computePositionBands` (`lib/positionBands.ts`) — explicit limits win, else `roundToHalf(target × (1 ± drift%/100))`; cash uses model cash limits. Keep in sync with the same logic inlined in `PortfolioDetailPage`.
 - **`full_monitoring`** (quarterly) → `HoldingMonitorGrid` — five review *areas* as guidance, then a per-holding grid of five categorical assignments: **Thesis Status** (intact/at_risk/broken), **Business Trend** (improving/stable/deteriorating), **Valuation** (attractive/fair/expensive), **Conviction** (high/medium/low), **Action** (add/hold/trim/exit/watchlist).
 - **`thesis_scorecards`** (quarterly) → `ThesisScorecardSection` — collapsible per-holding cards with five text fields (original thesis, what changed this quarter, evidence for, evidence against, current conclusion). "Evidence behind the ownership decision," not a thesis rewrite.
@@ -1111,15 +1147,43 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 - **UI:** the **Allocation → History** sub-tab (`AllocationHistoryPanel`) is the editable grid (dates as columns, securities as rows, per-date totals, add/delete date, add ticker). Production-editable.
 - **Importer:** the YCharts dynamic **source file is the LONG format** — columns `Date · Symbol · Target Weight`, one row per holding per date, weights in **decimal** (0.075 = 7.5%). `parseYchartsDynamic` pivots it to dated snapshots; `$:CASH` normalizes to `$Cash`. (Not the wide grid shown in the YCharts editor.)
 
-### Performance engine (`lib/portfolioPerformance.ts`)
+### Per-holding attribution (`lib/portfolioPerformance.ts`)
 
-**Buy-and-hold drift, rebalancing only at the snapshot dates** — nothing else feeds it (no model data, no change log, no benchmarks). Consecutive snapshot dates are episode boundaries; within an episode shares are held fixed and weights drift, then rebalance to the next snapshot's targets (NAV preserved across the boundary).
+**The buy-and-hold performance engine that used to live here was DELETED (Sep
+2026)** — `computePortfolioPerformance`, `computePortfolioPeriodReturns`,
+`computeBenchmarkPeriodReturns` and `PortfolioPerformancePanel` are all gone.
+It recomputed NAV from FMP closes across `portfolio_allocations` episodes and
+contributed exactly 0.00% on every rebalance date (episode *n* emitted days
+`d < b` while *n+1* rebuilt shares from the same NAV at `close(b)`), zeroing
+~12 trading days a year against a benchmark row that had no episodes and so no
+such loss. Model-portfolio performance now comes from **YCharts' own figures on
+`portfolio.*_total_return`**, refreshed by the daily workbook import and
+rendered by the Total Returns block in `PortfolioOverview`. Don't rebuild it:
+recomputing a number we do not own meant owning its bugs. The file's own
+docstring carries this history — read it before adding anything here.
 
-- **Stocks** are priced from FMP **dividend-adjusted** daily closes (`fetchDailyAdjustedSeries`). **`$Cash` and anything FMP can't price** (money-market funds like FISXX, unknown tickers) are **held flat** at 0% with weight preserved — so every episode stays 100% invested, no renormalization. Returns are **gross, time-weighted** (no fees/taxes/slippage). Funds/ETFs are out of scope for now.
-- **Class tickers map to FMP's hyphen form** (`BRK.B` → `BRK-B`) via `fmpSymbol = s.replace(/\./g, '-')`, in this engine and in every symbol-keyed FMP fetch. The DB row keeps the original `security_id`; only the FMP fetch uses the mapped symbol.
-- `computePortfolioPerformance(name, start, end)` returns the daily NAV series + episodes. `computePortfolioPeriodReturns(name)` builds **one** inception→today series and derives all standard periods (1D, 5D, 1Mo, 3Mo, YTD, 1Yr, 3Yr, 5Yr, 10Yr, All Time) as ratios off it. Periods ≤ 1 year are cumulative; **3Y/5Y/10Y and All Time are annualized**; periods reaching before inception show `—`. `PortfolioPerformancePanel` renders this as a Total-Returns-style table on the Overview tab (auto-computed, cached). **It carries a benchmark row**: `computeBenchmarkPeriodReturns(symbol, inception)` normalizes the benchmark ETF's dividend-adjusted closes to 1.0 on the *portfolio's* inception date and runs the SAME `derivePeriods()` helper as the portfolio row, so All Time is since-portfolio-inception for both and 3Y/5Y/10Y blank out identically. The ticker comes from `fetchModelBenchmarkTicker(name)`, which resolves `model_portfolio_data.benchmark` → `model_portfolio_benchmarks.security_id` and returns a null symbol for the five YCharts composites (their `P:` portfolio ids are not priceable by FMP), so the row is simply omitted rather than firing a doomed request. **Rendered only for Equity (all-stock) portfolios** (gated on `isEquityStrategy` in `PortfolioDetailPage`) — the engine is stocks-only, so fund/ETF portfolios rely on the stored-YCharts **Total Returns** block instead and don't show the Performance block.
-- **Base-date convention:** the first episode anchors NAV on the close **on/before the window start** (fetch is buffered ~10 days earlier so the prior close exists) — so "From Jan 1" measures from the Dec 31 close (YTD convention), not the first in-window day. **Since-inception is measured from the inception-date close** (returns start at the stated inception). This undershoots YCharts when a portfolio launched on a big up-day (Core Growth's 2025-04-09 inception coincided with the +10% tariff-pause rally → its All-Time reads low vs YCharts, which credits the launch-day return). Every period **not** straddling the inception day matches YCharts to ~0.2%; the residual elsewhere is FMP-adjusted-price vs YCharts-total-return-index methodology (mine is gross).
-- These two portfolios (Core Growth, Equity Income) are **all-stock + ~1% cash**; the seed values + bad `holdings_change_log` (single-date, phantom funds) are obsolete — the YCharts dynamic files are the real history.
+What remains is **`fetchPortfolioMovers(portfolioName, days)`** — not "how did
+the portfolio do" but "which holdings led and lagged", which needs no NAV
+reconstruction.
+
+- **Ranked by CONTRIBUTION (`weight × ret`), not by return.** A 5% sleeve down
+  3.51% costs the book 0.18pp while a 22% sleeve down 1.80% costs 0.40pp, so
+  ranking by return alone files the real drag in the middle of the list.
+- **Weights come from the UPLOADED allocation file when there is one**
+  (`fetchLatestActualAllocation`, the file the review's position-sizing step
+  saves), falling back to `positions.allocation_pct`. The basis is named on
+  screen — a contribution measured against targets describes a book nobody
+  necessarily holds.
+- **It reconciles to 100%.** `cashWeight` and `unpriced[]` are returned
+  separately and rendered beneath each window, because the two are different
+  claims: cash genuinely contributed nothing, an unpriced holding contributed
+  something nobody here can measure. Cash weight is **never redistributed** —
+  renormalising would overstate every other holding.
+- `SPLIT_MIN_HOLDINGS` (11) in `AttributionMovers`: below that it renders one
+  ranked list instead of top-5/bottom-5. A split only informs when it *hides*
+  something, and at exactly five holdings `slice(5)` returned an EMPTY "Bottom
+  5" while the worst performers sat under a heading reading "Top 5" — the common
+  case, since a Foundation book holds a handful of funds by construction.
 
 ## Excel Import
 
