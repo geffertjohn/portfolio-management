@@ -214,7 +214,7 @@ a plain "Buy" (reserving `-700` for "Strong Buy"); `TipRanksPanel.tsx:74` return
 
 **Fix:** import the lib one; it handles every label the local copy does.
 
-### 13. `pre_earnings` has no unique index — the dedupe is a prompt instruction `[ ]`
+### 13. `pre_earnings` has no unique index — the dedupe is a prompt instruction `[x] DONE 3 Nov`
 
 `post_earnings` is protected by `research_reports_one_post_per_parent`. `pre_earnings`
 is protected only by a 7-day window described in prose, which two schedulers firing six
@@ -225,7 +225,21 @@ carries three briefs for one quarter.
 matching partial unique index. Do this *even after* §1 — the guard should not depend
 on there being one scheduler.
 
-### 14. Three job-prompt defects `[ ]`
+**Done (PR #66).** `research_reports_one_pre_per_period` on `(security_id, fiscal_year,
+quarter)`, partial on `report_type = 'pre_earnings' and deleted_at is null` (and on both
+period columns being non-null, since standing research carries neither). Excluding
+soft-deleted rows is deliberate: a deleted duplicate must not block a legitimate rewrite
+of that quarter later. The prompt now resolves the fiscal period *before* deduping, keys
+on it, and treats a unique violation as "already briefed — skip" rather than an error to
+retry.
+
+Seven legacy duplicates blocked the index. All thirteen rows in the six affected groups
+were checked first: none had a post-earnings child, none was cited by any thesis's
+`source_report_ids`, and all predated the two-section brief shape. The richest of each
+group was kept and the other seven soft-deleted — reversible with one `update`. Zero
+duplicate groups remain against 59 live pre-briefs.
+
+### 14. Three job-prompt defects `[x] DONE 3 Nov`
 
 - **`weekly-risk-report:42`** tells the agent to read `positions.target_weight`. **That
   column does not exist** — it is `allocation_pct`.
@@ -238,6 +252,13 @@ on there being one scheduler.
   documents as returning *HTTP 404 with an empty array body*, so the agent reads "no
   coverage" instead of an error and the "weight by track record" instruction silently
   becomes a no-op. The working path is `tipranks-pit-symbol`.
+
+**Done (PR #66).** `target_weight` → `allocation_pct` with the query spelled out;
+`where deleted_at is null` added to `pre-earnings-brief` and `post-earnings-brief`, so
+all five prompts that read `positions` now agree; and `tipranks-pit-by-symbol` →
+`tipranks-pit-symbol` in `new-buy-ic-review.js` and both agent files. The TipRanks path
+was the quietest of the three — a 404 with an empty array reads as no coverage, so
+"weight by track record, not head count" had been doing nothing at all.
 
 ### 15. The workflow's inlined roles are missing the research standard `[ ]`
 
