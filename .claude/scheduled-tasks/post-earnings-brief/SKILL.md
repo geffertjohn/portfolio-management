@@ -75,7 +75,7 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
    order by p.created_at;
    ```
 
-   The 21-day window plus the not-exists check is what makes this job idempotent and self-retrying. If it returns nothing, write "No pre-earnings briefs are awaiting a post-mortem." and STOP (persist nothing).
+   The 21-day window plus the not-exists check is what makes this job idempotent and self-retrying. If it returns nothing, write "No pre-earnings briefs are awaiting a post-mortem.", then **still run step 12 and still close the heartbeat** — persist no briefs, but do not end the turn here. A day with nothing to brief is exactly the day an aged-out row is the only thing worth saying, and a run that exits early leaves its `job_runs` row open, which reads as a death.
 
 2. **GATE ON ACTUALS AND THE CALL TRANSCRIPT, NOT ON THE CALENDAR.** A candidate is ready only when BOTH have posted. Check in this order:
 
@@ -104,7 +104,11 @@ Nobody is at the keyboard when this runs. **Any tool call that asks for approval
       - Grade only what the release and statements actually show. A Section 2 check they do not speak to is `not_addressed`.
       - A street question the release does not answer is `answered: "no"` with an `answer` that **begins** `No transcript available —` and says what the release did or did not disclose. That prefix is what separates "we could not hear the call" from "the company declined to address it"; do not drop it.
 
-   - If a brief is older than 21 days with still no actuals, report it in the digest as "no actuals posted — aged out" so it is visible rather than silently dropped.
+   - A brief that passes 21 days with still no actuals leaves the step-1 window and
+     can never be picked up again. **Step 1 cannot report that** — the row is already
+     outside the query that would find it — so the aged-out check is its own query in
+     step 12. Do not try to widen step 1 to cover it: that would re-read every aged-out
+     brief every day, and the point of the window is that the job stops trying.
 
 3. **Adopt the research-analyst role** — Read `.claude/agents/research-analyst.md` first. **The transcript is the primary source for Section 1's `street_questions` and for most Section 2 findings** (guidance, segment and order disclosures, management's answers); the release and FMP statements supply the figures.
 
@@ -283,7 +287,40 @@ was written and are not rewritten.
     so it stands on its own (see *How to write the prose fields*) — "three of six
     scorecard metrics were red in June and two still are" , not "it is at-risk".
 
-12. **DIGEST.** Per name: TICKER, report date, the estimate beat/miss line (EPS and revenue), the street-question tally (e.g. "2 answered / 1 partial"), the Section 2 tally (e.g. "1 supported / 1 undermined"), the thesis verdict, and a one-line takeaway. **Call out any tripped break test at the top of the digest** — that is the thing the CIO needs to see first. List skipped names separately, in two groups, so it is clear they were considered, not missed: **"awaiting actuals"**, and **"awaiting transcript"** (actuals posted, no call transcript yet; give the report date and how many business days remain before the fallback writes it). Mark any brief written under the fallback as **"no transcript"** in its digest line.
+12. **AGED-OUT CHECK.** Before writing the digest, run this ONCE — it is the only
+    thing that can see a brief the 21-day window has dropped:
+
+    ```sql
+    select p.id, p.security_id, p.created_at::date as written,
+           (now()::date - p.created_at::date) as age_days
+    from research_reports p
+    where p.report_type = 'pre_earnings'
+      and p.deleted_at is null
+      and p.created_at < now() - interval '21 days'
+      and p.created_at >= (select min(created_at) from research_reports
+                           where report_type = 'post_earnings' and deleted_at is null)
+      and not exists (
+        select 1 from research_reports c
+        where c.parent_report_id = p.id
+          and c.report_type = 'post_earnings'
+          and c.deleted_at is null)
+    order by p.created_at;
+    ```
+
+    **The floor is the oldest post-brief, not a fixed date.** Pre-briefs written before
+    this job existed were never going to get a post-mortem, and reporting ~30 of them
+    every morning would teach the reader to skip the section — the same reasoning that
+    keeps `never_run` out of the Actions hub. Deriving the floor from the data means no
+    constant to maintain, and if no post-brief exists at all the subquery is null and
+    the check returns nothing, which fails quiet rather than noisy.
+
+    **Expect zero.** The 3-business-day transcript fallback writes a brief long before
+    21 days, so a row here means actuals never posted for a name that reported — worth
+    a look, not an alarm. Report each as `TICKER — pre-brief <id> written <date>, N days
+    old, no post-mortem (aged out of the retry window)` under a heading **"Aged out —
+    will not be retried"**. If there are none, say nothing.
+
+13. **DIGEST.** Per name: TICKER, report date, the estimate beat/miss line (EPS and revenue), the street-question tally (e.g. "2 answered / 1 partial"), the Section 2 tally (e.g. "1 supported / 1 undermined"), the thesis verdict, and a one-line takeaway. **Call out any tripped break test at the top of the digest** — that is the thing the CIO needs to see first. List skipped names separately, in two groups, so it is clear they were considered, not missed: **"awaiting actuals"**, and **"awaiting transcript"** (actuals posted, no call transcript yet; give the report date and how many business days remain before the fallback writes it). Mark any brief written under the fallback as **"no transcript"** in its digest line.
 
 ## Guardrails
 
