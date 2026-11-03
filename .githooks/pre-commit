@@ -23,5 +23,10 @@ if git diff --cached --name-only --diff-filter=ACM | grep -qE '^client/src/.*\.(
     exit 1
   fi
 
-  echo "✓ typecheck + lint passed"
+  if ! npm run --silent --prefix client test; then
+    echo "✖ tests failed — commit blocked. Fix the failures above or use 'git commit --no-verify' to bypass."
+    exit 1
+  fi
+
+  echo "✓ typecheck + lint + tests passed"
 fi

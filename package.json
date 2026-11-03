@@ -9,6 +9,7 @@
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspace=client",
     "typecheck": "npm run typecheck --workspace=client",
+    "test": "npm run test --workspace=client",
     "install:all": "npm install",
     "prepare": "git config core.hooksPath .githooks || true"
   },
