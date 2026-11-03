@@ -45,3 +45,10 @@ supabase/.temp/
 
 # Built by scripts/refresh/build.sh — rebuild rather than commit a stale bundle
 scripts/refresh/import-workbook.cjs
+
+# The YCharts workbook master lives on the VM (C:\portfolio\Ycharts.xlsm) and is
+# refreshed there every weekday. A copy committed here goes stale within a day
+# and then sits at the most obvious path a file picker lands on — on 3 Nov 2026
+# an Oct 5 copy was imported by mistake, which rolled every fund's figures back
+# a month under a provenance stamp reading "imported today".
+YCharts/*.xlsm
