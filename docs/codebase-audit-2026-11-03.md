@@ -74,7 +74,14 @@ scripts/scheduled-tasks/sync.mjs` is the repair.
 
 ## P1 — Silently wrong, or audit-record integrity
 
-### 3. The model editor writes bands with the rounding the lib was fixed to abandon `[ ]`
+### 3. The model editor writes bands with the rounding the lib was fixed to abandon `[x] DONE 3 Nov`
+
+> **Resolved** in PR #65. The form now imports `driftBandFor`. The one collapsed band
+> this had already produced — model 1 `us_small_cap` 1/1/1 — was repaired to 0.75/1.25
+> by a guarded one-row UPDATE; a re-scan shows 0 collapsed bands across all models.
+> **Correction to the original finding:** neither portfolio on model 1 holds any US
+> small-cap position, so the collapsed band was not producing a live false breach — it
+> would only have bitten once a holding sat near 1%. The harm was latent, not active.
 
 `lib/positionBands.ts` has `roundBand` with collapse-safe stepping, documented against
 a real past failure: *"±20% of a 1.0% target is 0.8–1.2, and both edges round to 1.0,
