@@ -232,7 +232,7 @@ fmtUtcLongDate(value)  // '2027-02-11T00:00:00Z' → "February 11, 2027"  (see g
 EMPTY                  // '—' — use for null/missing display values
 ```
 
-`lib/formatters` also exports `stripTotalReturn(name)` and **`consensusColor(label)`** — the shared helper for analyst-consensus text colors, read by `AnalystSummaryCards` and `TipRanksPanel`. **`sharedHelpers.test.ts` now enforces that nobody re-implements it**, or `fmtUsdCompact`: both had been quietly duplicated and each copy drifted (`TipRanksPanel` returned the strong shade for any label containing "Buy", flattening "Moderate Buy" into "Strong Buy"; two components grew a money ladder whose last two branches were identical, printing a $400k figure as "$0.40M" and $3.2T as "$3200.00B"). A convention in this document did not stop either; the test names the helper to import rather than only saying no. Other cross-cutting shared helpers: **`mapSecurityJoin(row)`** in `lib/securityJoin.ts` (flattens an embedded `securities2(id, security_id, security_name)` join onto a row — used by the action-items / alerts / comm-log / review-schedule fetchers); shared UI primitives **`DetailPageState`** (loading/error/not-found scaffold for detail pages) and **`RangeBar`** (analyst range bar) in `components/`.
+`lib/formatters` also exports `stripTotalReturn(name)` and **`consensusColor(label)`** — the shared helper for analyst-consensus text colors, read by `AnalystSummaryCards` and `TipRanksPanel`. **`sharedHelpers.test.ts` now enforces that nobody re-implements it**, or `fmtUsdCompact`: both had been quietly duplicated and each copy drifted (`TipRanksPanel` returned the strong shade for any label containing "Buy", flattening "Moderate Buy" into "Strong Buy"; two components grew a money ladder whose last two branches were identical, printing a $400k figure as "$0.40M" and $3.2T as "$3200.00B"). A convention in this document did not stop either; the test names the helper to import rather than only saying no. Other cross-cutting shared helpers: **`mapSecurityJoin(row)`** in `lib/securityJoin.ts` (flattens an embedded `securities2(id, security_id, security_name)` join onto a row — **only `lib/actionItems.ts` imports it today**, though the alerts, comm-log and review-schedule fetchers each hand-roll the same flatten and would be the natural second callers); shared UI primitives **`DetailPageState`** (loading/error/not-found scaffold for detail pages) and **`RangeBar`** (analyst range bar) in `components/`.
 
 ### No `any`
 
@@ -460,7 +460,22 @@ There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`,
 
 ### LocalStorage persistence for UI state
 
-Benchmark selections in return tables are persisted to localStorage with key `fund_benchmarks_${securityId}`. Changes dispatch a `benchmark-changed` CustomEvent so sibling components stay in sync — **declared once in `lib/benchmarkSelection.ts`** (`announceBenchmarkChange` / `onBenchmarkChange`), not inline at each end. It was inline in both, which is how the listener came to be permanently dead (below).
+**Two keys, both device-local UI state and nothing else:** the Actions page's
+filters (`ActionItemsPage`) and the notification settings
+(`settings/NotificationsPage`). That is the whole of it — `grep localStorage
+client/src` returns four lines.
+
+This section used to describe benchmark selections persisting under
+`fund_benchmarks_${securityId}`. **No such key exists, and never did in this
+tree.** A stock's benchmarks are a governed value and live in
+`securities2.preferred_benchmark1_id` / `2_id`; the cross-component sync is the
+`benchmark-changed` event, **declared once in `lib/benchmarkSelection.ts`**
+(`announceBenchmarkChange` / `onBenchmarkChange`) rather than inline at each end
+— being inline in both is how that listener stayed dead for three weeks.
+
+**Do not reintroduce localStorage as an authority for a governed value.** The
+committee only ever sees Supabase, so anything it must read has to be there (the
+same reason the firm-settings store was deleted).
 
 ---
 
@@ -522,7 +537,7 @@ For **stocks** (not funds), the detail page pulls these live via `useQuery` rath
 - **There is no "Sync from FMP" button on the stock page** — it was removed. All stock-page data is on-demand `useQuery` (gated on `isStock`); identity/returns/price/earnings/consensus/scorecard all refresh on load (≤ `staleTime`) with no manual sync.
 - Identity uses `(isStock ? profile.x : null) ?? security.x` — live FMP for stocks (so new positions aren't blank), stored `securities2` value as fallback and for funds. **Excel can no longer write these four** (mapped to `null` / in the `SKIP` set in `securities2ExcelUpload.ts`).
 - The **benchmark return rows** (Total Performance on Overview *and* the Monitor Alternatives "Trailing Returns" table) are **live FMP total return via a representative ETF**, not the YCharts return columns. FMP serves none of the TR index symbols (`^SPXTR`, `^RLGTR`, the `^SP15…STR` sector indices — all confirmed *not found*); the price-return symbols it *does* serve (`^RUI`, `^RLG`, `^RLV`) understate total return by ~0.5–2.5%/yr and are deliberately unused. **`resolveEtfProxy(bench)` in `lib/benchmarks.ts` is the single resolver: it reads the benchmark row's own `etf_proxy` column (source of truth, loaded from the benchmark workbook — 41/41 category + 10/10 sector rows populated) and falls back to the hardcoded `BENCHMARK_ETF_PROXY` map only when the row has none.** Never call `benchmarkEtfProxy(ticker)` directly from a component — the map is partial (17 tickers) and was the cause of mid/small-cap-value, fixed-income and international benchmarks silently reverting to stored YCharts columns with `—` in the 5D column. The ETF's dividend-adjusted returns come from the same `fetchStockReturns` used by the security row, so all periods (incl. 5D) populate. Benchmarks with no proxy from either source still fall back to the stored YCharts columns. The Total Performance benchmark label shows a `· <ETF>` proxy tag. (Stocks only — funds keep their stored comparison.) **Adding a column to a benchmark option select requires bumping `QUERY_KEYS.benchmarks` / `sectorBenchmarks`.**
-- **`fmpSync.ts` and the bulk "Sync all stocks from FMP" button were DELETED (Aug 2026).** The Jun 2026 slim-down left `syncStockFromFMP` writing 27 columns, of which 21 (`*_total_return_nav` + the risk metrics) had no stock-side reader at all — every consumer (`FundReturnTable`, `FundMonitoringPanel`/`ReturnRanksTable`, `reviewEvidencePdf`) is gated behind `isFundOrEtfSecurity`, while the button filtered to non-funds. Its only irreplaceable job was seeding the four identity columns, which is now done at creation time. **Do not reintroduce a bulk sync**; use `refreshSecurityFromFMP` instead.
+- **`fmpSync.ts` and the bulk "Sync all stocks from FMP" button were DELETED (Aug 2026).** The Jun 2026 slim-down left `syncStockFromFMP` writing 27 columns, of which 21 (`*_total_return_nav` + the risk metrics) had no stock-side reader at all — every consumer (then `FundReturnTable`, since deleted; today `FundMonitoringPanel`/`ReturnRanksTable` and `reviewEvidencePdf`) is gated behind `isFundOrEtfSecurity`, while the button filtered to non-funds. Its only irreplaceable job was seeding the four identity columns, which is now done at creation time. **Do not reintroduce a bulk sync**; use `refreshSecurityFromFMP` instead.
   - **`refreshSecurityFromFMP(symbol)` in `lib/securities.ts` is the single writer of the FMP-owned columns**: `security_name`, `morningstar_sector`, `morningstar_industry`, `long_description`, `last_earnings_release`, `next_earnings_release`. It runs (a) inside `createSecurityBySymbol`, so a security added by ticker is never nameless, and (b) as a **write-through on the stock detail page**, which already fetches profile + earnings live — so simply opening a stock refreshes the stored dates. Only non-empty values are written, so a partial FMP response never blanks a good value.
   - **The Review Calendar self-heals.** On mount, `ReviewCalendarPage` finds its **stock** rows (via `isFundOrEtfSecurity` — `fetchReviewSchedules` embeds the classifier columns for exactly this) whose stored `next_earnings_release` is null or in the past, and tops them up through `refreshSecuritiesFromFMP(symbols)` — a bounded-concurrency (4) batch wrapper around `refreshSecurityFromFMP` that swallows per-symbol failures. It runs **once per mount** (a `useRef` guard, not a dependency-driven effect) and invalidates `reviewSchedules` only when something actually changed, so it cannot loop.
   - **Excel cannot write any of those six.** Excel has had no path to them since `securities2ExcelUpload.ts` was deleted (Sep 2026); before that they were in its `SKIP` set. Earnings dates come from FMP only — they drive stock review scheduling, and the cross-security surfaces (`ReviewCalendarPage`, `fetchReviewSchedules`) read the STORED columns because they cannot fire a per-row FMP request the way the detail page does.
@@ -561,7 +576,7 @@ On the Overview tab. News and Press Releases are company-specific feeds, side by
 metrics as the stock Scorecard cards. Funds use the `equity` / `fixed income`
 sets and are **unchanged** — everything below is stocks only.
 
-**The `at-risk-review` job owns the list.** Weekdays at 09:25, *before* the
+**The `at-risk-review` job owns the list.** Weekdays, *before* the
 post-earnings brief, because the brief reports any same-day change and there is
 only ever one brief per print. It flags, re-measures, clears, and raises a breach
 alert. The manual "+ Add stock" modal was **deleted**; the advisor's remaining
@@ -873,7 +888,7 @@ On-demand: re-synthesizes a candidate's committee output into the Add Security w
 
 ### Compliance architecture (rules hub → risk report)
 
-Compliance rules live **only** in the Settings **Compliance Rules hub** (`pages/settings/InvestmentCommitteePage.tsx`), stored in `firm_compliance_rules` (firm-wide, e.g. Max Single Position, Minimum Holdings Count) and `compliance_rules` (per-portfolio). **There is no per-portfolio Compliance tab** (the old `CompliancePanel` was removed). The **risk manager verifies each portfolio against every active rule and folds the results into `mandate_checks`**, measured against the **ACTUAL** book — the most recent file in the `Portfolio Documents` storage bucket, parsed by `lib/currentAllocation.ts` — falling back to model targets (and flagging the basis) if no actual-allocation file exists. The AI risk report **is** the compliance surface; there is no separate per-portfolio compliance report.
+Compliance rules live **only** in the Settings **Compliance Rules hub** (`pages/settings/CompliancePage.tsx`, route `/settings/compliance`), stored in `firm_compliance_rules` (firm-wide, e.g. Max Single Position, Minimum Holdings Count) and `compliance_rules` (per-portfolio). **There is no per-portfolio Compliance tab** (the old `CompliancePanel` was removed). The **risk manager verifies each portfolio against every active rule and folds the results into `mandate_checks`**, measured against the **ACTUAL** book — the most recent file in the `Portfolio Documents` storage bucket, parsed by `lib/currentAllocation.ts` — falling back to model targets (and flagging the basis) if no actual-allocation file exists. The AI risk report **is** the compliance surface; there is no separate per-portfolio compliance report.
 
 ### Model IPS vs Client IPS — two distinct documents
 
@@ -898,48 +913,20 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 ### Scheduled jobs (draft-only) — prompts live in this repo
 
-Six routines: **watchlist-research** (weekdays 10:05 → the lean IC over unresearched watchlist ideas, see below), **at-risk-review** (weekdays 09:25 → `at_risk` + `alert_events`, see At-Risk below), **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
+**Seven routines**, all draft-only, all LaunchAgents: `weekly-risk-report` and
+`reviews-due-digest` on Mondays, and `at-risk-review`, `post-earnings-brief`,
+`pre-earnings-brief`, `earnings-call-summary` and `watchlist-research` on
+weekdays, staggered through the morning. **The schedule itself lives in
+`scripts/scheduled-jobs/README.md`** and in the generated plists, which are the
+authority — do not copy the times here again; the copy that used to be in this
+paragraph had two of them wrong.
 
-#### The committee writes through a SQL API, never raw INSERT/UPDATE
+One ordering constraint IS a convention and stays: **`at-risk-review` runs before
+`post-earnings-brief`**, because the brief reports any same-day change to the
+at-risk list and there is only ever one brief per print.
 
-**`committee_insert(table, payload)` and `committee_update(table, id, payload)`
-are the only way the jobs write.** Plus two wrappers for the heartbeat every job
-opens and closes: **`job_run_open(job_id)`** and **`job_run_close(id, status,
-considered, written, summary, errors)`**.
-
-The constraint that forces this: the jobs run under launchd with a tool
-allowlist that **deliberately excludes `Bash`** (an approval prompt would stall
-an unattended run forever), so their only write channel is Supabase SQL. A
-type-checked TypeScript writer could never be the path they take — which is why
-`insertResearchReport` / `insertRiskReport` / `insertIcMemo` sat in `lib/` with
-one reference each, their own definition, reading as a guard over a path nothing
-used. **They are deleted; the app is read-only on these tables.**
-
-What the prompts carried instead was a hand-written column list per table across
-seven files that nothing checks, so a column added, renamed or dropped left
-every one stale with no way to find out but a failed 07:25 run.
-
-- **The functions carry NO column list of their own.** They derive it from the
-  catalog at call time and build the statement dynamically, so a new column is
-  absorbed rather than propagated into seven prompts.
-- **An unknown key is an ERROR, not something to drop.** `jsonb_populate_record`
-  ignores unknown keys silently, which is exactly how a prompt naming a removed
-  column would keep "succeeding" while writing less than it says.
-- **A write that matches no row RAISES.** RLS blocks an UPDATE by returning zero
-  rows, not an error, and PostgREST then reports success — `review_log` lost 25
-  updates that way in Nov 2026 with no error anywhere. `committee_update` and
-  `job_run_close` both fail loudly instead.
-- **Omit a key rather than passing null** — an unmentioned column keeps its
-  default. `id` and `created_at` are refused outright as generated.
-- **`committee_writable_tables()` is the allowlist** (`research_reports`,
-  `risk_reports`, `ic_memos`, `job_runs`, `alert_events`, `at_risk`). Adding a
-  table to the API is that one line.
-- **SECURITY INVOKER, never DEFINER.** These validate and report; they are not a
-  way around a missing RLS policy, and `schemaContract.test.ts` asserts it along
-  with the existence of every function and every allowlisted table — a dropped
-  function would otherwise surface as a failed run, not a failed build.
-- **`run-job.sh` greps for `job_run_open`, not `job_runs`.** The prompts discuss
-  the table in prose, so the old guard passed on prose rather than on the call.
+(The YCharts workbook refresh is a separate LaunchAgent, `scripts/refresh/`, not
+one of these seven.)
 
 #### Every job writes a `job_runs` heartbeat — it is the only health signal there is
 
@@ -977,46 +964,31 @@ log before anything here knows its name). Surfaced by `AutomationPanel` and by t
 
 #### They run from launchd, not the app scheduler (Oct 2026)
 
-The seven routines are **LaunchAgents** — `scripts/scheduled-jobs/` (runner,
-plist generator, install script, README). The app scheduler's copies are
-**disabled, not deleted**, so a revert is one call; re-enabling them without
-unloading the agents would run everything twice.
+**The runbook is `scripts/scheduled-jobs/README.md`** — schedule, commands, logs,
+and the four traps (prompt read from `main`; `CLAUDE_CODE_OAUTH_TOKEN` must stay
+unset; the repo must stay out of TCC-protected folders; the tool allowlist
+excludes `Bash`). It is not repeated here: this document carried its own copy of
+the schedule and **two of the times had drifted wrong** while the README's were
+right — which is the argument against duplicating it a third time.
 
-Three things changed, and each closes a failure mode that had already bitten:
+What belongs here, because it is a convention rather than operations:
 
-- **They no longer need the app open.** The app scheduler only fires while
-  Claude Code is running, which is how two jobs read as `running` all day while
-  doing nothing.
-- **The prompt is read from `git show main:.claude/scheduled-tasks/…`, not the
-  working tree.** That kills the `sync.mjs` drift problem — there is now one
-  copy and the repo IS it — and it means a job cannot run a half-finished prompt
-  off whatever branch is checked out. Caught exactly that way: a test run
-  produced no heartbeat because the tree sat on a branch predating it.
-  `JOB_PROMPT_REF` overrides for testing.
-- **`CLAUDE_CODE_OAUTH_TOKEN` must stay unset.** It outranks the stored
-  claude.ai login, and a session authenticated by that token **cannot load
-  claude.ai MCP connectors** — which is where Supabase and FMP live, since only
-  `tipranks` is configured project-locally. Setting it leaves every job with no
-  data access at all. A malformed one in `~/.claude/settings.json`'s `env` block
-  (a pasted token with embedded newlines) broke every `claude` CLI invocation on
-  this machine; the desktop app ignores env vars, so nothing surfaced it.
-
-**Test with `install.sh run <id>`, never by calling `run-job.sh` from a shell** —
-a shell cannot reproduce launchd's PATH or TCC context, the same trap that hid
-the YCharts refresh failure for weeks. Full detail, including the tool allowlist
-and why `Bash` is excluded from it, is in `scripts/scheduled-jobs/README.md`.
-
-**The prompts are version-controlled at `.claude/scheduled-tasks/<taskId>/SKILL.md`** — that is the source of truth, and now the only copy the live path reads. `sync.mjs` remains only for reverting to the app scheduler, which reads a fixed path it owns (`~/.claude/scheduled-tasks/<taskId>/SKILL.md`) that nothing repoints:
-
-```bash
-node scripts/scheduled-tasks/sync.mjs            # repo → scheduler (deploy)
-node scripts/scheduled-tasks/sync.mjs --check    # report drift, exit 1 if any
-node scripts/scheduled-tasks/sync.mjs --from-home # scheduler → repo (capture a UI edit)
-```
-
-**Do NOT symlink the scheduler's path at the repo file.** It fails silently and in the worst possible way: the task stays registered, enabled and on schedule, but its frontmatter reads back empty because the reader does not follow symlinks — and the prompt is that file, so the job runs with nothing to do while every listing looks healthy. This was tried and reverted; `sync.mjs --check` detects and repairs a symlink for exactly this reason.
-
-Editing a prompt through the app, or with `update_scheduled_task`, rewrites the **scheduler's** copy — run `--from-home` afterwards or the repo silently goes stale.
+- **They do NOT need the app open.** The app scheduler only fired while Claude
+  Code was running, which is how two jobs read as `running` all day while doing
+  nothing. Its copies are disabled, not deleted — re-enabling them without
+  unloading the agents would run everything twice.
+- **A prompt is edited at `.claude/scheduled-tasks/<taskId>/SKILL.md` and nowhere
+  else.** The live path reads `git show main:…`, so an edit reaches the jobs when
+  it is MERGED, not when it is saved — and a job can never run a half-finished
+  prompt off whatever branch is checked out.
+- **Do NOT symlink the scheduler's path at the repo file.** It fails in the worst
+  way: the task stays registered, enabled and on schedule, but its frontmatter
+  reads back empty because the reader does not follow symlinks — so the job runs
+  with nothing to do while every listing looks healthy. Tried and reverted.
+- `sync.mjs` is **not** part of the live path. It survives only to revert to the
+  app scheduler, which reads a fixed path it owns and that nothing repoints.
+  Editing a prompt through the app or `update_scheduled_task` rewrites the
+  scheduler's copy, so `--from-home` afterwards or the repo goes stale.
 
 ### Watchlist research — the job that was missing
 
@@ -1341,6 +1313,37 @@ The Actions page is a **unified command center**, not a plain to-do list. It sho
 - **Create-from-context.** `CreateActionItemModal` takes `defaultSecurityId`/`defaultPortfolioName`/`defaultClientId` and auto-sets the category; **"+ Action" buttons** live on the security detail, portfolio detail, and client detail pages. A client-linked task uses `linked_type='client'`; `fetchActionItemsByClient` scopes the client page's list (client-linked **plus** its portfolios' actions).
 - **Convergence.** The Home **Action Center** band shows bucket + category counts from the same `fetchAllActions` model; the **Review Calendar** stays the review-completion workflow and cross-links to `/actions`.
 
+## Audit & Governance surfaces
+
+Four live surfaces that carried **no entry here at all** until Nov 2026 — which
+is how a reader concluded the app had no audit trail. All four are the
+regulatory half of the tool, so they are worth knowing before touching the
+tables they read.
+
+- **`audit_log` + `/audit` (`AuditLogPage`, `lib/auditLog.ts`)** — a **read-only**
+  surface over an append-only table, with CSV export. **Nothing in the app writes
+  it:** a Postgres trigger (`log_audit`) does, on **nine** tables —
+  `action_items`, `at_risk`, `clients`, `compliance_rules`,
+  `firm_compliance_rules`, `investment_policy_statements`,
+  `portfolio_allocations`, `prospects`, `review_schedules`. Adding a trigger is
+  how a table joins the log; there is no client-side path, and there should not
+  be one.
+- **Compliance Rules hub — `pages/settings/CompliancePage.tsx`,
+  `/settings/compliance`** (data layer `lib/compliance.ts`). `firm_compliance_rules`
+  is firm-wide, `compliance_rules` per-portfolio. **Not** `InvestmentCommitteePage`,
+  which is at `/settings/investment-committee` and is a read-only reference page
+  describing the AI roles — this document pointed at the wrong one of the two for
+  months. See "Compliance architecture" above for how the rules reach a risk report.
+- **Households (`lib/households.ts`, `HouseholdView`)** — aggregates positions
+  across every portfolio belonging to clients in one household, for
+  concentration and suitability review. A client's household is
+  `clients.household_name`; there is no households table.
+- **Trade suitability (`lib/tradeSuitability.ts`, `trade_suitability`)** —
+  records WHY a position was added, changed or removed, which is the
+  best-interest documentation requirement. Labels and the per-action reason sets
+  (`REASON_OPTIONS_BY_ACTION`, `REASON_OPTIONS_BY_MONITOR_ACTION`) live in that
+  module.
+
 ## Documents (Express file store)
 
 Files live in **Supabase Storage**, brokered by the Express server (`server/`, `/api/files|upload|folders|files/signed-url`) which holds the service-role key. The client lives in **`lib/documents.ts`** (`fetchAllFiles`, `uploadFile`, `deleteFile`, `getSignedUrl`, `createFolder`, `deleteFolder`, `formatBytes`, `isServerUnreachable`, `StoredFile`).
@@ -1376,7 +1379,7 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 - **A missing ticker is NOT auto-created.** `syncPositionsFromLatestSnapshot` is all-or-nothing, and the import names the unknown symbols and stops at positions (history still lands). **Never create them via `createSecurityBySymbol`** — that calls FMP, and for a fund or ETF the identity and metrics belong to the YCharts workbook's `Securities` sheet (see "YCharts owns fund/ETF data"). FMP does not even serve these share classes: it returns nothing for VMSAX. `lib/portfolioAllocations.ts` owns the data layer (`fetchAllocationGrid`, `fetchAllocationSnapshots`, cell upsert, add/delete date, bulk import); `positions` still holds the *current* target allocation separately.
 
 - **No DB FK to securities2** — the table intentionally stages arbitrary import symbols (incl. tickers not yet in `securities2`), so PostgREST **cannot embed** `securities2(...)`. Resolve names with a **separate `securities2` lookup** keyed by the distinct symbols, never an embed (an embed 400s — "no relationship found").
-- **Portfolio detail tabs** (`PortfolioDetailPage`): top-level **Overview · Allocation · Reviews · Documents**. **Allocation sub-tabs** are **Positions · History · Change Log · Candidates** — Change Log and Candidates were moved from top-level into Allocation, and the **Comparison sub-tab was removed** (the `AllocationComparison` component file is left in place but no longer routed).
+- **Portfolio detail tabs** (`PortfolioDetailPage`): top-level **Overview · Allocation · Reviews · Documents**. **Allocation sub-tabs** are **Positions · History · Change Log · Candidates** — Change Log and Candidates were moved from top-level into Allocation, and the **Comparison sub-tab was removed** (`AllocationComparison.tsx` was deleted with it in `c3ee3ff`; this used to say the file was left in place, and it was not).
 - **UI:** the **Allocation → History** sub-tab (`AllocationHistoryPanel`) is the editable grid (dates as columns, securities as rows, per-date totals, add/delete date, add ticker). Production-editable. It carries the **"Import allocations"** action (`ImportAllocationsModal`), which **previews before it writes** — dates, holdings, per-date totals, and any unknown tickers — because the import REPLACES every stored date and re-points Positions. A per-date total that is not 100% is flagged amber: that is a broken file, not a rounding quirk.
 - **The Overview's Asset Class Allocation table has NO actual/holdings column for FUND portfolios** (`PortfolioOverview`, Nov 2026) — same reasoning: their positions are the uploaded snapshot, so the comparison column restated the target beside it. The legend's second figure and the "Actual holdings as of …" basis line go with it. **Equity portfolios are unchanged** and keep all three. Two consequences were handled rather than accepted:
   - **The band status went with the column** (`STATUS_CLASS` ambers the actual figure). A class held outside the model is therefore restated as a red line beneath the table — otherwise removing the column would silently remove the finding. Foundation Conservative is the live case: **VWEAX 7% and VMSAX 3% sit in sleeves its model does not fund**.
@@ -1488,7 +1491,7 @@ newest run per source is that dataset's stamp.
   stop the funds and portfolios in the same file from loading; failures are
   reported in the banner, not thrown.
 - **`components/DataAsOf.tsx`** renders the stamp on the fund detail page
-  (`FundReturnTable`, `FundMonitoringPanel`) and Settings → Benchmarks, ambering
+  (`FundMonitoringPanel`) and Settings → Benchmarks, ambering
   past 45 days. It takes a **`sources` prop** and shows the OLDEST of them —
   pass the sources a surface actually reads, or an unrelated stale import will
   understate freshness (a fund page must not report the portfolio import's date).
@@ -1545,19 +1548,18 @@ Identity fields (`security_name`, `long_description`, `morningstar_sector`, `mor
 
 17. **`price-target-consensus` is a TRAILING-6-MONTH aggregate, not every standing target** — FMP returns `targetConsensus`/`High`/`Low`/`Median` with no horizon field, **no analyst count** (`fetchAnalystData` tries `numberOfAnalysts`/`numAnalysts`/`numberOfPriceTargets` and gets null for all three), and no documentation of the window. Reproducing it from `/price-target-news` across seven tickers shows the rule: **each covering firm's LATEST target, keeping only firms that published within ~183 days** (183–195 days fits all seven; 180 and 210 do not). It is not a fixed firm count — 10 firms for HWM, 20 for AAPL, 8 for GLW. The individual targets ARE 12-month ones by sell-side convention, but the aggregation is not. Because the filter drops stale targets, and on a re-rated name the stale ones are the LOW ones, it reads systematically high: HWM $331.10 off 10 firms vs TipRanks' $295.78 off 23 standing targets, on the same page. `AnalystSummaryCards` labels it; don't strip the qualifier.
 
+18. **Don't rebuild a performance engine to match YCharts.** `lib/portfolioPerformance.ts` used to recompute NAV from FMP dividend-adjusted prices and was **deleted in Sep 2026** — it contributed exactly 0.00% on every rebalance date, zeroing ~12 trading days a year against a benchmark row that had no such loss. Model performance now comes from YCharts' own `portfolio.*_total_return`. The reason not to recompute is not that it was hard to match (it agreed to ~0.2% except on All-Time, where since-inception is measured from the inception *close* while YCharts credits the launch day): it is that **recomputing a number we do not own means owning its bugs**. The file's own docstring carries this history.
 
-18. **Performance vs YCharts won't be bit-identical** — `lib/portfolioPerformance.ts` recomputes from FMP dividend-adjusted prices; the stored `portfolio.*_total_return` are YCharts' own model figures. They agree to ~0.2% except (a) **All-Time** when the portfolio launched on a big move day (since-inception is measured from the inception *close*; YCharts credits the launch day) and (b) base-date sensitivity near volatile dates. Don't "fix" the engine to chase an exact match — verify the convention first (see Portfolio Allocations & Performance).
-
-19. **FMP's annual `operatingIncome` disagrees with the filing on ~1 name in 3** — a charge is relocated out of the operating line while `incomeBeforeTax` ties, so no internal check catches it, and `ratios.operatingProfitMargin` is derived from the same number. BSX FY2020 reads +$601M against a filed **-$80M loss**. Read it from SEC XBRL via `lib/secOperatingIncome.ts`, and never conclude the feed is sound because two adjacent years agree with each other (see FMP Financial Metrics).
+19. **FMP's annual `operatingIncome` disagrees with the filing on ~1 name in 3** — a charge is relocated out of the operating line while `incomeBeforeTax` ties, so no internal check catches it, and `ratios.operatingProfitMargin` is derived from the same number. BSX FY2020 reads +$601M against a filed **-$80M loss**. Never conclude the feed is sound because two adjacent years agree with each other. **But do NOT "fix" the Scorecard with `lib/secOperatingIncome.ts`:** that card compares TTM against two prior fiscal years, TTM can never be SEC-sourced because it is not a filed period, and mixing the two made every comparison on the card apples-to-oranges. The Scorecard is deliberately single-source FMP; the SEC path exists, works, and has **no caller** (see FMP Financial Metrics — this gotcha used to instruct the opposite of what that section says).
 
 20. **TipRanks `stockReturn` is a GAP TO SPOT, not a return** — it is exactly `price / target - 1` (verified on 272 of 272 rows across three symbols), so it has no time dimension and no outcome; the same analyst's $325 and $705 targets on one name read -16.6% and -61.6% against one spot price. Never label it a return and never colour it green/red: positive just means the target sits below the price. The per-row `beatTarget` flag is likewise unreliable (on WMT it marks ~half the rows as beats against a symbol record of 6 in 259) and is deliberately not rendered -- use `beatRate()` on the summary aggregate, which gates on `MIN_RATINGS_FOR_ACCURACY`.
 
-22. **FMP's transcript-date list stamps the wrong calendar YEAR on some Q4/Q1 rows** — the fiscal labels are right and the transcript itself is right, only the `date` is a year early. It dates Alphabet's **FY2024 Q4** call `2024-02-04` and its **FY2025 Q1** call `2024-04-24`, though those transcripts open with "Fourth Quarter 2024" and "First Quarter 2025"; `search-transcripts`/`earning_call_transcript` by `(year, quarter)` return the correct call regardless. **2 of 42 held symbols** carry it (also APP FY2023 Q4) — a fiscal-year-boundary bug, so expect it at Q4/Q1. Anything ordering calls must sort by **`(fiscalYear, quarter)`**, not by `date`: the Commentary timeline sorted by date and GOOGL's table jumped Q2 2025 → Q3 2024, dropping two real quarters off the bottom of its eight-row window. Do not "fix" a bad date by adding a year — that is inventing a figure; flag it (`CommentaryRow.dateSuspect`) and show it unasserted.
-
-25. **Saving a model through the Edit Model Portfolio page RECOMPUTES its derived bands — it does not echo them.** In `absolute` category mode the form writes `equity`/`fixed_income` limits as **`max(0, target − category_drift_percentage)` / `min(99, target + category_drift_percentage)`** — the clamps are part of the rule, not decoration, and an audit that omits them raises a false positive on any model whose target is within the drift of the ends (Foundation Growth stores equity 98 / 93–99, which IS 98 ± 5 clamped). In `manual` category mode the form does not recompute them at all, which is why the `category_drift_percentage = 20` sitting on Core Growth, Equity Income, EI&CG, Aggressive and Fixed Income Total Return is inert rather than dangerous. In `relative` asset-class mode it writes `roundHalf(target × (1 ∓ asset_class_drift_percentage/100))`. Where the stored band disagrees with the stored drift, **the first save silently rewrites the band** and every save after that is idempotent, so the damage is invisible unless you diff. **No model is in that state today** (verified 3 Nov 2026: every `absolute`-mode row has bands equal to its own clamped formula). Two were. Foundation Balanced with Growth (id 90) was corrected by a save that set its drift to 5; **Growth (id 4)** stored drift 20 against ±5 bands since Apr 2026 and was corrected directly, setting `category_drift_percentage = 5` and leaving its bands untouched — the value its three siblings (ids 1–3) already carried, and the one its own bands already encoded. Editing id 4 would otherwise have widened equity 76–86 to 76–99 and fixed income 13–23 to 0–38, and `equity_lower_limit` is rendered on the Model Portfolios settings list, so it is a user-visible governed number. The recompute behaviour itself has not changed, so **re-check with the clamped formula above after any drift edit** rather than assuming it stays clean. Snapshot the row before saving (`md5((to_jsonb(m.*) - 'updated_at')::text)`) if you only meant to change one field — there is **no audit trigger on `model_portfolio_data`**, so nothing else records what a save overwrote.
-
 21. **`totalDebt` folds operating leases in as `capitalLeaseObligations`** (13+ names; TJX 4.7x overstated at $13,489M vs a filed $2,869M). On HWM and RDDT it is wrong **in kind** -- neither has any finance leases, and RDDT has no borrowings at all, so any feed-derived leverage ratio there is meaningless rather than merely wrong. It also breaks multi-year EV comparisons across the ASC 842 boundary (TJX net debt/EBITDA flips -0.11x to +1.55x). **`propertyPlantEquipmentNet`** folds in the ROU asset, with the mirror error visible in `otherNonCurrentAssets`.
+
+22. **FMP's transcript-date list stamps the wrong calendar YEAR on some Q4/Q1 rows** — the fiscal labels are right and the transcript itself is right, only the `date` is a year early. It dates Alphabet's **FY2024 Q4** call `2024-02-04` and its **FY2025 Q1** call `2024-04-24`, though those transcripts open with "Fourth Quarter 2024" and "First Quarter 2025"; `search-transcripts`/`earning_call_transcript` by `(year, quarter)` return the correct call regardless. **2 of 42 held symbols** carry it (also APP FY2023 Q4) — a fiscal-year-boundary bug, so expect it at Q4/Q1. Anything ordering calls must sort by **`(fiscalYear, quarter)`**, not by `date`: the Commentary timeline sorted by date and GOOGL's table jumped Q2 2025 → Q3 2024, dropping two real quarters off the bottom of its eight-row window. Do not "fix" a bad date by adding a year — that is inventing a figure; flag it (`CommentaryRow.dateSuspect`) and show it unasserted.
 
 23. **A `category_name` missing from `ASSET_CLASS_BY_CATEGORY` becomes silent unclassified weight — and TWO SPELLINGS of one category can be live at once.** The lookup normalizes case and whitespace but is otherwise exact. VEMAX carries Morningstar's abbreviated `Diversified Emerging Mkts`; EICOX / EMMF / EYLD carry the spelled-out `Diversified Emerging Markets`. Only the abbreviation was mapped, so three of the four emerging-market holdings resolved to `null` across **six portfolios** (the three Hybrid and three ETF books). The three Foundation books hold VEMAX and looked correct, which is exactly why it survived — the sleeve appeared to work. On Hybrid Balanced the Equity legend read 66.00% target against 62.00% holdings, with `4.00% unclassified — EICOX` beneath the table. **Before adding a category, read the DB for every spelling in use** (`select distinct category_name from securities2`) rather than trusting the vendor's documented form, and never delete an existing key to "tidy up" a duplicate — both may be carrying real holdings.
 
 24. **A `timestamptz` column holding a calendar DATE renders a day early.** `at_risk.removal_date` and its kin are stored at UTC midnight, so `new Date(v).toLocaleDateString()` in a negative-UTC-offset zone shows the previous day. COIN's At-Risk card read "expires February 10, 2027" against a row holding the 11th — contradicting its own brief on the same screen. Use **`fmtUtcLongDate(value)`** from `lib/formatters` for any column that is a date rather than an instant; reserve local-time formatting for true timestamps (`reviewed_at`, `triggered_at`).
+
+25. **Saving a model through the Edit Model Portfolio page RECOMPUTES its derived bands — it does not echo them.** In `absolute` category mode the form writes `equity`/`fixed_income` limits as **`max(0, target − category_drift_percentage)` / `min(99, target + category_drift_percentage)`** — the clamps are part of the rule, not decoration, and an audit that omits them raises a false positive on any model whose target is within the drift of the ends (Foundation Growth stores equity 98 / 93–99, which IS 98 ± 5 clamped). In `manual` category mode the form does not recompute them at all, which is why the `category_drift_percentage = 20` sitting on Core Growth, Equity Income, EI&CG, Aggressive and Fixed Income Total Return is inert rather than dangerous. In `relative` asset-class mode it writes `roundHalf(target × (1 ∓ asset_class_drift_percentage/100))`. Where the stored band disagrees with the stored drift, **the first save silently rewrites the band** and every save after that is idempotent, so the damage is invisible unless you diff. **No model is in that state today** (verified 3 Nov 2026: every `absolute`-mode row has bands equal to its own clamped formula). Two were. Foundation Balanced with Growth (id 90) was corrected by a save that set its drift to 5; **Growth (id 4)** stored drift 20 against ±5 bands since Apr 2026 and was corrected directly, setting `category_drift_percentage = 5` and leaving its bands untouched — the value its three siblings (ids 1–3) already carried, and the one its own bands already encoded. Editing id 4 would otherwise have widened equity 76–86 to 76–99 and fixed income 13–23 to 0–38, and `equity_lower_limit` is rendered on the Model Portfolios settings list, so it is a user-visible governed number. The recompute behaviour itself has not changed, so **re-check with the clamped formula above after any drift edit** rather than assuming it stays clean. Snapshot the row before saving (`md5((to_jsonb(m.*) - 'updated_at')::text)`) if you only meant to change one field — there is **no audit trigger on `model_portfolio_data`**, so nothing else records what a save overwrote.
