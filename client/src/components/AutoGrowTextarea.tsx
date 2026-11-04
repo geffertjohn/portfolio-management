@@ -11,6 +11,7 @@ export function AutoGrowTextarea({
   placeholder,
   className = '',
   maxHeightPx,
+  disabled = false,
 }: {
   value: string
   onChange: (v: string) => void
@@ -18,6 +19,8 @@ export function AutoGrowTextarea({
   className?: string
   /** Cap the grown height; content beyond it scrolls instead of expanding. */
   maxHeightPx?: number
+  /** Read-only, e.g. a fund annual review already handed to the committee. */
+  disabled?: boolean
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
@@ -47,6 +50,7 @@ export function AutoGrowTextarea({
     <textarea
       ref={ref}
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={1}

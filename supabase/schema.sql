@@ -796,11 +796,16 @@ CREATE TABLE IF NOT EXISTS "public"."holding_reviews" (
     "annual_decision" "text",
     "annual_notes" "text",
     "conviction_tier" smallint,
+    "proposed_decision" "text",
+    "proposed_weight" numeric,
+    "proposed_rationale" "text",
     CONSTRAINT "holding_reviews_action_check" CHECK (("action" = ANY (ARRAY['add'::"text", 'hold'::"text", 'trim'::"text", 'exit'::"text", 'watchlist'::"text"]))),
     CONSTRAINT "holding_reviews_annual_decision_check" CHECK (("annual_decision" = ANY (ARRAY['keep'::"text", 'increase'::"text", 'reduce'::"text", 'replace'::"text", 'exit'::"text"]))),
     CONSTRAINT "holding_reviews_business_trend_check" CHECK (("business_trend" = ANY (ARRAY['improving'::"text", 'stable'::"text", 'deteriorating'::"text"]))),
     CONSTRAINT "holding_reviews_conviction_check" CHECK (("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"]))),
     CONSTRAINT "holding_reviews_conviction_tier_check" CHECK ((("conviction_tier" >= 1) AND ("conviction_tier" <= 4))),
+    CONSTRAINT "holding_reviews_proposed_decision_check" CHECK (("proposed_decision" = ANY (ARRAY['keep'::"text", 'increase'::"text", 'reduce'::"text", 'replace'::"text", 'exit'::"text"]))),
+    CONSTRAINT "holding_reviews_proposed_weight_check" CHECK ((("proposed_weight" IS NULL) OR (("proposed_weight" >= (0)::numeric) AND ("proposed_weight" <= (100)::numeric)))),
     CONSTRAINT "holding_reviews_thesis_status_check" CHECK (("thesis_status" = ANY (ARRAY['intact'::"text", 'at_risk'::"text", 'broken'::"text"]))),
     CONSTRAINT "holding_reviews_valuation_check" CHECK (("valuation" = ANY (ARRAY['attractive'::"text", 'fair'::"text", 'expensive'::"text"]))),
     CONSTRAINT "holding_reviews_watchlist_trigger_check" CHECK (("watchlist_trigger" = ANY (ARRAY['fundamental_deterioration'::"text", 'margin_pressure'::"text", 'estimate_cuts'::"text", 'thesis_concern'::"text", 'valuation_issue'::"text", 'portfolio_issue'::"text"])))
@@ -1522,6 +1527,8 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio_review_log" (
     "checklist" "jsonb",
     "status" "text" DEFAULT 'completed'::"text" NOT NULL,
     "completed_at" timestamp with time zone,
+    "considerations" "text",
+    "committee_requested_at" timestamp with time zone,
     CONSTRAINT "portfolio_review_log_cadence_check" CHECK (("cadence" = ANY (ARRAY['monthly'::"text", 'quarterly'::"text", 'annual'::"text"]))),
     CONSTRAINT "portfolio_review_log_outcome_check" CHECK (("outcome" = ANY (ARRAY['no_issues'::"text", 'flagged_for_action'::"text", 'placed_on_watchlist'::"text", 'recommended_sell'::"text"]))),
     CONSTRAINT "portfolio_review_log_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'completed'::"text"])))
@@ -1529,6 +1536,14 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio_review_log" (
 
 
 ALTER TABLE "public"."portfolio_review_log" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."portfolio_review_log"."considerations" IS 'The advisor''s standing thoughts handed to the committee, alongside the per-holding proposals in holding_reviews.';
+
+
+
+COMMENT ON COLUMN "public"."portfolio_review_log"."committee_requested_at" IS 'Set when the review is handed off. The queue a committee run reads; null means not yet requested.';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."portfolio_review_log_id_seq"
@@ -1543,6 +1558,39 @@ ALTER SEQUENCE "public"."portfolio_review_log_id_seq" OWNER TO "postgres";
 
 
 ALTER SEQUENCE "public"."portfolio_review_log_id_seq" OWNED BY "public"."portfolio_review_log"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."portfolio_review_memos" (
+    "id" bigint NOT NULL,
+    "review_log_id" bigint NOT NULL,
+    "portfolio_name" "text" NOT NULL,
+    "pm_assessment" "text",
+    "risk_assessment" "text",
+    "macro_context" "text",
+    "recommendations" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "summary" "text",
+    "risk_report_id" bigint,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "deleted_at" timestamp with time zone
+);
+
+
+ALTER TABLE "public"."portfolio_review_memos" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."portfolio_review_memos_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."portfolio_review_memos_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."portfolio_review_memos_id_seq" OWNED BY "public"."portfolio_review_memos"."id";
 
 
 
@@ -2380,6 +2428,10 @@ ALTER TABLE ONLY "public"."portfolio_review_log" ALTER COLUMN "id" SET DEFAULT "
 
 
 
+ALTER TABLE ONLY "public"."portfolio_review_memos" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."portfolio_review_memos_id_seq"'::"regclass");
+
+
+
 ALTER TABLE ONLY "public"."prospects" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."prospects_id_seq"'::"regclass");
 
 
@@ -2554,6 +2606,11 @@ ALTER TABLE ONLY "public"."portfolio"
 
 ALTER TABLE ONLY "public"."portfolio_review_log"
     ADD CONSTRAINT "portfolio_review_log_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."portfolio_review_memos"
+    ADD CONSTRAINT "portfolio_review_memos_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2855,6 +2912,10 @@ CREATE UNIQUE INDEX "portfolio_review_log_one_draft" ON "public"."portfolio_revi
 
 
 CREATE INDEX "portfolio_review_log_portfolio_name_idx" ON "public"."portfolio_review_log" USING "btree" ("portfolio_name");
+
+
+
+CREATE UNIQUE INDEX "portfolio_review_memos_one_per_review" ON "public"."portfolio_review_memos" USING "btree" ("review_log_id") WHERE ("deleted_at" IS NULL);
 
 
 
@@ -3187,6 +3248,21 @@ ALTER TABLE ONLY "public"."investment_policy_statements"
 
 
 
+ALTER TABLE ONLY "public"."portfolio_review_memos"
+    ADD CONSTRAINT "portfolio_review_memos_portfolio_name_fkey" FOREIGN KEY ("portfolio_name") REFERENCES "public"."portfolio"("name") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."portfolio_review_memos"
+    ADD CONSTRAINT "portfolio_review_memos_review_log_id_fkey" FOREIGN KEY ("review_log_id") REFERENCES "public"."portfolio_review_log"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."portfolio_review_memos"
+    ADD CONSTRAINT "portfolio_review_memos_risk_report_id_fkey" FOREIGN KEY ("risk_report_id") REFERENCES "public"."risk_reports"("id") ON DELETE SET NULL;
+
+
+
 ALTER TABLE ONLY "public"."portfolio_review_schedules"
     ADD CONSTRAINT "portfolio_review_schedules_portfolio_name_fkey" FOREIGN KEY ("portfolio_name") REFERENCES "public"."portfolio"("name") ON DELETE CASCADE;
 
@@ -3374,6 +3450,10 @@ CREATE POLICY "Allow delete portfolio_review_log" ON "public"."portfolio_review_
 
 
 
+CREATE POLICY "Allow delete portfolio_review_memos" ON "public"."portfolio_review_memos" FOR DELETE TO "authenticated", "anon" USING (true);
+
+
+
 CREATE POLICY "Allow delete positions" ON "public"."positions" FOR DELETE TO "authenticated", "anon" USING (true);
 
 
@@ -3487,6 +3567,10 @@ CREATE POLICY "Allow insert portfolio_model_map" ON "public"."portfolio_model_ma
 
 
 CREATE POLICY "Allow insert portfolio_review_log" ON "public"."portfolio_review_log" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
+
+
+
+CREATE POLICY "Allow insert portfolio_review_memos" ON "public"."portfolio_review_memos" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
 
 
 
@@ -3606,6 +3690,10 @@ CREATE POLICY "Allow read portfolio_review_log" ON "public"."portfolio_review_lo
 
 
 
+CREATE POLICY "Allow read portfolio_review_memos" ON "public"."portfolio_review_memos" FOR SELECT TO "authenticated", "anon" USING (true);
+
+
+
 CREATE POLICY "Allow read positions" ON "public"."positions" FOR SELECT TO "authenticated", "anon" USING (true);
 
 
@@ -3719,6 +3807,10 @@ CREATE POLICY "Allow update portfolio_model_map" ON "public"."portfolio_model_ma
 
 
 CREATE POLICY "Allow update portfolio_review_log" ON "public"."portfolio_review_log" FOR UPDATE TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "Allow update portfolio_review_memos" ON "public"."portfolio_review_memos" FOR UPDATE TO "authenticated", "anon" USING (true);
 
 
 
@@ -3919,6 +4011,9 @@ ALTER TABLE "public"."portfolio_model_map" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."portfolio_review_log" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."portfolio_review_memos" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."portfolio_review_schedules" ENABLE ROW LEVEL SECURITY;
@@ -4529,6 +4624,18 @@ GRANT ALL ON TABLE "public"."portfolio_review_log" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."portfolio_review_log_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."portfolio_review_log_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."portfolio_review_log_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."portfolio_review_memos" TO "anon";
+GRANT ALL ON TABLE "public"."portfolio_review_memos" TO "authenticated";
+GRANT ALL ON TABLE "public"."portfolio_review_memos" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."portfolio_review_memos_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."portfolio_review_memos_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."portfolio_review_memos_id_seq" TO "service_role";
 
 
 
