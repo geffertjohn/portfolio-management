@@ -612,7 +612,7 @@ grep recipe.
 - **`docs/ai-investment-team-charter.md`** points at `scratchpad/persist_committee.py`,
   which does not exist, for the committee's documented persistence step.
 
-### 26. `excel_gone()` reports "not running" whenever `prlctl exec` fails `[ ]`
+### 26. `excel_gone()` reports "not running" whenever `prlctl exec` fails `[x] DONE 4 Nov`
 
 `scripts/refresh/refresh.sh:115` discards stderr and never reads the exit status, so any
 failure → empty output → `grep -q` fails → `!` → **true**. `close_excel_and_suspend`
@@ -625,6 +625,37 @@ I was in this file today and did not catch it.
 **Fix:** capture the return code, treat non-zero as "unknown — assume NOT gone", log
 stderr. Also delete the stale "Parallels Pro/Business only" claim, which this morning's
 log disproves.
+
+**Done (PR #76), and reproduced first.** Against the live VM (suspended),
+`prlctl exec` returns 255 `PRL_ERR_IO_STOPPED` and the old predicate answered
+**"gone"** — the exact false positive. `lock_gone` has the same shape but fails
+the SAFE way (empty output means no `LOCK_CLEAR`, so it reports the lock present
+and retries); only `excel_gone` inverted its result, which is why only it was
+dangerous. That asymmetry is now written down beside both.
+
+`excel_state` returns **three** answers — `gone` / `running` / `unknown` — and
+`excel_gone` is just `state = gone`. An empty task list counts as unreadable,
+since a live Windows box always has processes. On `unknown` the shutdown path
+stops waiting immediately (a grace period cannot observe what it cannot read),
+says so instead of claiming an exit, and still attempts the taskkill and the
+lock clear. All three paths exercised with a stubbed `prlctl`.
+
+**The log line this replaces was unfalsifiable.** Today's run printed *"Excel
+exited on its own after 0s"*; on 3 Nov the same check took >60s and still found
+Excel alive. Nothing in the log could tell a real instant exit from a failed
+probe — so whether this morning suspended cleanly is genuinely unknown, and
+tomorrow's log will be the first that can answer it.
+
+**A bug I introduced and the test caught:** `log()` tees to stdout, so calling it
+inside `excel_state` folded the warning into the `$(...)` capture and the `case`
+fell through. Added `log_quiet()` — file only — and noted why.
+
+**The "Pro/Business only" claim was wrong**, in `refresh.sh`, `README.md` and
+`watch-trigger.cmd`. The 3 Nov log shows `prlctl exec` reading the task list and
+terminating PID 9768 from this very script. The real limit is that it runs as
+SYSTEM in session 0, so it has no desktop and cannot open an INTERACTIVE Excel —
+which is the actual reason for the trigger file, and what the corrected comments
+now say.
 
 ---
 

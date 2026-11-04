@@ -92,16 +92,16 @@ it is resumed, used, and suspended. Suspending (not shutting down) preserves the
 logged-in Windows session, so auto-login inside Windows is only the recovery path
 for a cold start — a host power cut or a Parallels update.
 
-**The Mac asks; it cannot tell.** `prlctl exec` — the obvious way to launch Excel
-in the guest — is **Parallels Pro/Business only**, and this is a standard licence:
+**The Mac asks rather than tells — but it CAN see.** `prlctl exec` does work on
+this licence, and the shutdown path depends on it: on 2026-11-03 it read the
+guest task list, found `EXCEL.EXE` and terminated PID 9768, all from
+`refresh.sh`. An older note here claimed the command was Pro/Business only;
+that is wrong and was corrected on 2026-11-04.
 
-```
-$ prlctl exec "Windows 11" cmd.exe /c ...
-The command is available only in Parallels Desktop for Mac Pro or Business Edition.
-```
-
-So the Mac drops a trigger file in the shared folder and `watch-trigger.cmd`, run
-by Task Scheduler every 2 minutes, picks it up. This beats scheduling the refresh
+What `prlctl exec` cannot do is start an **interactive** Excel inside the
+logged-in session — a process it starts has no desktop to draw on, which is the
+actual reason for the trigger file. So the Mac drops one in the shared folder
+and `watch-trigger.cmd`, run by Task Scheduler every 2 minutes, picks it up. This beats scheduling the refresh
 on Windows' own clock, because the Mac controls when the VM is actually awake —
 and unlike a logon-triggered task, a polled one still fires after a resume.
 
