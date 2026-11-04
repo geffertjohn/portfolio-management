@@ -316,13 +316,13 @@ CREATE OR REPLACE FUNCTION "public"."seed_portfolio_review_schedules"() RETURNS 
     LANGUAGE "plpgsql"
     AS $$
 begin
-  -- Every portfolio gets quarterly + annual review timers.
   insert into public.portfolio_review_schedules (portfolio_name, cadence, next_review_at)
-  select new.name, c.cadence, now()
-  from (values ('quarterly'),('annual')) as c(cadence)
+  values
+    (new.name, 'quarterly', now()),
+    (new.name, 'annual',    now() + interval '9 months')
   on conflict (portfolio_name, cadence) do nothing;
 
-  -- Monthly reviews only for Equity (individual-stock) strategies.
+  -- Monthly is Equity-only and sits outside the quarterly/annual cycle.
   if new.portfolio_strategy = 'Equity' then
     insert into public.portfolio_review_schedules (portfolio_name, cadence, next_review_at)
     values (new.name, 'monthly', now())

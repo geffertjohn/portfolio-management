@@ -200,6 +200,79 @@ function calcNextReview(cadence: PortfolioCadence, from = new Date()): Date {
   return d
 }
 
+/** Calendar day in UTC, for comparing two due dates that are really days. */
+function dayOf(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * The quarterly that belongs with an annual due on `annualDueAt`.
+ *
+ * Nine months before it — so the three quarterlies land at annual −9, −6 and
+ * −3, and the annual itself takes the fourth slot. This is the invariant the
+ * whole rule rests on, so it has one definition.
+ */
+export function quarterlyAnchorFor(annualDueAt: Date): Date {
+  const d = new Date(annualDueAt)
+  d.setMonth(d.getMonth() - 9)
+  return d
+}
+
+/** What completing one review does to the portfolio's schedule. */
+export interface ScheduleAdvance {
+  /** New due date for the cadence just completed. */
+  nextReviewAt: Date
+  /**
+   * Set when completing an ANNUAL: the quarterly is re-anchored to it, so the
+   * next year's three quarterlies fall at +3, +6 and +9 months and the annual
+   * takes the fourth slot.
+   */
+  quarterlyAt?: Date
+}
+
+/**
+ * Advance the schedule after a review, so a portfolio runs **three quarterly
+ * reviews and one annual**, never two on the same day.
+ *
+ * The annual REPLACES the fourth quarterly rather than adding to it. Before
+ * Nov 2026 the two timers advanced independently — quarterly +3 months,
+ * annual +12, each ignorant of the other — which gives four quarterlies and an
+ * annual every year, and a guaranteed collision when the fourth quarterly
+ * lands on the annual's own date. The seed trigger made it worse by starting
+ * both at `now()`, so every portfolio was born colliding.
+ *
+ * The annual is the anchor. Completing it sets the next annual a year out and
+ * drops the quarterly three months after it; completing a quarterly steps
+ * three months unless that would reach the annual, in which case the annual
+ * covers that slot and the quarterly moves to three months beyond it.
+ *
+ * `annualDueAt` is the portfolio's current annual due date, or null when it has
+ * no annual row — in which case the quarterly simply steps, because there is
+ * nothing to collide with.
+ */
+export function advanceSchedule(
+  cadence: PortfolioCadence,
+  completedAt: Date,
+  annualDueAt: Date | null,
+): ScheduleAdvance {
+  if (cadence === 'monthly') {
+    // Monthly is Equity-only and is not part of the quarterly/annual cycle.
+    return { nextReviewAt: calcNextReview('monthly', completedAt) }
+  }
+
+  if (cadence === 'annual') {
+    const nextAnnual = calcNextReview('annual', completedAt)
+    return { nextReviewAt: nextAnnual, quarterlyAt: quarterlyAnchorFor(nextAnnual) }
+  }
+
+  const stepped = calcNextReview('quarterly', completedAt)
+  if (annualDueAt && dayOf(stepped) >= dayOf(annualDueAt)) {
+    // The annual takes this slot; the next quarterly is a quarter past it.
+    return { nextReviewAt: calcNextReview('quarterly', annualDueAt) }
+  }
+  return { nextReviewAt: stepped }
+}
+
 /** Next due date for a cadence, as an ISO string — used to pre-fill the modal. */
 export function nextReviewDateFor(cadence: PortfolioCadence, from = new Date()): string {
   return calcNextReview(cadence, from).toISOString()
@@ -364,12 +437,36 @@ export interface CompleteReviewOptions {
 }
 
 /**
- * Finalize a draft review: stamp it completed and advance ONLY that cadence's
- * schedule timer. Per-holding assessments are saved separately (saveHoldingReviews).
+ * Finalize a draft review: stamp it completed and advance the schedule.
+ *
+ * **Completing an ANNUAL also re-anchors the quarterly**, because the annual
+ * replaces the fourth quarterly rather than adding to it — three quarterly
+ * reviews and one annual per year, never two on the same day. See
+ * `advanceSchedule`. Per-holding assessments are saved separately
+ * (`saveHoldingReviews`).
+ *
+ * An explicit `nextReviewAt` from the Summary section still wins for the
+ * cadence being completed: the advisor may know the next one has to move. The
+ * re-anchored quarterly follows the date actually used, not the default, so
+ * the two cannot end up inconsistent.
  */
 export async function completeReview(opts: CompleteReviewOptions): Promise<void> {
   const { reviewLogId, portfolioName, cadence, checklist, notes, reviewedAt } = opts
-  const nextReviewAt = (opts.nextReviewAt ?? calcNextReview(cadence, reviewedAt)).toISOString()
+
+  // The portfolio's current annual due date is what a quarterly must not land
+  // on. Read it before writing anything.
+  const { data: annualRow, error: annualError } = await supabase
+    .from('portfolio_review_schedules')
+    .select('next_review_at')
+    .eq('portfolio_name', portfolioName)
+    .eq('cadence', 'annual')
+    .maybeSingle()
+  if (annualError) throw annualError
+  const annualDueAt = annualRow?.next_review_at ? new Date(annualRow.next_review_at) : null
+
+  const advance = advanceSchedule(cadence, reviewedAt, annualDueAt)
+  const chosenNext = opts.nextReviewAt ?? advance.nextReviewAt
+  const nextReviewAt = chosenNext.toISOString()
 
   const { error: logError } = await supabase
     .from('portfolio_review_log')
@@ -398,4 +495,23 @@ export async function completeReview(opts: CompleteReviewOptions): Promise<void>
       { onConflict: 'portfolio_name,cadence' },
     )
   if (schedError) throw schedError
+
+  // Completing the annual moves the quarterly with it, so next year's three
+  // quarterlies fall at +3, +6 and +9 and the annual takes the fourth slot.
+  // Anchored on the date actually used for the annual, not the default.
+  if (cadence === 'annual') {
+    const quarterlyAt = quarterlyAnchorFor(chosenNext)
+    const { error: qError } = await supabase
+      .from('portfolio_review_schedules')
+      .upsert(
+        {
+          portfolio_name: portfolioName,
+          cadence: 'quarterly',
+          next_review_at: quarterlyAt.toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'portfolio_name,cadence' },
+      )
+    if (qError) throw qError
+  }
 }
