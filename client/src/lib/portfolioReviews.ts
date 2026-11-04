@@ -134,7 +134,17 @@ export function reviewTasksFor(
 ): ReviewTaskDef[] {
   const base = PORTFOLIO_REVIEW_TASKS[cadence]
   const isEquity = strategy === 'Equity'
-  if (isEquity) return base
+  if (isEquity) {
+    // A quarterly or annual ABSORBS the monthly slot it lands on (see
+    // `advanceSchedule`), so it has to carry the monthly's two checks or that
+    // month loses them. Fund books already had these for the mirror-image
+    // reason — they have no monthly at all — so every quarterly and annual in
+    // the app now opens with the same two portfolio-level checks.
+    if (cadence === 'quarterly' || cadence === 'annual') {
+      return [POSITION_SIZING_TASK, PERFORMANCE_ATTRIBUTION_TASK, ...base]
+    }
+    return base
+  }
   if (cadence === 'quarterly') return FUND_QUARTERLY_TASKS
   if (cadence === 'annual') return FUND_ANNUAL_TASKS
   return base
@@ -250,14 +260,44 @@ export interface ScheduleAdvance {
  * no annual row — in which case the quarterly simply steps, because there is
  * nothing to collide with.
  */
+/**
+ * The other cadences' due dates, which the rules below read.
+ *
+ * Named rather than positional: this is the second time the function has
+ * needed more context, and two bare `Date | null` arguments in a row is the
+ * shape that let `MarkReviewedModal`'s `isFund` disagree with its `security`.
+ */
+export interface OtherDueDates {
+  annual: Date | null
+  quarterly?: Date | null
+}
+
+/** How many months a monthly may be pushed before we stop trying. */
+const MONTHLY_DODGE_LIMIT = 12
+
 export function advanceSchedule(
   cadence: PortfolioCadence,
   completedAt: Date,
-  annualDueAt: Date | null,
+  due: OtherDueDates,
 ): ScheduleAdvance {
+  const annualDueAt = due.annual
+
   if (cadence === 'monthly') {
-    // Monthly is Equity-only and is not part of the quarterly/annual cycle.
-    return { nextReviewAt: calcNextReview('monthly', completedAt) }
+    // A larger review ABSORBS the monthly that falls on its date — it carries
+    // position sizing and performance attribution itself (`reviewTasksFor`),
+    // so the monthly skips that month rather than standing beside it. Eight
+    // monthlies, three quarterlies and an annual: twelve sittings, no two on
+    // one day.
+    //
+    // Bounded rather than a single step, because real rows are not always
+    // well formed — Foundation Conservative's annual sat overdue for weeks —
+    // and a quarterly one month from the annual would otherwise dodge onto it.
+    let next = calcNextReview('monthly', completedAt)
+    const taken = [due.quarterly, annualDueAt].filter((d): d is Date => d != null)
+    for (let i = 0; i < MONTHLY_DODGE_LIMIT && taken.some((t) => dayOf(t) === dayOf(next)); i++) {
+      next = calcNextReview('monthly', next)
+    }
+    return { nextReviewAt: next }
   }
 
   if (cadence === 'annual') {
@@ -462,18 +502,24 @@ export interface CompleteReviewOptions {
 export async function completeReview(opts: CompleteReviewOptions): Promise<void> {
   const { reviewLogId, portfolioName, cadence, checklist, notes, reviewedAt } = opts
 
-  // The portfolio's current annual due date is what a quarterly must not land
-  // on. Read it before writing anything.
-  const { data: annualRow, error: annualError } = await supabase
+  // The dates a smaller cadence must not land on: a quarterly dodges the
+  // annual, a monthly dodges both. Read before writing anything.
+  const { data: otherRows, error: otherError } = await supabase
     .from('portfolio_review_schedules')
-    .select('next_review_at')
+    .select('cadence, next_review_at')
     .eq('portfolio_name', portfolioName)
-    .eq('cadence', 'annual')
-    .maybeSingle()
-  if (annualError) throw annualError
-  const annualDueAt = annualRow?.next_review_at ? new Date(annualRow.next_review_at) : null
+    .in('cadence', ['annual', 'quarterly'])
+  if (otherError) throw otherError
+  const dueOf = (c: string): Date | null => {
+    const raw = otherRows?.find((r) => r.cadence === c)?.next_review_at
+    return raw ? new Date(raw) : null
+  }
+  const annualDueAt = dueOf('annual')
 
-  const advance = advanceSchedule(cadence, reviewedAt, annualDueAt)
+  const advance = advanceSchedule(cadence, reviewedAt, {
+    annual: annualDueAt,
+    quarterly: dueOf('quarterly'),
+  })
   const chosenNext = opts.nextReviewAt ?? advance.nextReviewAt
   const nextReviewAt = chosenNext.toISOString()
 

@@ -322,10 +322,17 @@ begin
     (new.name, 'annual',    now() + interval '9 months')
   on conflict (portfolio_name, cadence) do nothing;
 
-  -- Monthly is Equity-only and sits outside the quarterly/annual cycle.
+  -- Monthly is Equity-only. It starts ONE MONTH OUT, not at now().
+  --
+  -- The quarterly is seeded at now(), so seeding the monthly there too made
+  -- every new Equity portfolio collide on its first day -- the same birth
+  -- defect the quarterly/annual pair carried until Nov 2026. A larger review
+  -- absorbs the monthly that falls on its date (advanceSchedule in
+  -- lib/portfolioReviews.ts), but that rule only runs when a review is
+  -- COMPLETED, so the seeded state has to be clean on its own.
   if new.portfolio_strategy = 'Equity' then
     insert into public.portfolio_review_schedules (portfolio_name, cadence, next_review_at)
-    values (new.name, 'monthly', now())
+    values (new.name, 'monthly', now() + interval '1 month')
     on conflict (portfolio_name, cadence) do nothing;
   end if;
 
