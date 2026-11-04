@@ -516,7 +516,13 @@ export function SecurityDetailPage() {
                 </div>
               ) : (
                 <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
-                  No review schedule set. Click "Set Schedule" to configure a review cadence.
+                  {/* This said 'Click "Set Schedule"' — a control that exists
+                      nowhere. The modal had a 'schedule' mode that both call
+                      sites hard-coded past, so the button was never built and
+                      the sentence pointed at nothing. Recording a review is in
+                      fact the way a schedule row appears: markReviewed upserts
+                      review_schedules on security_id. */}
+                  No review schedule yet — recording a review above creates one.
                 </div>
               )}
             </section>
@@ -744,7 +750,6 @@ export function SecurityDetailPage() {
           securityId={security.security_id}
           securitySymbol={security.security_id}
           currentCadence={reviewSchedule?.cadence ?? 'quarterly'}
-          mode="review"
           fundSecurity={isFundOrEtfSecurity(security) ? security : null}
           companyName={companyName}
           lastEarnings={lastEarnings}

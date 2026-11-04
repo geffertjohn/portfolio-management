@@ -614,7 +614,7 @@ are now driven by **one** column list; they were three parallel literals that ha
 to stay in the same order by hand. Verified on ETF Conservative (2.5 yrs: 3/5/10
 n/a) and Foundation Conservative (0.11 yrs: 1/3/5/10 n/a).
 
-### 19. Orphaned files and exports `[ ]`
+### 19. Orphaned files and exports `[x] DONE 4 Nov`
 
 - **`components/AtRiskModal.tsx`** — 132 lines, zero references. A dead *file*, the
   category `noUnusedLocals` structurally cannot catch. It is also the only live reader
@@ -642,6 +642,48 @@ Note `qualifiesForFlag` and `rulesForPortfolio` are not ordinary dead code: both
 doc comments claiming to be the single definition of a rule, while the live consumer is
 a job prompt restating it in prose. A prompt cannot call TypeScript. Decide which copy
 is authoritative and delete the other.
+
+**Done.** Deleted: `AtRiskModal.tsx` (132 lines, zero references),
+`NotificationsPage` with its route and nav entry, eleven lib exports, six query
+keys (nine were claimed; one went with `alert_rules` in §16 and two had gained
+callers), `MetricCard.scale` and `FinancialsTooltip.metric` (both declared,
+passed by every caller, never read), eight unreachable `StatusBadge` variants
+and its never-passed `label` prop, and the modal's `'schedule'` mode.
+
+**The two rule-bearing exports were decided separately, and differently.**
+
+- **`rulesForPortfolio` / `fetchComplianceRules` — deleted; the prompt is
+  authoritative.** `.claude/agents/risk-manager.md` states the rule with the SQL
+  — *"a rule sets exactly one of `portfolio_name` / `portfolio_strategy`, so you
+  must match on both or you will silently miss every strategy-scoped rule"* —
+  and it is the copy that runs. The app's Compliance hub reads
+  `fetchAllComplianceRules` (all rules, to edit them) and never needed the
+  resolver.
+- **`qualifiesForFlag` / `allMetricsRecovered` — KEPT, and pinned.** Deleting
+  them would leave the firm's flag rule with no machine-readable form at all.
+  Their doc comment claimed *"the `at-risk-review` job applies this rule"*, which
+  is false — the job restates it in prose. Corrected, and
+  **`atRiskRule.test.ts` now holds the two copies together**: it parses "3 or
+  more red metrics AND at least one … MARGIN metric" out of the prompt and
+  asserts it against `MIN_REDS_TO_FLAG` and the margin gate. Mutation-tested in
+  BOTH directions — editing either copy alone fails the build.
+
+**`AT_RISK_METRICS_BY_ASSET_CLASS`'s fund sets are confirmed dead, and the doc
+was wrong about them.** CLAUDE.md said "funds use the `equity`/`fixed income`
+sets, unchanged". `AtRiskModal` was their only reader; the live fund path calls
+`addToAtRisk(securityId, [], …)` with an **empty** array, so a fund flagged
+At-Risk carries no metrics and the sell-timer tiering has nothing to count. The
+sets are kept as the firm's definition for the planned fund-review automation
+and are now labelled *defined, not wired*.
+
+**`SecurityDetailPage` told the user to click a control that does not exist** —
+*No review schedule set. Click "Set Schedule"…*, which was the `'schedule'`
+mode's button, never built. It now says what is true: recording a review creates
+the schedule, because `markReviewed` upserts `review_schedules` on
+`security_id`.
+
+**One user-visible removal, flagged rather than buried:** the Notifications
+settings page is gone from the nav.
 
 ---
 
@@ -718,7 +760,7 @@ convention (`at-risk-review` before `post-earnings-brief`) against the plists
 rather than the prose. Parser self-check included so it cannot pass vacuously;
 both drift cases mutation-tested.
 
-### 22. Three oversized components worth splitting `[ ]`
+### 22. Three oversized components worth splitting `[x] DONE 4 Nov`
 
 - **`MarkReviewedModal.tsx` (746)** — two unrelated forms plus an evidence pipeline,
   every branch triple-gated on `mode × isFund`. Delete `'schedule'` mode, extract
@@ -730,6 +772,42 @@ both drift cases mutation-tested.
 - **`ActionItemsPage.tsx` (651)** — extract `useActionFilters` (it owns a storage
   schema) and `exportActionsCsv` into `lib/actions.ts`, where half the CSV concern
   already lives.
+
+**Done, with one deliberate departure.**
+
+| file | before | after |
+|---|---|---|
+| `Layout.tsx` | 546 | **121** |
+| `MarkReviewedModal.tsx` | 829 | **735** |
+| `ActionItemsPage.tsx` | 651 | **615** |
+
+- **`Layout`** → `components/nav/navLinks.tsx` (the tree as data),
+  `NavDropdown.tsx` (desktop dropdown **and** `MobileNavGroup`), and
+  `TickerSearch.tsx`. The win is not the line count: Holdings and Settings were
+  two copies of the same dropdown with **two identical click-outside
+  `useEffect`s** differing only in which ref they closed, and the mobile
+  accordion was two more copies. Four blocks became two components used twice
+  each, and the open state and ref moved to the component that owns them. The
+  close-on-route-change the page did centrally is preserved inside each.
+- **`ActionItemsPage`** → `hooks/useActionFilters.ts` (six pieces of view state
+  behind one storage key, with `try`/`catch` on both read and write, which the
+  inline version had on neither) and `buildActionsCsv` in `lib/actions.ts`,
+  beside `actionLabel` so the export and the row cannot name an action
+  differently. `SourceFilter` and `GroupBy` moved there too.
+- **`MarkReviewedModal`**: `'schedule'` mode deleted (§19) and `buildSnapshot`
+  extracted to **`lib/reviewSnapshot.ts`** — the highest-value half, because that
+  mapping is the only thing making a stock review reconstructable and it sat in a
+  closure where nothing could test it. Removing `mode` also exposed that
+  `cadence` state could no longer diverge from `currentCadence`, so it went too.
+
+**NOT done: the `StockReviewForm` / `FundReviewForm` split.** The stated reason
+for it was that the `mode × isFund` matrix "is what let §4 ship" — and both legs
+of that matrix are now gone: the `fundSecurity` prop was collapsed in PR #67 and
+`mode` is deleted here. What is left is a 735-line component branching on one
+boolean. Against that, components have **no** automated coverage in this repo —
+the suite is lib-only by design — so a mechanical move of the audit-record write
+path would be the largest unguarded change on the list for the smallest
+remaining benefit. Extracting the snapshot into the tested layer bought more.
 
 ### 23. CLAUDE.md: 1,334 lines, with wrong claims in it `[x] DONE 4 Nov`
 

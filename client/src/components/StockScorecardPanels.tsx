@@ -267,7 +267,6 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
         displayValue={operatingMargin !== null ? fmtDecimalPct(operatingMargin) : EMPTY}
         rawValue={operatingMargin}
         neutral={0}
-        scale={0.3}
         higherIsBetter={true}
         benchmarkValue={opMarginYears[0]?.operatingProfitMargin ?? null}
         benchmark2Value={opMarginYears[1]?.operatingProfitMargin ?? null}
@@ -286,7 +285,6 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
         displayValue={fcfTtm !== null ? fmtDecimalPct(fcfTtm) : EMPTY}
         rawValue={fcfTtm}
         neutral={0}
-        scale={0.3}
         higherIsBetter={true}
         benchmarkValue={fcfMarginYears[0]?.fcfMargin ?? null}
         benchmark2Value={fcfMarginYears[1]?.fcfMargin ?? null}
@@ -305,7 +303,6 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
         displayValue={revGrowthTtm !== null ? fmtDecimalPct(revGrowthTtm) : EMPTY}
         rawValue={revGrowthTtm}
         neutral={0}
-        scale={0.3}
         higherIsBetter={true}
         benchmarkValue={bench1SalesGrowth}
         benchmark2Value={bench2SalesGrowth}
@@ -322,7 +319,6 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
         displayValue={epsGrowthTtm !== null ? fmtDecimalPct(epsGrowthTtm) : EMPTY}
         rawValue={epsGrowthTtm}
         neutral={0}
-        scale={0.5}
         higherIsBetter={true}
         benchmarkValue={bench1EpsGrowth}
         benchmark2Value={bench2EpsGrowth}
@@ -339,7 +335,6 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
         displayValue={revCagr3y !== null ? fmtDecimalPct(revCagr3y) : EMPTY}
         rawValue={revCagr3y}
         neutral={0}
-        scale={0.5}
         higherIsBetter={true}
         benchmarkValue={bench1SalesGrowth3y}
         benchmark2Value={bench2SalesGrowth3y}
@@ -356,7 +351,6 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
         displayValue={epsCagr3y !== null ? fmtDecimalPct(epsCagr3y) : EMPTY}
         rawValue={epsCagr3y}
         neutral={0}
-        scale={0.5}
         higherIsBetter={true}
         benchmarkValue={bench1EpsGrowth3y}
         benchmark2Value={bench2EpsGrowth3y}

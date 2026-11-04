@@ -239,7 +239,3 @@ export async function completeCandidate(id: number, fields: SaveCandidateFields)
   if (error) throw error
 }
 
-export async function deleteCandidate(id: number): Promise<void> {
-  const { error } = await supabase.from('security_additions').delete().eq('id', id)
-  if (error) throw error
-}

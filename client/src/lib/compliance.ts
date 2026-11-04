@@ -83,21 +83,6 @@ export function scopeCoverage(
   return ` · covers ${n} portfolio${n === 1 ? '' : 's'}`
 }
 
-/**
- * Every rule that applies to one portfolio: its own, plus every rule scoped to
- * its strategy. Any consumer asking "what governs this portfolio" must go
- * through this — matching on `portfolio_name` alone silently ignores every
- * strategy-scoped rule.
- */
-export function rulesForPortfolio(
-  rules: ComplianceRule[],
-  portfolio: { name: string; portfolio_strategy: string | null },
-): ComplianceRule[] {
-  return rules.filter((r) =>
-    r.portfolio_name === portfolio.name ||
-    (r.portfolio_strategy != null && r.portfolio_strategy === portfolio.portfolio_strategy))
-}
-
 export const RULE_TYPE_LABELS: Record<RuleType, string> = {
   max_single_position:    'Max Single Position',
   min_equity_pct:         'Min Equity %',

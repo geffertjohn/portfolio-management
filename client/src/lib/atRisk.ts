@@ -19,6 +19,15 @@ import type { Json } from '@/types/database.types'
 // ── Metric options by asset class ─────────────────────────────────────────────
 
 export const AT_RISK_METRICS_BY_ASSET_CLASS: Record<string, string[]> = {
+  // The two FUND sets have no live reader. `AtRiskModal` was the only one and
+  // was deleted in Nov 2026 as a dead file; the fund path into the list runs
+  // through the review modal, which calls `addToAtRisk(securityId, [], ...)` —
+  // an EMPTY metrics array. So a fund flagged At-Risk today carries no metrics
+  // and the sell-timer tiering, which counts reds, has nothing to count.
+  // Kept because they are the firm's definition and the planned fund-review
+  // automation is their intended consumer, not because anything reads them.
+  // Do not read this as 'funds use these, unchanged' — CLAUDE.md said that and
+  // it was wrong.
   equity: ['Alpha 3Y', 'Information Ratio 3Y', 'Sortino Ratio 3Y', 'Max Drawdown 3Y'],
   'fixed income': ['Sortino Ratio 3Y', 'Sharpe Ratio 3Y', 'Max Drawdown 3Y', 'Alpha 3Y'],
   // Mirrors the stock Scorecard cards (StockScorecardPanels)
@@ -138,8 +147,12 @@ export const MIN_REDS_TO_FLAG = 3
  * least one margin red separates the two, and keeps the cases that matter: MSFT
  * qualifies on FCF margin falling 25.4% -> 20.2% -> 17.3%.
  *
- * The `at-risk-review` job applies this rule; it lives here so the rule has one
- * definition and the app can explain a flag rather than restate the reasoning.
+ * **The job cannot call this function.** `at-risk-review` runs in Claude Code
+ * and restates the rule in prose at step 4 of its prompt — a prompt cannot
+ * call TypeScript, so there are unavoidably two copies. This one is the
+ * written definition and the one the app would use to explain a flag; the
+ * prompt's is the one that runs. `atRiskRule.test.ts` pins them together, so
+ * changing the threshold in one place fails the build.
  */
 export function qualifiesForFlag(metrics: AtRiskMetric[]): boolean {
   const reds = failingMetrics(metrics)
