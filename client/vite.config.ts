@@ -23,6 +23,38 @@ export default defineConfig({
      */
     dedupe: ['react', 'react-dom'],
   },
+  /**
+   * Every dependency, declared up front — this is a correctness fix, not a
+   * speed one.
+   *
+   * Vite's first optimize pass only sees what it can crawl from the entry, and
+   * every route here is `lazy()`. So `recharts`, `xlsx` and `jspdf` are first
+   * discovered when a lazy page actually loads, which triggers a SECOND
+   * optimize pass and a new browser hash — while the page already holds React
+   * from the first. Two React instances in one tree, and the dispatcher is
+   * null at the first hook of whatever mounted, reported against a file that
+   * has nothing to do with it ("Invalid hook call" in Layout, or in
+   * PortfolioDetailPage).
+   *
+   * It only bites on a COLD cache, which is why it looks random: it reappears
+   * after a dependency install or a change to this file, and not otherwise.
+   * Listing the deps makes the first pass complete, so there is never a second.
+   *
+   * Anything imported by a lazy page belongs here. The cost of a missing entry
+   * is the bug above; the cost of a stale one is nothing.
+   */
+  optimizeDeps: {
+    include: [
+      'react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime',
+      'react-router-dom',
+      '@tanstack/react-query',
+      '@supabase/supabase-js',
+      'recharts',
+      'xlsx',
+      'jspdf',
+      'jspdf-autotable',
+    ],
+  },
   server: {
     port: 5173,
     proxy: {
