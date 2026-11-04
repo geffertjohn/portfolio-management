@@ -9,6 +9,7 @@
  * Weights are stored as percent points (e.g. 6.50 = 6.5%).
  */
 import { supabase } from './supabase'
+import { ensureReviewSchedules } from './reviewSchedules'
 
 export interface AllocationSnapshot {
   effective_date: string // YYYY-MM-DD
@@ -263,6 +264,9 @@ export async function syncPositionsFromLatestSnapshot(
       toInsert.map((s) => ({ portfolio_name: portfolioName, security_id: s, allocation_pct: target.get(s)! })),
     )
     if (error) throw error
+    // `toInsert` is already scoped to securities not previously in this book,
+    // so this fires only for genuinely new holdings — not on every re-import.
+    await ensureReviewSchedules(toInsert)
   }
 
   const toUpdate = symbols.filter((s) => currentSet.has(s))
@@ -363,6 +367,7 @@ export async function syncPositionForGridEdit(
   const { error } = await supabase
     .from('positions').insert({ portfolio_name: portfolioName, security_id: sym, allocation_pct: weight })
   if (error) throw error
+  await ensureReviewSchedules([sym])
   return 'inserted'
 }
 

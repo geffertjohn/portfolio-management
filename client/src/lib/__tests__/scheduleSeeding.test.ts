@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { seededStockSchedules, type ScheduleSeedInput } from '../reviewSchedules'
+import { seededStockSchedules, newScheduleWrites, type ScheduleSeedInput } from '../reviewSchedules'
 
 /**
  * Nothing creates a `review_schedules` row when a stock is bought — the only
@@ -110,5 +110,89 @@ describe('seeding a schedule for a held stock that has none', () => {
       expect(s.nextReviewAt.slice(0, 10) > TODAY, `${s.securityId} seeded into the past`)
         .toBe(true)
     }
+  })
+})
+
+/**
+ * Wiring the purchase path (Nov 2026). Until then NOTHING created a schedule
+ * when a security entered a book — `upsertReviewSchedule` existed for exactly
+ * this and had no caller — so a bought stock showed on no review surface until
+ * somebody happened to open the Review Calendar.
+ */
+describe('what a newly held security gets', () => {
+  it('schedules a stock from its next call', () => {
+    const w = newScheduleWrites(
+      [stock({ security_id: 'NVDA', next_earnings_release: '2027-02-25T00:00:00Z' })],
+      TODAY,
+    )
+    expect(w).toEqual([
+      { securityId: 'NVDA', cadence: 'quarterly', nextReviewAt: '2027-02-26T00:00:00Z' },
+    ])
+  })
+
+  it('schedules a fund on its CADENCE, with no date of its own', () => {
+    // A fund has no earnings date to read, so the writer falls back to
+    // `calcNextReview(cadence)`. null is the instruction to do that — not a
+    // missing value.
+    const w = newScheduleWrites(
+      [stock({ security_id: 'VBILX', detailed_security_type: 'mutual_fund',
+               peer_group_name: 'Interm Bond' })],
+      TODAY,
+    )
+    expect(w).toEqual([{ securityId: 'VBILX', cadence: 'quarterly', nextReviewAt: null }])
+  })
+
+  it('uses the cadence default for a fund EVEN IF it carries an earnings date', () => {
+    // No fund carries one today, which is exactly why this needs pinning: a
+    // fixture with a null date cannot tell the rule from the accident. This
+    // codebase has form for stale residue on columns a dead sync once wrote
+    // (`*_total_return_nav` on stocks), and a fund scheduled from an earnings
+    // date would silently stop being cadence-driven.
+    const w = newScheduleWrites(
+      [stock({ security_id: 'RESIDUE', detailed_security_type: 'mutual_fund',
+               peer_group_name: 'Interm Bond',
+               next_earnings_release: '2027-02-25T00:00:00Z' })],
+      TODAY,
+    )
+    expect(w).toEqual([{ securityId: 'RESIDUE', cadence: 'quarterly', nextReviewAt: null }])
+  })
+
+  it('gives a stock with a STALE earnings date nothing, not a bad date', () => {
+    // It would be born overdue. The calendar seed refreshes from FMP and
+    // catches it there; writing a wrong date here would look like an answer.
+    expect(newScheduleWrites(
+      [stock({ security_id: 'TSM', next_earnings_release: '2026-10-15T00:00:00Z' })],
+      TODAY,
+    )).toEqual([])
+  })
+
+  it('handles a mixed batch — an allocation import adding both at once', () => {
+    const w = newScheduleWrites([
+      stock({ security_id: 'NVDA', next_earnings_release: '2027-02-25T00:00:00Z' }),
+      stock({ security_id: 'VBILX', detailed_security_type: 'mutual_fund', peer_group_name: 'Interm Bond' }),
+      stock({ security_id: 'STALE', next_earnings_release: '2026-01-01T00:00:00Z' }),
+    ], TODAY)
+    expect(w.map((x) => x.securityId).sort()).toEqual(['NVDA', 'VBILX'])
+  })
+
+  it('never writes a cadence the CHECK constraint would reject', () => {
+    const w = newScheduleWrites([
+      stock({ security_id: 'A', next_earnings_release: '2027-02-25T00:00:00Z' }),
+      stock({ security_id: 'B', detailed_security_type: 'etf', expense_ratio_generic: 0.03 }),
+    ], TODAY)
+    for (const x of w) expect(['quarterly', 'semi_annual', 'annual']).toContain(x.cadence)
+  })
+
+  it('counts each security once, never twice', () => {
+    // A row must not land in both arms: the stock arm and the fund arm are
+    // partitioned by the same classifier, and a double write would make the
+    // upsert overwrite the date it had just derived.
+    const w = newScheduleWrites([
+      stock({ security_id: 'X', next_earnings_release: '2027-02-25T00:00:00Z' }),
+      stock({ security_id: 'Y', detailed_security_type: 'etf', expense_ratio_generic: 0.03,
+              next_earnings_release: '2027-02-25T00:00:00Z' }),
+    ], TODAY)
+    expect(w).toHaveLength(2)
+    expect(new Set(w.map((x) => x.securityId)).size).toBe(2)
   })
 })

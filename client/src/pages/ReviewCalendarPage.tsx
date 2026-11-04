@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   fetchReviewSchedules, isOverdue, isDueSoon, redatedStockSchedules, applyScheduleRedates,
-  fetchUnscheduledHeldSecurities, seededStockSchedules, applyScheduleSeeds,
+  fetchUnscheduledHeldSecurities, ensureReviewSchedules,
   reviewDueDay, type ReviewCadence,
 } from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -86,10 +86,14 @@ export function ReviewCalendarPage() {
         }
       }
 
-      const seeds = seededStockSchedules(unscheduled, today)
-      if (seeds.length > 0) {
-        await applyScheduleSeeds(seeds)
-        setSeededCount(seeds.length)
+      // The SAME function the purchase path calls, so the two cannot diverge
+      // on what a new holding's schedule looks like. It matters here: this used
+      // to call `seededStockSchedules`, which skips funds — so four held mutual
+      // funds (VBTLX, VIGAX, VMSAX, VVIAX) stayed unscheduled while the stock
+      // gap read as closed.
+      const seeded = await ensureReviewSchedules(unscheduled.map((c) => c.security_id))
+      if (seeded > 0) {
+        setSeededCount(seeded)
         rows = await fetchReviewSchedules()
       }
 
@@ -98,7 +102,7 @@ export function ReviewCalendarPage() {
         await applyScheduleRedates(redates)
         setRedatedCount(redates.length)
       }
-      if (stale.length > 0 || seeds.length > 0 || redates.length > 0) {
+      if (stale.length > 0 || seeded > 0 || redates.length > 0) {
         await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedules })
       }
     })()
@@ -160,12 +164,13 @@ export function ReviewCalendarPage() {
               Updated earnings dates for {refreshedCount} stock{refreshedCount === 1 ? '' : 's'}.
             </p>
           )}
-          {/* Said separately: a held stock with no schedule was invisible to
-              every review surface, so starting one is a governed write, not
-              routine upkeep. */}
+          {/* Said separately: a held security with no schedule was invisible
+              to every review surface, so starting one is a governed write, not
+              routine upkeep. Securities, not stocks — four held mutual funds
+              were in this state. */}
           {!refreshing && seededCount != null && seededCount > 0 && (
             <p className="mt-1 text-xs text-gray-400">
-              Started a review schedule for {seededCount} held stock{seededCount === 1 ? '' : 's'} that had none.
+              Started a review schedule for {seededCount} held securit{seededCount === 1 ? 'y' : 'ies'} that had none.
             </p>
           )}
           {/* Said separately from the line above: a re-dated review is a date
