@@ -6,14 +6,18 @@
 # The VM is a short-lived worker: started, used, suspended. It is never left
 # running, because Windows wants ~4GB of an 8GB machine.
 #
-# Excel is launched by dropping a TRIGGER FILE the guest is watching for, not by
-# `prlctl exec` — that command is Parallels Pro/Business only. See
-# watch-trigger.cmd. The Mac still owns the schedule; it just asks rather than
-# tells.
+# Excel is LAUNCHED by dropping a TRIGGER FILE the guest is watching for, rather
+# than by `prlctl exec`. See watch-trigger.cmd. The Mac still owns the schedule;
+# it just asks rather than tells.
 #
-# Completion is detected by the OUTPUT FILE APPEARING. Nothing on this side can
-# see the Excel process at all, so the file is the only completion signal — and
-# it is the right one, since a hung Excel would otherwise wedge the run.
+# `prlctl exec` itself DOES work on this licence, whatever the older comments
+# here and in README.md claimed: on 2026-11-03 it read the guest task list, saw
+# EXCEL.EXE and terminated PID 9768, all from this script. The shutdown path
+# below depends on that. What it cannot do is start an interactive Excel in the
+# logged-in session, which is the reason for the trigger file.
+#
+# Completion is still detected by the OUTPUT FILE APPEARING, because that is the
+# right signal: a hung Excel would otherwise wedge the run.
 set -uo pipefail
 
 # NOT ~/Desktop, and not ~/Documents or ~/Downloads either.
@@ -54,6 +58,11 @@ KEEP_DAYS=30
 mkdir -p "$INBOX" "$PROCESSED" "$FAILED" "$LOGDIR"
 LOG="$LOGDIR/$(date +%Y-%m-%d).log"
 log() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOG"; }
+
+# log(), but to the FILE only. `log` tees to stdout, so calling it inside a
+# `$(...)` capture folds the log line into the captured value — which silently
+# broke `excel_state`'s return the first time it was written this way.
+log_quiet() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$LOG"; }
 
 # ── One run at a time ───────────────────────────────────────────────────────
 # A run that overruns its schedule must not have the next one start a second VM.
@@ -112,7 +121,38 @@ date '+%Y-%m-%d %H:%M:%S' > "$TRIGGER"
 # The grace period is the caller's, because the paths differ: a macro that
 # aborted cleanly may still be quitting Excel itself, while one that has not
 # written a file in 25 minutes is hung by definition and will never exit.
-excel_gone() { ! prlctl exec "$VM" tasklist.exe 2>/dev/null | grep -qi '^EXCEL.EXE'; }
+# Is Excel still up in the guest? THREE answers, not two.
+#
+# This used to be a one-liner that discarded stderr and never read the exit
+# status, so ANY failure — a suspended VM, a Parallels hiccup — produced empty
+# output, the grep found nothing, and the leading `!` turned that into "Excel is
+# gone". `close_excel_and_suspend` then logged "Excel exited on its own after 0s"
+# and suspended the VM with Excel possibly alive: the self-perpetuating wedge
+# that cost 15 of 20 runs in October, with `clear_excel_lock` unreachable in
+# exactly the state that needs it.
+#
+# Reproduced against the live VM while suspended: `prlctl exec` returns 255
+# (`PRL_ERR_IO_STOPPED`) and the old predicate answered "gone".
+#
+# `lock_gone` below has the same shape but fails the SAFE way — empty output
+# means no LOCK_CLEAR, so it reports the lock present and retries. Only this one
+# inverted its result, which is why only this one was dangerous.
+excel_state() {
+  _tl=$(prlctl exec "$VM" tasklist.exe 2>&1); _rc=$?
+  # An empty task list is impossible on a live Windows box, so treat it as
+  # unreadable rather than as "nothing is running".
+  if [ "$_rc" -ne 0 ] || [ -z "$_tl" ]; then
+    log_quiet "WARN: cannot read the guest task list (prlctl rc=$_rc): $(printf '%s' "$_tl" | head -1)"
+    printf 'unknown'
+  elif printf '%s\n' "$_tl" | grep -qi '^EXCEL.EXE'; then
+    printf 'running'
+  else
+    printf 'gone'
+  fi
+}
+
+# Gone means GONE. "Unknown" is not gone — assuming otherwise is the whole bug.
+excel_gone() { [ "$(excel_state)" = gone ]; }
 
 # Is the stale ~$ lock gone?
 #
@@ -172,12 +212,33 @@ clear_excel_lock() {
 
 close_excel_and_suspend() {
   grace_max="${1:-60}"; grace=0
-  until excel_gone || [ "$grace" -ge "$grace_max" ]; do sleep 5; grace=$((grace + 5)); done
-  if excel_gone; then
-    log "Excel exited on its own after ${grace}s"
-  else
-    log "WARN: Excel still running after ${grace}s — forcing it"
-    prlctl exec "$VM" taskkill.exe /IM EXCEL.EXE /F >>"$LOG" 2>&1
+  state=unknown
+  while :; do
+    state=$(excel_state)
+    [ "$state" = gone ] && break
+    # No point waiting out a grace period we cannot observe: if the task list is
+    # unreadable it will still be unreadable in 60 seconds, and the whole reason
+    # to wait is to watch Excel leave.
+    [ "$state" = unknown ] && break
+    [ "$grace" -ge "$grace_max" ] && break
+    sleep 5; grace=$((grace + 5))
+  done
+
+  case "$state" in
+    gone)
+      log "Excel exited on its own after ${grace}s" ;;
+    unknown)
+      # Say what is actually known. The old code logged "exited on its own after
+      # 0s" here, which reads as a clean shutdown and is why a wedge could sit
+      # undetected: the line was unfalsifiable from the log alone.
+      log "WARN: Excel's state is UNKNOWN (guest unreadable) — NOT claiming it exited; trying to force it anyway" ;;
+    *)
+      log "WARN: Excel still running after ${grace}s — forcing it" ;;
+  esac
+
+  if [ "$state" != gone ]; then
+    prlctl exec "$VM" taskkill.exe /IM EXCEL.EXE /F >>"$LOG" 2>&1 \
+      || log "WARN: taskkill failed (rc=$?) — Excel may survive into the suspend"
     clear_excel_lock
   fi
   prlctl suspend "$VM" >>"$LOG" 2>&1 && log "VM suspended" || log "WARN: suspend failed"

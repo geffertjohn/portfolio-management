@@ -4,10 +4,11 @@ REM every 2 minutes while the user is logged on.
 REM
 REM WHY THIS EXISTS
 REM The obvious design is for the Mac to launch Excel directly with
-REM `prlctl exec`. That command is Parallels Pro/Business only and returns
-REM "The command is available only in Parallels Desktop for Mac Pro or Business
-REM Edition" on the standard licence. So the Mac asks instead of tells: it drops
-REM a trigger file in the shared folder, and this notices within two minutes.
+REM `prlctl exec`. That command CAN run here — refresh.sh uses it to read the
+REM task list and kill a hung Excel — but a process it starts has no desktop to
+REM draw on, so it cannot open an INTERACTIVE Excel in the logged-in session.
+REM So the Mac asks instead of tells: it drops a trigger file in the shared
+REM folder, and this notices within two minutes.
 REM
 REM A polled trigger beats scheduling the refresh inside Windows on its own
 REM clock, because the Mac controls when the VM is actually awake. It also
