@@ -825,7 +825,34 @@ A **fund/ETF** review keeps the process `outcome` enum (Maintain/Propose/At-Risk
 
 ## Portfolio Reviews (cadence-driven)
 
-Portfolio-level reviews are **separate from per-security reviews** (above) and from the per-security `review_schedules`/`review_log` tables. Each portfolio carries **independent cadence timers** that advance separately. **Monthly is Equity-only**: individual-stock strategies (`portfolio.portfolio_strategy = 'Equity'` — Core Growth, Equity Income, Equity Income & Core Growth) get monthly + quarterly + annual; the fund/ETF strategic models (Foundation/Hybrid/ETF/Fixed Income) get **quarterly + annual only**. `cadencesForStrategy(strategy)` in `lib/portfolioReviews.ts` is the single source for which cadences apply (mirrors the seed trigger); `PortfolioReviewsPanel` takes `portfolioStrategy` and renders only those cards, and `PortfolioReviewWorkspace` blocks a disallowed cadence (e.g. a direct `/review/monthly` URL on a fund portfolio).
+Portfolio-level reviews are **separate from per-security reviews** (above) and from the per-security `review_schedules`/`review_log` tables. **The annual REPLACES the fourth quarterly**, so a portfolio runs **three
+quarterly reviews and one annual** a year and never two on the same day
+(`advanceSchedule`, Nov 2026).
+
+This document used to say the timers were "independent … and advance
+separately", and they were: quarterly stepped +3 months and annual +12, each
+ignorant of the other. That gives FOUR quarterlies and an annual every year,
+and a guaranteed collision when the fourth quarterly lands on the annual's own
+date. The seed trigger made it certain from birth by inserting both at `now()`
+— every one of the 19 portfolios started colliding, and Foundation Conservative
+was still sitting on it (both due 30 Sept 2026) when this was found.
+
+- **The annual is the anchor.** `quarterlyAnchorFor(annualDue)` is annual − 9
+  months and is the single definition of the invariant; the quarterlies fall at
+  −9, −6 and −3 and the annual takes the fourth slot.
+- **Completing an annual re-anchors the quarterly** as well as advancing
+  itself, which is why `completeReview` writes two schedule rows for that
+  cadence and reads the annual's due date before writing anything.
+- **Completing a quarterly steps +3 months unless that reaches the annual**, in
+  which case the annual covers the slot and the quarterly moves to three months
+  beyond it.
+- **An explicit next-review date from the Summary section still wins** for the
+  cadence being completed, and the re-anchored quarterly follows the date
+  actually used — not the default — so the two cannot end up inconsistent.
+- **Monthly is outside the cycle** and still steps independently; it is
+  Equity-only. A monthly CAN still coincide with a quarterly or annual.
+- The seed trigger now starts a new portfolio's quarterly at `now()` and its
+  annual nine months out. **Monthly is Equity-only**: individual-stock strategies (`portfolio.portfolio_strategy = 'Equity'` — Core Growth, Equity Income, Equity Income & Core Growth) get monthly + quarterly + annual; the fund/ETF strategic models (Foundation/Hybrid/ETF/Fixed Income) get **quarterly + annual only**. `cadencesForStrategy(strategy)` in `lib/portfolioReviews.ts` is the single source for which cadences apply (mirrors the seed trigger); `PortfolioReviewsPanel` takes `portfolioStrategy` and renders only those cards, and `PortfolioReviewWorkspace` blocks a disallowed cadence (e.g. a direct `/review/monthly` URL on a fund portfolio).
 
 **`model_portfolio_data.review_frequency` is RETIRED — review cadence is not a model-level setting.** The column and its values stay in the DB and on the `ModelPortfolio` type (so the domain type still matches the generated row type), but nothing reads or writes them: the Review Frequency control was removed from the model editor and the Model Portfolios list in Nov 2026. It drove nothing — only the editor that wrote it ever read it — while sitting one page away from the real timers and appearing to contradict them, which is exactly how it surfaced: the editor showed Core Growth as "Quarterly" while the Actions hub correctly showed a monthly review due, because Core Growth is an Equity strategy. Don't re-add a model-level review cadence; `cadencesForStrategy` + the seed trigger are the authority. **Contrast `rebalance_frequency`, which IS live** — `lib/rebalanceSchedule.ts` reads it to date the rebalance timers, so the two neighbouring fields are not the same kind of thing. Data layer is `lib/portfolioReviews.ts`. The Reviews tab on `PortfolioDetailPage` renders `PortfolioReviewsPanel` (the three cadence status cards + completed-review history); **"Start Review" navigates to a dedicated workspace page** (`PortfolioReviewWorkspace`, route `/portfolio/:portfolioId/review/:cadence`) — there is no longer a review modal. The workspace is the right container for the data volume (a 29-holding grid + per-holding scorecards + watchlist), and the annual review will have more sections still.
 
