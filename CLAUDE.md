@@ -347,6 +347,37 @@ write time.
   `ResearchReport` later must not quietly ride along. It asserts the sentinel is
   *present in the input* first, so it cannot pass vacuously.
 
+### `optimizeDeps.include` is a correctness setting, not a speed one
+
+`client/vite.config.ts` lists every external dependency. **Every route is
+`lazy()`**, so Vite's first optimize pass — which crawls from the entry — cannot
+see `recharts`, `xlsx` or `jspdf`. They are discovered when a lazy page first
+loads, which triggers a SECOND optimize pass and a new browser hash while the
+page already holds React from the first. Two React instances in one tree, and
+the symptom is:
+
+```
+Invalid hook call … (3) You might have more than one copy of React
+TypeError: null is not an object (evaluating 'dispatcher.useContext')
+```
+
+reported at the **first hook of whatever mounted** — `Layout` on one load,
+`PortfolioDetailPage` on the next. The named file is never the cause, which is
+what makes it so misleading.
+
+- **It only bites on a COLD dep cache**, which is why it looks random: it
+  reappears after a dependency install or a change to `vite.config.ts`, and not
+  otherwise. It struck twice in Nov 2026, and the first diagnosis — a transient
+  that a restart would settle — was wrong.
+- **Anything imported by a lazy page belongs in the list.** A missing entry costs
+  the bug above; a stale entry costs nothing.
+- `resolve.dedupe: ['react', 'react-dom']` sits alongside it and guards a
+  different failure (a transitive dependency resolving its own React in a
+  workspaces repo). Dedupe alone does **not** fix the two-generations race.
+- Deleting `node_modules/.vite/deps` under a RUNNING dev server does not force a
+  re-optimize — Vite serves from its in-memory cache. Only a restart does, so
+  that is the only way to test this.
+
 ### Automated gates — now in place
 
 The manual definition-of-done above is still the per-change discipline, but two automated gates now enforce it (the backlog was driven to zero first, so they hold from a clean baseline):
