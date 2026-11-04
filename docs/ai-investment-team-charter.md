@@ -59,7 +59,49 @@ The value is **not** "AI that picks stocks." It is:
 
 ## 3. Roles
 
-Each role is a **subagent** (`.claude/agents/*.md`) with a scoped toolset and a system prompt. Tool scoping enforces the guardrails: analysts get read-only research tools; PM/Risk get Supabase read; none get write access to `positions`.
+Each role is a **subagent** (`.claude/agents/*.md`) with a scoped toolset and a system prompt.
+
+**What tool scoping actually enforces, stated precisely.** This paragraph used to
+read *"Tool scoping enforces the guardrails: analysts get read-only research
+tools; PM/Risk get Supabase read; none get write access to `positions`."* **No
+agent file scoped its tools at all** — every one carried only `name:` and
+`description:`, so each inherited the full toolset including Write, Edit and
+Bash. The guarantee was prompt-level while this document described it as
+technical. Corrected Nov 2026 (audit §8), and worth being exact about, because
+the point of the control is that a reader can rely on it:
+
+- **Enforced, everywhere.** Every agent now carries
+  `disallowedTools: Write, Edit, NotebookEdit, Bash`. These are built-in tool
+  names, so they bind regardless of how the MCP servers happen to be named in a
+  given session. No agent can write a file or open a shell.
+- **Enforced under the scheduled jobs.** `run-job.sh` launches `claude -p` with
+  an `--allowedTools` list that already excluded Bash and Write/Edit and admits
+  only three MCP servers; subagents inherit the session's tools, so the jobs
+  were always the tighter environment. The gap was the **interactive** Agent
+  path, which is what the frontmatter closes.
+- **Enforced for the three analysts who need no database.** `research-analyst`,
+  `devils-advocate` and `macro-strategist` additionally deny
+  `mcp__claude_ai_Supabase`. That server-level name resolves under the jobs,
+  which is where those three run unattended; in a desktop session the connector
+  is named differently and the entry simply does not match.
+- **NOT enforced: `positions` is still reachable by SQL.** `execute_sql` is one
+  tool that both reads and writes, so tool scoping cannot split it, and the five
+  roles that must read the book keep it. The *sanctioned* write path —
+  `committee_insert` / `committee_update` — has a table allowlist of
+  `research_reports, risk_reports, ic_memos, job_runs, alert_events, at_risk`,
+  which excludes `positions` and `portfolio_allocations`. But a raw
+  `execute_sql` UPDATE bypasses that, and the connector authenticates as
+  `postgres`, which **bypasses RLS**, so no database-side grant or policy can
+  stop it either. **This one is prompt-level, and saying otherwise is what the
+  audit finding was about.** Closing it properly means giving the committee's
+  Supabase connection a dedicated restricted role rather than `postgres`; that
+  is a credentials change, not a code change.
+- **Not covered by any of the above: the workflow's inlined roles.**
+  `.claude/workflows/new-buy-ic-review.js` inlines each role as a prompt string
+  rather than invoking the agent definitions, so `disallowedTools` does not
+  reach them — they run with whatever the calling session has. Passing
+  `agentType` would bring them under it and delete three prompt-sync points at
+  the same time; see the note above `RESEARCH_STANDARD_NOTE` in that file.
 
 ### 3.1 Research Analyst — "should we own it?"
 
@@ -302,7 +344,7 @@ Concise starting prompts for the four first-build roles. (Full versions live in 
 2. **Phase 1 — data + lib layer:** create the three tables (`apply_migration`), regenerate types, write `lib/*.ts` + query keys. No UI yet. ✅ *Done 2026-07-01: `research_reports`/`risk_reports`/`ic_memos` migrated; types regenerated; `lib/researchReports.ts`, `lib/riskReports.ts`, `lib/icMemos.ts` + query keys added; typecheck + lint clean.*
 3. **Phase 2 — the four subagents + the new-buy workflow:** wire the pipeline, launch it from the Candidates tab, render the IC memo (read-only). This is the demoable slice. ✅ *Done 2026-07-01: subagents `.claude/agents/{research-analyst,devils-advocate,portfolio-manager,risk-manager}.md`; workflow `.claude/workflows/new-buy-ic-review.js` (roles inlined — the workflow agent() registry doesn't resolve custom agent types); read-only viewer `components/ICReviewPanel.tsx` + `hooks/useIcReview.ts` wired as an "IC Review" section in the candidate workspace. Ran the live committee on **GLW / Core Growth** (5 agents, 66 tool calls, ~348k tokens): analyst HOLD (FV ~$130 vs ~$220), red team KILL, PM watchlist/0%, risk PASS-at-0%/conditional-VETO → memo WATCHLIST; persisted to the three tables (ic_memo id 3) and verified rendering in the app. Architecture note: the committee runs in Claude Code, not the browser; a UI-triggered "Run committee" button would need an Express/Anthropic-API bridge (future).*
 4. **Phase 3 — scheduled jobs** (pre-earnings brief, weekly risk report, reviews-due digest). ✅ *Shipped 2026-07-01 as `create_scheduled_task` routines (self-contained prompts in `~/.claude/scheduled-tasks/`, each adopts a role from `.claude/agents/`, all draft/read-only): `pre-earnings-brief` (weekdays 6:55am → draft research_reports, report_type=earnings_review), `weekly-risk-report` (Mon 7:18am → risk_reports, scope=portfolio), `reviews-due-digest` (Mon 7:42am → informational, read-only). Verified the reviews-due query live (18 portfolios due; MU quarterly 7d overdue). **Note:** click "Run now" once per job to pre-approve its Supabase/FMP MCP tools so future runs don't pause on permission prompts. Runtime caveat: these run in Claude Code while the app is open (or on next launch if missed) — production-grade scheduling would move to the Express/Anthropic-API runner.*
-5. **Phase 4 — output viewers, decision action, remaining roles.** 🟡 *In progress (2026-07-01): shared cards extracted to `components/icReviewCards.tsx`; `SecurityResearchPanel` on the security **Monitor** tab (renders `research_reports` by security — analyst reports + pre-earnings briefs) and `PortfolioRiskPanel` on the portfolio **Reviews** tab (portfolio-scope `risk_reports`); the **CIO decision action** (approve/watchlist/reject → `recordIcDecision`) now lives on `MemoCard` in the candidate IC Review. Verified in preview (GLW research populated, decision recorded to DB then reset, risk panel wired). Added the remaining three roles — `.claude/agents/{quant-analyst,macro-strategist,compliance-ips}.md` — completing the seven-role roster. Wired **Quant** (Research phase) and **Compliance/IPS** (Control phase) into `new-buy-ic-review.js` as a **6-role committee**, flag-gated (`args.lean:true` runs the original 4-role version); a risk `veto` OR a compliance `unsuitable` now forces the committee recommendation to `reject`. Quant persists as a `research_reports` row (author_role='quant_analyst', already rendered by ResearchCard); Compliance folds into the memo rationale. **Macro** is a standing/on-demand role (not a per-name gate) — a natural weekly scheduled brief if wanted. Ran the full 6-role committee live on the two Equity Income candidates — **HWM** (unanimous REJECT: risk VETO + compliance UNSUITABLE; compliance caught the model "Aggressive Growth" objective vs "Equity Income" name inconsistency) and **CAT** (REJECT: 0.6% yield + AI-narrative re-rating + Michael Burry short) — persisted (ic_memos 4 & 5, quant research_reports 8 & 11) and verified all cards incl. the new Quant Analyst card render in the candidate IC Review. Generic persist script at `scratchpad/persist_committee.py`. **Remaining:** optional monitoring/review-automation flows; a dedicated compliance table/column (compliance currently folds into the memo rationale).*
+5. **Phase 4 — output viewers, decision action, remaining roles.** 🟡 *In progress (2026-07-01): shared cards extracted to `components/icReviewCards.tsx`; `SecurityResearchPanel` on the security **Monitor** tab (renders `research_reports` by security — analyst reports + pre-earnings briefs) and `PortfolioRiskPanel` on the portfolio **Reviews** tab (portfolio-scope `risk_reports`); the **CIO decision action** (approve/watchlist/reject → `recordIcDecision`) now lives on `MemoCard` in the candidate IC Review. Verified in preview (GLW research populated, decision recorded to DB then reset, risk panel wired). Added the remaining three roles — `.claude/agents/{quant-analyst,macro-strategist,compliance-ips}.md` — completing the seven-role roster. Wired **Quant** (Research phase) and **Compliance/IPS** (Control phase) into `new-buy-ic-review.js` as a **6-role committee**, flag-gated (`args.lean:true` runs the original 4-role version); a risk `veto` OR a compliance `unsuitable` now forces the committee recommendation to `reject`. Quant persists as a `research_reports` row (author_role='quant_analyst', already rendered by ResearchCard); Compliance folds into the memo rationale. **Macro** is a standing/on-demand role (not a per-name gate) — a natural weekly scheduled brief if wanted. Ran the full 6-role committee live on the two Equity Income candidates — **HWM** (unanimous REJECT: risk VETO + compliance UNSUITABLE; compliance caught the model "Aggressive Growth" objective vs "Equity Income" name inconsistency) and **CAT** (REJECT: 0.6% yield + AI-narrative re-rating + Michael Burry short) — persisted (ic_memos 4 & 5, quant research_reports 8 & 11) and verified all cards incl. the new Quant Analyst card render in the candidate IC Review. Persistence is the ORCHESTRATOR's job, done with Supabase MCP SQL after the workflow returns — the workflow itself writes nothing. (This line used to point at a "generic persist script at `scratchpad/persist_committee.py`"; that file does not exist and a scratchpad path could never have been the documented step for a persistence contract. Since Nov 2026 the writes go through `committee_insert` / `committee_update`, which validate the payload against the catalog and raise on an unknown column.) **Remaining:** optional monitoring/review-automation flows; a dedicated compliance table/column (compliance currently folds into the memo rationale).*
 
 Each phase honors the CLAUDE.md definition-of-done: `npm run typecheck` + `npm run lint` clean on touched files; schema-typed client kept in sync.
 

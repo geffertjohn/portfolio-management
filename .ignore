@@ -1,0 +1,15 @@
+# Paths excluded from SEARCH but not from git. ripgrep honours this file (so do
+# the editor and agent search tools built on it); `git` ignores it entirely, so
+# nothing here changes what is committed. Use `rg --no-ignore` (or `-u`) to
+# search these paths deliberately.
+#
+# supabase/archive/ is 32 hand-written .sql files from before the MCP migration
+# history existed. They are historical reference and are NOT authoritative —
+# supabase/schema.sql is the mirror of the live database (see supabase/README.md).
+#
+# They were making greps lie, and it was not hypothetical: the Nov 2026 audit
+# cleared several dead `portfolio` columns as "referenced" when their only
+# mentions were in archived DDL, and two independent sweeps hit it. The columns
+# `historical_sharpe_5y`, `tracking_error_5y` and `market_alpha_60_month` still
+# appear in these files and nowhere else in the tree.
+supabase/archive/

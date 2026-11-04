@@ -1,7 +1,7 @@
 /**
  * import-workbook.ts — headless import of the refreshed YCharts workbook.
  *
- * Runs on the mini after the Parallels VM has recalculated and written the file.
+ * Runs on the Mac Studio after the Parallels VM has recalculated and written the file.
  * It reuses the SAME importers the browser card uses, so there is one parsing
  * implementation, not two that drift.
  *
@@ -29,7 +29,7 @@ const MAX_AGE_HOURS = 18
 
 /**
  * A stamp from the future means the guest and host clocks disagree — almost
- * always because the Windows VM is in a different timezone than the mini. The
+ * always because the Windows VM is in a different timezone than the Studio. The
  * macro writes LOCAL time and this parses as local, so a mismatch silently
  * shifts every age by the offset. Fail loudly instead of drifting.
  */
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
   if (ageHours < -MAX_SKEW_HOURS) {
     fail(
       `Refresh stamp is ${(-ageHours).toFixed(1)}h in the future (${stamped.toISOString()}). ` +
-      `Set the Windows VM to the same timezone as the mini — otherwise every ` +
+      `Set the Windows VM to the same timezone as the Studio — otherwise every ` +
       `freshness check is off by the offset.`,
     )
   }

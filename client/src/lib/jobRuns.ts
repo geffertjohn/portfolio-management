@@ -62,47 +62,59 @@ export interface JobDefinition {
  * before anything here knows its name. A run whose `job_id` is absent from this
  * catalog still lands in the table and is shown as an unrecognised job rather
  * than dropped — the alternative is a new job that silently never appears.
+ *
+ * **The times, however, ARE load-bearing** — `gradeJob` derives `expected` from
+ * them to decide whether a run is `overdue`. Until Nov 2026 all seven were the
+ * times of the **app scheduler**, which was switched off on 3 Nov: 09:09 against
+ * launchd's 09:00, 09:32 against 09:45, 09:42 against 10:00. `GRACE_MINS = 180`
+ * was wide enough to hide every one of them, so no verdict was ever wrong — the
+ * health signal was simply measuring against a scheduler that no longer existed.
+ *
+ * `jobSchedule.test.ts` now reads `scripts/scheduled-jobs/launchagents/*.plist`
+ * and fails if this list drifts from them again. The plists are the authority
+ * because they are what launchd actually runs; checking against the generator's
+ * table instead would only prove two copies agree with each other.
  */
 export const JOB_DEFINITIONS: JobDefinition[] = [
   {
     id: 'at-risk-review', label: 'At-Risk review',
-    cadence: 'weekday', hour: 9, minute: 9,
+    cadence: 'weekday', hour: 9, minute: 0,
     writes: 'at_risk · alert_events',
     purpose: 'Flags newly deteriorated holdings, re-measures the ones already flagged, clears recoveries, and alerts on an expired sell timer.',
   },
   {
     id: 'post-earnings-brief', label: 'Post-earnings brief',
-    cadence: 'weekday', hour: 9, minute: 31,
+    cadence: 'weekday', hour: 9, minute: 30,
     writes: 'research_reports',
     purpose: 'Fills actuals against each pre-brief, answers the street questions, and grades the thesis and risk checks.',
   },
   {
     id: 'pre-earnings-brief', label: 'Pre-earnings brief',
-    cadence: 'weekday', hour: 9, minute: 32,
+    cadence: 'weekday', hour: 9, minute: 45,
     writes: 'research_reports',
     purpose: 'Expectations and thesis checks for held stocks reporting in the next few days.',
   },
   {
     id: 'earnings-call-summary', label: 'Earnings call summary',
-    cadence: 'weekday', hour: 9, minute: 42,
+    cadence: 'weekday', hour: 10, minute: 0,
     writes: 'earnings_call_summaries',
     purpose: 'Committee read of each newly transcribed call — sentiment, guidance, highlights and lowlights.',
   },
   {
     id: 'watchlist-research', label: 'Watchlist research',
-    cadence: 'weekday', hour: 10, minute: 16,
+    cadence: 'weekday', hour: 10, minute: 20,
     writes: 'research_reports',
     purpose: 'Rates watchlist ideas carrying no research — a standalone buy/hold/sell with bear/base/bull targets.',
   },
   {
     id: 'weekly-risk-report', label: 'Weekly risk report',
-    cadence: 'weekly_monday', hour: 7, minute: 20,
+    cadence: 'weekly_monday', hour: 7, minute: 15,
     writes: 'risk_reports',
     purpose: 'Per-portfolio concentration and factor drift on the current book, with compliance verification.',
   },
   {
     id: 'reviews-due-digest', label: 'Reviews due digest',
-    cadence: 'weekly_monday', hour: 7, minute: 38,
+    cadence: 'weekly_monday', hour: 7, minute: 40,
     writes: '— (informational)',
     purpose: 'Weekly digest of portfolio and per-security reviews that are due or overdue. Read-only.',
   },

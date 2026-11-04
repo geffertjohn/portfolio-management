@@ -70,6 +70,31 @@ const BEAR_TIPRANKS_NOTE =
   'undercuts any bull case resting on "analysts see upside". Weight by stockSuccessRate and ignore ' +
   'accuracy figures with fewer than 10 resolved targets.'
 
+// Audit §15. The .md agent definitions carry a "Firm research standard" block
+// and these inlined copies did not, so committee output produced through the
+// WORKFLOW was shaped to fail `scripts/theses/load-drafts.mjs`, which rejects a
+// draft whose reason contains a digit — while the same role invoked through the
+// Agent tool produced output that loads. One pipeline, two standards.
+//
+// This is a THIRD sync point, alongside TIPRANKS_NOTE / BEAR_TIPRANKS_NOTE:
+// `.claude/agents/research-analyst.md`, `.claude/agents/devils-advocate.md` and
+// this constant must agree. The roles are inlined because custom .claude/agents
+// types did not resolve inside agent() when this was written; if that has since
+// changed, passing `agentType` would delete all three sync points AND bring the
+// workflow under the agents' `disallowedTools`, which inlined strings cannot be.
+const RESEARCH_STANDARD_NOTE =
+  ' FIRM RESEARCH STANDARD — docs/research-standard.md is the firm\'s documented ' +
+  'research process; read it before writing. Two rules from it govern everything you ' +
+  'write. (1) THE DURABLE/EVIDENCE SPLIT: a reason to own is a structural statement ' +
+  'that still reads correctly in three years and contains no figure and no date. Every ' +
+  'number is evidence and belongs in a supporting metric. If a sentence in a reason ' +
+  'contains a digit, it is in the wrong layer. (2) EVERY METRIC IS RE-MEASURABLE: each ' +
+  'carries metric (the exact series), baseline (the reading with its period), trend ' +
+  '(direction and rate with history), and breaks_if (the specific reading that would ' +
+  'say the reason is failing). breaks_if must be checkable against data or a named ' +
+  'disclosure, never a mood like "if growth slows". Write for three readers: the ' +
+  'advisor, a regulator examining the firm\'s process, and a client.'
+
 const ANALYST_ROLE =
   'You are a sector-aware equity RESEARCH ANALYST on an AI investment team; the human CIO makes the final ' +
   'call. Determine whether the business should be owned: identify the company/segments, assess fundamentals ' +
@@ -79,7 +104,7 @@ const ANALYST_ROLE =
   'state what must be true for the thesis to work plus the single biggest risk. For fit with an income ' +
   'strategy, do not treat a below-benchmark per-security yield as disqualifying — note which Investment ' +
   'Philosophy criteria the name checks and leave the portfolio-level allocation call to the PM. ' +
-  'Recommend-only: never trade or modify positions. ' + FMP_NOTE + TIPRANKS_NOTE
+  'Recommend-only: never trade or modify positions. ' + FMP_NOTE + TIPRANKS_NOTE + RESEARCH_STANDARD_NOTE
 
 const BEAR_ROLE =
   'You are the RED TEAM / devil\'s advocate on an AI investment team. Build the strongest possible case ' +
@@ -95,7 +120,7 @@ const BEAR_ROLE =
   '(fabless/asset-light converts most revenue to FCF). VERIFY dividend/payout/FCF facts from primary data ' +
   'before asserting — a bear case built on a wrong number is worse than none. ' +
   'Default toward KILL when the evidence is ambiguous, but build only the strongest REAL bear ' +
-  'case — if it is genuinely weak, say so. Recommend-only: never trade. ' + FMP_NOTE + BEAR_TIPRANKS_NOTE
+  'case — if it is genuinely weak, say so. Recommend-only: never trade. ' + FMP_NOTE + BEAR_TIPRANKS_NOTE + RESEARCH_STANDARD_NOTE
 
 const QUANT_ROLE =
   'You are the QUANTITATIVE ANALYST on an AI investment team — the systematic, data-first lens that ' +

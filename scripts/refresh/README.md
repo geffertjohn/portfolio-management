@@ -1,17 +1,19 @@
 # Scheduled YCharts refresh
 
-> **STATUS: PAUSED — Sep 2026. Not wired up; nothing runs on a schedule yet.**
+> **STATUS: LIVE — runs weekdays at 05:30 on the Mac Studio.**
 >
-> Paused while YCharts/Excel issues are sorted out. Two things below are already
-> out of date and must be fixed before following them:
+> This said "PAUSED — not wired up; nothing runs on a schedule yet" until Nov
+> 2026, by which point it had been running daily for weeks. It failed 15 of 20
+> runs in Oct 2026; the first clean unattended run was **3 Nov 2026** and it has
+> run green since. Check `~/portfolio-refresh/logs/<date>.log` for the last run.
 >
 > - **The host is the Mac Studio, not the mini.** The mini was evaluated and
 >   dropped: 8GB with a Windows VM was tight, but the deciding factor was that
 >   the Studio already has Parallels, the repo, Node, the `.env` and the
 >   scheduled-task setup, so a second machine meant duplicating and then
 >   syncing all of it. The Studio sleeps, which `sudo pmset repeat
->   wakeorpoweron MTWRF 05:25:00` solves. The install steps below still say
->   "mini" and reference `johnauxcomp` paths.
+>   wakeorpoweron MTWRF 05:25:00` solves. The install steps below have been
+>   corrected to say Studio; any remaining `johnauxcomp` path is a leftover.
 > - **`watch-trigger.cmd` and the trigger-file handshake ARE still needed** — I
 >   was wrong to say otherwise. The Studio's Parallels licence does allow
 >   `prlctl exec`, but that command runs as **NT AUTHORITY\SYSTEM in session 0**,
@@ -50,7 +52,7 @@
 > The app-side half — `import_runs`, the `data_refresh` action, the headless
 > importer — **is finished, tested and live.** Only the VM half is unbuilt.
 
-Unattended daily refresh of the YCharts workbook on the Mac mini, feeding the
+Unattended daily refresh of the YCharts workbook on the Mac Studio, feeding the
 same importers the app's Import page uses.
 
 ```
@@ -141,7 +143,7 @@ on the Home Action Center and `/actions`. Silence is not the failure mode.
 ## Layout
 
 ```
-mini (macOS)                          mini (Windows VM)
+Studio (macOS)                        Studio (Windows VM)
 ~/portfolio-management/    ← repo     C:\portfolio\Ycharts.xlsm   ← driver workbook
 ~/portfolio-refresh/
   inbox/       ← VM writes here       Z:\portfolio-refresh\inbox  ← same folder, shared
@@ -154,8 +156,22 @@ The driver workbook lives on `C:\`, never on the `Z:` share: Office treats
 mapped network drives as untrusted (needing an extra Trusted Locations setting
 that can silently reset), and every recalc would otherwise cross SMB.
 
-The repo's `YCharts/Ycharts.xlsm` is the **template of record** — commit it when
-the structure changes, never from the job.
+**There is no copy of the workbook in the repo, and there must not be one.**
+`YCharts/Ycharts.xlsm` was the "template of record" until Nov 2026, when it was
+deleted and gitignored — it went stale within a day of every refresh while
+sitting at the most obvious path a file picker lands on, and on 3 Nov 2026 an
+**Oct 5 copy was imported by mistake**: 43 securities instead of 46, every
+fund's figures rolled back a month, under an `import_runs` stamp reading
+"imported today". Provenance said fresh; the data was four weeks old.
+
+Pull the file from the VM when you need it, rather than re-adding a copy here:
+
+```
+prlctl exec "Windows 11" cmd.exe /c 'copy "C:\portfolio\Ycharts.xlsm" "\\Mac\Home\Downloads\Ycharts.xlsm"'
+```
+
+Row counts alone will not catch a stale import — compare a known return value
+against the DB, which is how that one was found.
 
 ## Registry gotcha: prlctl exec writes to the WRONG hive
 
@@ -186,9 +202,9 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
 
 ## Install on the Mac Studio
 
-### On the mini (macOS)
+### On the Studio (macOS)
 
-1. **Install Node** — the mini has git but no node or npm.
+1. **Install Node** — if the host has git but no node or npm.
    `brew install node`, or the installer from nodejs.org.
 2. `git clone` the repo to `~/portfolio-management`, then `npm install`.
 3. Copy `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` into
@@ -233,7 +249,7 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
    > ```
 10. Power and recovery: never sleep, `powercfg /h off`, auto-login via
     `netplwiz`, and Windows Update active hours outside 05:00–07:00.
-11. **Same timezone as the mini.** The macro stamps local time and the importer
+11. **Same timezone as the Studio.** The macro stamps local time and the importer
     parses local time; a mismatch shifts every freshness check by the offset.
     The importer refuses a stamp more than 2h in the future so the mistake is
     loud rather than silent. (They already match.)
