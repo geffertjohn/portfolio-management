@@ -69,10 +69,3 @@ export const SCORECARD_TEXT_CLASS: Record<ScorecardColor, string> = {
   none: 'text-gray-400',
 }
 
-/** Bar fill per state, for the delta bars. */
-export const SCORECARD_BAR_COLOR: Record<ScorecardColor, string> = {
-  green: '#22c55e',
-  yellow: '#eab308',
-  red: '#ef4444',
-  none: '#d1d5db',
-}

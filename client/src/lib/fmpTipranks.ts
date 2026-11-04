@@ -212,16 +212,6 @@ export async function fetchTipRanksRatings(symbol: string, limit = 200): Promise
   return rows.map(mapRating)
 }
 
-/** Trailing-window scorecard for one research firm, e.g. "Raymond James". */
-export async function fetchTipRanksFirmSummary(firmName: string): Promise<TipRanksSummary | null> {
-  const rows = asArray(
-    await fmpFetch(
-      `${FMP_STABLE}/tipranks-firm-summary?firmName=${encodeURIComponent(firmName)}&apikey=${apiKey()}`,
-    ),
-  )
-  return rows[0] ? mapSummary(rows[0]) : null
-}
-
 /** Trailing-window scorecard for one analyst, across every name they cover. */
 export async function fetchTipRanksAnalystSummary(expertUID: string): Promise<TipRanksSummary | null> {
   const rows = asArray(

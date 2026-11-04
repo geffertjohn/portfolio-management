@@ -1,8 +1,6 @@
 export const QUERY_KEYS = {
   securities: ['securities2'] as const,
   security: (id: number) => ['security', id] as const,
-  securityEquityModelPortfolios: (id: number) =>
-    ['security-equity-model-portfolios', id] as const,
   portfolio: (name: string) => ['portfolio', name] as const,
   portfolios: ['portfolios'] as const,
   positions: (portfolioName: string) => ['positions', portfolioName] as const,
@@ -17,10 +15,7 @@ export const QUERY_KEYS = {
   actionItemsBySecurity: (securityId: string) => ['action_items', 'security', securityId] as const,
   actionItemsByPortfolio: (portfolioName: string) => ['action_items', 'portfolio', portfolioName] as const,
   actionItemsByClient: (clientId: number) => ['action_items', 'client', clientId] as const,
-  rebalanceLog: (portfolioName: string) => ['rebalance_log', portfolioName] as const,
   portfolioPeriodReturns: (portfolioName: string) => ['portfolio_period_returns', portfolioName] as const,
-  benchmarkPeriodReturns: (symbol: string, inception: string) =>
-    ['benchmark_period_returns', symbol, inception] as const,
   portfolioMovers: (portfolioName: string, days: number) => ['portfolio_movers', 'v2', portfolioName, days] as const,
   allocationGrid: (portfolioName: string) => ['allocation_grid', portfolioName] as const,
   latestActualAllocation: (portfolioName: string) => ['latest_actual_allocation', portfolioName] as const,
@@ -65,7 +60,6 @@ export const QUERY_KEYS = {
   riskReports: (portfolioName: string) => ['risk_reports', portfolioName] as const,
   riskReportsForAddition: (additionId: number) => ['risk_reports', 'addition', additionId] as const,
   icMemos: (portfolioName: string) => ['ic_memos', portfolioName] as const,
-  icMemo: (id: number) => ['ic_memo', id] as const,
   icMemosForAddition: (additionId: number) => ['ic_memos', 'addition', additionId] as const,
   documentsFiles: (bucket: string) => ['documents-files', bucket] as const,
   modelPortfolios: ['model_portfolios'] as const,
@@ -73,7 +67,6 @@ export const QUERY_KEYS = {
   modelPortfolioById: (id: number) => ['model_portfolio_by_id', id] as const,
   directModelPortfolioId: (securityId: string) => ['direct_model_portfolio_id', securityId] as const,
   benchmarkByName: (name: string) => ['benchmark_by_name', name] as const,
-  benchmarkAllByName: (name: string) => ['benchmark_all_by_name', name] as const,
   categoryBenchmark: (category: string) => ['cat-benchmark', category] as const,
   peerGroupBenchmark: (name: string) => ['pg-benchmark', name] as const,
   categoryBenchmarksTable: ['category-benchmarks'] as const,
@@ -103,7 +96,6 @@ export const QUERY_KEYS = {
   analystData: (symbol: string) => ['analyst_data', 'v4', symbol] as const,
   tipranksSummary: (symbol: string) => ['tipranks_summary', symbol] as const,
   tipranksRatings: (symbol: string) => ['tipranks_ratings', symbol] as const,
-  tipranksFirm: (firmName: string) => ['tipranks_firm', firmName] as const,
   tipranksAnalystSummary: (uid: string) => ['tipranks_analyst_summary', uid] as const,
   tipranksAnalystRatings: (uid: string) => ['tipranks_analyst_ratings', uid] as const,
   tipranksAnalyst: (name: string) => ['tipranks_analyst', name] as const,

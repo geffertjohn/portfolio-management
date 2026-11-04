@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -7,9 +7,11 @@ import {
   type ActionStatus, type ActionCategory, type ActionPriority, type ActionRecurrence,
 } from '@/lib/actionItems'
 import {
-  fetchAllActions, actionLabel, bucketOf, clusterActions, agingLabel, withinHorizon,
+  fetchAllActions, bucketOf, clusterActions, agingLabel, withinHorizon,
+  buildActionsCsv,
   BUCKET_LABELS, BUCKET_ORDER, SOURCE_LABELS, HORIZON_OPTIONS,
-  type UnifiedAction, type DateBucket, type ActionCluster, type Horizon,
+  type UnifiedAction, type DateBucket, type ActionCluster,
+  type SourceFilter, type GroupBy,
 } from '@/lib/actions'
 import { fetchLatestJobRuns, gradeAllJobs, needsAttention } from '@/lib/jobRuns'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -18,12 +20,10 @@ import { AutomationPanel } from '@/components/AutomationPanel'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ActionItemTimeline } from '@/components/ActionItemTimeline'
 import { formatDate } from '@/lib/fundFormat'
+import { useActionFilters } from '@/hooks/useActionFilters'
 
 const PRIORITY_ORDER: ActionPriority[] = ['high', 'medium', 'low']
 const CATEGORIES: ActionCategory[] = ['security', 'portfolio', 'ic', 'compliance', 'client', 'trade', 'operational']
-
-type SourceFilter = 'all' | 'manual' | 'derived'
-type GroupBy = 'bucket' | 'category'
 
 // Recurring-task quick-starts (manual, seeded with today's first occurrence).
 const TEMPLATES: { title: string; category: ActionCategory; recurrence: ActionRecurrence; priority: ActionPriority }[] = [
@@ -40,29 +40,6 @@ function matchesSource(a: UnifiedAction, filter: SourceFilter): boolean {
   return filter === 'all' || (filter === 'manual') === a.isManual
 }
 
-// Persist the working view so it survives navigation (device-local UI state).
-const FILTERS_KEY = 'actions_filters_v2'
-interface SavedFilters {
-  category: ActionCategory | 'all'
-  sourceFilter: SourceFilter
-  showClosed: boolean
-  groupBy: GroupBy
-  horizon: Horizon
-  collapsed: string[]
-}
-function loadFilters(): Partial<SavedFilters> {
-  try { return JSON.parse(localStorage.getItem(FILTERS_KEY) || '{}') } catch { return {} }
-}
-
-/**
- * Collapsed by default: the forward calendar, not the worklist.
- *
- * "Upcoming" is every schedule whose date is more than a week out — 80 rows of
- * "this reports in six weeks". They are real and they stay on the page, but
- * rendering them open by default buried the ~15 rows that actually need doing.
- */
-const DEFAULT_COLLAPSED = ['upcoming', 'no_date']
-
 /** A manual action counts as "active" unless closed or snoozed into the future. */
 function isActive(a: UnifiedAction): boolean {
   if (!a.isManual) return true
@@ -75,20 +52,13 @@ function isActive(a: UnifiedAction): boolean {
 export function ActionItemsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const saved = loadFilters()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [category, setCategory] = useState<ActionCategory | 'all'>(saved.category ?? 'all')
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(saved.sourceFilter ?? 'all')
-  const [showClosed, setShowClosed] = useState(saved.showClosed ?? false)
-  const [groupBy, setGroupBy] = useState<GroupBy>(saved.groupBy ?? 'bucket')
-  const [horizon, setHorizon] = useState<Horizon>(saved.horizon ?? 0)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(saved.collapsed ?? DEFAULT_COLLAPSED))
-  useEffect(() => {
-    localStorage.setItem(FILTERS_KEY, JSON.stringify({
-      category, sourceFilter, showClosed, groupBy, horizon, collapsed: [...collapsed],
-    }))
-  }, [category, sourceFilter, showClosed, groupBy, horizon, collapsed])
+  // Six pieces of view state behind one storage schema — see useActionFilters.
+  const {
+    category, sourceFilter, showClosed, groupBy, horizon, collapsed,
+    setCategory, setSourceFilter, setShowClosed, setGroupBy, setHorizon, setCollapsed,
+  } = useActionFilters()
 
   const [createOpen, setCreateOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
@@ -238,15 +208,9 @@ export function ActionItemsPage() {
     })
   }
 
+  // The rows are built by lib/actions.ts; this owns only the download.
   const exportCsv = () => {
-    const rows = [['Category', 'Source', 'Task', 'Context', 'Due', 'Priority', 'Status']]
-    for (const a of filtered) rows.push([
-      CATEGORY_LABELS[a.category], SOURCE_LABELS[a.source], actionLabel(a),
-      a.context ?? '', a.dueDate ?? '', a.priority,
-      a.isManual ? a.manual!.status : 'active',
-    ])
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const url = URL.createObjectURL(new Blob([buildActionsCsv(filtered)], { type: 'text/csv' }))
     const link = document.createElement('a')
     link.href = url; link.download = 'actions.csv'; link.click()
     URL.revokeObjectURL(url)

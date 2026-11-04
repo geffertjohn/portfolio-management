@@ -405,7 +405,6 @@ The primary display primitive for numeric metrics. Use `benchmarkValue`, `rawVal
   displayValue={fundSharpe !== null ? fmtNum(fundSharpe) : EMPTY}
   rawValue={fundSharpe}
   neutral={bmkSharpe ?? 0}
-  scale={2}
   higherIsBetter={true}
   benchmarkValue={bmkSharpe}
   components={bmkSharpe !== null ? [{ label: 'Benchmark', value: fmtNum(bmkSharpe) }] : []}
@@ -464,10 +463,17 @@ There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`,
 
 ### LocalStorage persistence for UI state
 
-**Two keys, both device-local UI state and nothing else:** the Actions page's
-filters (`ActionItemsPage`) and the notification settings
-(`settings/NotificationsPage`). That is the whole of it — `grep localStorage
-client/src` returns four lines.
+**ONE key, device-local UI state and nothing else:** the Actions page's
+filters, owned by **`hooks/useActionFilters.ts`**. That is the whole of it —
+`grep localStorage client/src` returns three lines, all in that hook.
+
+It was two until Nov 2026. `settings/NotificationsPage` stored six preferences
+that **nothing read**, behind a nav link and a green "Saved." — the same
+localStorage-only pattern this document records as deleted for Firm Settings,
+with an instruction not to reintroduce it. The page, its route and its nav entry
+are gone (audit §19). The filters hook wraps both the read and the write in
+`try`/`catch`: a private window makes either throw, and losing a remembered
+filter is not a reason to fail to render the page.
 
 This section used to describe benchmark selections persisting under
 `fund_benchmarks_${securityId}`. **No such key exists, and never did in this
@@ -577,8 +583,18 @@ On the Overview tab. News and Press Releases are company-specific feeds, side by
 ### At-Risk is run by the committee, not by hand (Oct 2026)
 
 `AT_RISK_METRICS_BY_ASSET_CLASS.stock` in `lib/atRisk.ts` lists the same six
-metrics as the stock Scorecard cards. Funds use the `equity` / `fixed income`
-sets and are **unchanged** — everything below is stocks only.
+metrics as the stock Scorecard cards. Everything below is stocks only.
+
+**The `equity` / `fixed income` sets have no live reader, and this document said
+they did.** It read "funds use them, unchanged". The only consumer was
+`AtRiskModal`, which was deleted as a dead file in Nov 2026 (audit §19) — it had
+zero references and had been unreachable for some time. The fund path onto the
+list runs through the review modal's At-Risk outcome, which calls
+`addToAtRisk(securityId, [], …)` — an **empty** metrics array. So a fund flagged
+At-Risk today carries no metrics, and the sell-timer tiering, which counts reds,
+has nothing to count. The two sets are kept as the firm's definition and as the
+intended input to the planned fund-review automation; they are **defined, not
+wired**, and `lib/atRisk.ts` says so at the constant.
 
 **The `at-risk-review` job owns the list.** Weekdays, *before* the
 post-earnings brief, because the brief reports any same-day change and there is
@@ -1319,13 +1335,13 @@ The Actions page is a **unified command center**, not a plain to-do list. It sho
 
 - **Two kinds of action.** **Manual** tasks are real `action_items` rows (created, completed, snoozed, recurring). **Derived** actions are projected **READ-ONLY** from their own authoritative tables and carry a **route into their own workflow** — they are completed **THERE, never from the Actions page** (no derived state is duplicated into `action_items`). Sources: `review_schedules`, `portfolio_review_schedules`, `ic_memos` (`pending_cio`), `security_additions` (`draft`), `alert_events`, `at_risk` (sell timer), drift breaches (computed from `positions`), `import_runs` (a YCharts refresh that failed or did not fire) and `job_runs` (a scheduled routine that died or missed a run — see the heartbeat convention above).
 - **`action_items` is the manual-task backbone** (extended Jul 2026): `category` (`security`/`portfolio`/`ic`/`compliance`/`client`/`trade`/`operational`), `source` (always `manual` here), polymorphic **`linked_type`/`linked_id`** (e.g. `client`), `recurrence` + `recurrence_interval`, `snoozed_until`, and a widened `status` (`open`/`in_progress`/`waiting`/`blocked`/`snoozed`/`closed`). CHECK constraints enforce the category/recurrence/status sets. Data layer + labels + `advanceDate`/`snoozeActionItem`/recurrence-on-complete live in **`lib/actionItems.ts`**. **Closing a recurring task spawns the next occurrence** (due date advanced by the cadence). Still soft-deleted (`deleted_at`); status transitions audited in `action_item_events` (`ActionItemTimeline`).
-- **Page** (`ActionItemsPage`): a summary band over sidebar facets (category + source, with counts) and a column table, **date-bucket grouping** (Overdue/Due Today/This Week/Upcoming/No Date) or group-by-category, auto-priority, snooze, bulk close/snooze, recurring **Templates**, CSV export, an **Automation** button opening `AutomationPanel` (also reachable at `/actions?automation=1`, which is where the `job_health` action routes), and **persisted filters** (localStorage — device-local UI state, OK). Manual rows are editable; derived rows show **"Open →"**.
+- **Page** (`ActionItemsPage`): a summary band over sidebar facets (category + source, with counts) and a column table, **date-bucket grouping** (Overdue/Due Today/This Week/Upcoming/No Date) or group-by-category, auto-priority, snooze, bulk close/snooze, recurring **Templates**, CSV export, an **Automation** button opening `AutomationPanel` (also reachable at `/actions?automation=1`, which is where the `job_health` action routes), and **persisted filters** (`hooks/useActionFilters.ts` — six pieces of view state behind one localStorage key; device-local UI state, OK). The CSV is built by **`buildActionsCsv`** in `lib/actions.ts`, beside `actionLabel`, so the exported row and the on-screen row cannot name an action differently; the page owns only the download. Manual rows are editable; derived rows show **"Open →"**.
 - **The page mixes a worklist and a calendar, and the calendar is the bigger half.** Every `review_schedules` and `portfolio_review_schedules` row is projected whether or not it is due, so 98 of 171 actions were future-dated reviews reading "this reports in six weeks". Two devices keep that from burying the ~15 rows that need doing, and **neither hides anything without a count saying so**:
   - **Upcoming and No Date are collapsed by default** (`DEFAULT_COLLAPSED`), and the group header carries the full count. A **horizon** control (7/30/90/all days) trims how far the list reaches; overdue rows always pass it, since a negative `daysUntil` is within any horizon.
   - **`clusterActions` collapses repeated DERIVED actions** sharing a source and a day into one line — "Portfolio Review — 37 due Jun 29, 2026". One fact printed 37 times is not 37 facts. Manual tasks never cluster (two sharing a date is coincidence, not a common cause), and a group under `COLLAPSE_MIN` (3) renders as itself.
   - **The cluster key is the LOCAL calendar day** (`localDayKey`), not the raw `dueDate`. These sources store `timestamptz` while the whole page treats a due date as a day — `bucketOf`/`daysUntil` round to local midnight and `formatDate` renders a bare date at local noon. Two Equity Income reviews stamped `2026-06-30T00:08Z` fall on 29 June here: keying on the raw string split them out of a cluster showing their own date, and keying on the UTC prefix would have labelled the cluster a day after the rows inside it. The label is built with `formatDate` for the same reason.
 - **Overdue rows are marked on the edge and on the date, not washed red.** 48 red rows is a red page. They also carry an **aging** line (`agingLabel` — "124d overdue"): in an audit-defense tool, how late a thing is is a different fact from whether it is late.
-- **Create-from-context.** `CreateActionItemModal` takes `defaultSecurityId`/`defaultPortfolioName`/`defaultClientId` and auto-sets the category; **"+ Action" buttons** live on the security detail, portfolio detail, and client detail pages. A client-linked task uses `linked_type='client'`; `fetchActionItemsByClient` scopes the client page's list (client-linked **plus** its portfolios' actions).
+- **Create-from-context.** `CreateActionItemModal` takes `defaultSecurityId`/`defaultPortfolioName`/`defaultClientId` and auto-sets the category; **"+ Action" buttons** live on the security detail, portfolio detail, and client detail pages. A client-linked task uses `linked_type='client'`; the client page shows **client-linked actions plus its portfolios' actions**, which it does by fetching all actions under the shared `actionItems` key and narrowing with a TanStack `select` — so it costs no extra request and shares the Actions page's cache. (This used to say `fetchActionItemsByClient` scoped that list. It did not: nothing called it, and it filtered on `linked_type='client'` ALONE, so it could not have produced the portfolios' half. Deleted in Nov 2026.)
 - **Convergence.** The Home **Action Center** band shows bucket + category counts from the same `fetchAllActions` model; the **Review Calendar** stays the review-completion workflow and cross-links to `/actions`.
 
 ## Audit & Governance surfaces

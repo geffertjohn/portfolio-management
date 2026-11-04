@@ -42,15 +42,6 @@ export async function fetchClientById(id: number): Promise<Client | null> {
   return data ?? null
 }
 
-/** Soft-delete: sets deleted_at and preserves the row for regulatory retention. */
-export async function archiveClient(id: number): Promise<void> {
-  const { error } = await supabase
-    .from('clients')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
-}
-
 export async function fetchClientPortfolios(clientId: number): Promise<ClientPortfolio[]> {
   const { data, error } = await supabase
     .from('client_portfolios')
@@ -74,11 +65,6 @@ export async function createClient(client: {
   const { data, error } = await supabase.from('clients').insert(client).select().single()
   if (error) throw error
   return data
-}
-
-export async function updateClient(id: number, updates: Partial<Omit<Client, 'id' | 'created_at' | 'updated_at'>>): Promise<void> {
-  const { error } = await supabase.from('clients').update(updates).eq('id', id)
-  if (error) throw error
 }
 
 export async function linkPortfolioToClient(clientId: number, portfolioName: string): Promise<void> {

@@ -11,6 +11,7 @@
 import { supabase } from './supabase'
 import {
   fetchActionItems,
+  CATEGORY_LABELS,
   type ActionItem,
   type ActionCategory,
   type ActionPriority,
@@ -675,6 +676,50 @@ export const BUCKET_ORDER: DateBucket[] = ['overdue', 'today', 'this_week', 'upc
  */
 export const HORIZON_OPTIONS = [7, 30, 90, 0] as const
 export type Horizon = typeof HORIZON_OPTIONS[number]
+
+/**
+ * The Actions list as CSV.
+ *
+ * Here rather than in the page (audit §22) because half the concern already
+ * lived here — `actionLabel` exists precisely so the export and the row agree
+ * on what an action is called, and splitting the two invites a CSV column that
+ * says something the screen does not.
+ *
+ * Returns the TEXT; the page owns the download, which is a DOM act.
+ */
+export function buildActionsCsv(actions: UnifiedAction[]): string {
+  const rows: string[][] = [['Category', 'Source', 'Task', 'Context', 'Due', 'Priority', 'Status']]
+  for (const a of actions) {
+    rows.push([
+      CATEGORY_LABELS[a.category],
+      SOURCE_LABELS[a.source],
+      actionLabel(a),
+      a.context ?? '',
+      a.dueDate ?? '',
+      a.priority,
+      // A derived action has no stored status — it is completed in its own
+      // workflow, never from this page.
+      a.isManual ? (a.manual?.status ?? '') : 'active',
+    ])
+  }
+  return rows.map(quoteRow).join('\n')
+}
+
+/**
+ * Every field quoted, with `"` doubled.
+ *
+ * Unconditional, not just for fields containing a comma: an action title is
+ * free text that routinely carries commas, quotes and em-dashes, and a
+ * half-quoted file is one that opens misaligned in Excel without erroring.
+ */
+function quoteRow(cells: string[]): string {
+  return cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
+}
+
+/** Which half of the list to show: real tasks, projected ones, or both. */
+export type SourceFilter = 'all' | 'manual' | 'derived'
+/** Date buckets (the default) or the category facet. */
+export type GroupBy = 'bucket' | 'category'
 
 /** `0` means no horizon. Undated actions are never filtered out by it. */
 export function withinHorizon(dueDate: string | null, days: Horizon): boolean {
