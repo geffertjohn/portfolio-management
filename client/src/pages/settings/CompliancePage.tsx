@@ -29,6 +29,7 @@ import { FiduciarySection } from '@/components/compliance/FiduciarySection'
 import { CrossPortfolioSection } from '@/components/compliance/CrossPortfolioSection'
 import { PortfolioRulesSection } from '@/components/compliance/PortfolioRulesSection'
 import { PositionRulesSection } from '@/components/compliance/PositionRulesSection'
+import { StrategicAllocationSection } from '@/components/compliance/StrategicAllocationSection'
 
 export function CompliancePage() {
   const queryClient = useQueryClient()
@@ -226,9 +227,14 @@ export function CompliancePage() {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Compliance Rules</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Firm-wide fiduciary rules and portfolio-level compliance.
+          Firm-wide fiduciary rules, portfolio-level compliance, and the published
+          strategic asset allocation models.
         </p>
       </div>
+
+      {/* Strategic Asset Allocation — the published document the models are
+          maintained against. Read-only with respect to model_portfolio_data. */}
+      <StrategicAllocationSection />
 
       {/* Fiduciary Rules */}
       <FiduciarySection
