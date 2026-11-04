@@ -23,26 +23,34 @@ const INK = [17, 24, 39] as const
 const BODY = [55, 65, 81] as const
 const MUTED = [107, 114, 128] as const
 
-export function buildQuarterlyBriefPdf(b: QuarterlyBrief): QuarterlyBriefPdfResult {
-  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+/**
+ * Draw the brief into an EXISTING document, starting at `startY`, and return
+ * the cursor afterwards.
+ *
+ * Extracted so the stock review-evidence PDF can staple the quarter's brief
+ * onto the end of the review without a second rendering path — the same reason
+ * `buildQuarterlyBrief` is shared between this file and the on-screen view. Two
+ * renderers of one document is how the page and the PDF drift apart.
+ */
+export function drawQuarterlyBrief(doc: jsPDF, b: QuarterlyBrief, startY = 46): number {
   const marginX = 40
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
   const textW = pageW - marginX * 2
 
   doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(...INK)
-  doc.text(`Q${b.quarter} ${b.fiscalYear} Quarterly Brief`, marginX, 46)
+  doc.text(`Q${b.quarter} ${b.fiscalYear} Quarterly Brief`, marginX, startY)
 
   doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(31, 41, 55)
-  doc.text(`${b.ticker}${b.companyName ? ` — ${b.companyName}` : ''}`, marginX, 66)
+  doc.text(`${b.ticker}${b.companyName ? ` — ${b.companyName}` : ''}`, marginX, startY + 20)
 
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...MUTED)
   const meta = [
     b.callDate ? `Earnings call: ${b.callDate}` : 'Earnings call date not recorded',
     b.sentiment ? `Tone of the call: ${SENTIMENT_LABEL[b.sentiment]}` : null,
   ].filter(Boolean) as string[]
-  doc.text(meta, marginX, 82, { lineHeightFactor: 1.35 })
-  let y = 82 + meta.length * 11 + 10
+  doc.text(meta, marginX, startY + 36, { lineHeightFactor: 1.35 })
+  let y = startY + 36 + meta.length * 11 + 10
 
   const room = (needed: number) => {
     if (y + needed > pageH - 54) {
@@ -160,12 +168,29 @@ export function buildQuarterlyBriefPdf(b: QuarterlyBrief): QuarterlyBriefPdfResu
     }
   }
 
+  return y
+}
+
+/** The provenance line this document carries on every page. */
+export function quarterlyBriefProvenance(b: QuarterlyBrief): string {
+  return b.sources.length
+    ? `Drawn from the ${b.sources.join(', the ')}.`
+    : 'Source documents not recorded.'
+}
+
+export function buildQuarterlyBriefPdf(b: QuarterlyBrief): QuarterlyBriefPdfResult {
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' })
+  const marginX = 40
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const textW = pageW - marginX * 2
+
+  drawQuarterlyBrief(doc, b)
+
   // Provenance on every page — this document is a rendering of the record, and
   // a reader should be able to see which parts of the record it drew on.
   const pages = doc.getNumberOfPages()
-  const provenance = b.sources.length
-    ? `Drawn from the ${b.sources.join(', the ')}.`
-    : 'Source documents not recorded.'
+  const provenance = quarterlyBriefProvenance(b)
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p)
     doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(156, 163, 175)

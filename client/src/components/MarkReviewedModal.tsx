@@ -19,7 +19,8 @@ import { fetchLatestPostEarningsBrief, composeReviewRationale } from '@/lib/rese
 import type { SecurityDetail } from '@/lib/securities'
 import { AutoGrowTextarea } from './AutoGrowTextarea'
 import { FundMonitoringPanel } from './FundMonitoringPanel'
-import { buildFundReviewPdf } from '@/lib/reviewEvidencePdf'
+import { buildFundReviewPdf, buildStockReviewPdf } from '@/lib/reviewEvidencePdf'
+import { fetchReviewQuarterlyBrief } from '@/lib/reviewBrief'
 import { uploadFile, SECURITY_DOCS_BUCKET, isServerUnreachable } from '@/lib/documents'
 import { fetchCategoryBenchmark, fetchPeerGroupBenchmark } from '@/lib/benchmarks'
 
@@ -50,6 +51,8 @@ interface MarkReviewedModalProps {
   lastEarnings?: string | null
   /** Next earnings release date (YYYY-MM-DD). Drives the Next Review Date (+1 day). */
   nextEarnings?: string | null
+  /** Company name for the evidence PDF's header. Stocks read it from FMP. */
+  companyName?: string | null
 }
 
 const CADENCE_OPTIONS: { value: ReviewCadence; label: string; months: number }[] = [
@@ -103,7 +106,7 @@ function SnapRow({ label, value }: { label: string; value: string }) {
 
 export function MarkReviewedModal({
   open, onClose, securityId, securitySymbol, currentCadence, mode,
-  fundSecurity, lastEarnings, nextEarnings,
+  fundSecurity, lastEarnings, nextEarnings, companyName,
 }: MarkReviewedModalProps) {
   const isFund = fundSecurity !== null
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -118,6 +121,8 @@ export function MarkReviewedModal({
   // Fund-specific outcome state
   const [fundMainOutcome, setFundMainOutcome] = useState<FundMainOutcome | null>(null)
   const [fundAtRisk, setFundAtRisk] = useState(false)
+  /** Set when the review was recorded but its PDF was not saved. */
+  const [pdfWarning, setPdfWarning] = useState<string | null>(null)
 
   // ── Pre-fill from the post-earnings brief ─────────────────────────────────
   // Reviews are earnings-driven, so the newest post-brief is normally the one
@@ -379,6 +384,53 @@ export function MarkReviewedModal({
     return uploadFile(securitySymbol, file, SECURITY_DOCS_BUCKET)
   }
 
+  /**
+   * Freeze the stock review as a PDF — the decision, the evidence it was taken
+   * against, and that quarter's brief — and upload it beside the fund ones.
+   *
+   * Returns the stored path and the report the review was drafted from.
+   *
+   * **Unlike the fund path, an upload failure does NOT abort the review.** For
+   * a fund the PDF is the only frozen evidence there is, so recording without
+   * it would lose the record; for a stock `metrics_snapshot` already freezes
+   * the evidence in the row itself, so the document is the readable artifact
+   * rather than the record. Refusing to record a decision the advisor has made
+   * because the file server is down would be the worse failure, and a missing
+   * document is recoverable — the backfill script rebuilds it from the row.
+   */
+  async function uploadStockEvidence(
+    reviewedOn: Date,
+  ): Promise<{ path: string | null; sourceReportId: number | null; error: string | null }> {
+    try {
+      const { brief: qb, absentReason, sourceReportId } =
+        await fetchReviewQuarterlyBrief(securityId, companyName ?? null, brief ?? null)
+      const { blob, filename } = buildStockReviewPdf({
+        ticker: securitySymbol,
+        companyName: companyName ?? null,
+        reviewDate: scheduledReviewDate,
+        reviewedAt: reviewedOn,
+        nextReviewAt: stockNextReview,
+        recommendation: recommendation as Recommendation,
+        conviction: conviction || null,
+        rationale: notes,
+        priceAtReview: quote?.price ?? null,
+        metrics: buildSnapshot(),
+        brief: qb,
+        briefAbsentReason: absentReason,
+      })
+      const file = new File([blob], filename, { type: 'application/pdf' })
+      return { path: await uploadFile(securitySymbol, file, SECURITY_DOCS_BUCKET), sourceReportId, error: null }
+    } catch (e) {
+      return {
+        path: null,
+        sourceReportId: brief?.id ?? null,
+        error: isServerUnreachable(e)
+          ? 'the Express file server is unreachable (cd server && npm run dev)'
+          : e instanceof Error ? e.message : 'unknown error',
+      }
+    }
+  }
+
   const reviewMutation = useMutation({
     mutationFn: async () => {
       const fundReviewedAt = new Date(reviewDate + 'T00:00:00')
@@ -396,6 +448,16 @@ export function MarkReviewedModal({
           )
         }
       }
+      // Stocks: the document is built from the same snapshot that is about to
+      // be written to the row, so the two cannot disagree.
+      let sourceReportId: number | null = null
+      if (!isFund) {
+        const r = await uploadStockEvidence(dateReviewed)
+        evidenceDocPath = r.path
+        sourceReportId = r.sourceReportId
+        if (r.error) setPdfWarning(`Review recorded, but the evidence PDF was not saved — ${r.error}.`)
+      }
+
       await markReviewed({
         securityId,
         cadence: isFund ? 'quarterly' : cadence,
@@ -414,6 +476,7 @@ export function MarkReviewedModal({
         priceAtReview: isFund ? null : (quote?.price ?? null),
         metricsSnapshot: isFund ? null : buildSnapshot(),
         evidenceDocPath,
+        sourceReportId,
       })
       if (isFund && fundAtRisk) {
         await addToAtRisk(securityId, [], notes.trim() || null)
@@ -421,14 +484,15 @@ export function MarkReviewedModal({
     },
     onSuccess: () => {
       invalidateAll()
-      if (isFund) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(SECURITY_DOCS_BUCKET) })
-      }
+      // Both paths now write a document into the security's folder.
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.documentsFiles(SECURITY_DOCS_BUCKET) })
       if (isFund && fundAtRisk) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRisk })
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRiskBySecurity(securityId) })
       }
-      onClose()
+      // A failed PDF leaves the review recorded, so the modal stays open to say
+      // so rather than closing on a half-done job.
+      if (!pdfWarning) onClose()
     },
   })
 
@@ -734,6 +798,15 @@ export function MarkReviewedModal({
         {activeMutation.isError && (
           <p className="mt-3 text-sm text-red-600">
             {activeMutation.error instanceof Error ? activeMutation.error.message : 'Failed to save'}
+          </p>
+        )}
+
+        {/* The review IS recorded in this case — the row carries the frozen
+            metrics snapshot — so this is amber, not red, and the modal stays
+            open to say it rather than closing on a half-done job. */}
+        {pdfWarning && (
+          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {pdfWarning} The decision and its evidence are saved; the document can be rebuilt later.
           </p>
         )}
 

@@ -501,7 +501,7 @@ For **stocks** (not funds), the detail page pulls these live via `useQuery` rath
 
 Tabs are **Overview · Monitor · Commentary** (no Alternatives tab; the Research tab was removed and its blocks redistributed). The third tab was called **Documents** until Oct 2026, when the earnings briefs and transcripts moved into it off Monitor and it was renamed — the split is now **Monitor = measurement** (scorecard, alternatives, financials) and **Commentary = what is said about the security**.
 - **Overview (stocks): Street Coverage, then the Investment Thesis card.** The Scorecard, Total Performance, News, Alerts and the Review Schedule / Review History blocks were **removed from the stock Overview (Oct 2026)** — they live on Monitor, and the tab is the ownership case. **`TipRanksPanel` was moved back here (Oct 2026), deliberately ABOVE the thesis**: the outside view is context for our own, and placing it second invites anchoring the thesis on the street rather than measuring the street against the thesis. Two consequences worth knowing: the price moved to the **header** as the first cell of the stock metrics row (so that row is `grid-cols-6`, funds stay `grid-cols-3`). It keeps the documented seam — TanStack owns the REST `fetchQuote` baseline, `quoteStream` owns the live last-trade leg via `useLiveQuote`, and a "Live" dot shows only while ticks arrive; `useLiveQuote` is passed `null` for funds, which is how they opt out of a stream FMP does not serve them. `AnalystCoveragePanel` was **deleted** — the header covers the price, and the 52-week range and vendor price-target consensus it added on top were reviewed on the page and not wanted. `RangeBar` survives as a shared primitive (`TipRanksPanel` uses it); and `StockReturnTable` / `NewsAlertsPanel` are **still live** via `ResearchPage`, so neither is dead code. **Funds are untouched** and keep their own (untabbed) layout.
-- **Monitor:** Scorecard cards (with Review button) · the two **Alternatives comparison tables** · **Financials**. (Street Coverage, AI Research & Briefs and Transcripts all used to sit here; the first is on Overview now, the other two on Commentary.)
+- **Monitor:** Scorecard cards (with Review button) · the two **Alternatives comparison tables** · **Review** (schedule + history) · **Financials**. The Review block was added Nov 2026: `ReviewLogSection`'s only mount was inside the fund branch, so a stock's recommendation, conviction, rationale and frozen snapshot were recorded on every review and rendered on no tab, while the header asserted "Review Overdue" with nowhere to look. It shows Last Reviewed / Next Review / Next Earnings rather than a cadence, because stock reviews are earnings-driven. (Street Coverage, AI Research & Briefs and Transcripts all used to sit here; the first is on Overview now, the other two on Commentary.)
 - **Commentary** (the renamed Documents tab): **AI Research & Briefs** (`SecurityResearchPanel`) · **Documents** (`DocumentsFolderPanel`, `Security Documents`/`<ticker>`). **The separate Transcripts block is GONE (Oct 2026)** — it could only ever show the LATEST call, so the evidence behind any brief older than a quarter was unreachable from the page. Everything written around a call now sits on that call's own row in the **Commentary timeline** (below), and the transcript opens in a modal with the committee's summary above it — the call is still read before our conclusions. The tab id in `activeTab` is `'commentary'`, and the nav label is derived from the id by capitalising it, so renaming the id renames the tab.
 
 ### Alternatives comparison tables (`AlternativesPanel.tsx`)
@@ -701,6 +701,50 @@ A **stock** review records an add/hold/trim/sell decision with a documented rati
 - `review_log` columns: `recommendation`, `conviction`, `price_at_review` (numeric), `metrics_snapshot` (`jsonb`, shape = `ReviewMetricsSnapshot`). All nullable; **funds leave them null** and keep the `outcome` enum (Maintain/Propose/At-Risk → `no_issues`/`flagged_for_action`/`placed_on_watchlist`). Stocks leave `outcome` null.
 - The **evidence snapshot is frozen at submit time** from on-demand FMP (`fetchScorecardMetrics` + `fetchAnalystData` + `fetchQuote`, deduped with the page's queries) so a review stays reconstructable later even though stock metrics are never persisted. `ReviewLogSection` shows the recommendation badge, conviction, rationale, and the frozen metrics.
 - `markReviewed()` takes `recommendation` / `conviction` / `priceAtReview` / `metricsSnapshot`; pass them for stocks, null for funds.
+
+### A stock review is ALSO a PDF — the decision plus that quarter's brief
+
+A stock review writes **both** halves now: the `metrics_snapshot` jsonb (the
+frozen evidence, queryable) **and** a PDF in `Security Documents/<ticker>`,
+recorded on `review_log.evidence_doc_path` like the fund one. The document is
+the decision, the evidence it was taken against, and **the quarter's brief
+stapled on as its second half** — one file.
+
+- **It is INTERNAL.** The quarterly brief alone is shaped to be handed to a
+  client; the review half carries the allocation recommendation, conviction, the
+  open questions and the rationale, so the combination must not leave the firm.
+  Every page says so in the footer.
+- **The brief is embedded through `drawQuarterlyBrief`**, the same renderer the
+  standalone client-facing PDF uses — extracted from `buildQuarterlyBriefPdf`
+  for exactly this. Two renderers of one document is how a page and a PDF drift.
+- **A missing brief does NOT block the review.** Most quarters carry no
+  post-brief and no call summary, and `canBuildQuarterlyBrief` refuses to build
+  one from expectations alone. The document states which quarter had nothing
+  rather than omitting the section — a reader must be able to tell "nothing was
+  written" from "we left it out".
+- **Unlike the fund path, an upload failure does NOT abort the review.** For a
+  fund the PDF is the only frozen evidence, so recording without it loses the
+  record; for a stock the jsonb snapshot already freezes it, so the document is
+  the readable artifact rather than the record. The modal stays open with an
+  amber note and the backfill can rebuild it.
+- **`review_log.source_report_id`** (FK → `research_reports`, `ON DELETE SET
+  NULL`) records WHICH brief a review was drafted from. It was prose in the
+  rationale — "Drafted from the post-earnings brief of Nov 3, 2026" — so the
+  quarter had to be inferred from the review date, which picks the wrong one
+  whenever a review is recorded late. `lib/reviewBrief.ts` keys on the brief's
+  own `(fiscal_year, quarter)`.
+- **Backfill:** `npx vite-node scripts/reviews/backfill-stock-review-pdfs.ts`
+  (`--dry-run` first). It imports the app's own builders so a rebuilt document
+  is what the app would have produced, only touches rows with no
+  `evidence_doc_path`, and stamps every page **"Rebuilt from the recorded review
+  on <date>"** — a reconstruction must not read as a contemporaneous freeze. The
+  25 reviews from 28 Oct – 2 Nov 2026 were backfilled this way, all 25 with a
+  brief. Needs the Express server running.
+- **`review_log` had no UPDATE policy** until Nov 2026 — insert, read and delete
+  only — so an update was silently dropped (PostgREST reports success, zero rows
+  affected). That is not append-only; a DELETE policy already existed. It
+  surfaced when the first backfill run uploaded all 25 PDFs and recorded none of
+  them.
 
 ### Fund/ETF review captures a PDF evidence document (not a jsonb snapshot)
 

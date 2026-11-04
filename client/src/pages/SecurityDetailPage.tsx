@@ -19,6 +19,7 @@ import { CreateActionItemModal } from '@/components/CreateActionItemModal'
 import { MarkReviewedModal } from '@/components/MarkReviewedModal'
 import { ReviewLogSection } from '@/components/ReviewLogSection'
 import { fetchReviewScheduleBySecurity, isOverdue, isDueSoon, reviewDueDay } from '@/lib/reviewSchedules'
+import { formatDate } from '@/lib/fundFormat'
 import { fetchPortfoliosHoldingSecurity } from '@/lib/positions'
 import { useSecurityDetail } from '@/hooks/useSecurityDetail'
 import { useSecurityBackLink } from '@/hooks/useSecurityBackLink'
@@ -590,6 +591,65 @@ export function SecurityDetailPage() {
           {/* Alternatives comparison tables */}
           <AlternativesPanel security={security} />
 
+          {/* ── Review schedule + history ──────────────────────────────────
+              The audit-defence record — recommendation, conviction, the
+              required rationale, the price and the frozen metrics snapshot —
+              was recorded on every stock review and rendered on no stock tab:
+              ReviewLogSection's only mount was inside the fund branch. The
+              header asserted "Review Overdue" while the page offered nowhere
+              to see when it was due or what the last one concluded. */}
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="text-base font-semibold text-gray-900">Review</h2>
+            <div className="mt-6 space-y-6">
+              <section>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Review Schedule</h3>
+                {reviewSchedule ? (
+                  <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Last Reviewed</p>
+                        <p className="mt-1 text-gray-900">
+                          {reviewSchedule.last_reviewed_at
+                            ? formatDate(reviewSchedule.last_reviewed_at)
+                            : <span className="text-gray-400">Never</span>}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Next Review</p>
+                        {/* reviewDueDay, not the raw column: this is a calendar
+                            day stored as timestamptz (gotcha 24). */}
+                        <p className={`mt-1 font-medium ${
+                          isOverdue(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-red-600'
+                          : isDueSoon(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-amber-600'
+                          : 'text-gray-900'}`}>
+                          {formatDate(reviewDueDay(reviewSchedule.next_review_at))}
+                        </p>
+                      </div>
+                      <div>
+                        {/* Stock reviews are earnings-driven, so the cadence a
+                            fund shows here would be noise — the next earnings
+                            date is what actually sets the date. */}
+                        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Next Earnings</p>
+                        <p className="mt-1 text-gray-900">
+                          {nextEarnings ? formatDate(nextEarnings) : <span className="text-gray-400">Unknown</span>}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
+                    No review schedule set — this security has never been reviewed.
+                  </div>
+                )}
+              </section>
+              <div className="border-t border-gray-100" />
+              <section>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-700">Review History</h3>
+                <ReviewLogSection securityId={security.security_id} />
+              </section>
+            </div>
+          </div>
+
           {/* Financials (moved from Research) */}
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <button
@@ -680,6 +740,7 @@ export function SecurityDetailPage() {
           currentCadence={reviewSchedule?.cadence ?? 'quarterly'}
           mode="review"
           fundSecurity={isFundOrEtfSecurity(security) ? security : null}
+          companyName={companyName}
           lastEarnings={lastEarnings}
           nextEarnings={nextEarnings}
         />

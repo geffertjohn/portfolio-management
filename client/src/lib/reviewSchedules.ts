@@ -110,8 +110,13 @@ export interface MarkReviewedOptions {
   conviction?: Conviction | null
   priceAtReview?: number | null
   metricsSnapshot?: ReviewMetricsSnapshot | null
-  /** Path of the uploaded review-evidence document (Security Documents bucket) — funds/ETFs. */
+  /** Path of the uploaded review-evidence document (Security Documents bucket). */
   evidenceDocPath?: string | null
+  /**
+   * The research report this review was drafted from — the post-earnings brief.
+   * Makes the pairing structural; it was prose in the rationale before.
+   */
+  sourceReportId?: number | null
 }
 
 /**
@@ -151,6 +156,7 @@ export async function markReviewed(opts: MarkReviewedOptions): Promise<void> {
       price_at_review: priceAtReview ?? null,
       metrics_snapshot: metricsSnapshot ?? null,
       evidence_doc_path: evidenceDocPath ?? null,
+      source_report_id: opts.sourceReportId ?? null,
     } as never)
   if (logError) throw logError
 }

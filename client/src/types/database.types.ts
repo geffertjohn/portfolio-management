@@ -2684,6 +2684,7 @@ export type Database = {
           reviewed_at: string
           reviewed_by: string | null
           security_id: string
+          source_report_id: number | null
         }
         Insert: {
           conviction?: string | null
@@ -2700,6 +2701,7 @@ export type Database = {
           reviewed_at?: string
           reviewed_by?: string | null
           security_id: string
+          source_report_id?: number | null
         }
         Update: {
           conviction?: string | null
@@ -2716,6 +2718,7 @@ export type Database = {
           reviewed_at?: string
           reviewed_by?: string | null
           security_id?: string
+          source_report_id?: number | null
         }
         Relationships: [
           {
@@ -2724,6 +2727,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "securities2"
             referencedColumns: ["security_id"]
+          },
+          {
+            foreignKeyName: "review_log_source_report_id_fkey"
+            columns: ["source_report_id"]
+            isOneToOne: false
+            referencedRelation: "research_reports"
+            referencedColumns: ["id"]
           },
         ]
       }
