@@ -21,6 +21,7 @@ export const QUERY_KEYS = {
   latestActualAllocation: (portfolioName: string) => ['latest_actual_allocation', portfolioName] as const,
   sp500SectorWeights: ['sp500_sector_weights'] as const,
   strategicAllocationVintages: ['strategic_allocation_vintages'] as const,
+  securityDetails: (securityIds: string[]) => ['security_details', [...securityIds].sort().join(',')] as const,
   alertEvents: ['alert_events'] as const,
   clients: ['clients'] as const,
   client: (id: number) => ['client', id] as const,

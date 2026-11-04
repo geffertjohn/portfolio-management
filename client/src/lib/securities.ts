@@ -331,6 +331,33 @@ export async function fetchSecurityById(id: number): Promise<SecurityDetail | nu
   return data as unknown as SecurityDetail
 }
 
+/**
+ * Full `securities2` rows for a set of tickers, keyed by `security_id`.
+ *
+ * The fund scorecard reads ~40 rank and value columns, so the portfolio
+ * review needs whole rows rather than the slim `Security` the lists use. One
+ * request for the whole book: a per-holding fetch would be a dozen round trips
+ * on a Foundation review.
+ *
+ * A ticker with no `securities2` row is simply absent from the map — the
+ * caller reports it rather than rendering a scorecard of blanks.
+ */
+export async function fetchSecurityDetailsByIds(
+  securityIds: string[],
+): Promise<Record<string, SecurityDetail>> {
+  if (securityIds.length === 0) return {}
+  const { data, error } = await supabase
+    .from('securities2')
+    .select('*')
+    .in('security_id', securityIds)
+  if (error) throw error
+  const out: Record<string, SecurityDetail> = {}
+  for (const row of (data ?? []) as unknown as SecurityDetail[]) {
+    out[row.security_id] = row
+  }
+  return out
+}
+
 export async function saveSecurityBenchmarks(
   id: number,
   bench1Id: number | null,

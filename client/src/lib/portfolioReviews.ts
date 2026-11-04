@@ -71,12 +71,40 @@ const POSITION_SIZING_TASK: ReviewTaskDef = { key: 'position_sizing', label: 'Re
 const PERFORMANCE_ATTRIBUTION_TASK: ReviewTaskDef = { key: 'performance_attribution', label: 'Review performance attribution' }
 
 /**
+ * The fund/ETF QUARTERLY review.
+ *
+ * Its own list, not the Equity one with extras bolted on. The shared sections
+ * ask a fund holder stock questions it cannot answer: `full_monitoring` wants a
+ * Business Trend and a Valuation call of attractive/fair/expensive,
+ * `thesis_scorecards` wants a thesis when `security_theses` is stocks-only by
+ * design, and the annual `deep_review` asks whether the moat is intact and
+ * whether "there is a better STOCK for the same role". Four fund reviews were
+ * opened under that list and none was ever completed.
+ *
+ * A fund is hired for a mandate at a cost, so the evidence is its cohort
+ * scorecard — the same `buildFundScorecard` the fund detail page and the
+ * per-security review PDF already use. Summary is appended by the workspace
+ * and carries the At-Risk list.
+ */
+const FUND_QUARTERLY_TASKS: ReviewTaskDef[] = [
+  POSITION_SIZING_TASK,
+  PERFORMANCE_ATTRIBUTION_TASK,
+  { key: 'scorecard_review', label: 'Scorecard review on every holding' },
+]
+
+/**
  * The task list for a review, given cadence + portfolio strategy.
  *
  * Fund/ETF portfolios (Foundation/Hybrid/ETF/Fixed Income) have no monthly
  * review, so their quarterly & annual reviews lead with the same position-size
  * check and performance attribution that Equity portfolios run monthly.
  * Equity portfolios keep the base lists (they do those in their monthly review).
+ *
+ * **The fund ANNUAL list is still the stock one with those two prepended.**
+ * Only the quarterly has been reshaped; the annual's deep-review and
+ * conviction-tier sections remain as stock-shaped as they ever were — and the
+ * tier bands in particular do not fit a book of five funds at twenty to forty
+ * percent each, which `hasConvictionTiers` already says in the model editor.
  */
 export function reviewTasksFor(
   cadence: PortfolioCadence,
@@ -84,9 +112,9 @@ export function reviewTasksFor(
 ): ReviewTaskDef[] {
   const base = PORTFOLIO_REVIEW_TASKS[cadence]
   const isEquity = strategy === 'Equity'
-  if (!isEquity && (cadence === 'quarterly' || cadence === 'annual')) {
-    return [POSITION_SIZING_TASK, PERFORMANCE_ATTRIBUTION_TASK, ...base]
-  }
+  if (isEquity) return base
+  if (cadence === 'quarterly') return FUND_QUARTERLY_TASKS
+  if (cadence === 'annual') return [POSITION_SIZING_TASK, PERFORMANCE_ATTRIBUTION_TASK, ...base]
   return base
 }
 

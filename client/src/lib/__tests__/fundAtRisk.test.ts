@@ -1,0 +1,187 @@
+import { describe, it, expect } from 'vitest'
+import { atRiskMetricsFromScorecard, failingScorecardRows, metricKeyFor } from '../fundAtRisk'
+import { buildFundScorecard, type ScorecardRow } from '../fundScorecard'
+import { gradeAtRiskMetric, isMetricFailing } from '../atRisk'
+import type { SecurityDetail } from '../securities'
+
+/**
+ * The point of recording a fund's failing metrics is that the entry becomes
+ * re-measurable. So most of these cases run the result back through the SHARED
+ * grader — if `gradeAtRiskMetric` does not agree with the scorecard's own tier,
+ * the mapping is wrong however reasonable it looks.
+ */
+
+function row(over: Partial<ScorecardRow> = {}): ScorecardRow {
+  return {
+    label: 'Sharpe Ratio 3Y', weight: 0.2, displayVal: 150, size: 200,
+    tier: 4, score: 5, tier3Threshold: 100, tier2Threshold: 50, tier1Threshold: 20,
+    higherIsBetter: false, ...over,
+  }
+}
+
+describe('which rows count as failing', () => {
+  it('takes tier 4 and nothing else', () => {
+    const rows = [row({ tier: 1 }), row({ tier: 2 }), row({ tier: 3 }), row({ tier: 4 })]
+    expect(failingScorecardRows(rows)).toHaveLength(1)
+    expect(failingScorecardRows(rows)[0].tier).toBe(4)
+  })
+
+  it('does NOT count a metric with no data', () => {
+    // A reading we could not take is not evidence against the fund. Counting it
+    // would also inflate the sell timer, which is sized on the failing count.
+    expect(failingScorecardRows([row({ tier: null, displayVal: null })])).toHaveLength(0)
+  })
+})
+
+describe('the resulting metric grades the way the scorecard tiered it', () => {
+  const metric = (over: Partial<ScorecardRow>) =>
+    atRiskMetricsFromScorecard([row({ tier: 4, ...over })], 'category')[0]
+
+  it('is RED while the reading is still in tier 4', () => {
+    // rank 150 of 200 = 75th percentile: beats neither the tier-3 line (100)
+    // nor the tier-2 line (50), and lower is better.
+    const m = metric({ displayVal: 150 })
+    expect(gradeAtRiskMetric(m)).toBe('red')
+    expect(isMetricFailing(m)).toBe(true)
+  })
+
+  it('goes AMBER once back in tier 3, which clears the flag', () => {
+    // The whole reason tier 3 is the first comparator: "recovered" has to mean
+    // out of the bottom tier, not all the way to top-quartile.
+    const m = { ...metric({ displayVal: 150 }), currentValue: 80 }
+    expect(gradeAtRiskMetric(m)).toBe('yellow')
+    expect(isMetricFailing(m)).toBe(false)
+  })
+
+  it('goes GREEN at tier 2 or better', () => {
+    expect(gradeAtRiskMetric({ ...metric({ displayVal: 150 }), currentValue: 30 })).toBe('green')
+  })
+
+  it('handles a higher-is-better reading the same way', () => {
+    // Manager tenure: 2 years is tier 4; the lines out are 3 and 5.
+    const m = atRiskMetricsFromScorecard(
+      [row({ label: 'Manager Tenure', displayVal: 2, size: null, tier: 4, tier3Threshold: 3, tier2Threshold: 5, tier1Threshold: 7, higherIsBetter: true })],
+      'category',
+    )[0]
+    expect(gradeAtRiskMetric(m)).toBe('red')
+    expect(gradeAtRiskMetric({ ...m, currentValue: 4 })).toBe('yellow')
+    expect(gradeAtRiskMetric({ ...m, currentValue: 6 })).toBe('green')
+  })
+})
+
+describe('what the entry records', () => {
+  it('names the cohort, because the same metric ranks differently in each', () => {
+    const [cat] = atRiskMetricsFromScorecard([row()], 'category')
+    const [peer] = atRiskMetricsFromScorecard([row()], 'peer')
+    expect(cat.label).toBe('Sharpe Ratio 3Y (vs category)')
+    expect(peer.label).toBe('Sharpe Ratio 3Y (vs peer group)')
+    // Distinct keys, so flagging on both cohorts does not collapse to one row.
+    expect(cat.key).not.toBe(peer.key)
+  })
+
+  it('freezes the reading and the two lines it failed', () => {
+    const [m] = atRiskMetricsFromScorecard([row()], 'category')
+    expect(m.flaggedValue).toBe(150)
+    expect(m.flaggedBenchmark).toBe(100)   // tier 3 line
+    expect(m.flaggedBenchmark2).toBe(50)   // tier 2 line
+    expect(m.currentValue).toBeNull()      // nothing re-measured yet
+  })
+
+  it('uses live comparators, not frozen ones', () => {
+    // A fund's cohort re-ranks every quarter, so the real test is beating the
+    // cohort as it is NOW — the same reasoning as a stock's growth benchmarks.
+    expect(atRiskMetricsFromScorecard([row()], 'category')[0].basis).toBe('benchmarks')
+  })
+
+  it('makes a key that survives a label with punctuation', () => {
+    expect(metricKeyFor('Upside/Downside 5Y')).toBe('upside_downside_5y')
+    expect(metricKeyFor('R-Square 3Y')).toBe('r_square_3y')
+  })
+})
+
+describe('against a scorecard built from a real security row', () => {
+  // Ranks deep in a 200-fund category: bottom-tier on both rank metrics given.
+  const security = {
+    sharpe_rank: 180, three_year_total_return_rank_category_size_nav: 200,
+    alpha_rank: 170,
+    max_manager_tenure: 9,
+  } as unknown as SecurityDetail
+
+  it('flags only the metrics that actually have bottom-tier data', () => {
+    const { rows } = buildFundScorecard(security, 'category')
+    const metrics = atRiskMetricsFromScorecard(rows, 'category')
+    const labels = metrics.map((m) => m.label)
+    expect(labels).toContain('Sharpe Ratio 3Y (vs category)')
+    expect(labels).toContain('Alpha 3Y (vs category)')
+    // Tenure of 9 years is tier 1 — not flagged.
+    expect(labels.join(' ')).not.toContain('Manager Tenure')
+    // Metrics with no underlying data are absent rather than counted.
+    expect(metrics.every((m) => m.flaggedValue !== null)).toBe(true)
+  })
+
+  it('every flagged metric reads red, so the count that sizes the timer is real', () => {
+    const { rows } = buildFundScorecard(security, 'category')
+    const metrics = atRiskMetricsFromScorecard(rows, 'category')
+    expect(metrics.length).toBeGreaterThan(0)
+    for (const m of metrics) expect(isMetricFailing(m), m.label).toBe(true)
+  })
+})
+
+/**
+ * FPX as it stands in the book — the case the UI offers to flag.
+ *
+ * Pinned with the security's real column values because the browser could not
+ * exercise the write (the permission classifier blocks it), so this is what
+ * stands in for clicking the button: the exact composition the workspace
+ * performs, on the exact row it would perform it against.
+ */
+describe('FPX against its designated peer-group cohort', () => {
+  const fpx = {
+    security_id: 'FPX',
+    scorecard_cohort: 'peer',
+    upside_downside_5y_vs_pg: 0.862859,
+    rsquared_3y_vs_pg: 0.64190251,
+    max_manager_tenure: 20.48,
+    sharpe_peer_group_rank: 26,
+    three_year_total_return_peer_group_size_nav: 342,
+    alpha_peer_group_rank: 18,
+    information_ratio_peer_group_rank: 8,
+    one_year_total_return_peer_group_rank_nav: 53,
+    one_year_total_return_peer_group_size_nav: 367,
+  } as unknown as SecurityDetail
+
+  const { rows } = buildFundScorecard(fpx, 'peer')
+  const metrics = atRiskMetricsFromScorecard(rows, 'peer')
+
+  it('finds exactly the two readings the review offers to record', () => {
+    expect(metrics.map((m) => m.label)).toEqual([
+      'Upside/Downside 5Y (vs peer group)',
+      'R-Square 3Y (vs peer group)',
+    ])
+  })
+
+  it('freezes the readings and the lines they failed', () => {
+    const [ud, rsq] = metrics
+    expect(ud.flaggedValue).toBeCloseTo(0.8629, 4)
+    expect(ud.flaggedBenchmark).toBe(0.9)    // out of tier 4
+    expect(ud.flaggedBenchmark2).toBe(1.0)   // into tier 2
+    expect(rsq.flaggedValue).toBeCloseTo(0.6419, 4)
+    expect(rsq.flaggedBenchmark).toBe(0.70)
+    expect(rsq.flaggedBenchmark2).toBe(0.85)
+  })
+
+  it('both read red, so the sell timer is sized on two real failures', () => {
+    // Not zero, which is what every fund entry has recorded until now — and
+    // zero takes the longest rung on the day table.
+    expect(metrics).toHaveLength(2)
+    for (const m of metrics) expect(isMetricFailing(m), m.label).toBe(true)
+  })
+
+  it('leaves its strong metrics alone', () => {
+    // Information ratio 8th of 342 and 20 years of manager tenure are tier 1;
+    // a flag that swept them in would misreport the evidence.
+    const labels = metrics.map((m) => m.label).join(' ')
+    expect(labels).not.toContain('Information Ratio')
+    expect(labels).not.toContain('Manager Tenure')
+  })
+})

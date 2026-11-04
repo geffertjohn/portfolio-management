@@ -836,6 +836,45 @@ Portfolio-level reviews are **separate from per-security reviews** (above) and f
 
 ### Checklists are the documented process
 
+**The fund/ETF QUARTERLY review has its own list** (Nov 2026): position sizing →
+performance attribution → **scorecard review**, then the built-in summary. It is
+not the Equity list with extras prepended, because the shared sections ask a
+fund holder stock questions it cannot answer — `full_monitoring` wants a
+Business Trend and a Valuation call of attractive/fair/expensive,
+`thesis_scorecards` wants a thesis when `security_theses` is stocks-only by
+design, and the annual `deep_review` asks whether the moat is intact and whether
+"there is a better STOCK for the same role". **Four fund reviews were opened
+under that list and none was ever completed.**
+
+- **`scorecard_review` shows each holding against the cohort
+  `securities2.scorecard_cohort` names**, with a Category/Peer toggle — the same
+  default the per-security review modal uses, so the two surfaces cannot show a
+  holding a different scorecard. A fund with no cohort set is said so rather
+  than quietly defaulted.
+- **The flag decision sits with the evidence**, on that step rather than in the
+  summary: deciding in the summary means deciding away from the numbers.
+- **Flagging records the FAILING READINGS**, via `atRiskMetricsFromScorecard`
+  (`lib/fundAtRisk.ts`). Tier 4 is the scorecard's own definition of a
+  bottom-tier reading, so no new threshold is invented; the comparators frozen
+  onto the entry are the **tier-3** line (out of tier 4) and the **tier-2** line,
+  taken from `ScorecardRow` rather than restated. That makes the shared colour
+  rule say the right thing — still tier 4 reads red, back in tier 3 reads amber,
+  and **amber clears the flag**. `basis` is `benchmarks` (live), because a fund's
+  cohort re-ranks every quarter.
+- **This fixes a real gap.** The fund path called `addToAtRisk(securityId, [], …)`
+  — an EMPTY array — so IAGG has sat on the list with no metrics, nothing to
+  re-measure, and a sell timer on the longest rung because `calcRemovalDate`
+  sizes on the failing count. `nextEarnings` is deliberately not passed for a
+  fund: it does not report, so the day table is the right basis.
+- **The summary leads with At-Risk**, scoped to the portfolio's own holdings
+  (`at_risk` is keyed by security, so the firm-wide list is mostly Equity
+  stocks). Entries added since the draft opened are badged; clearing requires a
+  reason, which is CHECK-enforced anyway. **Fund books only** for now.
+- **The fund ANNUAL review is UNCHANGED and still stock-shaped** — deep review,
+  conviction tiers and all. The tier bands in particular do not fit a book of
+  five funds at twenty to forty percent each, which `hasConvictionTiers` already
+  says in the model editor but the review workspace does not read.
+
 `PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the base task list per cadence (monthly: performance attribution · position sizing; quarterly: full monitoring review · update thesis scorecards · update watchlist status · check valuation changes; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction · check valuation changes). **`reviewTasksFor(cadence, strategy)` is the authoritative resolver** — for **non-Equity** portfolios it prepends **`position_sizing` then `performance_attribution`** to the quarterly and annual lists (fund/ETF portfolios have no monthly review, so they get those two portfolio-level checks that Equity portfolios run monthly). Equity portfolios keep the base lists. Change tasks here and the workspace sections + history follow. **In the workspace each task is a section** (left nav); a section = its special content (below) + a "Mark reviewed" toggle (the `done` flag) + section notes.
 
 ### Workspace draft lifecycle

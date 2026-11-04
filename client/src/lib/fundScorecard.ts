@@ -89,6 +89,21 @@ export interface ScorecardRow {
   /** Points contributed (weight × multiplier × 100, or fixed for Upside/Downside). */
   score: number | null
   valueType?: MetricDef['valueType']
+  /**
+   * The readings at which this metric would reach tiers 3, 2 and 1, in the
+   * same units as `displayVal`, with `higherIsBetter` saying which direction
+   * clears them. `tier3Threshold` is the one that matters most: it is the line
+   * out of tier 4, which is what "this metric has recovered" means.
+   *
+   * Exposed so the quarterly fund review can record WHY a holding was flagged
+   * without restating the tier boundaries. They are decided in `computeMetric`
+   * and nowhere else; a second copy is how a card ends up red while the list
+   * that cites it says amber (the lesson `lib/scorecardColor.ts` carries).
+   */
+  tier3Threshold: number | null
+  tier2Threshold: number | null
+  tier1Threshold: number | null
+  higherIsBetter: boolean
 }
 
 function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
@@ -103,25 +118,48 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       pct < 0.25 ? 2 :
       pct < 0.50 ? 3 : 4
     const score = tier != null ? def.weight * TIER_MULTIPLIERS[tier] * 100 : null
-    return { label: def.label, weight: def.weight, displayVal: rank, size, tier, score, valueType: def.valueType }
+    return {
+      label: def.label, weight: def.weight, displayVal: rank, size, tier, score,
+      valueType: def.valueType,
+      // A rank: lower is better, and the boundaries are shares of the cohort.
+      tier3Threshold: size != null && size > 0 ? size * 0.50 : null,
+      tier2Threshold: size != null && size > 0 ? size * 0.25 : null,
+      tier1Threshold: size != null && size > 0 ? size * 0.10 : null,
+      higherIsBetter: false,
+    }
   }
 
   // ── Value-based ───────────────────────────────────────────────────────────
   if (def.valueKey && def.valueType) {
     const val = numVal(s, def.valueKey)
-    if (val == null) return { label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null, valueType: def.valueType }
+    if (val == null) {
+      return {
+        label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null,
+        valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null, higherIsBetter: true,
+      }
+    }
 
     let tier: Tier
     let score: number
+
+    let tier3Threshold: number
+    let tier2Threshold: number
+    let tier1Threshold: number
 
     if (def.valueType === 'tenure') {
       // Manager Tenure: ≤1yr scores 0 regardless of tier bucket
       tier = val > 7 ? 1 : val > 5 ? 2 : val > 3 ? 3 : 4
       score = val > 1 ? def.weight * TIER_MULTIPLIERS[tier] * 100 : 0
+      tier3Threshold = 3
+      tier2Threshold = 5
+      tier1Threshold = 7
     } else if (def.valueType === 'rsquared') {
       // R-Squared: always scores at least 25% of weight (no zero case)
       tier = val >= 0.95 ? 1 : val >= 0.85 ? 2 : val >= 0.70 ? 3 : 4
       score = def.weight * TIER_MULTIPLIERS[tier] * 100
+      tier3Threshold = 0.70
+      tier2Threshold = 0.85
+      tier1Threshold = 0.95
     } else {
       // Upside/Downside — fixed point values (not weight × multiplier).
       // Round to 2 dp before comparing so a DB value like 0.9997 (displayed
@@ -132,12 +170,23 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       else if (v >= 0.9)  { tier = 3; score = 6  }
       else if (v > 0.01)  { tier = 4; score = 4  }
       else                { tier = 4; score = 0  }
+      tier3Threshold = 0.9
+      tier2Threshold = 1.0
+      tier1Threshold = 1.1
     }
 
-    return { label: def.label, weight: def.weight, displayVal: val, size: null, tier, score, valueType: def.valueType }
+    return {
+      label: def.label, weight: def.weight, displayVal: val, size: null, tier, score,
+      valueType: def.valueType,
+      tier3Threshold, tier2Threshold, tier1Threshold,
+      higherIsBetter: true,  // every value-type metric here reads higher-is-better
+    }
   }
 
-  return { label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null, valueType: def.valueType }
+  return {
+    label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null,
+    valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null, higherIsBetter: true,
+  }
 }
 
 export interface FundScorecard {
