@@ -7,6 +7,7 @@
  * `calcNextReview()` computes the next date from a base date + cadence.
  */
 import { supabase } from './supabase'
+import { isFundOrEtfSecurity } from './securities'
 import type { ReviewOutcome, Recommendation, Conviction, ReviewMetricsSnapshot } from './reviewLog'
 
 export type ReviewCadence = 'quarterly' | 'semi_annual' | 'annual'
@@ -245,6 +246,117 @@ export function redatedStockSchedules(rows: ScheduleRedateInput[]): ScheduleReda
     out.push({ securityId: r.security_id, from: current, nextReviewAt: `${target}T00:00:00Z` })
   }
   return out
+}
+
+/**
+ * A held stock that carries NO `review_schedules` row.
+ *
+ * Nothing creates one when a stock is bought: the only live writer is
+ * `markReviewed`, so a row appears by completing a review — which you would
+ * only think to do if the security appeared on the calendar. HCA and TSM sat
+ * held in two books each, never reviewed, visible on no surface, because both
+ * the Review Calendar and the Actions hub read `fetchReviewSchedules`.
+ * (`upsertReviewSchedule` could have seeded one and has no caller.)
+ */
+export interface ScheduleSeedInput {
+  security_id: string
+  next_earnings_release: string | null
+  detailed_security_type: string | null
+  peer_group_name: string | null
+  fund_company_name: string | null
+  fund_family: string | null
+  expense_ratio_generic: number | null
+}
+
+export interface ScheduleSeed {
+  securityId: string
+  cadence: ReviewCadence
+  nextReviewAt: string
+}
+
+/**
+ * Which held, unscheduled stocks get a schedule, and dated how. Pure.
+ *
+ * **Dated forward from `next_earnings_release`, and skipped when that date is
+ * in the past.** A stale stored date would seed a review that reads
+ * overdue for a call nobody has evidence was missed — the position may have
+ * been added last week, or reviewed outside the system. Scheduling the NEXT
+ * review makes no retrospective claim; manufacturing an overdue one does. TSM's
+ * stored date was three weeks past, which is why the caller refreshes from FMP
+ * before seeding rather than seeding whatever is stored.
+ *
+ * `cadence` is required by the table and hidden from the stock review UI, which
+ * is earnings-driven — `quarterly` is what all 94 live rows carry.
+ */
+export function seededStockSchedules(
+  candidates: ScheduleSeedInput[],
+  today: string,
+): ScheduleSeed[] {
+  const out: ScheduleSeed[] = []
+  for (const c of candidates) {
+    if (isFundOrEtfSecurity(c)) continue
+    const earnings = c.next_earnings_release
+    if (!earnings) continue
+    const day = earnings.slice(0, 10)
+    // Strictly in the PAST is the disqualifier. A call today gives a review due
+    // tomorrow, which is a perfectly good forward date and claims nothing.
+    if (day < today) continue
+    out.push({
+      securityId: c.security_id,
+      cadence: 'quarterly',
+      nextReviewAt: `${addUtcDays(day, 1)}T00:00:00Z`,
+    })
+  }
+  return out
+}
+
+/**
+ * Held stocks with no schedule row, for `seededStockSchedules`.
+ *
+ * Three reads rather than one: `review_schedules` has no FK from `positions`,
+ * so there is no embed to lean on, and the set difference is done here. Runs
+ * once per calendar mount.
+ */
+export async function fetchUnscheduledHeldSecurities(): Promise<ScheduleSeedInput[]> {
+  const [held, scheduled] = await Promise.all([
+    supabase.from('positions').select('security_id').is('deleted_at', null),
+    supabase.from('review_schedules').select('security_id'),
+  ])
+  if (held.error) throw held.error
+  if (scheduled.error) throw scheduled.error
+
+  const have = new Set((scheduled.data ?? []).map((r) => r.security_id))
+  const want = [...new Set((held.data ?? []).map((r) => r.security_id))].filter((id) => !have.has(id))
+  if (want.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('securities2')
+    // ONE literal, not a concatenation: the client is schema-typed and infers
+    // the row shape from this string, so a `+` here loses the columns and the
+    // result degrades to GenericStringError[].
+    .select('security_id, next_earnings_release, detailed_security_type, peer_group_name, fund_company_name, fund_family, expense_ratio_generic')
+    .in('security_id', want)
+  if (error) throw error
+  return data ?? []
+}
+
+/**
+ * Writes the seeds. `ignoreDuplicates` so a row created concurrently — another
+ * tab, or a review completed between the read and this write — wins rather than
+ * being overwritten with a derived date.
+ */
+export async function applyScheduleSeeds(seeds: ScheduleSeed[]): Promise<number> {
+  if (seeds.length === 0) return 0
+  const { error } = await supabase.from('review_schedules').upsert(
+    seeds.map((s) => ({
+      security_id: s.securityId,
+      cadence: s.cadence,
+      next_review_at: s.nextReviewAt,
+    })),
+    { onConflict: 'security_id', ignoreDuplicates: true },
+  )
+  if (error) throw error
+  return seeds.length
 }
 
 /**

@@ -757,6 +757,39 @@ Stock reviews are earnings-driven, not cadence-driven (cadence is set by the mod
 - **Date Reviewed** = today, when the button is clicked (read-only) → `review_log.reviewed_at` + `review_schedules.last_reviewed_at`.
 - **Next Review Date** = `next_earnings_release + 1 day` → `review_schedules.next_review_at`.
 
+**A held stock with no `review_schedules` row is invisible, and nothing used to
+create one** (Nov 2026). The only live writer was `markReviewed`, so a row
+appeared by *completing* a review — which you would only think to do if the
+security showed on the calendar. HCA (Equity Income 2.50%, EI&CG 1.25%) and TSM
+(Core Growth 2.00%, EI&CG 1.00%) sat held and never reviewed, raising nothing:
+`ReviewCalendarPage` **and** the Actions hub both read `fetchReviewSchedules`.
+(`upsertReviewSchedule` could have seeded one and had no caller.)
+
+- **The calendar now SEEDS a schedule on mount** for any held stock missing one,
+  via `seededStockSchedules` (pure) + `applyScheduleSeeds`. `$Cash` and unheld
+  tickers like `BRK.B` are correctly excluded — nothing to schedule.
+- **It dates forward from `next_earnings_release`, never backward from
+  `last_earnings_release`.** Dating from the last call would assert a review was
+  missed; nobody knows that — the position may have been added last week or
+  reviewed outside the system. A stale stored date is **refused**, not used.
+- **The FMP top-up was widened to the unscheduled stocks, and that is what makes
+  the seeding work at all.** It used to read only schedule rows, so TSM — whose
+  stored `next_earnings_release` was three weeks past — could never be
+  refreshed, and therefore never seeded, and therefore never refreshed. Order on
+  mount is **seed-candidates → refresh stale → seed → re-date**.
+- **The staleness test is strictly `< today`.** A stock whose call is *today*
+  has a review due tomorrow; treating it as stale would advance the stored date
+  past that call and skip the review.
+
+**The stock contract has TWO arms, and an audit that checks only the first
+raises false positives.** `next_review_at = next_earnings_release + 1 day`,
+**unless** the review is outstanding for a call that already happened
+(`next_review_at <= last_earnings_release + 1`), in which case
+`redatedStockSchedules` deliberately leaves it where it is rather than pushing
+it a quarter out. On 4 Nov 2026 that was 51 rows on the first arm and 3 on the
+second (AMD, ETN, UBER, which had just reported) — checking only the first
+arm reports those three as violations.
+
 `review_log.review_date` persists the scheduled due date alongside `reviewed_at`. `markReviewed()` takes an options object with explicit `reviewDate` / `nextReviewAt`; when omitted (funds), it falls back to cadence-based scheduling. Funds keep the legacy editable-date + cadence flow. `review_schedules.cadence` is NOT NULL, so always write a cadence value even when it's UI-hidden.
 
 For stocks, `last_earnings_release` / `next_earnings_release` driving these dates come **live from FMP** (`fetchEarningsDates`), passed into `MarkReviewedModal` — not from the YCharts Excel upload. The same columns are written to `securities2` by `refreshSecurityFromFMP` because the cross-security list views (Review Calendar, review schedules) read the stored values.
