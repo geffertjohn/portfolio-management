@@ -16,8 +16,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
  * and CI has no `.env` to supply real ones.
  */
 export default defineConfig({
+  /**
+   * Vitest's own cache, kept OUT of the dev server's.
+   *
+   * Both default to `node_modules/.vite`, so running the suite writes into the
+   * directory Vite's dependency optimizer owns. Keeping them apart means a test
+   * run can never disturb a running dev server's optimized deps.
+   */
+  cacheDir: 'node_modules/.vitest',
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
+    dedupe: ['react', 'react-dom'],
   },
   test: {
     include: ['src/**/*.test.ts'],
