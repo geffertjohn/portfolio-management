@@ -61,8 +61,13 @@ describe('the fund review task lists', () => {
     expect(keys).not.toContain('portfolio_construction')
   })
 
-  it('leaves the EQUITY annual exactly as it was', () => {
+  it('leaves the EQUITY annual\u2019s own sections alone', () => {
+    // Its four sections and their order are untouched by the fund work. The
+    // two leading portfolio-level checks arrived later and for a different
+    // reason: an annual absorbs the monthly that falls on its date, so it has
+    // to carry that month's sizing and attribution.
     expect(reviewTasksFor('annual', 'Equity').map((t) => t.key)).toEqual([
+      'position_sizing', 'performance_attribution',
       'deep_review', 'conviction_rankings', 'portfolio_construction', 'valuation_changes',
     ])
   })

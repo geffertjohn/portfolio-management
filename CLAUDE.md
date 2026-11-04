@@ -858,10 +858,33 @@ was still sitting on it (both due 30 Sept 2026) when this was found.
 - **An explicit next-review date from the Summary section still wins** for the
   cadence being completed, and the re-anchored quarterly follows the date
   actually used — not the default — so the two cannot end up inconsistent.
-- **Monthly is outside the cycle** and still steps independently; it is
-  Equity-only. A monthly CAN still coincide with a quarterly or annual.
-- The seed trigger now starts a new portfolio's quarterly at `now()` and its
-  annual nine months out. **Monthly is Equity-only**: individual-stock strategies (`portfolio.portfolio_strategy = 'Equity'` — Core Growth, Equity Income, Equity Income & Core Growth) get monthly + quarterly + annual; the fund/ETF strategic models (Foundation/Hybrid/ETF/Fixed Income) get **quarterly + annual only**. `cadencesForStrategy(strategy)` in `lib/portfolioReviews.ts` is the single source for which cadences apply (mirrors the seed trigger); `PortfolioReviewsPanel` takes `portfolioStrategy` and renders only those cards, and `PortfolioReviewWorkspace` blocks a disallowed cadence (e.g. a direct `/review/monthly` URL on a fund portfolio).
+- **A larger review ABSORBS the monthly that lands on its date** (Nov 2026).
+  Monthly is Equity-only and still steps +1 month, but a step onto the
+  quarterly's or annual's own day skips to the next month — so an Equity book
+  runs **8 monthly + 3 quarterly + 1 annual = 12 sittings a year, no two on one
+  day**. It was 16 with four collisions: monthly on the 4th against quarterlies
+  on 4 Feb / 4 May / 4 Aug and the annual on 4 Nov.
+- **The absorbing review therefore CARRIES the monthly's two checks**, and this
+  did NOT transfer from the quarterly/annual rule. There was no redundancy to
+  absorb: the Equity quarterly never included `position_sizing` or
+  `performance_attribution`, so a quarterly simply swallowing the monthly would
+  have dropped that month's sizing and attribution — 8 a year instead of 12.
+- **The dodge is one DAY, not one month.** A monthly a fortnight after a
+  quarterly is fine and keeps its own day; only an exact collision moves. It is
+  bounded (12 attempts) rather than a single step, because real rows are not
+  always well formed — Foundation Conservative's annual sat overdue for weeks —
+  and a quarterly one month from the annual would otherwise dodge onto it.
+- **`advanceSchedule` takes a named `OtherDueDates` object**, not a bare
+  `annualDueAt`: a quarterly needs the annual's date, a monthly needs both, and
+  two adjacent nullable `Date`s is the shape that let `MarkReviewedModal`'s
+  `isFund` disagree with its `security`.
+- The seed trigger now starts a new portfolio's quarterly at `now()`, its
+  annual nine months out, and an Equity book's **monthly one month out — not at
+  `now()`**, which put every new Equity portfolio on the quarterly's own day.
+  The absorb rule above only runs when a review is COMPLETED, so a seeded
+  collision is one nothing clears until the advisor finishes something; the seed
+  has to be clean on its own. `schemaContract.test.ts` pins both the offset and
+  the Equity guard, since prose did not stop it the first time. **Monthly is Equity-only**: individual-stock strategies (`portfolio.portfolio_strategy = 'Equity'` — Core Growth, Equity Income, Equity Income & Core Growth) get monthly + quarterly + annual; the fund/ETF strategic models (Foundation/Hybrid/ETF/Fixed Income) get **quarterly + annual only**. `cadencesForStrategy(strategy)` in `lib/portfolioReviews.ts` is the single source for which cadences apply (mirrors the seed trigger); `PortfolioReviewsPanel` takes `portfolioStrategy` and renders only those cards, and `PortfolioReviewWorkspace` blocks a disallowed cadence (e.g. a direct `/review/monthly` URL on a fund portfolio).
 
 **`model_portfolio_data.review_frequency` is RETIRED — review cadence is not a model-level setting.** The column and its values stay in the DB and on the `ModelPortfolio` type (so the domain type still matches the generated row type), but nothing reads or writes them: the Review Frequency control was removed from the model editor and the Model Portfolios list in Nov 2026. It drove nothing — only the editor that wrote it ever read it — while sitting one page away from the real timers and appearing to contradict them, which is exactly how it surfaced: the editor showed Core Growth as "Quarterly" while the Actions hub correctly showed a monthly review due, because Core Growth is an Equity strategy. Don't re-add a model-level review cadence; `cadencesForStrategy` + the seed trigger are the authority. **Contrast `rebalance_frequency`, which IS live** — `lib/rebalanceSchedule.ts` reads it to date the rebalance timers, so the two neighbouring fields are not the same kind of thing. Data layer is `lib/portfolioReviews.ts`. The Reviews tab on `PortfolioDetailPage` renders `PortfolioReviewsPanel` (the three cadence status cards + completed-review history); **"Start Review" navigates to a dedicated workspace page** (`PortfolioReviewWorkspace`, route `/portfolio/:portfolioId/review/:cadence`) — there is no longer a review modal. The workspace is the right container for the data volume (a 29-holding grid + per-holding scorecards + watchlist), and the annual review will have more sections still.
 
@@ -946,7 +969,7 @@ forty percent each, which `hasConvictionTiers` already says in the model editor.
   though a Claude Code run is what calls it — column names living only inside a
   prompt is the failure the committee write API was built to stop.
 
-`PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the base task list per cadence (monthly: performance attribution · position sizing; quarterly: full monitoring review · update thesis scorecards · update watchlist status · check valuation changes; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction · check valuation changes). **`reviewTasksFor(cadence, strategy)` is the authoritative resolver** — for **non-Equity** portfolios it prepends **`position_sizing` then `performance_attribution`** to the quarterly and annual lists (fund/ETF portfolios have no monthly review, so they get those two portfolio-level checks that Equity portfolios run monthly). Equity portfolios keep the base lists. Change tasks here and the workspace sections + history follow. **In the workspace each task is a section** (left nav); a section = its special content (below) + a "Mark reviewed" toggle (the `done` flag) + section notes.
+`PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the base task list per cadence (monthly: performance attribution · position sizing; quarterly: full monitoring review · update thesis scorecards · update watchlist status · check valuation changes; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction · check valuation changes). **`reviewTasksFor(cadence, strategy)` is the authoritative resolver** — **every** quarterly and annual list now opens with **`position_sizing` then `performance_attribution`**, for two different reasons that arrive at the same place: fund/ETF portfolios have no monthly review at all, and an Equity quarterly or annual **absorbs** the monthly that falls on its date (see the cadence rules above), so it has to carry that month's two checks. Only the monthly list itself differs, keeping its own `performance_attribution`-then-`position_sizing` order. Change tasks here and the workspace sections + history follow. **In the workspace each task is a section** (left nav); a section = its special content (below) + a "Mark reviewed" toggle (the `done` flag) + section notes.
 
 ### Workspace draft lifecycle
 

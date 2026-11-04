@@ -334,6 +334,55 @@ describe('the objects that only LOOK dead', () => {
   })
 })
 
+describe('the seed trigger does not create the collision the app then has to dodge', () => {
+  /**
+   * `advanceSchedule` keeps a monthly off a quarterly or annual date, but that
+   * rule only runs when a review is COMPLETED. A portfolio's FIRST set of
+   * dates comes from this trigger, so a seed that collides is a collision
+   * nothing will clear until the advisor completes something.
+   *
+   * This is the exact defect #90 found: quarterly and annual were both seeded
+   * at now(), so all 19 portfolios were born colliding. Monthly was then
+   * seeded at now() too, which put every new Equity book on the quarterly's
+   * own day. Pinned here rather than restated in prose, because prose did not
+   * stop it the first time.
+   */
+  const seedFn = (() => {
+    const m = /FUNCTION "public"\."seed_portfolio_review_schedules"\(\)[\s\S]*?\$\$([\s\S]*?)\$\$;/
+      .exec(SCHEMA)
+    return m?.[1] ?? ''
+  })()
+
+  it('is present in the snapshot', () => {
+    // Guards the guard: an empty match would pass every assertion below.
+    expect(seedFn).toContain('portfolio_review_schedules')
+    expect(seedFn).toContain("'Equity'")
+  })
+
+  it('seeds the monthly at an OFFSET, never at the quarterly instant', () => {
+    // To END OF LINE, not to the first ')' — that one sits inside `now()`,
+    // so a `[^)]*` capture reads " now(" and the assertion fails on a seed
+    // that is actually correct.
+    const monthly = /values \(new\.name, 'monthly',([^\n]*)/.exec(seedFn)?.[1] ?? ''
+    expect(monthly, 'the monthly seed line should still be there').not.toBe('')
+    expect(monthly, "a bare now() puts the monthly on the quarterly's own day")
+      .toMatch(/now\(\)\s*\+\s*interval/)
+  })
+
+  it('still seeds the quarterly and the annual apart', () => {
+    expect(seedFn).toMatch(/'quarterly', now\(\)/)
+    expect(seedFn).toMatch(/'annual',\s*now\(\) \+ interval '9 months'/)
+  })
+
+  it('still gives a monthly row to Equity books only', () => {
+    const guard = seedFn.indexOf("new.portfolio_strategy = 'Equity'")
+    const monthlyAt = seedFn.indexOf("'monthly'")
+    expect(guard).toBeGreaterThan(-1)
+    expect(monthlyAt, 'the monthly insert must sit INSIDE the Equity guard')
+      .toBeGreaterThan(guard)
+  })
+})
+
 describe('the parser itself', () => {
   it('fails loudly on a constraint that is not there', () => {
     // Otherwise a renamed constraint would quietly stop being checked.
