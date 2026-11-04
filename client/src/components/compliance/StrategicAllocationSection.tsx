@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ASSET_CLASS_ROWS, fetchModelPortfolios } from '@/lib/modelPortfolios'
+import { ASSET_CLASS_ROWS } from '@/lib/modelPortfolios'
 import {
-  fetchStrategicVintages, diffVintages, compareModelsToVintage, driftRowCount,
+  fetchStrategicVintages, diffVintages,
   bandTotal, STRATEGIC_PROFILES, PROFILE_LABELS, EQUITY_KEYS, FIXED_INCOME_KEYS,
   type StrategicVintage, type StrategicProfile,
 } from '@/lib/strategicAllocation'
@@ -13,14 +13,13 @@ import { UploadStrategicAllocationModal } from './UploadStrategicAllocationModal
 /**
  * The firm's published Strategic Asset Allocation Models.
  *
- * Three things on one card, in the order they are useful:
- *   1. the published table for the selected vintage,
- *   2. what moved since the vintage before it,
- *   3. where the live model portfolios no longer match the newest document.
+ * Two things on one card: the published table for the selected vintage, and
+ * what moved since the vintage before it.
  *
- * (3) is the reason this belongs on the compliance page rather than being a
- * document in a folder. The models are maintained by hand against this
- * document, and nothing until now could say when one had been missed.
+ * It carried a third — a read-only report of where `model_portfolio_data` no
+ * longer matched the newest document — which was removed on request in Nov
+ * 2026, along with the comparison that fed it. Nothing here has ever written a
+ * model target, and that has not changed; the record is now simply a record.
  */
 export function StrategicAllocationSection() {
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -30,11 +29,6 @@ export function StrategicAllocationSection() {
     queryKey: QUERY_KEYS.strategicAllocationVintages,
     queryFn: fetchStrategicVintages,
   })
-  const { data: models = [] } = useQuery({
-    queryKey: QUERY_KEYS.modelPortfolios,
-    queryFn: fetchModelPortfolios,
-  })
-
   // Newest BY PRINTED MONTH — fetchStrategicVintages orders on that, not on
   // upload time, so an older document uploaded later cannot become "current".
   const selected: StrategicVintage | null =
@@ -47,14 +41,6 @@ export function StrategicAllocationSection() {
     () => (selected ? diffVintages(previous?.weights ?? null, selected.weights) : []),
     [selected, previous],
   )
-
-  // Drift is always measured against the NEWEST document, whichever vintage is
-  // being viewed — the models are supposed to track what is current.
-  const drift = useMemo(
-    () => (vintages[0] ? compareModelsToVintage(models, vintages[0].weights) : []),
-    [models, vintages],
-  )
-  const driftCount = driftRowCount(drift)
 
   return (
     <section>
@@ -159,10 +145,6 @@ export function StrategicAllocationSection() {
             selectedLabel={selected.label}
           />
         </div>
-      )}
-
-      {vintages.length > 0 && (
-        <ModelDriftPanel drift={drift} count={driftCount} vintageLabel={vintages[0].label} />
       )}
 
       {uploadOpen && (
@@ -277,82 +259,4 @@ function changeTone(from: number | null, to: number | null): string {
   if (from === null || to === null) return 'font-medium text-gray-900'
   // Not green/red: an allocation moving up is not "good". Weight alone.
   return 'font-medium text-gray-900'
-}
-
-// ── Model drift ──────────────────────────────────────────────────────────────
-
-function ModelDriftPanel({
-  drift, count, vintageLabel,
-}: {
-  drift: ReturnType<typeof compareModelsToVintage>
-  count: number
-  vintageLabel: string
-}) {
-  const families = [...new Set(drift.map((d) => d.family))]
-
-  return (
-    <div className="mt-4 rounded-lg border border-gray-200 bg-white">
-      <div className="border-b border-gray-200 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-900">
-          Model portfolios vs {vintageLabel}
-        </h3>
-        <p className="mt-0.5 text-xs text-gray-500">
-          Read-only. Nothing here changes a model — a difference is a question for the
-          advisor, and the two families answer it differently.
-        </p>
-      </div>
-
-      {count === 0 ? (
-        <p className="px-4 py-3 text-sm text-green-700">
-          Every mapped model matches the published document.
-        </p>
-      ) : (
-        <div className="divide-y divide-gray-100">
-          {families.map((family) => {
-            const inFamily = drift.filter((d) => d.family === family)
-            const note = inFamily[0]?.familyNote ?? null
-            const withRows = inFamily.filter((d) => d.rows.length > 0 || !d.found)
-            return (
-              <div key={family} className="px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{family}</p>
-                {note && <p className="mt-1 text-xs italic text-gray-500">{note}</p>}
-                {withRows.length === 0 ? (
-                  <p className="mt-1 text-xs text-green-700">All five match.</p>
-                ) : (
-                  <div className="mt-2 space-y-2">
-                    {withRows.map((d) => (
-                      <div key={`${d.family}-${d.profile}`}>
-                        <p className="text-xs font-medium text-gray-700">
-                          {d.modelName}{' '}
-                          <span className="font-normal text-gray-400">({PROFILE_LABELS[d.profile]})</span>
-                        </p>
-                        {!d.found ? (
-                          <p className="text-xs text-amber-700">
-                            No model portfolio of this name — the mapping in{' '}
-                            <code>lib/strategicAllocation.ts</code> needs correcting.
-                          </p>
-                        ) : (
-                          <ul className="mt-0.5 space-y-0.5">
-                            {d.rows.map((r) => (
-                              <li key={r.assetClassKey} className="flex items-baseline gap-2 text-xs text-gray-600">
-                                <span className="text-gray-500">{r.label}</span>
-                                <span className="tabular-nums">
-                                  model <span className="font-medium text-amber-700">{pct(r.model)}</span>
-                                  {' '}· published <span className="font-medium text-gray-900">{pct(r.published)}</span>
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
 }

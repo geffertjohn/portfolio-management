@@ -1378,16 +1378,13 @@ tables they read.
     upload time, and the list orders on that. An older document can legitimately
     be uploaded later; keying on upload order would make January read as current
     and mark every model wrong.
-  - **It is READ-ONLY with respect to `model_portfolio_data`.** Nothing here
-    writes a model target. `compareModelsToVintage` reports the gap and resolves
-    nothing — saving a model recomputes its drift bands (gotcha 25) and there is
-    no audit trigger on that table, so an automatic write would be a silent,
-    unlogged rewrite of a governed number.
-  - **Two families map onto the five published profiles**, and they differ
-    systematically rather than by accident: the Foundation five carry the
-    document's 2% cash, the shared ETF/Hybrid models 1–5 carry 1% with the spare
-    point in equity. `MODEL_FAMILIES` carries that as a note so the convention is
-    not re-reported as drift every month. Matched on NAME, not id.
+  - **It does not touch `model_portfolio_data` in either direction.** It neither
+    writes a model target nor reports on one. A read-only drift report shipped
+    with it and was removed on request a day later, together with the comparison
+    behind it rather than left as an unused export — `git log` has it. Worth
+    knowing if it is ever rebuilt: the Foundation five carry the document's 2%
+    cash while the shared ETF/Hybrid models 1–5 carry 1% with the spare point in
+    equity, so that one-point offset is a standing convention and not drift.
   - **Change notes are DERIVED, never stored** — the same reasoning as the
     portfolio Change Log: a stored note is a second copy of what two vintages
     already say, and the two drift.

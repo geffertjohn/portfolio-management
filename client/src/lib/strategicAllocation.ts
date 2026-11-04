@@ -19,14 +19,14 @@
  *    upload time. An older document can legitimately be uploaded later —
  *    uploading January after October must file January behind October rather
  *    than make it look current.
- * 3. **Nothing here writes `model_portfolio_data`.** The advisor maintains the
- *    models; this is the published reference they are maintained against.
- *    `compareModelsToVintage` reports the gap and resolves nothing — saving a
- *    model recomputes its drift bands (gotcha 25) and there is no audit trigger
- *    on that table, so an automatic write would be a silent, unlogged rewrite
- *    of a governed number.
+ * 3. **Nothing here touches `model_portfolio_data`, in either direction.** The
+ *    advisor maintains the models; this is the published reference they are
+ *    maintained against, and it neither writes them nor reports on them. It did
+ *    briefly carry a read-only drift report; that was removed on request in Nov
+ *    2026 along with the comparison behind it, rather than left as an unused
+ *    export. `git log` has it if it is ever wanted back.
  */
-import { ASSET_CLASS_ROWS, type AssetClassKey, type ModelPortfolio } from './modelPortfolios'
+import { ASSET_CLASS_ROWS, type AssetClassKey } from './modelPortfolios'
 
 // ── The five published risk profiles ─────────────────────────────────────────
 
@@ -287,109 +287,6 @@ export function diffVintages(
     }
   }
   return changes
-}
-
-// ── Drift between the live models and the published document ─────────────────
-
-/**
- * Which model portfolio implements which published profile.
- *
- * Both families are visibly derived from this document, and they are listed
- * separately because they differ in a systematic way rather than by accident:
- * the Foundation five carry the document's 2% cash, while the shared ETF/Hybrid
- * models 1-5 carry 1% and put the spare point in equity. That is a standing
- * convention, not a breach, and the report says so instead of raising five
- * findings about it every month.
- *
- * Matched on NAME rather than id: ids are environment data, names are what the
- * advisor sees on the Model Portfolios page.
- */
-export const MODEL_FAMILIES: { family: string; note: string | null; byProfile: Record<StrategicProfile, string> }[] = [
-  {
-    family: 'Foundation',
-    note: null,
-    byProfile: {
-      conservative:          'Foundation Conservative',
-      moderate_conservative: 'Foundation Conservative Balanced',
-      moderate:              'Foundation Balanced',
-      moderate_growth:       'Foundation Balanced with Growth',
-      growth:                'Foundation Growth',
-    },
-  },
-  {
-    family: 'ETF / Hybrid (shared models 1–5)',
-    note: 'These models run 1% cash against the document’s 2%, with the spare point in equity. Expect that one-point offset on the cash and large-cap rows; it is a standing convention, not drift.',
-    byProfile: {
-      conservative:          'Income with Capital Preservation',
-      moderate_conservative: 'Income with Moderate Growth',
-      moderate:              'Growth with Income',
-      moderate_growth:       'Growth',
-      growth:                'Aggressive',
-    },
-  },
-]
-
-export interface ModelDrift {
-  family: string
-  familyNote: string | null
-  profile: StrategicProfile
-  modelName: string
-  /** Null when no model of that name exists — itself worth reporting. */
-  found: boolean
-  rows: { assetClassKey: AssetClassKey; label: string; published: number; model: number | null }[]
-}
-
-/** `large_cap_blend` → `large_cap_blend_target`, the column the model stores. */
-function targetFieldFor(key: AssetClassKey): string {
-  return `${key}_target`
-}
-
-/**
- * Where each model disagrees with the newest published document.
- *
- * Compared against the NEWEST vintage, never against whichever was uploaded
- * last — uploading an older document must not make every model look wrong.
- *
- * Reports and resolves nothing. A difference here is a question for the
- * advisor ("has this model not been updated, or is it deliberate?"), and the
- * two families already answer it differently.
- */
-export function compareModelsToVintage(
-  models: ModelPortfolio[],
-  weights: ProfileWeights,
-): ModelDrift[] {
-  const byName = new Map(models.map((m) => [m.name, m]))
-  const out: ModelDrift[] = []
-
-  for (const fam of MODEL_FAMILIES) {
-    for (const profile of STRATEGIC_PROFILES) {
-      const modelName = fam.byProfile[profile]
-      const model = byName.get(modelName)
-      if (!model) {
-        out.push({ family: fam.family, familyNote: fam.note, profile, modelName, found: false, rows: [] })
-        continue
-      }
-      const bag = model as unknown as Record<string, unknown>
-      const rows: ModelDrift['rows'] = []
-      for (const row of ASSET_CLASS_ROWS) {
-        const published = weights[profile]?.[row.key]
-        if (published === undefined) continue
-        const raw = bag[targetFieldFor(row.key)]
-        const modelValue = raw === null || raw === undefined ? null : Number(raw)
-        if (modelValue !== null && Number.isNaN(modelValue)) continue
-        if (modelValue !== null && Math.abs(modelValue - published) < 0.051) continue
-        if (modelValue === null && published === 0) continue  // unset and nothing to hold
-        rows.push({ assetClassKey: row.key, label: row.label, published, model: modelValue })
-      }
-      out.push({ family: fam.family, familyNote: fam.note, profile, modelName, found: true, rows })
-    }
-  }
-  return out
-}
-
-/** Total rows differing, for the headline count. */
-export function driftRowCount(drift: ModelDrift[]): number {
-  return drift.reduce((n, d) => n + d.rows.length, 0)
 }
 
 // ── Data access ──────────────────────────────────────────────────────────────
