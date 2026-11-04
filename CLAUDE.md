@@ -938,6 +938,15 @@ was still sitting on it (both due 30 Sept 2026) when this was found.
   `annualDueAt`: a quarterly needs the annual's date, a monthly needs both, and
   two adjacent nullable `Date`s is the shape that let `MarkReviewedModal`'s
   `isFund` disagree with its `security`.
+- **`reviewCadenceShapes.test.ts` walks the nineteen REAL shapes** (a 4 Nov 2026
+  snapshot, not a live mirror) three years forward and asserts no two cadences
+  ever share a day, every sitting moves forward, and a full year holds the right
+  MIX — 8 monthly + 3 quarterly + 1 annual for an Equity book, 3 + 1 for a fund.
+  The mix assertion is load-bearing: "no collisions" is also what you get by
+  silently dropping reviews. Its value is Foundation Conservative's overdue
+  annual sitting alongside eighteen healthy books — the idealised 12-cycle
+  simulation written with the first fix passed through all three defects,
+  because it only ever modelled healthy timers completed on their due dates.
 - The seed trigger now starts a new portfolio's quarterly at `now()`, its
   annual nine months out, and an Equity book's **monthly one month out — not at
   `now()`**, which put every new Equity portfolio on the quarterly's own day.
