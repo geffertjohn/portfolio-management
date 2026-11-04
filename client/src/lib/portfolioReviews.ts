@@ -266,7 +266,16 @@ export function advanceSchedule(
   }
 
   const stepped = calcNextReview('quarterly', completedAt)
-  if (annualDueAt && dayOf(stepped) >= dayOf(annualDueAt)) {
+
+  // The annual can only claim a slot it has not already missed. An OVERDUE
+  // annual is a pending obligation, not a future review, and letting it claim
+  // one pins the quarterly to `annual + 3 months` — a date on or BEFORE the
+  // completion, so the quarterly stays due the moment it is completed, or
+  // lands already overdue. Foundation Conservative was live in exactly that
+  // state: annual overdue 30 Sept 2026, quarterly due 30 Dec; completing the
+  // quarterly on its own due date returned that same day.
+  const annualStillAhead = annualDueAt != null && dayOf(annualDueAt) > dayOf(completedAt)
+  if (annualDueAt && annualStillAhead && dayOf(stepped) >= dayOf(annualDueAt)) {
     // The annual takes this slot; the next quarterly is a quarter past it.
     return { nextReviewAt: calcNextReview('quarterly', annualDueAt) }
   }
