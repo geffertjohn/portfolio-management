@@ -846,7 +846,15 @@ was still sitting on it (both due 30 Sept 2026) when this was found.
   cadence and reads the annual's due date before writing anything.
 - **Completing a quarterly steps +3 months unless that reaches the annual**, in
   which case the annual covers the slot and the quarterly moves to three months
-  beyond it.
+  beyond it — **but only while the annual is still AHEAD of the completion.** An
+  overdue annual has already missed its slot and cannot claim a future one;
+  letting it pinned the quarterly to `annual + 3 months`, which is a date on or
+  BEFORE the completion, so the review stayed due the instant it was signed off
+  (Foundation Conservative, annual overdue 30 Sept 2026 and quarterly due 30
+  Dec, returned 30 Dec) or was born overdue (an annual stale by a year returned
+  eleven months in the past). Fixed Nov 2026; `reviewCadence.test.ts` asserts
+  the property — no annual due date, at any staleness, yields a next quarterly
+  that is not strictly after the completion.
 - **An explicit next-review date from the Summary section still wins** for the
   cadence being completed, and the re-anchored quarterly follows the date
   actually used — not the default — so the two cannot end up inconsistent.

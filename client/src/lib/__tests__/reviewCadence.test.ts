@@ -93,6 +93,55 @@ describe('completing the annual re-anchors the quarterly', () => {
   })
 })
 
+describe('a quarterly completed while the annual is OVERDUE', () => {
+  /**
+   * The annual only replaces a quarterly slot it can still occupy. An overdue
+   * annual has already missed its slot, and pinning the quarterly to
+   * `annual + 3 months` then produces a date on or before the completion.
+   *
+   * Foundation Conservative was live in exactly this state after the collision
+   * repair: annual overdue 30 Sept 2026, quarterly due 30 Dec 2026.
+   */
+  const overdueAnnual = d('2026-09-30')
+
+  it('advances instead of returning the day it was completed', () => {
+    // The live case. This returned '2026-12-30' — the completion date itself,
+    // so the review stayed due the instant it was signed off.
+    const r = advanceSchedule('quarterly', d('2026-12-30'), overdueAnnual)
+    expect(day(r.nextReviewAt)).toBe('2027-03-30')
+    expect(r.nextReviewAt.getTime()).toBeGreaterThan(d('2026-12-30').getTime())
+  })
+
+  it('never returns a date in the past, however stale the annual', () => {
+    // An annual overdue by more than a year returned '2025-12-30' — eleven
+    // months BEFORE the completion, so the next quarterly was born overdue.
+    const r = advanceSchedule('quarterly', d('2026-11-04'), d('2025-09-30'))
+    expect(day(r.nextReviewAt)).toBe('2027-02-04')
+    expect(r.nextReviewAt.getTime()).toBeGreaterThan(d('2026-11-04').getTime())
+  })
+
+  it('always lands strictly after the completion, over many stale annuals', () => {
+    // The property, not the arithmetic: no annual due date, at any staleness,
+    // may produce a next quarterly that is not in the future.
+    const completed = d('2026-11-04')
+    for (let monthsStale = 0; monthsStale <= 36; monthsStale++) {
+      const annual = new Date(completed)
+      annual.setMonth(annual.getMonth() - monthsStale)
+      const r = advanceSchedule('quarterly', completed, annual)
+      expect(
+        r.nextReviewAt.getTime(),
+        `annual ${monthsStale}mo stale gave ${day(r.nextReviewAt)}`,
+      ).toBeGreaterThan(completed.getTime())
+    }
+  })
+
+  it('still yields to an annual that is genuinely ahead', () => {
+    // The fix must not disarm the rule it guards.
+    expect(day(advanceSchedule('quarterly', d('2027-08-04'), d('2027-11-04')).nextReviewAt))
+      .toBe('2028-02-04')
+  })
+})
+
 describe('monthly is untouched', () => {
   it('steps a month and does not re-anchor anything', () => {
     // Equity-only, and not part of the quarterly/annual cycle.
