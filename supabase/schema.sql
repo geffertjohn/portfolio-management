@@ -1617,6 +1617,7 @@ CREATE TABLE IF NOT EXISTS "public"."review_log" (
     "price_at_review" numeric,
     "metrics_snapshot" "jsonb",
     "evidence_doc_path" "text",
+    "source_report_id" bigint,
     CONSTRAINT "review_log_conviction_chk" CHECK ((("conviction" IS NULL) OR ("conviction" = ANY (ARRAY['high'::"text", 'medium'::"text", 'low'::"text"])))),
     CONSTRAINT "review_log_outcome_check" CHECK (("outcome" = ANY (ARRAY['no_issues'::"text", 'flagged_for_action'::"text", 'placed_on_watchlist'::"text", 'recommended_sell'::"text"]))),
     CONSTRAINT "review_log_recommendation_check" CHECK ((("recommendation" IS NULL) OR ("recommendation" = ANY (ARRAY['add'::"text", 'hold'::"text", 'trim'::"text", 'sell'::"text"]))))
@@ -1624,6 +1625,10 @@ CREATE TABLE IF NOT EXISTS "public"."review_log" (
 
 
 ALTER TABLE "public"."review_log" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."review_log"."source_report_id" IS 'The research_reports row this review was drafted from (the post-earnings brief). Null for funds and for reviews recorded before Nov 2026.';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."review_log_id_seq"
@@ -2680,6 +2685,10 @@ CREATE INDEX "review_log_security_id_idx" ON "public"."review_log" USING "btree"
 
 
 
+CREATE INDEX "review_log_source_report_id_idx" ON "public"."review_log" USING "btree" ("source_report_id") WHERE ("source_report_id" IS NOT NULL);
+
+
+
 CREATE INDEX "review_schedules_next_review_idx" ON "public"."review_schedules" USING "btree" ("next_review_at");
 
 
@@ -3014,6 +3023,11 @@ ALTER TABLE ONLY "public"."research_reports"
 
 ALTER TABLE ONLY "public"."review_log"
     ADD CONSTRAINT "review_log_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id");
+
+
+
+ALTER TABLE ONLY "public"."review_log"
+    ADD CONSTRAINT "review_log_source_report_id_fkey" FOREIGN KEY ("source_report_id") REFERENCES "public"."research_reports"("id") ON DELETE SET NULL;
 
 
 
@@ -3489,6 +3503,10 @@ CREATE POLICY "Allow update positions" ON "public"."positions" FOR UPDATE TO "au
 
 
 CREATE POLICY "Allow update prospects" ON "public"."prospects" FOR UPDATE USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Allow update review_log" ON "public"."review_log" FOR UPDATE TO "authenticated", "anon" USING (true) WITH CHECK (true);
 
 
 

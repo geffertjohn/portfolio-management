@@ -126,8 +126,14 @@ export interface ReviewLogEntry {
   conviction: Conviction | null
   price_at_review: number | null
   metrics_snapshot: ReviewMetricsSnapshot | null
-  /** Path (folder/filename) of the uploaded evidence PDF in the Security Documents bucket — funds/ETFs. */
+  /** Path (folder/filename) of the uploaded evidence PDF in the Security Documents bucket. */
   evidence_doc_path: string | null
+  /**
+   * The research report this review was drafted from (the post-earnings brief).
+   * Null for funds, and for the 25 stock reviews recorded before the column
+   * existed — those had only the sentence in the rationale to go on.
+   */
+  source_report_id: number | null
   created_at: string
 }
 

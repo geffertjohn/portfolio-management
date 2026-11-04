@@ -184,7 +184,7 @@ in Total Performance now updates the scorecard row — the listener firing for t
 first time. AAPL's stored row was unchanged throughout. The save path itself was
 not executed against the live book, for the same reason as §9.
 
-### 6. A stock's review history is recorded but rendered nowhere `[ ]`
+### 6. A stock's review history is recorded but rendered nowhere `[x] DONE 4 Nov`
 
 `ReviewLogSection` has exactly one render site, inside the `isFundOrEtfSecurity` block
 at `SecurityDetailPage.tsx:481`. No stock tab shows it. Meanwhile the header still
@@ -196,6 +196,32 @@ This is the audit-defence record: recommendation, conviction, required rationale
 Monitor". They do not.
 
 **Fix:** render Review Schedule + `ReviewLogSection` on the stock Monitor tab.
+
+**Done (PR #72), and extended.** The Review block (schedule + history) now
+renders on the stock Monitor tab, so the record the header complains about is
+visible. On top of that, a stock review now writes a **PDF** to
+`Security Documents/<ticker>` like the fund one — the decision, the evidence it
+was taken against, and **that quarter's brief as its second half**, one file,
+reachable from the Commentary tab.
+
+The brief is embedded via `drawQuarterlyBrief`, extracted from
+`buildQuarterlyBriefPdf` so there is one renderer rather than two. The document
+is marked INTERNAL on every page: the brief alone is client-safe, the review
+half is not. A quarter with no brief still produces a document that says so.
+
+`review_log.source_report_id` records which brief a review was drafted from —
+that link was a sentence in the rationale, so the quarter had to be inferred
+from the review date, which is wrong whenever a review is recorded late.
+
+All **25** existing stock reviews were backfilled, every one with a brief, each
+stamped "Rebuilt from the recorded review on 4 Nov 2026" so a reconstruction
+cannot be mistaken for a contemporaneous freeze.
+
+**Found on the way:** `review_log` had **no UPDATE policy** — insert, read and
+delete only — so updates were silently dropped, PostgREST reporting success with
+zero rows affected. The first backfill run uploaded all 25 PDFs and recorded
+none of them, with no error. It was not append-only (DELETE was already open),
+just un-correctable; it is now consistent with every other table.
 
 ### 7. The committee's write path has no schema-aware layer `[ ]`
 
