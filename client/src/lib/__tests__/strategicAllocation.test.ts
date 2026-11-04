@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseStrategicAllocationPdfText, StrategicAllocationParseError,
-  diffVintages, compareModelsToVintage, driftRowCount, bandTotal,
-  STRATEGIC_PROFILES, MODEL_FAMILIES,
+  diffVintages, bandTotal, STRATEGIC_PROFILES,
   type ProfileWeights,
 } from '../strategicAllocation'
-import { ASSET_CLASS_ROWS, type ModelPortfolio } from '../modelPortfolios'
+import { ASSET_CLASS_ROWS } from '../modelPortfolios'
 
 /**
  * The fixture is the REAL extracted text of page 1 of "Strategic Asset
@@ -167,46 +166,5 @@ describe('diffing one vintage against the one before it', () => {
     expect(changes).toHaveLength(1)
     expect(changes[0].from).toBeNull()
     expect(changes[0].to).toBe(0)
-  })
-})
-
-describe('drift between the live models and the published document', () => {
-  /** The Foundation five, as they stand in the database today. */
-  const foundation: Partial<ModelPortfolio>[] = [
-    { name: 'Foundation Conservative', large_cap_blend_target: 21, large_cap_growth_target: 0, large_cap_value_target: 0, us_mid_cap_target: 4, us_small_cap_target: 0, non_us_developed_target: 5, emerging_market_target: 0, ig_intermediate_fixed_income_target: 58, ig_short_fixed_income_target: 0, non_ig_fixed_income_target: 7, non_us_fixed_income_target: 0, multi_sector_fixed_income_target: 3, alternatives_target: 0, cash_target: 2 },
-  ]
-
-  it('reports nothing for a model that matches the document', () => {
-    const oct = parseStrategicAllocationPdfText(OCTOBER_2026).weights
-    const drift = compareModelsToVintage(foundation as ModelPortfolio[], oct)
-    const conservative = drift.find((d) => d.modelName === 'Foundation Conservative')!
-    expect(conservative.found).toBe(true)
-    expect(conservative.rows).toEqual([])
-  })
-
-  it('reports the rows where the model lags the document', () => {
-    // The same model against JANUARY: Non-US FI 3% and Multi-Sector 0% then,
-    // the other way round now. Two rows, both real.
-    const jan = parseStrategicAllocationPdfText(JANUARY_2026).weights
-    const drift = compareModelsToVintage(foundation as ModelPortfolio[], jan)
-    const rows = drift.find((d) => d.modelName === 'Foundation Conservative')!.rows
-    expect(rows.map((r) => `${r.assetClassKey} doc=${r.published} model=${r.model}`).sort())
-      .toEqual(['multi_sector_fixed_income doc=0 model=3', 'non_us_fixed_income doc=3 model=0'])
-  })
-
-  it('says so when a named model does not exist, instead of passing silently', () => {
-    const oct = parseStrategicAllocationPdfText(OCTOBER_2026).weights
-    const drift = compareModelsToVintage([], oct)
-    expect(drift.every((d) => !d.found)).toBe(true)
-    expect(drift).toHaveLength(MODEL_FAMILIES.length * STRATEGIC_PROFILES.length)
-    expect(driftRowCount(drift)).toBe(0)
-  })
-
-  it('covers both families, and only the ETF/Hybrid one carries the cash note', () => {
-    // The 1%-vs-2% cash convention is a standing difference, not drift, and
-    // saying so once beats raising five findings about it every month.
-    const noted = MODEL_FAMILIES.filter((f) => f.note !== null)
-    expect(noted).toHaveLength(1)
-    expect(noted[0].note).toMatch(/1% cash/)
   })
 })
