@@ -131,12 +131,12 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
     else announceBenchmarkChange({ securityId: security.id, ...next })
   }
 
-  const { data: allBenchmarks = [] } = useQuery({
+  const { data: allBenchmarks = [], isPending: benchmarksPending } = useQuery({
     queryKey: QUERY_KEYS.benchmarks,
     queryFn: fetchBenchmarkOptions,
   })
 
-  const { data: allSectorBenchmarks = [] } = useQuery({
+  const { data: allSectorBenchmarks = [], isPending: sectorsPending } = useQuery({
     queryKey: QUERY_KEYS.sectorBenchmarks,
     queryFn: fetchSectorBenchmarkOptions,
   })
@@ -177,26 +177,50 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
   const bench1Label = bench1 ? stripTotalReturn(bench1.category_benchmark ?? bench1.ticker) : 'Benchmark'
   const bench2Label = bench2 ? stripTotalReturn(bench2.sector ?? bench2.ticker) : 'Peer Group'
 
+  /**
+   * THREE states, not two. A comparator can be set-and-resolved, set-but-the
+   * benchmark list has not arrived, or genuinely unset — and the middle one
+   * looks exactly like the last if you only check whether the lookup found a
+   * row. AAPL (which carries both) read "Set benchmark" under the amber
+   * "grades against zero" warning for the second or so each load took, which is
+   * a false statement on an audit surface and invites a click that would
+   * overwrite a good value.
+   */
+  const slotState = (id: number | null, resolved: boolean, pending: boolean) =>
+    resolved ? 'set' : id != null && pending ? 'loading' : id != null ? 'missing' : 'unset'
+
   const pickSlot = (slot: 1 | 2) => (bench: BenchmarkOption) =>
     applyBenchmarks(slot === 1 ? { ...ids, bench1Id: bench.id } : { ...ids, bench2Id: bench.id })
   const clearSlot = (slot: 1 | 2) => () =>
     applyBenchmarks(slot === 1 ? { ...ids, bench1Id: null } : { ...ids, bench2Id: null })
 
-  /** One comparator, named and editable. Unset reads as a gap, not a label. */
-  const slotButton = (slot: 1 | 2, label: string, set: boolean) => (
+  /** One comparator, named and editable. Only a genuinely UNSET slot reads as a gap. */
+  const slotButton = (slot: 1 | 2, label: string, state: ReturnType<typeof slotState>) => (
     <button
       type="button"
       onClick={() => setPicker(slot)}
-      title={`Choose the ${slot === 1 ? 'category benchmark' : 'sector benchmark'} these cards are graded against`}
+      disabled={state === 'loading'}
+      title={state === 'missing'
+        ? 'The stored benchmark is not in the benchmark list — choose another'
+        : `Choose the ${slot === 1 ? 'category benchmark' : 'sector benchmark'} these cards are graded against`}
       className={`rounded border px-2 py-0.5 font-medium ${
-        set
-          ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
-          : 'border-dashed border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-500'
+        state === 'set'     ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400' :
+        state === 'loading' ? 'border-gray-200 bg-white text-gray-400' :
+        'border-dashed border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-500'
       }`}
     >
-      {set ? label : `Set ${slot === 1 ? 'benchmark' : 'sector'}`}
+      {state === 'set'     ? label :
+       state === 'loading' ? 'Loading…' :
+       state === 'missing' ? 'Benchmark not found' :
+       `Set ${slot === 1 ? 'benchmark' : 'sector'}`}
     </button>
   )
+
+  const state1 = slotState(ids.bench1Id, bench1 != null, benchmarksPending)
+  const state2 = slotState(ids.bench2Id, bench2 != null, sectorsPending)
+  // Only claim a comparator is missing once we actually know it is.
+  const anyUnset = state1 === 'unset' || state2 === 'unset' ||
+                   state1 === 'missing' || state2 === 'missing'
 
   return (
     <div>
@@ -206,14 +230,14 @@ export function StockScorecardPanels({ security }: { security: SecurityDetail })
           an error. */}
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
         <span>Graded against</span>
-        {slotButton(1, bench1Label, bench1 != null)}
+        {slotButton(1, bench1Label, state1)}
         <span className="text-gray-300">·</span>
-        {slotButton(2, bench2Label, bench2 != null)}
+        {slotButton(2, bench2Label, state2)}
         {saveMut.isPending && <span className="text-gray-400">Saving…</span>}
         {!security.id && (
           <span className="text-gray-400">· this session only — nothing is saved here</span>
         )}
-        {(bench1 == null || bench2 == null) && security.id !== 0 && (
+        {anyUnset && security.id !== 0 && (
           <span className="text-amber-700">
             · an unset comparator grades every growth card against zero, so any growth reads green
           </span>
