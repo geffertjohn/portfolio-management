@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseStrategicAllocationPdfText, StrategicAllocationParseError,
-  diffVintages, bandTotal, STRATEGIC_PROFILES,
+  diffVintages, findLastChange, bandTotal, STRATEGIC_PROFILES,
   type ProfileWeights,
 } from '../strategicAllocation'
 import { ASSET_CLASS_ROWS } from '../modelPortfolios'
@@ -166,5 +166,48 @@ describe('diffing one vintage against the one before it', () => {
     expect(changes).toHaveLength(1)
     expect(changes[0].from).toBeNull()
     expect(changes[0].to).toBe(0)
+  })
+})
+
+describe('finding the last vintage that actually moved', () => {
+  const jan = { label: 'January 2026',  effectiveMonth: '2026-01-01', weights: parseStrategicAllocationPdfText(JANUARY_2026).weights }
+  const feb = { label: 'February 2026', effectiveMonth: '2026-02-01', weights: parseStrategicAllocationPdfText(OCTOBER_2026).weights }
+  const apr = { label: 'April 2026',    effectiveMonth: '2026-04-01', weights: parseStrategicAllocationPdfText(OCTOBER_2026).weights }
+  const jul = { label: 'July 2026',     effectiveMonth: '2026-07-01', weights: parseStrategicAllocationPdfText(OCTOBER_2026).weights }
+  const oct = { label: 'October 2026',  effectiveMonth: '2026-10-01', weights: parseStrategicAllocationPdfText(OCTOBER_2026).weights }
+
+  // Newest first, the order fetchStrategicVintages returns — and the real
+  // shape of the 2026 documents: one change all year, in February.
+  const all = [oct, jul, apr, feb, jan]
+
+  it('skips the unchanged vintages and names the one that moved', () => {
+    const last = findLastChange(all)
+    expect(last).not.toBeNull()
+    expect(last!.label).toBe('February 2026')
+    expect(last!.previousLabel).toBe('January 2026')
+    expect(last!.changes).toHaveLength(7)
+  })
+
+  it('looks back from the SELECTED vintage, not from the newest', () => {
+    // Viewing January, nothing has changed YET — reporting February's change
+    // would report a change that had not happened when that document was
+    // published.
+    expect(findLastChange(all, all.indexOf(jan))).toBeNull()
+    // Viewing February, the change is February's own.
+    expect(findLastChange(all, all.indexOf(feb))!.label).toBe('February 2026')
+  })
+
+  it('returns null when nothing has ever changed', () => {
+    expect(findLastChange([oct, jul, apr])).toBeNull()
+  })
+
+  it('returns null for a single vintage, with nothing to compare against', () => {
+    expect(findLastChange([oct])).toBeNull()
+    expect(findLastChange([])).toBeNull()
+  })
+
+  it('reports the same changes diffVintages would, not a second opinion', () => {
+    const last = findLastChange(all)!
+    expect(last.changes).toEqual(diffVintages(jan.weights, feb.weights))
   })
 })
