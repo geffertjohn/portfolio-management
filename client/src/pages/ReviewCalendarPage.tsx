@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   fetchReviewSchedules, isOverdue, isDueSoon, redatedStockSchedules, applyScheduleRedates,
+  fetchUnscheduledHeldSecurities, seededStockSchedules, applyScheduleSeeds,
   reviewDueDay, type ReviewCadence,
 } from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -37,6 +38,7 @@ export function ReviewCalendarPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshedCount, setRefreshedCount] = useState<number | null>(null)
   const [redatedCount, setRedatedCount] = useState<number | null>(null)
+  const [seededCount, setSeededCount] = useState<number | null>(null)
   const didRefresh = useRef(false)
 
   // Two corrections, and the second does NOT depend on the first.
@@ -51,25 +53,52 @@ export function ReviewCalendarPage() {
 
     const stocksIn = (rows: typeof schedules) => rows.filter((s) => s.symbol && !isFundOrEtfSecurity(s))
     const today = new Date().toISOString().slice(0, 10)
-    const stale = stocksIn(schedules)
-      .filter((s) => s.next_earnings_release == null || s.next_earnings_release < today)
-      .map((s) => s.symbol)
+    // STRICTLY before today, as it has always been: a stock whose call is TODAY
+    // has a review due tomorrow, and refreshing it would advance the stored
+    // date past that call and skip the review entirely.
+    const isStale = (d: string | null | undefined) => d == null || d.slice(0, 10) < today
 
     setRefreshing(true)
     void (async () => {
+      // A held stock with NO schedule row is invisible to everything here, and
+      // the two corrections below cannot reach it: the top-up reads schedule
+      // rows and the re-date is a per-row UPDATE. So find them first.
+      let unscheduled = await fetchUnscheduledHeldSecurities()
+
+      // Refresh BOTH sets of stale earnings dates in one call. Widening this to
+      // the unscheduled stocks is what breaks the circularity: TSM's stored
+      // date was three weeks past, and `seededStockSchedules` refuses to date a
+      // schedule from a stale date, so without this it could never be seeded
+      // and so could never be refreshed.
+      const stale = [
+        ...stocksIn(schedules).filter((s) => isStale(s.next_earnings_release)).map((s) => s.symbol),
+        ...unscheduled.filter((c) => isStale(c.next_earnings_release)).map((c) => c.security_id),
+      ]
+
       let rows = schedules
       if (stale.length > 0) {
         const n = await refreshSecuritiesFromFMP(stale)
         setRefreshedCount(n)
-        // Re-read so the re-date below sees the dates FMP just supplied.
-        if (n > 0) rows = await fetchReviewSchedules()
+        // Re-read so the seed and re-date below see the dates FMP just supplied.
+        if (n > 0) {
+          rows = await fetchReviewSchedules()
+          unscheduled = await fetchUnscheduledHeldSecurities()
+        }
       }
+
+      const seeds = seededStockSchedules(unscheduled, today)
+      if (seeds.length > 0) {
+        await applyScheduleSeeds(seeds)
+        setSeededCount(seeds.length)
+        rows = await fetchReviewSchedules()
+      }
+
       const redates = redatedStockSchedules(stocksIn(rows))
       if (redates.length > 0) {
         await applyScheduleRedates(redates)
         setRedatedCount(redates.length)
       }
-      if (stale.length > 0 || redates.length > 0) {
+      if (stale.length > 0 || seeds.length > 0 || redates.length > 0) {
         await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedules })
       }
     })()
@@ -129,6 +158,14 @@ export function ReviewCalendarPage() {
           {!refreshing && refreshedCount != null && refreshedCount > 0 && (
             <p className="mt-1 text-xs text-gray-400">
               Updated earnings dates for {refreshedCount} stock{refreshedCount === 1 ? '' : 's'}.
+            </p>
+          )}
+          {/* Said separately: a held stock with no schedule was invisible to
+              every review surface, so starting one is a governed write, not
+              routine upkeep. */}
+          {!refreshing && seededCount != null && seededCount > 0 && (
+            <p className="mt-1 text-xs text-gray-400">
+              Started a review schedule for {seededCount} held stock{seededCount === 1 ? '' : 's'} that had none.
             </p>
           )}
           {/* Said separately from the line above: a re-dated review is a date
