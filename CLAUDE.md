@@ -283,7 +283,8 @@ npm run test          # vitest run   — from the root or the client workspace
 npm run test:watch    # client only
 ```
 
-**147 tests over 11 modules**, added Nov 2026 as audit §20. The repo had no
+**25+ test modules** (`npm run test` prints the exact counts — it was 147 cases
+over 11 modules when this began), added Nov 2026 as audit §20. The repo had no
 runner and no test file at all until then, while ~1,700 lines of React-free
 business logic in `lib/` encoded the rules the tool rests on — verified only by
 driving a browser. Three defects the audit found (§3 band rounding, §11
@@ -457,7 +458,7 @@ There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`,
 
 - `category_benchmarks` — broad asset-class benchmarks; column is `category_ticker` (not `ticker`), renamed to `ticker` in the fetch layer. **One ticker can serve multiple categories** — the unique key is the composite `(category_ticker, category)`, not ticker alone.
 - `sector_benchmarks` — sector ETF benchmarks; column is `ticker` (unique).
-- Benchmark **data access lives in `lib/benchmarks.ts`** (`fetchBenchmarkOptions`, `fetchSectorBenchmarkOptions`, `fetchBenchmarkByName`, `fetchBenchmarkAll`, `fetchCategoryBenchmark`, `fetchPeerGroupBenchmark`, `fetchBenchmarkTable`, plus the `BenchmarkOption` type and SELECT column lists). `BenchmarkPickerModal` is now just the picker UI and imports the fetchers from there (it no longer exports data fns). When adding a benchmark column, add it to the SELECT strings **and** the `BenchmarkOption` interface in `lib/benchmarks.ts`.
+- Benchmark **data access lives in `lib/benchmarks.ts`** (`fetchBenchmarkOptions`, `fetchSectorBenchmarkOptions`, `fetchBenchmarkByName`, `fetchCategoryBenchmark`, `fetchPeerGroupBenchmark`, `fetchBenchmarkTable`, plus the `BenchmarkOption` type and SELECT column lists). `BenchmarkPickerModal` is now just the picker UI and imports the fetchers from there (it no longer exports data fns). When adding a benchmark column, add it to the SELECT strings **and** the `BenchmarkOption` interface in `lib/benchmarks.ts`.
 - Growth columns are YCharts **annualized** figures: `sales_growth_1_yr_generic`, `eps_growth_1_yr_generic`, `sales_growth_3_yr_generic`, `eps_growth_3_yr_generic` (the 3-yr ones are annualized CAGRs, comparable to derived stock 3Y CAGRs).
 - **`category_benchmarks` was slimmed 53 → 20 columns (Sep 2026).** Dropped: the risk ratios beyond the 3-year pair (`historical_sharpe_5y`, `historical_sortino_5y`, the three `calmar_ratio_*`, the three standard-deviation columns) and every exposure breakdown (11 sector, 7 credit-quality, 7 maturity). All 33 were loaded by YCharts and read by **nothing** — the exposure columns were for an allocation-comparison surface that was never built. The table now holds exactly what the app selects, plus `updated_at`. They were removed from the workbook's `category_benchmarks` sheet in the same change; `CATEGORY_DROPPED_COLS` in `ychartBenchmarksUpload.ts` keeps the import safe if an older workbook still carries them. **Note the asymmetry:** `sector_benchmarks` and `peer_group_benchmarks` still have their own 5-year/std-dev columns — this drop was scoped to `category_benchmarks`.
 
@@ -1035,7 +1036,23 @@ Two **separate** IPS concepts; never conflate them:
 The settings/governance data was consolidated so each concept has one authoritative home:
 - **Firm Settings page + `lib/appSettings.ts` were DELETED** — they were localStorage-only and read by nothing. `/settings` now **redirects** to `/settings/model-portfolios`; there is no firm-settings store. Do not reintroduce localStorage as an authority for governed values (the committee only sees Supabase).
 - **`portfolio_asset_class_targets` was DROPPED** — a dead duplicate of `model_portfolio_data`'s asset-class targets (0 readers).
-- **Position drift is single-sourced on the model**: rebalancing tolerance resolves `position.driftThreshold ?? model_portfolio_data.drift_percentage ?? 5` (`RebalancingPanel` takes `modelDriftPct`), so the Rebalancing panel and the Allocation-tab bands share one drift source.
+- **Position drift is single-sourced on the model**, and `lib/positionBands.ts`
+  is the one derivation. A position's band is its own explicit
+  `lower_limit`/`upper_limit` first, then the model's cash limits for a cash
+  row, then `model_portfolio_data.drift_percentage` — `computePositionBands`
+  applies that order and `driftBandFor` does the arithmetic.
+  **There is no hardcoded default**: a model with no `drift_percentage` yields
+  **no band at all**, not an assumed 5%. Callers: `lib/positionSizingCompare.ts`
+  (behind `PositionSizingCheck`) and `lib/actions.ts` (the drift-breach action)
+  call `computePositionBands`; `PortfolioDetailPage` and `ModelPortfolioModal`
+  call `driftBandFor` directly. **`positions.drift_threshold` is NOT in that
+  chain** — it is still selected and mapped onto
+  `PortfolioPosition.driftThreshold`, and then read by nothing; the per-position
+  override went with the Rebalancing panel in `95f041c`, which also dropped
+  `positions.target_weight`. This bullet named that panel and a `modelDriftPct`
+  prop until Nov 2026, months after both were deleted, and stated a resolution
+  chain (`driftThreshold ?? drift_percentage ?? 5`) that no code has followed
+  since.
 
 ### Narrative fields = the mandate rubric
 
