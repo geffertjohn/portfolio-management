@@ -7,6 +7,7 @@
  * positions.security_id is the text ticker (e.g. "UITB"), a FK to securities2.security_id.
  */
 import { supabase } from './supabase'
+import { ensureReviewSchedules } from './reviewSchedules'
 import { formatPortfolioSecuritySymbol } from '@/lib/positionDisplay'
 import type { PortfolioPosition } from '@/types/position'
 
@@ -34,6 +35,9 @@ export async function updatePosition(
         { onConflict: 'portfolio_name,security_id' }
       )
     if (upsertError) throw upsertError
+    // Swapping one holding for another: the INCOMING security is new to this
+    // book even though the row count did not change.
+    await ensureReviewSchedules([newSecurityId])
   } else {
     const { error } = await supabase
       .from('positions')
@@ -73,6 +77,9 @@ export async function createPosition(
       { onConflict: 'portfolio_name,security_id' }
     )
   if (error) throw error
+  // A security entering a book needs a review schedule, or it shows on no
+  // review surface at all. Never throws; the position is already written.
+  await ensureReviewSchedules([securityId])
 }
 
 /**

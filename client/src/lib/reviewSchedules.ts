@@ -340,23 +340,99 @@ export async function fetchUnscheduledHeldSecurities(): Promise<ScheduleSeedInpu
   return data ?? []
 }
 
+/** One schedule to create. `nextReviewAt` null means "use the cadence default". */
+export interface NewScheduleWrite {
+  securityId: string
+  cadence: ReviewCadence
+  nextReviewAt: string | null
+}
+
 /**
- * Writes the seeds. `ignoreDuplicates` so a row created concurrently — another
- * tab, or a review completed between the read and this write — wins rather than
- * being overwritten with a derived date.
+ * Which newly held securities get a schedule, and dated how. Pure.
+ *
+ * The two asset types are scheduled on different principles and this is the
+ * one place that says so:
+ *
+ * - **A stock is earnings-driven** — `next_earnings_release + 1 day`, via
+ *   `seededStockSchedules`, which REFUSES a stale date rather than producing a
+ *   schedule born overdue. A stock with no usable date gets nothing here and is
+ *   picked up by the calendar's seed, which refreshes from FMP first.
+ * - **A fund or ETF is cadence-driven** and has no earnings date to read, so it
+ *   takes the cadence default (`nextReviewAt: null`). Quarterly is what all 42
+ *   live fund rows carry.
  */
-export async function applyScheduleSeeds(seeds: ScheduleSeed[]): Promise<number> {
-  if (seeds.length === 0) return 0
-  const { error } = await supabase.from('review_schedules').upsert(
-    seeds.map((s) => ({
-      security_id: s.securityId,
-      cadence: s.cadence,
-      next_review_at: s.nextReviewAt,
-    })),
-    { onConflict: 'security_id', ignoreDuplicates: true },
-  )
-  if (error) throw error
-  return seeds.length
+export function newScheduleWrites(
+  candidates: ScheduleSeedInput[],
+  today: string,
+): NewScheduleWrite[] {
+  const stocks: NewScheduleWrite[] = seededStockSchedules(candidates, today).map((s) => ({
+    securityId: s.securityId,
+    cadence: s.cadence,
+    nextReviewAt: s.nextReviewAt,
+  }))
+  const funds: NewScheduleWrite[] = candidates
+    .filter((c) => isFundOrEtfSecurity(c))
+    .map((c) => ({ securityId: c.security_id, cadence: 'quarterly' as ReviewCadence, nextReviewAt: null }))
+  return [...stocks, ...funds]
+}
+
+/**
+ * Give a review schedule to securities that have just entered a book.
+ *
+ * **Called from the four paths that put a security into `positions`** —
+ * `createPosition`, `updatePosition` (when the ticker changes),
+ * `syncPositionsFromLatestSnapshot` and `syncPositionForGridEdit`. Until
+ * Nov 2026 none of them did, so a bought stock carried no schedule and showed
+ * on no review surface; `ReviewCalendarPage`'s on-mount seed was the only
+ * thing that noticed, and only once somebody opened that page.
+ *
+ * **It is create-only in effect**, by filtering to the unscheduled first.
+ * `upsertReviewSchedule` OVERWRITES `next_review_at`, which on this path would
+ * be a real defect: the allocation import runs often, and re-importing a book
+ * would reset the next review date of every holding, including one reviewed
+ * that morning. The filter is what makes using it safe. A row created between
+ * the read and the write is the only race, and it is harmless — both writers
+ * derive the same date from the same stored column.
+ *
+ * **A stock with no usable earnings date gets nothing, deliberately**
+ * (`seededStockSchedules` refuses a stale date rather than seeding a schedule
+ * born overdue). The calendar's seed is the backstop: it refreshes from FMP
+ * first, so the row appears there.
+ *
+ * **It never throws.** The position is already written by the time this runs,
+ * so a scheduling failure must not report a completed purchase as failed —
+ * the same reasoning as `recordImportRuns`. It warns, and the calendar seed
+ * picks up whatever was missed.
+ */
+export async function ensureReviewSchedules(securityIds: string[]): Promise<number> {
+  const want = [...new Set(securityIds.map((s) => s?.trim()).filter(Boolean))] as string[]
+  if (want.length === 0) return 0
+
+  try {
+    const { data: have, error: hErr } = await supabase
+      .from('review_schedules').select('security_id').in('security_id', want)
+    if (hErr) throw hErr
+    const scheduled = new Set((have ?? []).map((r) => r.security_id))
+    const missing = want.filter((id) => !scheduled.has(id))
+    if (missing.length === 0) return 0
+
+    const { data: rows, error: sErr } = await supabase
+      .from('securities2')
+      // ONE literal — the client is schema-typed and infers the row shape from
+      // this string, so a `+` concatenation degrades it to GenericStringError[].
+      .select('security_id, next_earnings_release, detailed_security_type, peer_group_name, fund_company_name, fund_family, expense_ratio_generic')
+      .in('security_id', missing)
+    if (sErr) throw sErr
+
+    const writes = newScheduleWrites(rows ?? [], new Date().toISOString().slice(0, 10))
+    for (const w of writes) {
+      await upsertReviewSchedule(w.securityId, w.cadence, w.nextReviewAt ? new Date(w.nextReviewAt) : undefined)
+    }
+    return writes.length
+  } catch (err) {
+    console.warn('ensureReviewSchedules: could not schedule', want, err)
+    return 0
+  }
 }
 
 /**

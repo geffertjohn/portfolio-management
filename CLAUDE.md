@@ -765,9 +765,36 @@ security showed on the calendar. HCA (Equity Income 2.50%, EI&CG 1.25%) and TSM
 `ReviewCalendarPage` **and** the Actions hub both read `fetchReviewSchedules`.
 (`upsertReviewSchedule` could have seeded one and had no caller.)
 
-- **The calendar now SEEDS a schedule on mount** for any held stock missing one,
-  via `seededStockSchedules` (pure) + `applyScheduleSeeds`. `$Cash` and unheld
-  tickers like `BRK.B` are correctly excluded — nothing to schedule.
+- **The PURCHASE PATH creates the schedule**, through `ensureReviewSchedules`
+  in `lib/reviewSchedules.ts` — called from all four writers that put a security
+  into `positions`: `createPosition`, `updatePosition` (when the ticker
+  changes), `syncPositionsFromLatestSnapshot` (its `toInsert` set, already
+  scoped to genuinely new holdings) and `syncPositionForGridEdit`. It wraps
+  `upsertReviewSchedule`, which until Nov 2026 was an exported function with no
+  caller at all.
+  - **It is create-only in effect**, by filtering to the unscheduled first.
+    `upsertReviewSchedule` OVERWRITES `next_review_at`, which here would be a
+    real defect: the allocation import runs often, and re-importing a book
+    would reset the next review date of every holding, including one reviewed
+    that morning. The filter is what makes using it safe.
+  - **It never throws.** The position is already written, so a scheduling
+    failure must not report a completed purchase as failed — the same reasoning
+    as `recordImportRuns`.
+- **The calendar still SEEDS on mount as the backstop**, and calls the SAME
+  `ensureReviewSchedules`, so the two surfaces cannot disagree about what a new
+  holding's schedule looks like. **`newScheduleWrites` (pure) is the one place
+  that says the two asset types are scheduled on different principles:** a stock
+  from `next_earnings_release + 1 day`, refusing a stale date; a fund or ETF
+  from the cadence default, since it has no earnings date to read.
+  - **This is where a second gap hid.** The seed originally called
+    `seededStockSchedules`, which skips funds, so **four held mutual funds —
+    VBTLX, VIGAX, VMSAX and VVIAX, across two to four books each — stayed
+    unscheduled while the stock gap read as closed.** It surfaced only because
+    wiring the purchase path made `fetchUnscheduledHeldSecurities` report five
+    rather than the zero a stock-filtered audit query had shown. **Audit both
+    asset types or neither.**
+  - `$Cash` and unheld tickers like `BRK.B` are correctly excluded — nothing to
+    schedule, and an unheld security on the review calendar is noise.
 - **It dates forward from `next_earnings_release`, never backward from
   `last_earnings_release`.** Dating from the last call would assert a review was
   missed; nobody knows that — the position may have been added last week or
