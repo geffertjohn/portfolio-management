@@ -141,7 +141,6 @@ export type Database = {
           id: number
           message: string | null
           metric_field: string
-          rule_id: number | null
           security_id: string
           source: string
           threshold_value: number | null
@@ -154,7 +153,6 @@ export type Database = {
           id?: number
           message?: string | null
           metric_field: string
-          rule_id?: number | null
           security_id: string
           source?: string
           threshold_value?: number | null
@@ -167,7 +165,6 @@ export type Database = {
           id?: number
           message?: string | null
           metric_field?: string
-          rule_id?: number | null
           security_id?: string
           source?: string
           threshold_value?: number | null
@@ -182,55 +179,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "alert_events_rule_id_fkey"
-            columns: ["rule_id"]
-            isOneToOne: false
-            referencedRelation: "alert_rules"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "alert_events_security_id_fkey"
-            columns: ["security_id"]
-            isOneToOne: false
-            referencedRelation: "securities2"
-            referencedColumns: ["security_id"]
-          },
-        ]
-      }
-      alert_rules: {
-        Row: {
-          created_at: string
-          id: number
-          is_active: boolean
-          metric_field: string
-          operator: string
-          security_id: string | null
-          threshold_value: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          is_active?: boolean
-          metric_field: string
-          operator: string
-          security_id?: string | null
-          threshold_value: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          is_active?: boolean
-          metric_field?: string
-          operator?: string
-          security_id?: string | null
-          threshold_value?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "alert_rules_security_id_fkey"
             columns: ["security_id"]
             isOneToOne: false
             referencedRelation: "securities2"
@@ -1929,7 +1878,6 @@ export type Database = {
           monthly_standard_deviation_annualized_all: number | null
           municipal_fixed_income_exposure_generic: number | null
           name: string
-          next_rebalance_date: string | null
           north_america_total_exposure_generic: number | null
           number_of_holdings: number | null
           objective_statement: string | null
@@ -2078,7 +2026,6 @@ export type Database = {
           monthly_standard_deviation_annualized_all?: number | null
           municipal_fixed_income_exposure_generic?: number | null
           name: string
-          next_rebalance_date?: string | null
           north_america_total_exposure_generic?: number | null
           number_of_holdings?: number | null
           objective_statement?: string | null
@@ -2227,7 +2174,6 @@ export type Database = {
           monthly_standard_deviation_annualized_all?: number | null
           municipal_fixed_income_exposure_generic?: number | null
           name?: string
-          next_rebalance_date?: string | null
           north_america_total_exposure_generic?: number | null
           number_of_holdings?: number | null
           objective_statement?: string | null

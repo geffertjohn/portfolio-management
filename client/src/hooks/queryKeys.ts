@@ -25,7 +25,6 @@ export const QUERY_KEYS = {
   allocationGrid: (portfolioName: string) => ['allocation_grid', portfolioName] as const,
   latestActualAllocation: (portfolioName: string) => ['latest_actual_allocation', portfolioName] as const,
   sp500SectorWeights: ['sp500_sector_weights'] as const,
-  alertRules: (securityId: string) => ['alert_rules', securityId] as const,
   alertEvents: ['alert_events'] as const,
   clients: ['clients'] as const,
   client: (id: number) => ['client', id] as const,

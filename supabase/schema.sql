@@ -429,7 +429,6 @@ ALTER SEQUENCE "public"."action_items_id_seq" OWNED BY "public"."action_items"."
 
 CREATE TABLE IF NOT EXISTS "public"."alert_events" (
     "id" bigint NOT NULL,
-    "rule_id" bigint,
     "metric_field" "text" NOT NULL,
     "actual_value" numeric,
     "threshold_value" numeric,
@@ -463,37 +462,6 @@ ALTER SEQUENCE "public"."alert_events_id_seq" OWNER TO "postgres";
 
 
 ALTER SEQUENCE "public"."alert_events_id_seq" OWNED BY "public"."alert_events"."id";
-
-
-
-CREATE TABLE IF NOT EXISTS "public"."alert_rules" (
-    "id" bigint NOT NULL,
-    "metric_field" "text" NOT NULL,
-    "operator" "text" NOT NULL,
-    "threshold_value" numeric NOT NULL,
-    "is_active" boolean DEFAULT true NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "security_id" "text",
-    CONSTRAINT "alert_rules_operator_check" CHECK (("operator" = ANY (ARRAY['lt'::"text", 'lte'::"text", 'gt'::"text", 'gte'::"text", 'eq'::"text"])))
-);
-
-
-ALTER TABLE "public"."alert_rules" OWNER TO "postgres";
-
-
-CREATE SEQUENCE IF NOT EXISTS "public"."alert_rules_id_seq"
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE "public"."alert_rules_id_seq" OWNER TO "postgres";
-
-
-ALTER SEQUENCE "public"."alert_rules_id_seq" OWNED BY "public"."alert_rules"."id";
 
 
 
@@ -1493,7 +1461,6 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio" (
     "developed_equity_exposure" numeric,
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "last_rebalance_date" "date",
-    "next_rebalance_date" "date",
     "objective_statement" "text",
     "investment_philosophy" "text"
 );
@@ -2294,10 +2261,6 @@ ALTER TABLE ONLY "public"."alert_events" ALTER COLUMN "id" SET DEFAULT "nextval"
 
 
 
-ALTER TABLE ONLY "public"."alert_rules" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."alert_rules_id_seq"'::"regclass");
-
-
-
 ALTER TABLE ONLY "public"."at_risk" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."watchlist_id_seq"'::"regclass");
 
 
@@ -2386,11 +2349,6 @@ ALTER TABLE ONLY "public"."action_items"
 
 ALTER TABLE ONLY "public"."alert_events"
     ADD CONSTRAINT "alert_events_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."alert_rules"
-    ADD CONSTRAINT "alert_rules_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2685,10 +2643,6 @@ CREATE INDEX "alert_events_unacked_idx" ON "public"."alert_events" USING "btree"
 
 
 
-CREATE INDEX "alert_rules_security_id_idx" ON "public"."alert_rules" USING "btree" ("security_id");
-
-
-
 CREATE INDEX "audit_log_table_idx" ON "public"."audit_log" USING "btree" ("table_name", "changed_at" DESC);
 
 
@@ -2925,10 +2879,6 @@ CREATE OR REPLACE TRIGGER "action_items_updated_at" BEFORE UPDATE ON "public"."a
 
 
 
-CREATE OR REPLACE TRIGGER "alert_rules_updated_at" BEFORE UPDATE ON "public"."alert_rules" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
-
-
-
 CREATE OR REPLACE TRIGGER "audit_action_items" AFTER INSERT OR DELETE OR UPDATE ON "public"."action_items" FOR EACH ROW EXECUTE FUNCTION "public"."log_audit"();
 
 
@@ -3058,17 +3008,7 @@ ALTER TABLE ONLY "public"."alert_events"
 
 
 ALTER TABLE ONLY "public"."alert_events"
-    ADD CONSTRAINT "alert_events_rule_id_fkey" FOREIGN KEY ("rule_id") REFERENCES "public"."alert_rules"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."alert_events"
     ADD CONSTRAINT "alert_events_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id");
-
-
-
-ALTER TABLE ONLY "public"."alert_rules"
-    ADD CONSTRAINT "alert_rules_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id");
 
 
 
@@ -3270,10 +3210,6 @@ CREATE POLICY "Allow delete alert_events" ON "public"."alert_events" FOR DELETE 
 
 
 
-CREATE POLICY "Allow delete alert_rules" ON "public"."alert_rules" FOR DELETE TO "authenticated", "anon" USING (true);
-
-
-
 CREATE POLICY "Allow delete at_risk" ON "public"."at_risk" FOR DELETE TO "authenticated", "anon" USING (true);
 
 
@@ -3379,10 +3315,6 @@ CREATE POLICY "Allow insert action_items" ON "public"."action_items" FOR INSERT 
 
 
 CREATE POLICY "Allow insert alert_events" ON "public"."alert_events" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
-
-
-
-CREATE POLICY "Allow insert alert_rules" ON "public"."alert_rules" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
 
 
 
@@ -3494,10 +3426,6 @@ CREATE POLICY "Allow read alert_events" ON "public"."alert_events" FOR SELECT TO
 
 
 
-CREATE POLICY "Allow read alert_rules" ON "public"."alert_rules" FOR SELECT TO "authenticated", "anon" USING (true);
-
-
-
 CREATE POLICY "Allow read at_risk" ON "public"."at_risk" FOR SELECT TO "authenticated", "anon" USING (true);
 
 
@@ -3603,10 +3531,6 @@ CREATE POLICY "Allow update action_items" ON "public"."action_items" FOR UPDATE 
 
 
 CREATE POLICY "Allow update alert_events" ON "public"."alert_events" FOR UPDATE TO "authenticated", "anon" USING (true);
-
-
-
-CREATE POLICY "Allow update alert_rules" ON "public"."alert_rules" FOR UPDATE TO "authenticated", "anon" USING (true);
 
 
 
@@ -3717,9 +3641,6 @@ ALTER TABLE "public"."action_items" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."alert_events" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."alert_rules" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "allow all action_item_events" ON "public"."action_item_events" USING (true) WITH CHECK (true);
@@ -4224,18 +4145,6 @@ GRANT ALL ON TABLE "public"."alert_events" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."alert_events_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."alert_events_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."alert_events_id_seq" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."alert_rules" TO "anon";
-GRANT ALL ON TABLE "public"."alert_rules" TO "authenticated";
-GRANT ALL ON TABLE "public"."alert_rules" TO "service_role";
-
-
-
-GRANT ALL ON SEQUENCE "public"."alert_rules_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."alert_rules_id_seq" TO "authenticated";
-GRANT ALL ON SEQUENCE "public"."alert_rules_id_seq" TO "service_role";
 
 
 

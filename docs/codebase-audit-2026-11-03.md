@@ -330,7 +330,7 @@ advisor. It is typechecked and reviewed, and the two rules most likely to be
 wrong — which column counts, and what counts as drift — are pure and unit-tested
 (15 new tests, 162 total).
 
-### 10. `next_review_at` renders a day early on the security page — gotcha 24, recurred `[ ]`
+### 10. `next_review_at` renders a day early on the security page — gotcha 24, recurred `[x] DONE 4 Nov`
 
 `SecurityDetailPage.tsx:504` normalises through `reviewDueDay()` for the *colour*, then
 `:505` renders the *value* from the raw timestamp in local time. A row holding
@@ -338,6 +338,11 @@ wrong — which column counts, and what counts as drift — are pure and unit-te
 page. Exactly the failure gotcha 24 records for `at_risk.removal_date`.
 
 **Fix:** `fmtUtcLongDate(...)`. (Currently renders only for funds — fix with §6.)
+
+**Done.** The fund branch now renders `formatDate(reviewDueDay(next_review_at))`,
+the same expression the stock Monitor block added in §6 already used — which is
+precisely why the two disagreed. `last_reviewed_at` moved to the same helper for
+consistency; it is a true instant, so it keeps local formatting.
 
 ### 11. Two money formatters print sub-million figures as `$0.xxM` `[x] DONE 4 Nov`
 
@@ -442,14 +447,46 @@ the workflow is shaped to fail the loader; output via the Agent tool is not.
 
 ## P2 — Dead code and dead schema (safe removals)
 
-### 16. Two dead tables `[ ]`
+### 16. Two dead tables — one was, one very much was not `[x] DONE 4 Nov`
 
 - **`alert_rules`** — 0 rows, no reader or writer, only an orphaned `alertRules` key in
   `queryKeys.ts`. Drop outright.
 - **`holdings_change_log`** — 208 rows, zero readers as of today. **Your call:** frozen
   history, or archive and drop.
 
-### 17. Dead columns `[ ]`
+> **`alert_rules` dropped; `holdings_change_log` REJECTED — the second finding is
+> wrong and acting on it would have caused an outage.**
+>
+> `alert_rules` went, with `alert_events.rule_id` (whose only meaning was the FK
+> into it) and the dead query key. `alert_events` survives untouched — it is the
+> HomePage alert surface with the at-risk breach alert as its producer — and
+> `threshold_value` is kept, since an alert can carry the number it breached
+> without a rule row behind it. It is empty (0 rows), so nothing was lost.
+>
+> **`holdings_change_log` has a live writer.** "Zero readers" is true and was the
+> only thing checked. The **`positions_audit` trigger** calls
+> `log_position_change()` on every insert, update and delete of `positions`; the
+> table has been appending since Apr 2026 and **the newest row was written the day
+> this audit was published**. Dropping it would have made every write to
+> `positions` fail — every allocation import, every History grid edit.
+>
+> It is also not redundant with `portfolio_allocations`, which was the implicit
+> argument for archiving: it covers Apr–Nov 2026 for the three equity books,
+> where their allocation snapshots stop in **Feb 2026**.
+>
+> And it matters on its own terms: `positions` is **not** one of the nine tables
+> `log_audit` covers, so this trigger is the only record of who changed a target
+> weight. It is a fifth audit surface, now documented in CLAUDE.md next to the
+> other four. `schemaContract.test.ts` pins the table and the trigger together.
+>
+> Three repo claims said it had "no writer anywhere" — CLAUDE.md twice and
+> `lib/allocationChanges.ts`'s own docstring — and this audit repeated them
+> without checking. All four are corrected. The Change Log tab is still right to
+> derive from snapshots, but for a better reason: the trigger logs a change to the
+> *current target* with **no `effective_date`**, so it cannot say which rebalance a
+> change belongs to.
+
+### 17. Dead columns — the `portfolio` half is wrong `[x] DONE 4 Nov`
 
 - **`portfolio`** — ≥18 of 147 columns all-null *and* unreferenced (their only mentions
   are in `supabase/archive/`). Undercounts: name-based grep can't tell `portfolio`'s
@@ -458,7 +495,45 @@ the workflow is shaped to fail the loader; output via the Agent tool is not.
 - **`securities2` (93) and `model_portfolio_data` (76) are clean** — every column earns
   its place.
 
-### 18. The Total Returns 3Yr/5Yr/10Yr columns are structurally always blank `[ ]`
+> **REJECTED for `portfolio`, with one exception. The columns are not dead, they
+> are PRE-INCEPTION.**
+>
+> `portfolio` has 26 all-null columns, and **25 of them are 3-year, 5-year or
+> 10-year metrics**: the `_3y`/`_5y` pairs of sharpe, sortino, treynor, max
+> drawdown, tracking error, upside/downside and annualised std-dev, plus
+> `market_alpha_36/60_month`, `quarterly_market_beta_36/60_month`, the
+> best/worst three- and five-year returns, and the three annualised returns of
+> §18.
+>
+> The decisive evidence is the **one-year siblings**: `historical_sharpe_1y`,
+> `max_drawdown_1y`, `tracking_error_1y`, `market_alpha_12_month` and the rest
+> are populated on **18 of 19** portfolios (the 19th is 0.11 years old), while
+> every `_3y`/`_5y` twin is null. The workbook carries the whole block. **The
+> oldest of the 19 models is 2.5 years old** — there is no three-year figure to
+> carry yet, and the first one arrives in **Apr 2027**.
+>
+> Dropping them would have deleted the landing place for that data *and* broken
+> the next workbook import, since the importers map sheet header straight to DB
+> column with no whitelist — gotcha 7, which this very report quotes. Guarded
+> now by `schemaContract.test.ts`, mutation-tested.
+>
+> **The one real dead column is `next_rebalance_date`** — the only non-period
+> column in the set, null on all 19, its sole writer
+> (`updatePortfolioRebalanceDates`) called from nowhere. Both are dropped, and
+> `lib/rebalanceSchedule.ts`'s docstring, which cited the column as present,
+> is corrected. `last_rebalance_date` is populated and untouched.
+>
+> **`model_portfolio_benchmarks` is NOT actioned.** Its 39 all-null columns are a
+> different shape (several are *one*-year metrics, so the pre-inception argument
+> does not carry), but it runs the same workbook-header hazard with an **empty
+> `skipCols`**, and the sheet cannot be inspected from here — the master lives on
+> the VM. Given that two of the three dead-schema findings in this section turned
+> out to be false, dropping 39 more columns on an un-inspectable file is not a
+> trade worth making. **Next time the VM is up, read the benchmark sheet's
+> headers**; anything genuinely absent can then be dropped with the columns added
+> to `skipCols`, exactly as `CATEGORY_DROPPED_COLS` did in Sep 2026.
+
+### 18. The Total Returns 3Yr/5Yr/10Yr columns are structurally always blank `[x] DONE 4 Nov`
 
 `PortfolioOverview` renders `annualized_{three,five,ten}_year_total_return` from the
 portfolio row. Nothing populates them — the Model Portfolios sheet has no such columns
@@ -466,6 +541,31 @@ and all 19 rows are null. They sit next to a benchmark row that *does* show 9.93
 
 **Fix:** add the three columns to the workbook sheet (the importer maps headers
 straight through, so that is all it takes), or drop them from the table.
+
+**Done — but neither of those two fixes was right, because the cause is not the
+one stated.** The sheet is not missing the columns and the table is not dead:
+**no model is three years old.** Adding workbook columns YCharts cannot populate
+would change nothing, and dropping them would delete the destination for Apr
+2027 (see §17 for the one-year-sibling evidence).
+
+The real defect was the rendering. An em-dash reads as *no data* when the truth
+is *no track record*, and it sat beside a benchmark cell showing a real 9.62%
+three-year figure — inviting a comparison that cannot be made. In a tool built
+to defend a process, that is the thing that was actually wrong.
+
+So a pre-inception cell now reads **`n/a`**, the benchmark figure in that column
+keeps its value but **loses its colour** (green on a benchmark return with no
+portfolio return beside it reads as a verdict), and a footnote names the
+inception date: *"3 Yr / 5 Yr / 10 Yr are n/a — this model's record starts April
+25, 2024 (2.5 years)."* It is self-correcting: the cells fill themselves as each
+model comes of age.
+
+`lib/trackRecord.ts` is the pure helper, with `hasTrackRecordFor` returning
+**null** for a portfolio with no inception date — "cannot tell" as a third
+answer, the same shape as `excel_state` in §26. The table's header and both rows
+are now driven by **one** column list; they were three parallel literals that had
+to stay in the same order by hand. Verified on ETF Conservative (2.5 yrs: 3/5/10
+n/a) and Foundation Conservative (0.11 yrs: 1/3/5/10 n/a).
 
 ### 19. Orphaned files and exports `[ ]`
 

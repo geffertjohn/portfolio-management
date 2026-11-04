@@ -25,7 +25,6 @@ export interface Portfolio {
   annualized_daily_all_time_total_return: number | null
   earliest_performance_date: string | null
   last_rebalance_date: string | null
-  next_rebalance_date: string | null
   dividend_yield: number | null
   expense_ratio: number | null
 

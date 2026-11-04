@@ -4,12 +4,24 @@
  * The portfolio Change Log, DERIVED from `portfolio_allocations` rather than
  * stored.
  *
- * `holdings_change_log` is the legacy store and has had **no writer anywhere**
- * since the allocation snapshots replaced it, so the tab showed whatever rows
- * happened to be left behind — six for Foundation Conservative, none for most
- * books, and nothing at all for any import made since. Rebuilding it as a second
- * copy of what the history already knows would re-create the drift it is meant
- * to report: a log that disagrees with the grid above it is worse than no log.
+ * `holdings_change_log` is NOT the right source, and the reason is not the one
+ * recorded here until Nov 2026. It was said to have "no writer anywhere"; it has
+ * a live one — the `positions_audit` trigger calls `log_position_change()` on
+ * every insert, update and delete of `positions`, and it has been appending
+ * continuously since Apr 2026 (208 rows, the newest written the day before this
+ * was corrected). What it logs is a change to the CURRENT target: a ticker, an
+ * old weight, a new weight and a wall-clock `changed_at`, with **no
+ * `effective_date`**. So it cannot say which dated snapshot a change belongs to,
+ * which is exactly what a change log keyed by rebalance has to say — and it
+ * records only what reached `positions`, while two books' positions are not
+ * driven by their own history at all (a derived blend, and one book whose
+ * newest snapshot is sixteen months older than its positions).
+ *
+ * That is the real argument, and it is the stronger one: the table is a
+ * per-row audit trail of `positions`, which is a different question from "what
+ * changed between these two rebalances". Rebuilding this tab on it would also
+ * re-create the drift it is meant to report — a log that disagrees with the
+ * grid above it is worse than no log.
  *
  * So this computes the diff on read, the way `quarterlyBrief.ts` assembles a
  * brief from documents that already exist. It is pure and React-free, and it

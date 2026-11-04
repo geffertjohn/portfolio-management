@@ -6,6 +6,8 @@ import { computeAllocationBands, type BandRow, type BandStatus } from '@/lib/all
 import { useLatestActualAllocation, usePositions } from '@/hooks/usePortfolio'
 import { useSecurities } from '@/hooks/useSecurities'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { hasTrackRecordFor, trackRecordYears } from '@/lib/trackRecord'
+import { fmtUtcLongDate } from '@/lib/formatters'
 import type { Portfolio } from '@/types/portfolio'
 
 interface PortfolioOverviewProps {
@@ -185,6 +187,37 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
   const holdingsLabel = actualAllocation ? 'Actual' : 'Holdings'
 
   /**
+   * The Total Returns columns, in one place, driving the header and both rows.
+   *
+   * `years` is the track record a column needs. Where the model has not existed
+   * that long, `preInception` is true and the portfolio cell reads n/a — the
+   * figure is not missing, the period never happened. `hasTrackRecordFor`
+   * returns null when there is no inception date on file, and null is NOT
+   * treated as pre-inception: without a date neither claim can be made, so the
+   * cell falls back to the ordinary em-dash.
+   */
+  const returnColumns = [
+    { label: '1 Mo',     years: null, portfolioValue: portfolio.one_month_total_return,                 benchmarkValue: benchmarkReturns?.one_month_total_return ?? null },
+    { label: '3 Mo',     years: null, portfolioValue: portfolio.three_month_total_return,               benchmarkValue: benchmarkReturns?.three_month_total_return ?? null },
+    { label: 'YTD',      years: null, portfolioValue: portfolio.ytd_total_return,                       benchmarkValue: benchmarkReturns?.ytd_total_return ?? null },
+    { label: '1 Yr',     years: 1,    portfolioValue: portfolio.one_year_total_return,                  benchmarkValue: benchmarkReturns?.one_year_total_return ?? null },
+    { label: '3 Yr',     years: 3,    portfolioValue: portfolio.annualized_three_year_total_return,     benchmarkValue: benchmarkReturns?.annualized_three_year_total_return ?? null },
+    { label: '5 Yr',     years: 5,    portfolioValue: portfolio.annualized_five_year_total_return,      benchmarkValue: benchmarkReturns?.annualized_five_year_total_return ?? null },
+    { label: '10 Yr',    years: 10,   portfolioValue: portfolio.annualized_ten_year_total_return,       benchmarkValue: benchmarkReturns?.annualized_ten_year_total_return ?? null },
+    { label: 'All Time', years: null, portfolioValue: portfolio.annualized_daily_all_time_total_return, benchmarkValue: benchmarkReturns?.annualized_daily_all_time_total_return ?? null },
+  ].map((c) => ({
+    ...c,
+    preInception: c.years != null
+      && hasTrackRecordFor(portfolio.earliest_performance_date, c.years) === false,
+  }))
+
+  const preInceptionLabels = returnColumns.filter((c) => c.preInception).map((c) => c.label)
+  const inceptionLabel = portfolio.earliest_performance_date
+    ? fmtUtcLongDate(portfolio.earliest_performance_date)
+    : null
+  const trackYears = trackRecordYears(portfolio.earliest_performance_date)
+
+  /**
    * Fund/ETF portfolios show the model's bands and targets ONLY — no actual /
    * holdings column (Nov 2026).
    *
@@ -349,7 +382,16 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
       {/* Total Returns — every portfolio, Equity included. These are YCharts' own
           model figures, refreshed daily by the workbook import. They were hidden
           for Equity portfolios in favour of a locally computed Performance panel;
-          that engine zeroed a trading day per rebalance and has been removed. */}
+          that engine zeroed a trading day per rebalance and has been removed.
+
+          One column list drives the header and BOTH rows. It used to be three
+          parallel literals that had to stay in the same order by hand, which is
+          a silent mis-pairing waiting to happen — relabel one and the portfolio
+          row reports its 5 Yr figure under "3 Yr".
+
+          `years` marks the columns that need a track record. Where the model has
+          not existed that long the cell reads n/a, not an em-dash: the figure is
+          not missing, the period never happened. See lib/trackRecord.ts. */}
       <div className="rounded-lg border border-gray-200 bg-white">
         <div className="border-b border-gray-200 px-4 py-3">
           <h3 className="text-sm font-semibold text-gray-900">Total Returns</h3>
@@ -358,42 +400,34 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
           <thead>
             <tr className="bg-[#0f2d4d] text-white">
               <th className="px-4 py-2 text-left font-semibold">Name</th>
-              <th className="px-4 py-2 text-left font-semibold">1 Mo</th>
-              <th className="px-4 py-2 text-left font-semibold">3 Mo</th>
-              <th className="px-4 py-2 text-left font-semibold">YTD</th>
-              <th className="px-4 py-2 text-left font-semibold">1 Yr</th>
-              <th className="px-4 py-2 text-left font-semibold">3 Yr</th>
-              <th className="px-4 py-2 text-left font-semibold">5 Yr</th>
-              <th className="px-4 py-2 text-left font-semibold">10 Yr</th>
-              <th className="px-4 py-2 text-left font-semibold">All Time</th>
+              {returnColumns.map((c) => (
+                <th key={c.label} className="px-4 py-2 text-left font-semibold">{c.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {/* Portfolio row */}
             <tr>
               <td className="px-4 py-3 font-medium text-gray-900">{portfolio.name}</td>
-              {([
-                portfolio.one_month_total_return,
-                portfolio.three_month_total_return,
-                portfolio.ytd_total_return,
-                portfolio.one_year_total_return,
-                portfolio.annualized_three_year_total_return,
-                portfolio.annualized_five_year_total_return,
-                portfolio.annualized_ten_year_total_return,
-                portfolio.annualized_daily_all_time_total_return,
-              ] as (number | null)[]).map((v, i) => {
-                const isAllTime = i === 7
-                return (
-                  <td key={i} className={`px-4 py-3 font-medium tabular-nums ${v == null ? 'text-gray-400' : v >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {v != null ? `${(v * 100).toFixed(2)}%` : '—'}
-                    {isAllTime && portfolio.earliest_performance_date && (
-                      <div className="text-[10px] font-normal text-gray-400 tabular-nums">
-                        {new Date(portfolio.earliest_performance_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </div>
-                    )}
-                  </td>
-                )
-              })}
+              {returnColumns.map((c) => (
+                <td
+                  key={c.label}
+                  className={`px-4 py-3 font-medium tabular-nums ${
+                    c.preInception ? 'text-gray-400'
+                      : c.portfolioValue == null ? 'text-gray-400'
+                      : c.portfolioValue >= 0 ? 'text-green-700' : 'text-red-600'
+                  }`}
+                >
+                  {c.preInception
+                    ? <span title={`This model's record starts ${inceptionLabel ?? 'later than this period'}`}>n/a</span>
+                    : c.portfolioValue != null ? `${(c.portfolioValue * 100).toFixed(2)}%` : '—'}
+                  {c.label === 'All Time' && portfolio.earliest_performance_date && (
+                    <div className="text-[10px] font-normal text-gray-400 tabular-nums">
+                      {fmtUtcLongDate(portfolio.earliest_performance_date)}
+                    </div>
+                  )}
+                </td>
+              ))}
             </tr>
             {/* Benchmark row */}
             {effectiveBenchmark && (
@@ -408,24 +442,36 @@ export function PortfolioOverview({ portfolio, overrideModelPortfolio }: Portfol
                     <span className="ml-1.5 text-xs text-amber-500">No data</span>
                   )}
                 </td>
-                {([
-                  benchmarkReturns?.one_month_total_return ?? null,
-                  benchmarkReturns?.three_month_total_return ?? null,
-                  benchmarkReturns?.ytd_total_return ?? null,
-                  benchmarkReturns?.one_year_total_return ?? null,
-                  benchmarkReturns?.annualized_three_year_total_return ?? null,
-                  benchmarkReturns?.annualized_five_year_total_return ?? null,
-                  benchmarkReturns?.annualized_ten_year_total_return ?? null,
-                  benchmarkReturns?.annualized_daily_all_time_total_return ?? null,
-                ] as (number | null)[]).map((v, i) => (
-                  <td key={i} className={`px-4 py-3 tabular-nums ${benchmarkLoading ? 'text-gray-300 animate-pulse' : v == null ? 'text-gray-400' : v >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {benchmarkLoading ? '—' : v != null ? `${(v * 100).toFixed(2)}%` : '—'}
+                {returnColumns.map((c) => (
+                  <td
+                    key={c.label}
+                    /* A pre-inception column keeps the benchmark figure but drops
+                       its colour. Green on a benchmark return with no portfolio
+                       return beside it reads as a verdict on a comparison that
+                       was never made. */
+                    className={`px-4 py-3 tabular-nums ${
+                      benchmarkLoading ? 'text-gray-300 animate-pulse'
+                        : c.preInception ? 'text-gray-400'
+                        : c.benchmarkValue == null ? 'text-gray-400'
+                        : c.benchmarkValue >= 0 ? 'text-green-700' : 'text-red-600'
+                    }`}
+                  >
+                    {benchmarkLoading ? '—' : c.benchmarkValue != null ? `${(c.benchmarkValue * 100).toFixed(2)}%` : '—'}
                   </td>
                 ))}
               </tr>
             )}
           </tbody>
         </table>
+        {preInceptionLabels.length > 0 && (
+          <p className="border-t border-gray-100 px-4 py-2 text-xs text-gray-500">
+            {preInceptionLabels.join(' / ')} {preInceptionLabels.length === 1 ? 'is' : 'are'} n/a — this
+            model’s record starts {inceptionLabel}
+            {trackYears != null && ` (${trackYears} years)`}, so the period has not
+            happened yet. The benchmark figure is shown uncoloured where there is no
+            portfolio figure to compare it against.
+          </p>
+        )}
       </div>
 
     </div>
