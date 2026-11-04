@@ -289,6 +289,49 @@ export function diffVintages(
   return changes
 }
 
+/** The vintage at which the most recent change appeared, and what it was. */
+export interface LastChange {
+  /** The vintage the change APPEARED IN. */
+  label: string
+  effectiveMonth: string
+  /** The vintage it changed from. */
+  previousLabel: string
+  changes: WeightChange[]
+}
+
+/**
+ * Walking back from `fromIndex`, the most recent vintage where anything moved.
+ *
+ * The published models go months without changing — on the five documents
+ * through 2026 the only movement was January to February, and April, July and
+ * October are identical to it. So "no changes from the last document" is the
+ * usual answer and on its own it is not very informative: the question a reader
+ * actually has is *when did this last move, and to what*.
+ *
+ * `vintages` must be NEWEST FIRST, the order `fetchStrategicVintages` returns.
+ * Returns null when nothing ever changed, or when the selected vintage is the
+ * earliest on file — in both cases there is no earlier movement to point at.
+ */
+export function findLastChange(
+  vintages: { label: string; effectiveMonth: string; weights: ProfileWeights }[],
+  fromIndex = 0,
+): LastChange | null {
+  for (let i = Math.max(0, fromIndex); i < vintages.length - 1; i++) {
+    const next = vintages[i]
+    const previous = vintages[i + 1]
+    const changes = diffVintages(previous.weights, next.weights)
+    if (changes.length > 0) {
+      return {
+        label: next.label,
+        effectiveMonth: next.effectiveMonth,
+        previousLabel: previous.label,
+        changes,
+      }
+    }
+  }
+  return null
+}
+
 // ── Data access ──────────────────────────────────────────────────────────────
 
 import { supabase } from './supabase'

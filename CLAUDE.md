@@ -1388,6 +1388,14 @@ tables they read.
   - **Change notes are DERIVED, never stored** — the same reasoning as the
     portfolio Change Log: a stored note is a second copy of what two vintages
     already say, and the two drift.
+  - **These models go months without moving**, so "no changes from the last
+    document" is the usual answer and says nothing about when they last did.
+    `findLastChange` walks back from the SELECTED vintage (not from the newest,
+    or viewing an old document would report a change that had not happened yet)
+    and the card carries a collapsed **Last changed** row naming that month. It
+    is suppressed when the selected vintage IS the last change, since the list
+    above is already that answer. On the five 2026 documents the only movement
+    is January → February; April, July and October are identical to it.
   - **The group totals are parsed but NOT stored.** EQUITY and FIXED INCOME are
     the sums of the rows beneath them, so they are used to CHECK a parse and
     then discarded; storing a total beside the rows it totals is how the two
