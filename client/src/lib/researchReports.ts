@@ -10,7 +10,6 @@
  * Soft-deleted via `deleted_at`.
  */
 import { supabase } from './supabase'
-import type { Json } from '@/types/database.types'
 import { parsePriceTargets, type PriceTargets } from './priceTargets'
 
 /**
@@ -345,80 +344,16 @@ export async function fetchResearchReportsForAddition(additionId: number): Promi
   return (data ?? []).map((r) => mapRow(r as unknown as Record<string, unknown>))
 }
 
-export interface NewResearchReport {
-  security_id: string
-  author_role: AuthorRole
-  portfolio_name?: string | null
-  addition_id?: number | null
-  report_type?: ReportType
-  parent_report_id?: number | null
-  thesis_id?: number | null
-  fiscal_year?: number | null
-  quarter?: number | null
-  estimates?: EstimateRow[] | null
-  street_questions?: StreetQuestion[] | null
-  thesis_checks?: ThesisCheck[] | null
-  risk_checks?: ThesisCheck[] | null
-  review_recommendations?: ReviewRecommendation[] | null
-  price_targets?: PriceTargets | null
-  watch_items?: WatchItem[] | null
-  thesis_status?: ThesisStatus | null
-  thesis?: string | null
-  bull_case?: string | null
-  bear_case?: string | null
-  rating?: Rating | null
-  conviction?: Conviction | null
-  fair_value?: number | null
-  current_price?: number | null
-  dcf_inputs?: Record<string, unknown> | null
-  valuation_summary?: Record<string, unknown> | null
-  sources?: Citation[] | null
-  status?: ReportStatus
-}
 
-export async function insertResearchReport(input: NewResearchReport): Promise<number> {
-  const { data, error } = await supabase
-    .from('research_reports')
-    .insert({
-      security_id: input.security_id.toUpperCase(),
-      author_role: input.author_role,
-      portfolio_name: input.portfolio_name ?? null,
-      addition_id: input.addition_id ?? null,
-      report_type: input.report_type ?? 'initial',
-      parent_report_id: input.parent_report_id ?? null,
-      thesis_id: input.thesis_id ?? null,
-      fiscal_year: input.fiscal_year ?? null,
-      quarter: input.quarter ?? null,
-      estimates: (input.estimates ?? null) as unknown as Json,
-      street_questions: (input.street_questions ?? null) as unknown as Json,
-      thesis_checks: (input.thesis_checks ?? null) as unknown as Json,
-      risk_checks: (input.risk_checks ?? null) as unknown as Json,
-      review_recommendations: (input.review_recommendations ?? null) as unknown as Json,
-      price_targets: (input.price_targets ?? null) as unknown as Json,
-      watch_items: (input.watch_items ?? null) as unknown as Json,
-      thesis_status: input.thesis_status ?? null,
-      thesis: input.thesis ?? null,
-      bull_case: input.bull_case ?? null,
-      bear_case: input.bear_case ?? null,
-      rating: input.rating ?? null,
-      conviction: input.conviction ?? null,
-      fair_value: input.fair_value ?? null,
-      current_price: input.current_price ?? null,
-      dcf_inputs: (input.dcf_inputs ?? null) as unknown as Json,
-      valuation_summary: (input.valuation_summary ?? null) as unknown as Json,
-      sources: (input.sources ?? null) as unknown as Json,
-      status: input.status ?? 'final',
-    })
-    .select('id')
-    .single()
-  if (error) throw error
-  return data.id
-}
-
-export async function softDeleteResearchReport(id: number): Promise<void> {
-  const { error } = await supabase
-    .from('research_reports')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
-}
+/**
+ * There is deliberately NO writer in this module.
+ *
+ * The committee's deliverables are written by the scheduled jobs, which run
+ * under launchd with a tool allowlist that excludes Bash — their only write
+ * channel is Supabase SQL, so a TypeScript writer could never be the path they
+ * take. `insert*` / `softDelete*` functions lived here with exactly one
+ * reference each (their own definition) and read as a guard over a path
+ * nothing used. The real guard is the `committee_insert` / `committee_update`
+ * SQL API, which validates a payload against the live table before writing and
+ * raises when a write matches no row. The app is read-only on this table.
+ */

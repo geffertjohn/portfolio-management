@@ -900,6 +900,47 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 Six routines: **watchlist-research** (weekdays 10:05 → the lean IC over unresearched watchlist ideas, see below), **at-risk-review** (weekdays 09:25 → `at_risk` + `alert_events`, see At-Risk below), **pre-earnings-brief** (weekdays → draft `research_reports`), **post-earnings-brief** (weekdays → draft `research_reports`, see below), **weekly-risk-report** (Mon → `risk_reports` scope=portfolio + compliance verification), **reviews-due-digest** (Mon, informational). All draft-only; they run in Claude Code while the app is open.
 
+#### The committee writes through a SQL API, never raw INSERT/UPDATE
+
+**`committee_insert(table, payload)` and `committee_update(table, id, payload)`
+are the only way the jobs write.** Plus two wrappers for the heartbeat every job
+opens and closes: **`job_run_open(job_id)`** and **`job_run_close(id, status,
+considered, written, summary, errors)`**.
+
+The constraint that forces this: the jobs run under launchd with a tool
+allowlist that **deliberately excludes `Bash`** (an approval prompt would stall
+an unattended run forever), so their only write channel is Supabase SQL. A
+type-checked TypeScript writer could never be the path they take — which is why
+`insertResearchReport` / `insertRiskReport` / `insertIcMemo` sat in `lib/` with
+one reference each, their own definition, reading as a guard over a path nothing
+used. **They are deleted; the app is read-only on these tables.**
+
+What the prompts carried instead was a hand-written column list per table across
+seven files that nothing checks, so a column added, renamed or dropped left
+every one stale with no way to find out but a failed 07:25 run.
+
+- **The functions carry NO column list of their own.** They derive it from the
+  catalog at call time and build the statement dynamically, so a new column is
+  absorbed rather than propagated into seven prompts.
+- **An unknown key is an ERROR, not something to drop.** `jsonb_populate_record`
+  ignores unknown keys silently, which is exactly how a prompt naming a removed
+  column would keep "succeeding" while writing less than it says.
+- **A write that matches no row RAISES.** RLS blocks an UPDATE by returning zero
+  rows, not an error, and PostgREST then reports success — `review_log` lost 25
+  updates that way in Nov 2026 with no error anywhere. `committee_update` and
+  `job_run_close` both fail loudly instead.
+- **Omit a key rather than passing null** — an unmentioned column keeps its
+  default. `id` and `created_at` are refused outright as generated.
+- **`committee_writable_tables()` is the allowlist** (`research_reports`,
+  `risk_reports`, `ic_memos`, `job_runs`, `alert_events`, `at_risk`). Adding a
+  table to the API is that one line.
+- **SECURITY INVOKER, never DEFINER.** These validate and report; they are not a
+  way around a missing RLS policy, and `schemaContract.test.ts` asserts it along
+  with the existence of every function and every allowlisted table — a dropped
+  function would otherwise surface as a failed run, not a failed build.
+- **`run-job.sh` greps for `job_run_open`, not `job_runs`.** The prompts discuss
+  the table in prose, so the old guard passed on prose rather than on the call.
+
 #### Every job writes a `job_runs` heartbeat — it is the only health signal there is
 
 The jobs run in Claude Code; **the React app has no bridge to the scheduler** and

@@ -14,21 +14,25 @@ differs if you write to it.
 **Before any other work**, open the row (Supabase MCP `execute_sql`):
 
 ```sql
-insert into job_runs (job_id) values ('at-risk-review') returning id;
+select job_run_open('at-risk-review');
 ```
 
 Keep that id. **As the very last step, whatever happened**, close it:
 
 ```sql
-update job_runs set
-  finished_at      = now(),
-  status           = 'success',   -- 'partial' if part of the work failed, 'failed' if none of it landed
-  items_considered = <n>,         -- candidates you looked at; 0 is a real answer
-  items_written    = <n>,         -- rows you actually wrote
-  summary          = $j$One line on what happened.$j$,
-  errors           = '{}'         -- array of error strings when status is not 'success'
-where id = <the id from the insert>;
+select job_run_close(
+  <the id from job_run_open>,
+  'success',                      -- 'partial' if part of the work failed, 'failed' if none of it landed
+  <items_considered>,             -- candidates you looked at; 0 is a real answer
+  <items_written>,                -- rows you actually wrote
+  $j$One line on what happened.$j$,
+  '{}'                            -- array of error strings when status is not 'success'
+);
 ```
+
+`job_run_close` **raises if it updates nothing**, so a heartbeat that fails to
+close is an error you will see rather than a row left open for `gradeJob` to
+report as a death three hours later.
 
 **Close the row even when there was nothing to do.** `items_considered = 13`
 with `items_written = 0` is the healthy-and-idle case, and it is precisely what
@@ -135,11 +139,11 @@ So when you flag a name, record the two prior-year figures in `flaggedBenchmark`
    - **Every flagged metric now green or yellow** -> clear the entry:
 
      ```sql
-     update at_risk
-     set removed_at = now(),
-         removed_by = 'committee',
-         removal_reason = 'All flagged metrics recovered: <metric> <flagged> -> <current> (<colour>), …'
-     where id = <id>;
+     select committee_update('at_risk', <id>, jsonb_build_object(
+       'removed_at', now(),
+       'removed_by', 'committee',
+       'removal_reason', $r$All flagged metrics recovered: <metric> <flagged> -> <current> (<colour>), …$r$
+     ));
      ```
 
      Name each metric with the figure it was flagged at and the figure now. "Recovered" with no numbers is not a record.
@@ -147,12 +151,14 @@ So when you flag a name, record the two prior-year figures in `flaggedBenchmark`
    - **Any metric still red, and `removal_date` has passed, and `breach_alerted_at` is null** -> the sell timer has been breached. Raise the alert and stamp the guard **in that order**, so a failure cannot leave a silent entry:
 
      ```sql
-     insert into alert_events (security_id, source, metric_field, message, at_risk_id, triggered_at)
-     values ('TICKER', 'at_risk', 'at_risk_sell_timer',
-             $m$Sell timer expired <n> days ago with <k> metric(s) still red: <metric> at <current> against <comparators>. Flagged <date> with <j> red.$m$,
-             <at_risk_id>, now());
+     select committee_insert('alert_events', jsonb_build_object(
+       'security_id','TICKER', 'source','at_risk', 'metric_field','at_risk_sell_timer',
+       'message', $m$Sell timer expired <n> days ago with <k> metric(s) still red: <metric> at <current> against <comparators>. Flagged <date> with <j> red.$m$,
+       'at_risk_id', <at_risk_id>, 'triggered_at', now()
+     ));
 
-     update at_risk set breach_alerted_at = now() where id = <at_risk_id>;
+     select committee_update('at_risk', <at_risk_id>,
+       jsonb_build_object('breach_alerted_at', now()));
      ```
 
      A partial unique index allows one unacknowledged breach alert per entry, so a duplicate insert fails loudly rather than piling up. **Do not remove the entry** — a breach is the advisor's decision to make, and the position stays flagged until they make it.
@@ -168,15 +174,17 @@ So when you flag a name, record the two prior-year figures in `flaggedBenchmark`
    > The count and the margin gate are separate dials. Raising the count to 4 trims the tail; dropping the margin requirement re-admits names that are merely growing slower than their benchmark.
 
    ```sql
-   insert into at_risk (security_id, source, metrics, metrics_detail, notes, removal_date)
-   values ('TICKER', 'committee',
-           array['Operating Margin TTM','…'],
-           $j$[{"key":"operating_margin_ttm","label":"Operating Margin TTM","basis":"prior_years","higherIsBetter":true,
-                "flaggedValue":0.21,"flaggedBenchmark":0.24,"flaggedBenchmark2":0.26,
-                "currentValue":0.21,"currentBenchmark":0.24,"currentBenchmark2":0.26,
-                "measuredAt":"2026-10-29"}]$j$::jsonb,
-           $n$<why, in a sentence a reader can follow without this prompt open>$n$,
-           now() + interval '<days> days');
+   select committee_insert('at_risk', jsonb_build_object(
+     'security_id','TICKER', 'source','committee',
+     'metrics', $m$["Operating Margin TTM","…"]$m$::jsonb,
+     'metrics_detail',
+       $j$[{"key":"operating_margin_ttm","label":"Operating Margin TTM","basis":"prior_years","higherIsBetter":true,
+            "flaggedValue":0.21,"flaggedBenchmark":0.24,"flaggedBenchmark2":0.26,
+            "currentValue":0.21,"currentBenchmark":0.24,"currentBenchmark2":0.26,
+            "measuredAt":"2026-10-29"}]$j$::jsonb,
+     'notes', $n$<why, in a sentence a reader can follow without this prompt open>$n$,
+     'removal_date', now() + interval '<days> days'
+   ));
    ```
 
    - `metrics` carries the labels of the **red** metrics only; `metrics_detail` carries those same metrics as objects. They must agree.

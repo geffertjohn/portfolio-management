@@ -205,6 +205,64 @@ describe('a bare type union still matches its constraint exactly', () => {
   })
 })
 
+/**
+ * The committee's write API.
+ *
+ * The scheduled jobs run under launchd with a tool allowlist that excludes
+ * Bash, so their only write channel is Supabase SQL — these functions ARE the
+ * guard on everything the committee writes. A dropped one, or a table quietly
+ * removed from the allowlist, takes the validation with it and nothing else
+ * would notice; the prompts would keep calling and start failing at 07:25.
+ */
+describe('the committee write API still exists', () => {
+  it.each([
+    ['insert one row, validated',        'committee_insert'],
+    ['update one row, raising on no-op', 'committee_update'],
+    ['the payload validator',            'committee_check_payload'],
+    ['the table allowlist',              'committee_writable_tables'],
+    ['open a heartbeat',                 'job_run_open'],
+    ['close a heartbeat',                'job_run_close'],
+  ])('%s', (_what, fn) => {
+    expect(SCHEMA).toMatch(new RegExp(`CREATE OR REPLACE FUNCTION "public"\\."${fn}"`, 'i'))
+  })
+
+  /**
+   * A function's text runs from its CREATE header to the ALTER FUNCTION line
+   * the dump emits after it. Not to the closing `$$`: pg_dump re-quotes a body
+   * that already contains `$$` with a different tag, so anchoring on `$$;`
+   * silently matched only some of them.
+   */
+  const bodyOf = (fn: string): string => {
+    const start = SCHEMA.indexOf(`CREATE OR REPLACE FUNCTION "public"."${fn}"`)
+    if (start < 0) return ''
+    const end = SCHEMA.indexOf(`ALTER FUNCTION "public"."${fn}"`, start)
+    return SCHEMA.slice(start, end < 0 ? start + 4000 : end)
+  }
+
+  it('still permits every table the jobs write', () => {
+    // Each of these is written by at least one prompt. Dropping one from the
+    // allowlist does not fail a build — it fails a 07:25 run.
+    const allowlist = bodyOf('committee_writable_tables')
+    expect(allowlist).not.toBe('')
+    for (const t of ['research_reports', 'risk_reports', 'ic_memos', 'job_runs', 'alert_events', 'at_risk']) {
+      expect(allowlist, t).toContain(`'${t}'`)
+    }
+  })
+
+  it('is SECURITY INVOKER, never DEFINER', () => {
+    // These validate and report; they are not a way around a missing RLS
+    // policy. DEFINER would turn the write API into a privilege escalation.
+    const names = ['committee_check_payload', 'committee_insert', 'committee_update',
+                   'committee_writable_tables', 'committee_generated_columns',
+                   'job_run_open', 'job_run_close']
+    for (const fn of names) {
+      const body = bodyOf(fn)
+      expect(body, fn).not.toBe('')
+      expect(body, fn).not.toMatch(/SECURITY DEFINER/i)
+    }
+  })
+})
+
 describe('the parser itself', () => {
   it('fails loudly on a constraint that is not there', () => {
     // Otherwise a renamed constraint would quietly stop being checked.

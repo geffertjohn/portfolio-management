@@ -45,6 +45,182 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 
 
 
+CREATE OR REPLACE FUNCTION "public"."committee_check_payload"("target" "text", "payload" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $$
+declare
+  bad text[];
+begin
+  if not (target = any (public.committee_writable_tables())) then
+    raise exception 'committee write API cannot write to %', target
+      using hint = 'Add it to committee_writable_tables() if that is intended.';
+  end if;
+
+  if payload is null or jsonb_typeof(payload) <> 'object' then
+    raise exception 'payload must be a json object, got %', coalesce(jsonb_typeof(payload), 'null');
+  end if;
+
+  select array_agg(k order by k) into bad
+  from jsonb_object_keys(payload) k
+  where k not in (
+    select column_name from information_schema.columns
+    where table_schema = 'public' and table_name = target
+  );
+  if bad is not null then
+    raise exception '% has no column(s): %', target, array_to_string(bad, ', ')
+      using hint = 'The caller is out of date with the schema.';
+  end if;
+
+  select array_agg(k order by k) into bad
+  from jsonb_object_keys(payload) k
+  where k = any (public.committee_generated_columns());
+  if bad is not null then
+    raise exception 'column(s) % are generated and must not be supplied', array_to_string(bad, ', ');
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."committee_check_payload"("target" "text", "payload" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."committee_generated_columns"() RETURNS "text"[]
+    LANGUAGE "sql" IMMUTABLE
+    AS $$
+  select array['id','created_at']::text[]
+$$;
+
+
+ALTER FUNCTION "public"."committee_generated_columns"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."committee_insert"("target" "text", "payload" "jsonb") RETURNS bigint
+    LANGUAGE "plpgsql"
+    AS $_$
+declare
+  cols text;
+  vals text;
+  new_id bigint;
+begin
+  perform public.committee_check_payload(target, payload);
+
+  select string_agg(quote_ident(k), ', ' order by k),
+         string_agg('r.' || quote_ident(k), ', ' order by k)
+    into cols, vals
+  from jsonb_object_keys(payload) k;
+
+  if cols is null then
+    raise exception 'payload for % is empty', target;
+  end if;
+
+  execute format(
+    'insert into public.%I (%s) select %s from jsonb_populate_record(null::public.%I, $1) r returning id',
+    target, cols, vals, target
+  ) using payload into new_id;
+
+  -- A write that reports success and changes nothing is the failure mode this
+  -- API exists to stop; review_log lost 25 updates that way in Nov 2026.
+  if new_id is null then
+    raise exception 'insert into % wrote no row', target
+      using hint = 'Check the RLS policies for this table.';
+  end if;
+  return new_id;
+end;
+$_$;
+
+
+ALTER FUNCTION "public"."committee_insert"("target" "text", "payload" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."committee_update"("target" "text", "row_id" bigint, "payload" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $_$
+declare
+  sets text;
+  n int;
+begin
+  perform public.committee_check_payload(target, payload);
+
+  select string_agg(format('%I = r.%I', k, k), ', ' order by k) into sets
+  from jsonb_object_keys(payload) k;
+
+  if sets is null then
+    raise exception 'payload for % is empty', target;
+  end if;
+
+  execute format(
+    'update public.%I t set %s from jsonb_populate_record(null::public.%I, $1) r where t.id = $2',
+    target, sets, target
+  ) using payload, row_id;
+
+  get diagnostics n = row_count;
+  if n = 0 then
+    raise exception 'update of %.id=% matched no row', target, row_id
+      using hint = 'Either the id does not exist or an RLS policy blocked the update.';
+  end if;
+end;
+$_$;
+
+
+ALTER FUNCTION "public"."committee_update"("target" "text", "row_id" bigint, "payload" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."committee_writable_tables"() RETURNS "text"[]
+    LANGUAGE "sql" IMMUTABLE
+    AS $$
+  select array[
+    'research_reports','risk_reports','ic_memos','job_runs','alert_events','at_risk'
+  ]::text[]
+$$;
+
+
+ALTER FUNCTION "public"."committee_writable_tables"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."committee_writable_tables"() IS 'Tables the committee write API may touch. Add a table here to let the jobs write it.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."job_run_close"("p_run_id" bigint, "p_status" "text", "p_items_considered" integer DEFAULT NULL::integer, "p_items_written" integer DEFAULT NULL::integer, "p_summary" "text" DEFAULT NULL::"text", "p_errors" "text"[] DEFAULT '{}'::"text"[]) RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $$
+begin
+  if p_status not in ('success','partial','failed') then
+    raise exception 'job_runs.status must be success, partial or failed, got %', p_status;
+  end if;
+  perform public.committee_update('job_runs', p_run_id, jsonb_build_object(
+    'finished_at', now(),
+    'status', p_status,
+    'items_considered', p_items_considered,
+    'items_written', p_items_written,
+    'summary', p_summary,
+    'errors', coalesce(p_errors, '{}')
+  ));
+end;
+$$;
+
+
+ALTER FUNCTION "public"."job_run_close"("p_run_id" bigint, "p_status" "text", "p_items_considered" integer, "p_items_written" integer, "p_summary" "text", "p_errors" "text"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."job_run_close"("p_run_id" bigint, "p_status" "text", "p_items_considered" integer, "p_items_written" integer, "p_summary" "text", "p_errors" "text"[]) IS 'Close a job_runs heartbeat. Raises if the row was not updated.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."job_run_open"("p_job_id" "text") RETURNS bigint
+    LANGUAGE "sql"
+    AS $$
+  select public.committee_insert('job_runs', jsonb_build_object('job_id', p_job_id));
+$$;
+
+
+ALTER FUNCTION "public"."job_run_open"("p_job_id" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."job_run_open"("p_job_id" "text") IS 'Open a job_runs heartbeat. Returns the run id to pass to job_run_close.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."log_audit"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -3925,6 +4101,48 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+
+
+
+GRANT ALL ON FUNCTION "public"."committee_check_payload"("target" "text", "payload" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."committee_check_payload"("target" "text", "payload" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."committee_check_payload"("target" "text", "payload" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."committee_generated_columns"() TO "anon";
+GRANT ALL ON FUNCTION "public"."committee_generated_columns"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."committee_generated_columns"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."committee_insert"("target" "text", "payload" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."committee_insert"("target" "text", "payload" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."committee_insert"("target" "text", "payload" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."committee_update"("target" "text", "row_id" bigint, "payload" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."committee_update"("target" "text", "row_id" bigint, "payload" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."committee_update"("target" "text", "row_id" bigint, "payload" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."committee_writable_tables"() TO "anon";
+GRANT ALL ON FUNCTION "public"."committee_writable_tables"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."committee_writable_tables"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."job_run_close"("p_run_id" bigint, "p_status" "text", "p_items_considered" integer, "p_items_written" integer, "p_summary" "text", "p_errors" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."job_run_close"("p_run_id" bigint, "p_status" "text", "p_items_considered" integer, "p_items_written" integer, "p_summary" "text", "p_errors" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."job_run_close"("p_run_id" bigint, "p_status" "text", "p_items_considered" integer, "p_items_written" integer, "p_summary" "text", "p_errors" "text"[]) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."job_run_open"("p_job_id" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."job_run_open"("p_job_id" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."job_run_open"("p_job_id" "text") TO "service_role";
 
 
 

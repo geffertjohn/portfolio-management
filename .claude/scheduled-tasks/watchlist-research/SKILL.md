@@ -14,21 +14,25 @@ differs if you write to it.
 **Before any other work**, open the row (Supabase MCP `execute_sql`):
 
 ```sql
-insert into job_runs (job_id) values ('watchlist-research') returning id;
+select job_run_open('watchlist-research');
 ```
 
 Keep that id. **As the very last step, whatever happened**, close it:
 
 ```sql
-update job_runs set
-  finished_at      = now(),
-  status           = 'success',   -- 'partial' if part of the work failed, 'failed' if none of it landed
-  items_considered = <n>,         -- candidates you looked at; 0 is a real answer
-  items_written    = <n>,         -- rows you actually wrote
-  summary          = $j$One line on what happened.$j$,
-  errors           = '{}'         -- array of error strings when status is not 'success'
-where id = <the id from the insert>;
+select job_run_close(
+  <the id from job_run_open>,
+  'success',                      -- 'partial' if part of the work failed, 'failed' if none of it landed
+  <items_considered>,             -- candidates you looked at; 0 is a real answer
+  <items_written>,                -- rows you actually wrote
+  $j$One line on what happened.$j$,
+  '{}'                            -- array of error strings when status is not 'success'
+);
 ```
+
+`job_run_close` **raises if it updates nothing**, so a heartbeat that fails to
+close is an error you will see rather than a row left open for `gradeJob` to
+report as a death three hours later.
 
 **Close the row even when there was nothing to do.** `items_considered = 13`
 with `items_written = 0` is the healthy-and-idle case, and it is precisely what
@@ -103,14 +107,30 @@ Nobody is at the keyboard. **Any tool call that asks for approval stalls the run
 
 4. **PERSIST WHAT THEY RETURN.**
 
+   Write through `committee_insert`, one call per role. It validates the payload
+   against the live table before writing and raises on a key the table does not
+   have, so this prompt never carries a column list that can go stale.
+
    ```sql
-   insert into research_reports
-     (security_id, portfolio_name, author_role, report_type, status,
-      thesis, bull_case, bear_case, rating, conviction, fair_value, current_price,
-      price_targets, sources)
-   values ('TICKER', null, 'research_analyst', 'initial', 'draft', …, '<price_targets json>'::jsonb, …),
-          ('TICKER', null, 'devils_advocate',  'initial', 'draft', …, null, …);
+   select committee_insert('research_reports', jsonb_build_object(
+     'security_id','TICKER', 'author_role','research_analyst',
+     'report_type','initial', 'status','draft',
+     'thesis', $t$…$t$, 'bull_case', $b$…$b$,
+     'rating','hold', 'conviction','medium',
+     'fair_value', 240, 'current_price', 200,
+     'price_targets', $p${…}$p$::jsonb,
+     'sources', $s$[…]$s$::jsonb
+   ));
+
+   select committee_insert('research_reports', jsonb_build_object(
+     'security_id','TICKER', 'author_role','devils_advocate',
+     'report_type','initial', 'status','draft',
+     'bear_case', $b$…$b$, 'sources', $s$[…]$s$::jsonb
+   ));
    ```
+
+   Omit a key rather than passing null — an unmentioned column keeps its
+   default. `portfolio_name` is one of those: it is **always** absent here.
 
    `price_targets` goes on the **research analyst's row only** — it is that role's valuation. Shape (see `client/src/lib/priceTargets.ts`):
 

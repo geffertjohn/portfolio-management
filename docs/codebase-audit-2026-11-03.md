@@ -223,7 +223,7 @@ zero rows affected. The first backfill run uploaded all 25 PDFs and recorded
 none of them, with no error. It was not append-only (DELETE was already open),
 just un-correctable; it is now consistent with every other table.
 
-### 7. The committee's write path has no schema-aware layer `[ ]`
+### 7. The committee's write path has no schema-aware layer `[x] DONE 4 Nov`
 
 `insertResearchReport`, `insertRiskReport`, `insertIcMemo` and their soft-delete
 counterparts are all dead — one reference each, their own definition. The committee
@@ -232,6 +232,41 @@ and `tsc` never sees it.
 
 **Fix:** either delete them and document that MCP SQL is the write path, or route the
 jobs through a small script so the generated-types check actually guards committee writes.
+
+**Done (PR #74) — but neither of those two options was available.** Routing the
+jobs through a script is impossible: they run under launchd with a tool
+allowlist that **deliberately excludes `Bash`**, because an approval prompt
+would stall an unattended run forever. Their only write channel is Supabase SQL,
+so whatever guards these writes has to live where they can reach it.
+
+So the guard is **in the database**: `committee_insert(table, payload)` and
+`committee_update(table, id, payload)`, plus `job_run_open` / `job_run_close`
+for the heartbeat every job opens and closes. All **14 raw writes across the
+seven prompts are gone** — none carries a column list any more.
+
+The functions carry no column list either; they derive it from the catalog at
+call time, so a schema change is absorbed rather than propagated. An unknown key
+**raises** instead of being silently dropped by `jsonb_populate_record`, which is
+how a prompt naming a removed column would keep "succeeding". And a write that
+matches no row raises — the `review_log` failure from §6, where RLS returned
+zero rows and PostgREST reported success.
+
+The dead TypeScript writers **are** deleted, as the first option suggested, but
+for a better-stated reason: the app is read-only on these tables and a
+TypeScript writer could never be the jobs' path, so they were a guard over
+nothing.
+
+Verified against the live database: seven guard cases each raise with a specific
+message (unknown column, generated column, table not on the allowlist, no-op
+update, bad status token, empty payload, non-object payload), and the happy
+paths round-trip — defaults applied, jsonb preserved, unlisted columns left
+null. `schemaContract.test.ts` locks the function set, the allowlist and
+SECURITY INVOKER; the DEFINER guard was mutation-tested.
+
+**Caught on the way:** `run-job.sh` greps each prompt for a heartbeat, but it
+grepped the *table name*, which the prompts also mention in prose — so it was
+passing on prose, and after this change the opening statement no longer contains
+the table name at all. It now greps `job_run_open`, the call itself.
 
 ### 8. The committee's recommend-only guarantee is not technically enforced `[ ]`
 
