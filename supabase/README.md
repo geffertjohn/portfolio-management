@@ -73,6 +73,16 @@ adds, the `portfolio` table, storage policies, benchmark indexes). They are supe
 by the remote migrations above and must not be replayed as a schema rebuild.
 `archive/data/` holds one-off data loads.
 
+**They are excluded from search by the repo-root `.ignore` file**, and that is not
+tidiness — they were making greps lie. The Nov 2026 audit cleared several dead
+`portfolio` columns as "referenced" when their only mentions were in archived DDL,
+and two independent sweeps hit it. `historical_sharpe_5y`, `tracking_error_5y` and
+`market_alpha_60_month` still appear here and nowhere else in the tree. `.ignore`
+is honoured by ripgrep and the search tools built on it; **git ignores the file
+entirely**, so all 33 archived scripts stay committed. Search them deliberately
+with `rg --no-ignore` (or `-u`). When asking "does anything use this column?",
+that is the question you want answered about the LIVE tree.
+
 Definitively-dead scripts (operating on the dropped `securities` / `benchmarks` /
 `ychart_benchmarks` tables, one-off `fix_*`/`clean_*`/`find_*` repairs, and the obsolete
 `seed_*_positions` files superseded by the `portfolio_allocations` table) were removed —

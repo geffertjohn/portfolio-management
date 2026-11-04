@@ -268,7 +268,7 @@ grepped the *table name*, which the prompts also mention in prose — so it was
 passing on prose, and after this change the opening statement no longer contains
 the table name at all. It now greps `job_run_open`, the call itself.
 
-### 8. The committee's recommend-only guarantee is not technically enforced `[ ]`
+### 8. The committee's recommend-only guarantee is not technically enforced `[x] DONE 4 Nov`
 
 `docs/ai-investment-team-charter.md:62` states: *"Tool scoping enforces the guardrails:
 analysts get read-only research tools; PM/Risk get Supabase read; none get write access
@@ -284,6 +284,37 @@ constraint is prompt-level, and the document describing your audit-defence postu
 says otherwise.
 
 **Fix:** add `tools:` frontmatter to each agent (preferred), or correct both lines.
+
+**Done — BOTH, because neither alone makes the document true.**
+
+`disallowedTools` rather than `tools:`, deliberately: the analysts load the FMP
+and TipRanks surfaces through ToolSearch, and a positive allowlist would have to
+enumerate dozens of MCP tool names and would silently cut off any new one. A
+deny-list of built-in names binds in every environment regardless of how the
+connectors are named. All eight agents now carry
+`disallowedTools: Write, Edit, NotebookEdit, Bash`; `research-analyst`,
+`devils-advocate` and `macro-strategist` also deny `mcp__claude_ai_Supabase`,
+which their own definitions say they do not use.
+
+Two things found while doing it, both of which change the finding:
+
+- **The scheduled jobs were never the exposed path.** `run-job.sh` already
+  launches `claude -p` with an `--allowedTools` list that excludes Bash and
+  Write/Edit and admits only three MCP servers, with a comment explaining why.
+  Subagents inherit the session's tools, so the jobs were always tighter than
+  the document claimed and the real gap was the **interactive** Agent path.
+- **The residue cannot be closed by tool scoping, and the charter now says so.**
+  `execute_sql` reads and writes through one tool, so the five roles that must
+  read the book keep it. The sanctioned write path (`committee_insert` /
+  `committee_update`) allowlists six tables and excludes `positions` and
+  `portfolio_allocations` — but raw SQL bypasses it, and the connector
+  authenticates as **`postgres`, which bypasses RLS**, so no grant or policy can
+  stop it either. Closing it properly means a dedicated restricted role for the
+  committee's Supabase connection: a credentials change, not a code change, and
+  **not done here.**
+
+Also newly documented: `.claude/workflows/new-buy-ic-review.js` inlines its roles
+as prompt strings, so `disallowedTools` does not reach the workflow path at all.
 
 ### 9. A grid edit leaves the Change Log and Positions stale — in cache *and* in the DB `[x] DONE 3 Nov`
 
@@ -432,7 +463,7 @@ all five prompts that read `positions` now agree; and `tipranks-pit-by-symbol` �
 was the quietest of the three — a 404 with an empty array reads as no coverage, so
 "weight by track record, not head count" had been doing nothing at all.
 
-### 15. The workflow's inlined roles are missing the research standard `[ ]`
+### 15. The workflow's inlined roles are missing the research standard `[x] DONE 4 Nov`
 
 `.claude/workflows/new-buy-ic-review.js` inlines each role, and the analyst/bear copies
 omit the entire "Firm research standard" block the `.md` files carry — including *"If a
@@ -442,6 +473,22 @@ the workflow is shaped to fail the loader; output via the Agent tool is not.
 
 **Fix:** append the standard block to `ANALYST_ROLE`/`BEAR_ROLE`, or have both read
 `docs/research-standard.md`.
+
+**Done — the first option, and it does both.** A `RESEARCH_STANDARD_NOTE`
+constant now appends to `ANALYST_ROLE` and `BEAR_ROLE`, carrying the two
+governing rules verbatim *and* instructing the agent to read
+`docs/research-standard.md` before writing. The second option alone was not
+available: a workflow script has no filesystem access, so only the spawned agent
+can read the file, and a prompt that merely points at a document is weaker than
+one that states the rule.
+
+This is now a **third** prompt-sync point alongside `TIPRANKS_NOTE` /
+`BEAR_TIPRANKS_NOTE`, which is one more than is healthy. The structural fix is
+`agentType` — the Workflow API resolves custom `.claude/agents` types from the
+same registry as the Agent tool, which would delete all three sync points and
+bring the workflow under §8's `disallowedTools` in one change. **Not taken
+here**: verifying it means running the committee, which costs real tokens and
+needs the explicit multi-agent opt-in. Recorded in a comment above the constant.
 
 ---
 
@@ -644,7 +691,7 @@ Two deliberate choices worth knowing:
   `ResearchReport` later cannot ride along into a client's hands. It asserts the
   sentinel is present in the INPUT first, so it cannot pass vacuously.
 
-### 21. Single-source the job schedule `[ ]`
+### 21. Single-source the job schedule `[x] DONE 4 Nov`
 
 Three different times exist for the same jobs: the plists (authoritative),
 `lib/jobRuns.ts` `JOB_DEFINITIONS` (which `gradeJob` uses to decide "missed"), and
@@ -653,6 +700,23 @@ currently wrong — but the only health signal there is derives "due" from a lis
 keeps in sync.
 
 **Fix:** have `generate-plists.mjs` and `JOB_DEFINITIONS` read one table.
+
+**Done, as a gate rather than a shared table.** `JOB_DEFINITIONS`' seven times
+were not merely "disagreeing" — they were the **app scheduler's** times, the
+scheduler switched off in §1: 09:09 against launchd's 09:00, 09:32 against
+09:45, 09:42 against 10:00. `gradeJob` was deriving "overdue" from a scheduler
+that no longer exists, and `GRACE_MINS = 180` hid every one. All seven corrected.
+
+A shared table would have meant either importing a `scripts/` file into the Vite
+bundle or generating a TS file from the plist generator; `jobSchedule.test.ts`
+instead reads `scripts/scheduled-jobs/launchagents/*.plist` and fails if the
+catalog drifts from them again. **The plists are the better authority** — they
+are what launchd actually reads, so this catches a drift that checking against
+the generator's own table could not, and it is the house pattern already used by
+`schemaContract` and `claudeMd`. It also asserts the one ordering that is a
+convention (`at-risk-review` before `post-earnings-brief`) against the plists
+rather than the prose. Parser self-check included so it cannot pass vacuously;
+both drift cases mutation-tested.
 
 ### 22. Three oversized components worth splitting `[ ]`
 
@@ -737,7 +801,7 @@ named as history, each with a reason), and the gotchas must stay in order. Three
 of the seven errors were of the first kind. Both checks mutation-tested; neither
 can pass vacuously.
 
-### 24. `supabase/archive/` makes greps lie `[ ]`
+### 24. `supabase/archive/` makes greps lie `[x] DONE 4 Nov`
 
 32 non-authoritative `.sql` files. They caused a false positive in this very audit —
 dead `portfolio` columns appeared "referenced" because archived DDL mentions them.
@@ -746,7 +810,19 @@ Both the lib sweep and I hit it independently.
 **Fix:** move under a clearly-excluded path, or add the exclusion to the documented
 grep recipe.
 
-### 25. Loose ends `[ ]`
+**Done — a repo-root `.ignore`, which beats both.** ripgrep and the search tools
+built on it honour `.ignore`; **git ignores the file entirely**, so all 33
+archived scripts stay committed and nothing moves. A documented grep recipe only
+helps the person who reads the doc first, and neither sweep that hit this did.
+`rg --no-ignore` searches them deliberately.
+
+Verified the fix on the exact failure: `rg -w historical_sharpe_5y` now returns
+only live references, `--no-ignore` restores the two archive files, and
+`git ls-files supabase/archive/` still lists 33. Those three columns —
+`historical_sharpe_5y`, `tracking_error_5y`, `market_alpha_60_month` — are the
+ones §17 nearly dropped on the strength of an archive-only reference.
+
+### 25. Loose ends `[x] 3 of 4 DONE 4 Nov`
 
 - **`at-risk-run-check`** — a one-off task that fired 2 Nov, still registered, never
   cleaned up. (Mine; it was on my list and got dropped.)
@@ -755,6 +831,29 @@ grep recipe.
 - **`scripts/refresh/`** still describes "the mini"; the pipeline runs on the Mac Studio.
 - **`docs/ai-investment-team-charter.md`** points at `scratchpad/persist_committee.py`,
   which does not exist, for the committee's documented persistence step.
+
+**Three done, one blocked.**
+
+- **`at-risk-run-check` — NOT DONE.** The delete call was refused by the
+  permission classifier. It is disabled and one-time, fired 2 Nov and cannot
+  fire again, so it is clutter rather than risk; it needs one manual delete.
+- **`scripts/refresh/README.md`** — the "commit the workbook" instruction is
+  replaced by the opposite, with the reason: the repo copy was deleted and
+  gitignored after an **Oct 5 copy was imported by mistake on 3 Nov**, rolling
+  every fund back a month under a stamp reading "imported today". The `prlctl`
+  command to pull the file from the VM is given instead.
+- **"the mini"** is now the Studio in `README.md`, `refresh.sh` and
+  `import-workbook.ts`. The one reference left is in `Ycharts.bas`, which is
+  deliberate — it explains why the drive letters differ between the two machines.
+- **`persist_committee.py`** — the charter now says what actually happens: the
+  orchestrator persists with Supabase MCP SQL after the workflow returns, through
+  `committee_insert` / `committee_update` since §7. A scratchpad path could never
+  have been the documented step for a persistence contract.
+
+**Found while in the file, and worse than any of the four:** that README led with
+**"STATUS: PAUSED — Not wired up; nothing runs on a schedule yet."** The refresh
+has been running daily for weeks and succeeded at 05:36 this morning. Corrected
+to LIVE, with the log path and the October failure history.
 
 ### 26. `excel_gone()` reports "not running" whenever `prlctl exec` fails `[x] DONE 4 Nov`
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# refresh.sh — the scheduled YCharts refresh, driven from macOS on the mini.
+# refresh.sh — the scheduled YCharts refresh, driven from macOS on the Mac Studio.
 #
 #   launchd → this script → Parallels VM (Excel + YCharts add-in) → Supabase
 #
