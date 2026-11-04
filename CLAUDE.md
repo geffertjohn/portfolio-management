@@ -1346,7 +1346,7 @@ The Actions page is a **unified command center**, not a plain to-do list. It sho
 
 ## Audit & Governance surfaces
 
-Five live surfaces that carried **no entry here at all** until Nov 2026 — which
+Six live surfaces that carried **no entry here at all** until Nov 2026 — which
 is how a reader concluded the app had no audit trail. All four are the
 regulatory half of the tool, so they are worth knowing before touching the
 tables they read.
@@ -1369,6 +1369,43 @@ tables they read.
   across every portfolio belonging to clients in one household, for
   concentration and suitability review. A client's household is
   `clients.household_name`; there is no households table.
+- **Strategic Asset Allocation (`lib/strategicAllocation.ts`,
+  `strategic_allocation_vintages` + `_weights`)** — the firm's PUBLISHED model
+  allocations, uploaded as a PDF on the compliance page. **Its fourteen rows are
+  exactly `ASSET_CLASS_ROWS`, in order**: this document is where that vocabulary
+  came from, which is why the parse maps straight onto `AssetClassKey`.
+  - **A vintage is keyed on the month PRINTED IN THE DOCUMENT**, never on the
+    upload time, and the list orders on that. An older document can legitimately
+    be uploaded later; keying on upload order would make January read as current
+    and mark every model wrong.
+  - **It is READ-ONLY with respect to `model_portfolio_data`.** Nothing here
+    writes a model target. `compareModelsToVintage` reports the gap and resolves
+    nothing — saving a model recomputes its drift bands (gotcha 25) and there is
+    no audit trigger on that table, so an automatic write would be a silent,
+    unlogged rewrite of a governed number.
+  - **Two families map onto the five published profiles**, and they differ
+    systematically rather than by accident: the Foundation five carry the
+    document's 2% cash, the shared ETF/Hybrid models 1–5 carry 1% with the spare
+    point in equity. `MODEL_FAMILIES` carries that as a note so the convention is
+    not re-reported as drift every month. Matched on NAME, not id.
+  - **Change notes are DERIVED, never stored** — the same reasoning as the
+    portfolio Change Log: a stored note is a second copy of what two vintages
+    already say, and the two drift.
+  - **The group totals are parsed but NOT stored.** EQUITY and FIXED INCOME are
+    the sums of the rows beneath them, so they are used to CHECK a parse and
+    then discarded; storing a total beside the rows it totals is how the two
+    start disagreeing. A mismatch is a warning on the preview, not a silent write.
+  - **PDFs go to `Portfolio Documents` under `compliance/strategic asset
+    allocation models/`.** Not the `security-uploads` general store, despite that
+    being the obvious home: that bucket restricts `allowed_mime_types` to the two
+    Excel types and Storage rejects a PDF outright. A file at this path is
+    invisible to `latestFileFor`, which matches on `folder === portfolioName` AND
+    a spreadsheet extension.
+  - **`pdfjs-dist` is pinned exactly and is in `optimizeDeps.include`** — the
+    compliance page is `lazy()`, which is the exact condition that splits React
+    in two on a cold dep cache. Text extraction is isolated in `lib/pdfText.ts`;
+    everything that decides what the text MEANS is pure and tested against the
+    real document's extracted text.
 - **Trade suitability (`lib/tradeSuitability.ts`, `trade_suitability`)** —
   records WHY a position was added, changed or removed, which is the
   best-interest documentation requirement. Labels and the per-action reason sets

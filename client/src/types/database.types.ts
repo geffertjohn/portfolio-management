@@ -3373,6 +3373,71 @@ export type Database = {
         }
         Relationships: []
       }
+      strategic_allocation_vintages: {
+        Row: {
+          created_at: string
+          effective_month: string
+          id: number
+          label: string
+          source_doc_bucket: string | null
+          source_doc_path: string | null
+          source_file_name: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          created_at?: string
+          effective_month: string
+          id?: number
+          label: string
+          source_doc_bucket?: string | null
+          source_doc_path?: string | null
+          source_file_name?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          created_at?: string
+          effective_month?: string
+          id?: number
+          label?: string
+          source_doc_bucket?: string | null
+          source_doc_path?: string | null
+          source_file_name?: string | null
+          uploaded_at?: string
+        }
+        Relationships: []
+      }
+      strategic_allocation_weights: {
+        Row: {
+          asset_class_key: string
+          id: number
+          profile: string
+          vintage_id: number
+          weight_pct: number
+        }
+        Insert: {
+          asset_class_key: string
+          id?: number
+          profile: string
+          vintage_id: number
+          weight_pct: number
+        }
+        Update: {
+          asset_class_key?: string
+          id?: number
+          profile?: string
+          vintage_id?: number
+          weight_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategic_allocation_weights_vintage_id_fkey"
+            columns: ["vintage_id"]
+            isOneToOne: false
+            referencedRelation: "strategic_allocation_vintages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       substitutions: {
         Row: {
           approved_at: string | null

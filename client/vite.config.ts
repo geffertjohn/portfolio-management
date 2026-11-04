@@ -53,6 +53,7 @@ export default defineConfig({
       'xlsx',
       'jspdf',
       'jspdf-autotable',
+      'pdfjs-dist',
     ],
   },
   server: {

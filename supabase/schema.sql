@@ -2161,6 +2161,69 @@ ALTER TABLE "public"."security_theses" ALTER COLUMN "id" ADD GENERATED ALWAYS AS
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."strategic_allocation_vintages" (
+    "id" bigint NOT NULL,
+    "effective_month" "date" NOT NULL,
+    "label" "text" NOT NULL,
+    "source_doc_bucket" "text",
+    "source_doc_path" "text",
+    "source_file_name" "text",
+    "uploaded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."strategic_allocation_vintages" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."strategic_allocation_vintages" IS 'One published Strategic Asset Allocation Models document, keyed on the month printed in it.';
+
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."strategic_allocation_vintages_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."strategic_allocation_vintages_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."strategic_allocation_vintages_id_seq" OWNED BY "public"."strategic_allocation_vintages"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."strategic_allocation_weights" (
+    "id" bigint NOT NULL,
+    "vintage_id" bigint NOT NULL,
+    "profile" "text" NOT NULL,
+    "asset_class_key" "text" NOT NULL,
+    "weight_pct" numeric NOT NULL,
+    CONSTRAINT "strategic_allocation_weights_pct_check" CHECK ((("weight_pct" >= (0)::numeric) AND ("weight_pct" <= (100)::numeric))),
+    CONSTRAINT "strategic_allocation_weights_profile_check" CHECK (("profile" = ANY (ARRAY['conservative'::"text", 'moderate_conservative'::"text", 'moderate'::"text", 'moderate_growth'::"text", 'growth'::"text"])))
+);
+
+
+ALTER TABLE "public"."strategic_allocation_weights" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "public"."strategic_allocation_weights_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "public"."strategic_allocation_weights_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "public"."strategic_allocation_weights_id_seq" OWNED BY "public"."strategic_allocation_weights"."id";
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."substitutions" (
     "id" bigint NOT NULL,
     "at_risk_id" bigint NOT NULL,
@@ -2330,6 +2393,14 @@ ALTER TABLE ONLY "public"."review_schedules" ALTER COLUMN "id" SET DEFAULT "next
 
 
 ALTER TABLE ONLY "public"."securities2" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."securities2_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "public"."strategic_allocation_vintages" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."strategic_allocation_vintages_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "public"."strategic_allocation_weights" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."strategic_allocation_weights_id_seq"'::"regclass");
 
 
 
@@ -2596,6 +2667,26 @@ ALTER TABLE ONLY "public"."security_theses"
 
 
 
+ALTER TABLE ONLY "public"."strategic_allocation_vintages"
+    ADD CONSTRAINT "strategic_allocation_vintages_effective_month_key" UNIQUE ("effective_month");
+
+
+
+ALTER TABLE ONLY "public"."strategic_allocation_vintages"
+    ADD CONSTRAINT "strategic_allocation_vintages_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."strategic_allocation_weights"
+    ADD CONSTRAINT "strategic_allocation_weights_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."strategic_allocation_weights"
+    ADD CONSTRAINT "strategic_allocation_weights_unique" UNIQUE ("vintage_id", "profile", "asset_class_key");
+
+
+
 ALTER TABLE ONLY "public"."substitutions"
     ADD CONSTRAINT "substitutions_pkey" PRIMARY KEY ("id");
 
@@ -2856,6 +2947,10 @@ CREATE UNIQUE INDEX "security_theses_one_draft" ON "public"."security_theses" US
 
 
 CREATE INDEX "security_theses_security_idx" ON "public"."security_theses" USING "btree" ("security_id");
+
+
+
+CREATE INDEX "strategic_allocation_weights_vintage_idx" ON "public"."strategic_allocation_weights" USING "btree" ("vintage_id");
 
 
 
@@ -3182,6 +3277,11 @@ ALTER TABLE ONLY "public"."security_related_securities"
 
 
 
+ALTER TABLE ONLY "public"."strategic_allocation_weights"
+    ADD CONSTRAINT "strategic_allocation_weights_vintage_id_fkey" FOREIGN KEY ("vintage_id") REFERENCES "public"."strategic_allocation_vintages"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."substitutions"
     ADD CONSTRAINT "substitutions_at_risk_id_fkey" FOREIGN KEY ("at_risk_id") REFERENCES "public"."at_risk"("id") ON DELETE CASCADE;
 
@@ -3302,6 +3402,14 @@ CREATE POLICY "Allow delete security_related_securities" ON "public"."security_r
 
 
 
+CREATE POLICY "Allow delete strategic_allocation_vintages" ON "public"."strategic_allocation_vintages" FOR DELETE TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "Allow delete strategic_allocation_weights" ON "public"."strategic_allocation_weights" FOR DELETE TO "authenticated", "anon" USING (true);
+
+
+
 CREATE POLICY "Allow delete substitutions" ON "public"."substitutions" FOR DELETE TO "authenticated", "anon" USING (true);
 
 
@@ -3407,6 +3515,14 @@ CREATE POLICY "Allow insert securities2" ON "public"."securities2" FOR INSERT TO
 
 
 CREATE POLICY "Allow insert security_related_securities" ON "public"."security_related_securities" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
+
+
+
+CREATE POLICY "Allow insert strategic_allocation_vintages" ON "public"."strategic_allocation_vintages" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
+
+
+
+CREATE POLICY "Allow insert strategic_allocation_weights" ON "public"."strategic_allocation_weights" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
 
 
 
@@ -3518,6 +3634,14 @@ CREATE POLICY "Allow read security_related_securities" ON "public"."security_rel
 
 
 
+CREATE POLICY "Allow read strategic_allocation_vintages" ON "public"."strategic_allocation_vintages" FOR SELECT TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "Allow read strategic_allocation_weights" ON "public"."strategic_allocation_weights" FOR SELECT TO "authenticated", "anon" USING (true);
+
+
+
 CREATE POLICY "Allow read substitutions" ON "public"."substitutions" FOR SELECT TO "authenticated", "anon" USING (true);
 
 
@@ -3623,6 +3747,14 @@ CREATE POLICY "Allow update securities2" ON "public"."securities2" FOR UPDATE TO
 
 
 CREATE POLICY "Allow update security_related_securities" ON "public"."security_related_securities" FOR UPDATE TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "Allow update strategic_allocation_vintages" ON "public"."strategic_allocation_vintages" FOR UPDATE TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "Allow update strategic_allocation_weights" ON "public"."strategic_allocation_weights" FOR UPDATE TO "authenticated", "anon" USING (true);
 
 
 
@@ -3858,6 +3990,12 @@ CREATE POLICY "security_theses_update_anon" ON "public"."security_theses" FOR UP
 
 CREATE POLICY "security_theses_update_auth" ON "public"."security_theses" FOR UPDATE TO "authenticated" USING (true) WITH CHECK (true);
 
+
+
+ALTER TABLE "public"."strategic_allocation_vintages" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."strategic_allocation_weights" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."substitutions" ENABLE ROW LEVEL SECURITY;
@@ -4541,6 +4679,30 @@ GRANT ALL ON TABLE "public"."security_theses" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."security_theses_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."security_theses_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."security_theses_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."strategic_allocation_vintages" TO "anon";
+GRANT ALL ON TABLE "public"."strategic_allocation_vintages" TO "authenticated";
+GRANT ALL ON TABLE "public"."strategic_allocation_vintages" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."strategic_allocation_vintages_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."strategic_allocation_vintages_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."strategic_allocation_vintages_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."strategic_allocation_weights" TO "anon";
+GRANT ALL ON TABLE "public"."strategic_allocation_weights" TO "authenticated";
+GRANT ALL ON TABLE "public"."strategic_allocation_weights" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."strategic_allocation_weights_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."strategic_allocation_weights_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."strategic_allocation_weights_id_seq" TO "service_role";
 
 
 
