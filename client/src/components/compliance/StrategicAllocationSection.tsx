@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ASSET_CLASS_ROWS } from '@/lib/modelPortfolios'
 import {
-  fetchStrategicVintages, diffVintages,
+  fetchStrategicVintages, diffVintages, findLastChange,
   bandTotal, STRATEGIC_PROFILES, PROFILE_LABELS, EQUITY_KEYS, FIXED_INCOME_KEYS,
-  type StrategicVintage, type StrategicProfile,
+  type StrategicVintage, type WeightChange, type LastChange,
 } from '@/lib/strategicAllocation'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fmtUtcLongDate } from '@/lib/formatters'
@@ -40,6 +40,13 @@ export function StrategicAllocationSection() {
   const changes = useMemo(
     () => (selected ? diffVintages(previous?.weights ?? null, selected.weights) : []),
     [selected, previous],
+  )
+
+  // Looking back FROM the selected vintage, not from the newest — viewing an
+  // older document should not report a change that had not happened yet.
+  const lastChange = useMemo(
+    () => (selectedIndex >= 0 ? findLastChange(vintages, selectedIndex) : null),
+    [vintages, selectedIndex],
   )
 
   return (
@@ -143,6 +150,7 @@ export function StrategicAllocationSection() {
             changes={changes}
             previousLabel={previous?.label ?? null}
             selectedLabel={selected.label}
+            lastChange={lastChange}
           />
         </div>
       )}
@@ -198,65 +206,117 @@ function pct(v: number | null): string {
 
 // ── Change notes ─────────────────────────────────────────────────────────────
 
-function ChangeNotes({
-  changes, previousLabel, selectedLabel,
-}: {
-  changes: { profile: StrategicProfile; label: string; from: number | null; to: number | null }[]
-  previousLabel: string | null
-  selectedLabel: string
-}) {
-  if (!previousLabel) {
-    return (
-      <p className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500">
-        {selectedLabel} is the earliest document on file, so there is nothing to compare it against.
-      </p>
-    )
-  }
-
-  if (changes.length === 0) {
-    return (
-      <p className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500">
-        <span className="font-medium text-gray-700">No changes</span> from {previousLabel}.
-        Every published weight is unchanged.
-      </p>
-    )
-  }
-
-  // Grouped by profile because that is how a reader asks the question — "what
-  // changed in Growth?" — not "what happened to large-cap blend everywhere?".
+/**
+ * What moved at one vintage, grouped by profile.
+ *
+ * Grouped that way because it is how a reader asks the question — "what changed
+ * in Growth?" — not "what happened to large-cap blend everywhere?". Shared by
+ * the current-vintage notes and the Last changed disclosure so the two cannot
+ * render the same facts differently.
+ */
+function ChangeList({ changes }: { changes: WeightChange[] }) {
   const byProfile = STRATEGIC_PROFILES
     .map((p) => ({ profile: p, rows: changes.filter((c) => c.profile === p) }))
     .filter((g) => g.rows.length > 0)
 
   return (
-    <div className="border-t border-gray-100 px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-        Changes from {previousLabel} · {changes.length} {changes.length === 1 ? 'weight' : 'weights'}
-      </p>
-      <div className="mt-2 space-y-2">
-        {byProfile.map(({ profile, rows }) => (
-          <div key={profile} className="text-sm">
-            <p className="text-xs font-medium text-gray-700">{PROFILE_LABELS[profile]}</p>
-            <ul className="mt-0.5 space-y-0.5">
-              {rows.map((c) => (
-                <li key={`${profile}-${c.label}`} className="flex items-baseline gap-2 text-xs text-gray-600">
-                  <span className="text-gray-500">{c.label}</span>
-                  <span className="tabular-nums">
-                    {pct(c.from)} <span className="text-gray-400">→</span>{' '}
-                    <span className={changeTone(c.from, c.to)}>{pct(c.to)}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+    <div className="space-y-2">
+      {byProfile.map(({ profile, rows }) => (
+        <div key={profile} className="text-sm">
+          <p className="text-xs font-medium text-gray-700">{PROFILE_LABELS[profile]}</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {rows.map((c) => (
+              <li key={`${profile}-${c.label}`} className="flex items-baseline gap-2 text-xs text-gray-600">
+                <span className="text-gray-500">{c.label}</span>
+                <span className="tabular-nums">
+                  {pct(c.from)} <span className="text-gray-400">&rarr;</span>{' '}
+                  {/* Not green/red: an allocation moving up is not "good". */}
+                  <span className="font-medium text-gray-900">{pct(c.to)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   )
 }
 
-function changeTone(from: number | null, to: number | null): string {
-  if (from === null || to === null) return 'font-medium text-gray-900'
-  // Not green/red: an allocation moving up is not "good". Weight alone.
-  return 'font-medium text-gray-900'
+function ChangeNotes({
+  changes, previousLabel, selectedLabel, lastChange,
+}: {
+  changes: WeightChange[]
+  previousLabel: string | null
+  selectedLabel: string
+  /**
+   * The most recent vintage AT OR BEFORE this one where anything moved. Null
+   * when nothing ever has.
+   */
+  lastChange: LastChange | null
+}) {
+  const [showLast, setShowLast] = useState(false)
+
+  const headline = !previousLabel ? (
+    <p className="px-4 py-3 text-xs text-gray-500">
+      {selectedLabel} is the earliest document on file, so there is nothing to compare it against.
+    </p>
+  ) : changes.length === 0 ? (
+    <p className="px-4 py-3 text-xs text-gray-500">
+      <span className="font-medium text-gray-700">No changes</span> from {previousLabel}.
+      Every published weight is unchanged.
+    </p>
+  ) : (
+    <div className="px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        Changes from {previousLabel} &middot; {changes.length} {changes.length === 1 ? 'weight' : 'weights'}
+      </p>
+      <div className="mt-2"><ChangeList changes={changes} /></div>
+    </div>
+  )
+
+  /**
+   * The disclosure is for the common case: these models go months without
+   * moving, so "no changes from the last document" is usually the answer and
+   * on its own says nothing about when they last did.
+   *
+   * Suppressed when the selected vintage IS the last change — the list above
+   * is already that answer, and repeating it behind a toggle is noise.
+   */
+  const showDisclosure = lastChange !== null && lastChange.label !== selectedLabel
+
+  return (
+    <div className="border-t border-gray-100">
+      {headline}
+      {showDisclosure && (
+        <div className="border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => setShowLast((o) => !o)}
+            aria-expanded={showLast}
+            className="flex w-full items-center gap-2 px-4 py-2 text-left hover:bg-gray-50"
+          >
+            <svg
+              className={`h-3 w-3 shrink-0 text-gray-400 transition-transform ${showLast ? 'rotate-90' : ''}`}
+              fill="none" viewBox="0 0 20 20" stroke="currentColor" strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 5l5 5-5 5" />
+            </svg>
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Last changed
+            </span>
+            <span className="text-xs font-medium text-gray-900">{lastChange.label}</span>
+            <span className="text-xs text-gray-400">
+              &middot; {lastChange.changes.length} {lastChange.changes.length === 1 ? 'weight' : 'weights'} from {lastChange.previousLabel}
+            </span>
+          </button>
+          {showLast && (
+            <div className="px-4 pb-3 pl-9">
+              <ChangeList changes={lastChange.changes} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
+
