@@ -339,7 +339,7 @@ page. Exactly the failure gotcha 24 records for `at_risk.removal_date`.
 
 **Fix:** `fmtUtcLongDate(...)`. (Currently renders only for funds — fix with §6.)
 
-### 11. Two money formatters print sub-million figures as `$0.xxM` `[ ]`
+### 11. Two money formatters print sub-million figures as `$0.xxM` `[x] DONE 4 Nov`
 
 `lib/formatters.ts:56` exports `fmtUsdCompact`; **no component imports it**.
 `FinancialsSection.tsx:73` and `RevenueSegmentsPanel.tsx:17` each reimplement it, and
@@ -348,7 +348,20 @@ in both the last two branches are byte-identical — so a $400k segment renders
 
 **Fix:** replace both with `fmtUsdCompact`.
 
-### 12. `consensusColor` renders the same label in two different shades `[ ]`
+**Done (PR #75).** Both replaced. `FinancialsSection` keeps a one-line
+`fmtFinancial` that routes EPS to `fmtUsd` and everything else to
+`fmtUsdCompact`; `RevenueSegmentsPanel`'s local copy is gone entirely. The chart
+axis passes `decimals: 1`, because a tick is read at a glance and "$150.0B" says
+what "$150.00B" says in less space — the table and tooltip keep the default two.
+
+**A trap worth recording:** `FinancialsSection` also had a local `fmtSignedPct`,
+and it must NOT be swapped for the lib one — the lib helper takes a DECIMAL
+(0.0123 → "+1.23%") because that is how the database stores a percentage, while
+`surprisePct` and `priceReactionPct` here are already percent points. It is
+renamed `fmtPercentPoints` with that difference stated, since the next reader
+would otherwise make exactly the swap this item invites.
+
+### 12. `consensusColor` renders the same label in two different shades `[x] DONE 4 Nov`
 
 CLAUDE.md records this as "a pre-existing divergence, not a pattern to copy". The two
 implementations give genuinely different answers: the lib returns `text-green-600` for
@@ -357,6 +370,16 @@ a plain "Buy" (reserving `-700` for "Strong Buy"); `TipRanksPanel.tsx:74` return
 `yellow-600`.
 
 **Fix:** import the lib one; it handles every label the local copy does.
+
+**Done (PR #75).** Every difference favoured the lib, which distinguishes
+strength where the local copy flattened it: "Moderate Buy" now reads
+`green-600` rather than the `green-700` reserved for "Strong Buy", "Strong Sell"
+gets `red-700` rather than a plain `red-600`, and Hold is `yellow-600` rather
+than `amber-600`. Verified live — AAPL's consensus renders `text-yellow-600`.
+
+**Both are now guarded** by `sharedHelpers.test.ts`, which fails if any file
+outside `lib/formatters.ts` defines a `consensusColor` or divides by a billion
+and fixes the decimals. Mutation-tested: reintroducing either copy trips it.
 
 ### 13. `pre_earnings` has no unique index — the dedupe is a prompt instruction `[x] DONE 3 Nov`
 

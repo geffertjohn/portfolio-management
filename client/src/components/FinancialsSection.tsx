@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { EMPTY, fmtUsd, fmtUsdCompact } from '@/lib/formatters'
 import { useQuery } from '@tanstack/react-query'
 import {
   LineChart,
@@ -65,20 +66,28 @@ function getMetricValues(q: MergedQuarter, m: Metric): MetricValues {
   }
 }
 
+/**
+ * EPS is a per-share price; everything else is an aggregate worth abbreviating.
+ *
+ * This used to carry its own abbreviation ladder whose last two branches were
+ * byte-identical, so anything under a million divided by a million anyway and a
+ * $400k line read "$0.40M". It had no trillion tier either, so $3.2T printed as
+ * "$3200.00B".
+ */
 function fmtFinancial(v: number | null, isEps: boolean): string {
-  if (v === null || !Number.isFinite(v)) return '—'
-  if (isEps) {
-    return v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`
-  }
-  const abs = Math.abs(v)
-  const sign = v < 0 ? '-' : ''
-  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`
-  return `${sign}$${(abs / 1_000_000).toFixed(2)}M`
+  if (v === null || !Number.isFinite(v)) return EMPTY
+  return isEps ? fmtUsd(v) : fmtUsdCompact(v)
 }
 
-function fmtSignedPct(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return '—'
+/**
+ * NOT `fmtSignedPct` from `lib/formatters`, and the difference is a factor of
+ * 100: the lib helper takes a DECIMAL (0.0123 -> "+1.23%") because that is how
+ * the database stores a percentage, while `surprisePct` and `priceReactionPct`
+ * here are already in percent points. Swapping it in would silently inflate
+ * every figure in this table a hundredfold.
+ */
+function fmtPercentPoints(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return EMPTY
   return v >= 0 ? `+${v.toFixed(1)}%` : `${v.toFixed(1)}%`
 }
 
@@ -254,8 +263,8 @@ function FinancialsTable({
                   <td className="whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs text-gray-600">{fmtFinancial(estHigh, metricDef.isEps)}</td>
                   <td className="whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs text-gray-600">{fmtFinancial(estAvg, metricDef.isEps)}</td>
                   <td className={`whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs font-medium ${actualColor}`}>{fmtFinancial(actual, metricDef.isEps)}</td>
-                  <td className={`whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs ${surpriseColor}`}>{fmtSignedPct(surprisePct)}</td>
-                  <td className={`whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs ${rxColor}`}>{fmtSignedPct(rxPct)}</td>
+                  <td className={`whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs ${surpriseColor}`}>{fmtPercentPoints(surprisePct)}</td>
+                  <td className={`whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs ${rxColor}`}>{fmtPercentPoints(rxPct)}</td>
                 </tr>
               )
             })}
