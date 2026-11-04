@@ -64,10 +64,12 @@ function parsePlists(): PlistJob[] {
 const PLISTS = parsePlists()
 
 describe('the plist parser itself', () => {
-  it('found all seven agents and read a real time out of each', () => {
+  it('found the installed agents and read a real time out of each', () => {
     // Guards against the parser silently matching nothing and every assertion
-    // below passing vacuously.
-    expect(PLISTS).toHaveLength(7)
+    // below passing vacuously. A floor rather than an exact count: adding a
+    // job should not require editing this test, and the id-set equality below
+    // is what actually ties the plists to the catalog.
+    expect(PLISTS.length).toBeGreaterThanOrEqual(7)
     for (const p of PLISTS) {
       expect(p.id, p.id).toMatch(/^[a-z-]+$/)
       expect(p.weekdays.length, p.id).toBeGreaterThan(0)

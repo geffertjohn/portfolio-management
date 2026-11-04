@@ -35,6 +35,10 @@ const JOBS = [
   { id: 'pre-earnings-brief',    days: [1,2,3,4,5],   hour: 9,  minute: 45 },
   { id: 'earnings-call-summary', days: [1,2,3,4,5],   hour: 10, minute: 0  },
   { id: 'watchlist-research',    days: [1,2,3,4,5],   hour: 10, minute: 20 },
+  // Last in the morning: it only acts when an annual review has been handed
+  // off, which is a handful of times a year, and a run that finds an empty
+  // queue costs one query.
+  { id: 'portfolio-committee-review', days: [1,2,3,4,5], hour: 10, minute: 45 },
 ]
 
 const xml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
