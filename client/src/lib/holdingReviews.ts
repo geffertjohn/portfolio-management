@@ -171,9 +171,25 @@ export interface HoldingAssessment {
   reviewDeadline: string | null
   exitTrigger: string | null
   // annual: deep review (#1) + conviction ranking (#2)
+  //
+  // On a FUND annual review `annualDecision` is the DECISION OF RECORD, written
+  // in the final step after the committee has reported.
   annualDecision: AnnualDecision | null
   annualNotes: string | null
   convictionTier: ConvictionTier | null
+  /**
+   * The advisor's PROPOSAL, written before the committee looks.
+   *
+   * Kept apart from `annualDecision` on purpose. A proposal recorded after
+   * reading the committee's view is not an independent one, and the record
+   * could not show that it was — so the handoff freezes what the advisor was
+   * inclined to do, and where the two end up differing is the most interesting
+   * line in the review.
+   */
+  proposedDecision: AnnualDecision | null
+  /** Target weight in percent points, when the proposal is a size change. */
+  proposedWeight: number | null
+  proposedRationale: string | null
 }
 
 export function emptyAssessment(securityId: string): HoldingAssessment {
@@ -184,6 +200,7 @@ export function emptyAssessment(securityId: string): HoldingAssessment {
     onWatchlist: false, watchlistTrigger: null, watchlistReason: null,
     requiredImprovement: null, reviewDeadline: null, exitTrigger: null,
     annualDecision: null, annualNotes: null, convictionTier: null,
+    proposedDecision: null, proposedWeight: null, proposedRationale: null,
   }
 }
 
@@ -193,6 +210,7 @@ export function isAssessmentEmpty(a: HoldingAssessment): boolean {
     && !a.onWatchlist && !a.watchlistTrigger && !a.watchlistReason
     && !a.requiredImprovement && !a.reviewDeadline && !a.exitTrigger
     && !a.annualDecision && !a.annualNotes && !a.convictionTier
+    && !a.proposedDecision && a.proposedWeight == null && !a.proposedRationale
 }
 
 export interface HoldingReviewRow extends HoldingAssessment {
@@ -207,7 +225,8 @@ const SELECT_COLS =
   'thesis_status, business_trend, valuation, conviction, action, ' +
   'original_thesis, thesis_change, evidence_for, evidence_against, current_conclusion, ' +
   'on_watchlist, watchlist_trigger, watchlist_reason, required_improvement, review_deadline, exit_trigger, ' +
-  'annual_decision, annual_notes, conviction_tier'
+  'annual_decision, annual_notes, conviction_tier, ' +
+  'proposed_decision, proposed_weight, proposed_rationale'
 
 function rowToAssessment(r: Record<string, unknown>): HoldingReviewRow {
   return {
@@ -235,6 +254,9 @@ function rowToAssessment(r: Record<string, unknown>): HoldingReviewRow {
     annualDecision: (r.annual_decision as AnnualDecision | null) ?? null,
     annualNotes: (r.annual_notes as string | null) ?? null,
     convictionTier: (r.conviction_tier as ConvictionTier | null) ?? null,
+    proposedDecision: (r.proposed_decision as AnnualDecision | null) ?? null,
+    proposedWeight: r.proposed_weight == null ? null : Number(r.proposed_weight),
+    proposedRationale: (r.proposed_rationale as string | null) ?? null,
   }
 }
 
@@ -278,6 +300,9 @@ export async function saveHoldingReviews(
       annual_decision: a.annualDecision,
       annual_notes: a.annualNotes,
       conviction_tier: a.convictionTier,
+      proposed_decision: a.proposedDecision,
+      proposed_weight: a.proposedWeight,
+      proposed_rationale: a.proposedRationale,
     }))
   if (rows.length === 0) return
   const { error } = await supabase.from('holding_reviews').insert(rows)

@@ -93,6 +93,29 @@ const FUND_QUARTERLY_TASKS: ReviewTaskDef[] = [
 ]
 
 /**
+ * The fund/ETF ANNUAL review.
+ *
+ * The quarterly's three evidence steps, then the committee handoff and back.
+ * The ORDER carries the meaning: the advisor records what they are inclined to
+ * do BEFORE the committee looks, the committee answers the portfolio on its own
+ * terms, and the advisor decides last. A proposal written after reading the
+ * committee's view is not an independent one, and the record could not show
+ * that it was.
+ *
+ * The committee runs in Claude Code, not the browser, so `considerations` ends
+ * by stamping a queue and `committee_review` waits on it. See
+ * `lib/portfolioReviewMemos.ts`.
+ */
+const FUND_ANNUAL_TASKS: ReviewTaskDef[] = [
+  POSITION_SIZING_TASK,
+  PERFORMANCE_ATTRIBUTION_TASK,
+  { key: 'scorecard_review',  label: 'Scorecard review on every holding' },
+  { key: 'considerations',    label: 'Considerations for the committee' },
+  { key: 'committee_review',  label: 'Committee review' },
+  { key: 'final_decision',    label: 'Final decision' },
+]
+
+/**
  * The task list for a review, given cadence + portfolio strategy.
  *
  * Fund/ETF portfolios (Foundation/Hybrid/ETF/Fixed Income) have no monthly
@@ -100,11 +123,10 @@ const FUND_QUARTERLY_TASKS: ReviewTaskDef[] = [
  * check and performance attribution that Equity portfolios run monthly.
  * Equity portfolios keep the base lists (they do those in their monthly review).
  *
- * **The fund ANNUAL list is still the stock one with those two prepended.**
- * Only the quarterly has been reshaped; the annual's deep-review and
- * conviction-tier sections remain as stock-shaped as they ever were — and the
- * tier bands in particular do not fit a book of five funds at twenty to forty
- * percent each, which `hasConvictionTiers` already says in the model editor.
+ * Both fund lists are now their own. The stock `deep_review` and
+ * `conviction_rankings` sections are gone from the fund annual: the tier bands
+ * never fitted a book of five funds at twenty to forty percent each, which
+ * `hasConvictionTiers` already says in the model editor.
  */
 export function reviewTasksFor(
   cadence: PortfolioCadence,
@@ -114,7 +136,7 @@ export function reviewTasksFor(
   const isEquity = strategy === 'Equity'
   if (isEquity) return base
   if (cadence === 'quarterly') return FUND_QUARTERLY_TASKS
-  if (cadence === 'annual') return [POSITION_SIZING_TASK, PERFORMANCE_ATTRIBUTION_TASK, ...base]
+  if (cadence === 'annual') return FUND_ANNUAL_TASKS
   return base
 }
 
@@ -164,6 +186,10 @@ export interface ReviewDraft {
   /** Next due date (set in the Summary section; defaults at completion). */
   nextReviewAt: string | null
   reviewedAt: string
+  /** Fund annual: the advisor's standing thoughts handed to the committee. */
+  considerations: string | null
+  /** Fund annual: set when handed off. Null means not yet requested. */
+  committeeRequestedAt: string | null
 }
 
 function calcNextReview(cadence: PortfolioCadence, from = new Date()): Date {
@@ -216,7 +242,7 @@ export async function fetchPortfolioReviews(portfolioName: string): Promise<Port
   return (data ?? []) as PortfolioReview[]
 }
 
-const DRAFT_COLS = 'id, cadence, checklist, notes, review_date, next_review_at, reviewed_at'
+const DRAFT_COLS = 'id, cadence, checklist, notes, review_date, next_review_at, reviewed_at, considerations, committee_requested_at'
 
 function mapDraft(row: Record<string, unknown>): ReviewDraft {
   return {
@@ -227,6 +253,8 @@ function mapDraft(row: Record<string, unknown>): ReviewDraft {
     reviewDate: (row.review_date as string | null) ?? null,
     nextReviewAt: (row.next_review_at as string | null) ?? null,
     reviewedAt: row.reviewed_at as string,
+    considerations: (row.considerations as string | null) ?? null,
+    committeeRequestedAt: (row.committee_requested_at as string | null) ?? null,
   }
 }
 

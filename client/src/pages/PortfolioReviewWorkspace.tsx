@@ -24,6 +24,12 @@ import { FundScorecardReviewSection } from '@/components/review/FundScorecardRev
 import { ReviewAtRiskSection } from '@/components/review/ReviewAtRiskSection'
 import { fetchActiveAtRisk, addToAtRisk, removeFromAtRisk } from '@/lib/atRisk'
 import { atRiskMetricsFromScorecard } from '@/lib/fundAtRisk'
+import { ConsiderationsSection } from '@/components/review/ConsiderationsSection'
+import { CommitteeReviewSection } from '@/components/review/CommitteeReviewSection'
+import { FinalDecisionSection } from '@/components/review/FinalDecisionSection'
+import {
+  fetchReviewMemo, requestCommitteeReview, cancelCommitteeRequest,
+} from '@/lib/portfolioReviewMemos'
 import type { ScorecardCohort, ScorecardRow } from '@/lib/fundScorecard'
 import { PortfolioConstructionSection } from '@/components/PortfolioConstructionSection'
 import { formatDate } from '@/lib/fundFormat'
@@ -107,6 +113,17 @@ export function PortfolioReviewWorkspace() {
   /** Foundation / Hybrid / ETF / Fixed Income — everything that is not Equity. */
   const isFundBook = !!portfolio && portfolio.portfolio_strategy !== 'Equity'
 
+  const [considerations, setConsiderations] = useState('')
+  const [requestedAt, setRequestedAt] = useState<string | null>(null)
+  const [handoffBusy, setHandoffBusy] = useState(false)
+
+  /** The committee's memo, once a Claude Code run has written one. */
+  const { data: memo = null } = useQuery({
+    queryKey: QUERY_KEYS.portfolioReviewMemo(init?.draft.id ?? -1),
+    queryFn: () => fetchReviewMemo(init!.draft.id),
+    enabled: !!init && cadence === 'annual' && isFundBook,
+  })
+
   const [flagging, setFlagging] = useState<string | null>(null)
   const [clearing, setClearing] = useState<string | null>(null)
   const [atRiskError, setAtRiskError] = useState<string | null>(null)
@@ -148,6 +165,34 @@ export function PortfolioReviewWorkspace() {
     }
   }
 
+  /**
+   * Hand off to the committee. Saves the draft first: the per-holding
+   * proposals live on `holding_reviews` via the autosave, and handing off
+   * before they land would queue a review the committee reads as empty.
+   */
+  const handOffToCommittee = async () => {
+    if (!init) return
+    setHandoffBusy(true)
+    try {
+      await saveMut.mutateAsync()
+      await requestCommitteeReview(init.draft.id, considerations)
+      setRequestedAt(new Date().toISOString())
+    } finally {
+      setHandoffBusy(false)
+    }
+  }
+
+  const withdrawHandoff = async () => {
+    if (!init) return
+    setHandoffBusy(true)
+    try {
+      await cancelCommitteeRequest(init.draft.id)
+      setRequestedAt(null)
+    } finally {
+      setHandoffBusy(false)
+    }
+  }
+
   const clearAtRisk = async (entryId: number, securityId: string, reason: string) => {
     setAtRiskError(null)
     setClearing(securityId)
@@ -174,6 +219,8 @@ export function PortfolioReviewWorkspace() {
     if (!init || !cadence) return
     setItems(init.draft.checklist)
     setNotes(init.draft.notes ?? '')
+    setConsiderations(init.draft.considerations ?? '')
+    setRequestedAt(init.draft.committeeRequestedAt ?? null)
     const today = toLocalDateInputValue(new Date())
     setReviewedDate(today)
     setNextDate(init.draft.nextReviewAt?.slice(0, 10) ?? nextReviewDateFor(cadence, new Date()).slice(0, 10))
@@ -426,6 +473,30 @@ export function PortfolioReviewWorkspace() {
 
               {active === 'performance_attribution' && <AttributionMovers portfolioId={id} />}
               {active === 'position_sizing' && <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} portfolioName={id} />}
+              {active === 'considerations' && (
+                <ConsiderationsSection
+                  positions={positions}
+                  assessments={assessments}
+                  considerations={considerations}
+                  requestedAt={requestedAt}
+                  busy={handoffBusy}
+                  onChange={setHoldingField}
+                  onConsiderationsChange={(v) => { setConsiderations(v); markDirty() }}
+                  onRequest={handOffToCommittee}
+                  onCancelRequest={withdrawHandoff}
+                />
+              )}
+              {active === 'committee_review' && (
+                <CommitteeReviewSection memo={memo} requestedAt={requestedAt} portfolioName={id} />
+              )}
+              {active === 'final_decision' && (
+                <FinalDecisionSection
+                  positions={positions}
+                  assessments={assessments}
+                  memo={memo}
+                  onChange={setHoldingField}
+                />
+              )}
               {active === 'scorecard_review' && (
                 <FundScorecardReviewSection
                   positions={positions}

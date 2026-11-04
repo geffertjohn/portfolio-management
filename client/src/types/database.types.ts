@@ -635,6 +635,9 @@ export type Database = {
           on_watchlist: boolean
           original_thesis: string | null
           portfolio_name: string
+          proposed_decision: string | null
+          proposed_rationale: string | null
+          proposed_weight: number | null
           required_improvement: string | null
           review_deadline: string | null
           review_log_id: number
@@ -663,6 +666,9 @@ export type Database = {
           on_watchlist?: boolean
           original_thesis?: string | null
           portfolio_name: string
+          proposed_decision?: string | null
+          proposed_rationale?: string | null
+          proposed_weight?: number | null
           required_improvement?: string | null
           review_deadline?: string | null
           review_log_id: number
@@ -691,6 +697,9 @@ export type Database = {
           on_watchlist?: boolean
           original_thesis?: string | null
           portfolio_name?: string
+          proposed_decision?: string | null
+          proposed_rationale?: string | null
+          proposed_weight?: number | null
           required_improvement?: string | null
           review_deadline?: string | null
           review_log_id?: number
@@ -2272,7 +2281,9 @@ export type Database = {
         Row: {
           cadence: string | null
           checklist: Json | null
+          committee_requested_at: string | null
           completed_at: string | null
+          considerations: string | null
           created_at: string
           id: number
           next_review_at: string | null
@@ -2288,7 +2299,9 @@ export type Database = {
         Insert: {
           cadence?: string | null
           checklist?: Json | null
+          committee_requested_at?: string | null
           completed_at?: string | null
+          considerations?: string | null
           created_at?: string
           id?: number
           next_review_at?: string | null
@@ -2304,7 +2317,9 @@ export type Database = {
         Update: {
           cadence?: string | null
           checklist?: Json | null
+          committee_requested_at?: string | null
           completed_at?: string | null
+          considerations?: string | null
           created_at?: string
           id?: number
           next_review_at?: string | null
@@ -2318,6 +2333,70 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      portfolio_review_memos: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: number
+          macro_context: string | null
+          pm_assessment: string | null
+          portfolio_name: string
+          recommendations: Json
+          review_log_id: number
+          risk_assessment: string | null
+          risk_report_id: number | null
+          summary: string | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: number
+          macro_context?: string | null
+          pm_assessment?: string | null
+          portfolio_name: string
+          recommendations?: Json
+          review_log_id: number
+          risk_assessment?: string | null
+          risk_report_id?: number | null
+          summary?: string | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: number
+          macro_context?: string | null
+          pm_assessment?: string | null
+          portfolio_name?: string
+          recommendations?: Json
+          review_log_id?: number
+          risk_assessment?: string | null
+          risk_report_id?: number | null
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_review_memos_portfolio_name_fkey"
+            columns: ["portfolio_name"]
+            isOneToOne: false
+            referencedRelation: "portfolio"
+            referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "portfolio_review_memos_review_log_id_fkey"
+            columns: ["review_log_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_review_log"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portfolio_review_memos_risk_report_id_fkey"
+            columns: ["risk_report_id"]
+            isOneToOne: false
+            referencedRelation: "risk_reports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       portfolio_review_schedules: {
         Row: {

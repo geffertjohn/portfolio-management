@@ -870,10 +870,45 @@ under that list and none was ever completed.**
   (`at_risk` is keyed by security, so the firm-wide list is mostly Equity
   stocks). Entries added since the draft opened are badged; clearing requires a
   reason, which is CHECK-enforced anyway. **Fund books only** for now.
-- **The fund ANNUAL review is UNCHANGED and still stock-shaped** — deep review,
-  conviction tiers and all. The tier bands in particular do not fit a book of
-  five funds at twenty to forty percent each, which `hasConvictionTiers` already
-  says in the model editor but the review workspace does not read.
+**The fund/ETF ANNUAL review** (Nov 2026) is the quarterly's three evidence
+steps, then **considerations → committee review → final decision**. The stock
+`deep_review`, `conviction_rankings` and `portfolio_construction` sections are
+gone from it: the tier bands never fitted a book of five funds at twenty to
+forty percent each, which `hasConvictionTiers` already says in the model editor.
+
+- **The ORDER is the control.** The advisor records what they are inclined to
+  do BEFORE the committee looks. A proposal written after reading the
+  committee's view is not an independent one, and the record could not show
+  that it was — so handing off freezes the Considerations fields, and the final
+  step shows proposal and recommendation side by side with **neither
+  pre-selected**. Defaulting to the committee would make the decision an
+  acceptance; defaulting to the advisor would make the handoff ceremonial.
+- **`committee_requested_at` IS the queue, and the stage is DERIVED.**
+  `committeeStage()` reads two facts — requested or not, memo or not — and
+  there is deliberately no stored status column, which could contradict either.
+  Withdrawing a handoff after a memo exists still reports `delivered`: the work
+  exists and the review has to show it.
+- **The app cannot run the committee and does not pretend to.** The roles run
+  in Claude Code; there is no Express → Anthropic bridge. The waiting state
+  says who acts next and how, rather than describing an absence as if something
+  were coming — the mistake the Watchlist card's "AI research pending" made,
+  where FCX sat 23 days with nothing behind it.
+- **`portfolio_review_memos` is the deliverable**, portfolio-scoped, which
+  `ic_memos` cannot be (its `security_id` is NOT NULL and it is keyed to a
+  candidate). The risk leg still writes its own `risk_reports` row — that table
+  already supports portfolio scope — and the memo REFERENCES it rather than
+  copying it, so the two cannot disagree about what risk said. A partial unique
+  index allows one live memo per review.
+- **`holding_reviews` carries both sides**: `proposed_decision` /
+  `proposed_weight` / `proposed_rationale` are the advisor's suggestion;
+  `annual_decision` / `annual_notes` stay the decision of record. Where they
+  differ the final step marks the row **split**, which is the most interesting
+  line in the review.
+- **Recorded only.** Nothing writes `positions` or stages a trade, matching the
+  candidate workflow's CIO decision.
+- **`saveReviewMemo` exists so the write contract is type-checked**, even
+  though a Claude Code run is what calls it — column names living only inside a
+  prompt is the failure the committee write API was built to stop.
 
 `PORTFOLIO_REVIEW_TASKS` in `lib/portfolioReviews.ts` defines the base task list per cadence (monthly: performance attribution · position sizing; quarterly: full monitoring review · update thesis scorecards · update watchlist status · check valuation changes; annual: deep review of every holding · rebuild conviction rankings · reassess portfolio construction · check valuation changes). **`reviewTasksFor(cadence, strategy)` is the authoritative resolver** — for **non-Equity** portfolios it prepends **`position_sizing` then `performance_attribution`** to the quarterly and annual lists (fund/ETF portfolios have no monthly review, so they get those two portfolio-level checks that Equity portfolios run monthly). Equity portfolios keep the base lists. Change tasks here and the workspace sections + history follow. **In the workspace each task is a section** (left nav); a section = its special content (below) + a "Mark reviewed" toggle (the `done` flag) + section notes.
 

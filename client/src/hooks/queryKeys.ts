@@ -22,6 +22,7 @@ export const QUERY_KEYS = {
   sp500SectorWeights: ['sp500_sector_weights'] as const,
   strategicAllocationVintages: ['strategic_allocation_vintages'] as const,
   securityDetails: (securityIds: string[]) => ['security_details', [...securityIds].sort().join(',')] as const,
+  portfolioReviewMemo: (reviewLogId: number) => ['portfolio_review_memo', reviewLogId] as const,
   alertEvents: ['alert_events'] as const,
   clients: ['clients'] as const,
   client: (id: number) => ['client', id] as const,
