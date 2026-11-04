@@ -244,7 +244,8 @@ describe('the committee write API still exists', () => {
     // allowlist does not fail a build — it fails a 07:25 run.
     const allowlist = bodyOf('committee_writable_tables')
     expect(allowlist).not.toBe('')
-    for (const t of ['research_reports', 'risk_reports', 'ic_memos', 'job_runs', 'alert_events', 'at_risk']) {
+    for (const t of ['research_reports', 'risk_reports', 'ic_memos', 'job_runs', 'alert_events', 'at_risk',
+                     'portfolio_review_memos']) {
       expect(allowlist, t).toContain(`'${t}'`)
     }
   })

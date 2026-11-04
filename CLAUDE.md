@@ -1018,10 +1018,10 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 ### Scheduled jobs (draft-only) — prompts live in this repo
 
-**Seven routines**, all draft-only, all LaunchAgents: `weekly-risk-report` and
+**Eight routines**, all draft-only, all LaunchAgents: `weekly-risk-report` and
 `reviews-due-digest` on Mondays, and `at-risk-review`, `post-earnings-brief`,
-`pre-earnings-brief`, `earnings-call-summary` and `watchlist-research` on
-weekdays, staggered through the morning. **The schedule itself lives in
+`pre-earnings-brief`, `earnings-call-summary`, `watchlist-research` and
+`portfolio-committee-review` on weekdays, staggered through the morning. **The schedule itself lives in
 `scripts/scheduled-jobs/README.md`** and in the generated plists, which are the
 authority — do not copy the times here again; the copy that used to be in this
 paragraph had two of them wrong.

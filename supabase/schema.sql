@@ -169,7 +169,8 @@ CREATE OR REPLACE FUNCTION "public"."committee_writable_tables"() RETURNS "text"
     LANGUAGE "sql" IMMUTABLE
     AS $$
   select array[
-    'research_reports','risk_reports','ic_memos','job_runs','alert_events','at_risk'
+    'research_reports','risk_reports','ic_memos','job_runs','alert_events','at_risk',
+    'portfolio_review_memos'
   ]::text[]
 $$;
 

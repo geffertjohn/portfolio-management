@@ -113,6 +113,12 @@ export const JOB_DEFINITIONS: JobDefinition[] = [
     purpose: 'Per-portfolio concentration and factor drift on the current book, with compliance verification.',
   },
   {
+    id: 'portfolio-committee-review', label: 'Portfolio committee review',
+    cadence: 'weekday', hour: 10, minute: 45,
+    writes: 'portfolio_review_memos · risk_reports',
+    purpose: 'Answers fund annual reviews handed to the committee — PM, risk and macro read the book and the advisor\u2019s proposals, and write back one memo.',
+  },
+  {
     id: 'reviews-due-digest', label: 'Reviews due digest',
     cadence: 'weekly_monday', hour: 7, minute: 40,
     writes: '— (informational)',

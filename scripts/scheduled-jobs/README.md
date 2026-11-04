@@ -43,9 +43,12 @@ every manual test while failing at 05:30 every morning.
 | `pre-earnings-brief` | weekdays 09:45 |
 | `earnings-call-summary` | weekdays 10:00 |
 | `watchlist-research` | weekdays 10:20 |
+| `portfolio-committee-review` | weekdays 10:45 |
 
-Staggered 15–30 minutes because a run takes 12–15 minutes. **`at-risk-review`
-must precede `post-earnings-brief`** — the brief reports any same-day at-risk
+Staggered 15–30 minutes because a run takes 12–15 minutes.
+`portfolio-committee-review` goes last: it acts only when a fund annual review
+has been handed off, which is a handful of times a year, so an empty queue
+costs one query. **`at-risk-review` must precede `post-earnings-brief`** — the brief reports any same-day at-risk
 change and there is only ever one brief per print. Under the app scheduler the
 two earnings jobs both nominally fired at 09:30 and were separated only by
 random jitter, which is a coin flip rather than a schedule.
