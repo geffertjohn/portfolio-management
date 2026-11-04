@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import { fetchRevenueSegments, orderedSegmentNames, type SegmentKind, type SegmentPeriod } from '@/lib/fmpSegments'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
+import { fmtUsdCompact } from '@/lib/formatters'
 
 interface Props {
   securityId: string
@@ -13,14 +14,6 @@ interface Props {
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#6366f1', '#f97316']
-
-function fmtMoney(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return '—'
-  const abs = Math.abs(v)
-  const sign = v < 0 ? '-' : ''
-  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`
-  return `${sign}$${(abs / 1_000_000).toFixed(1)}M`
-}
 
 function pctOf(v: number, total: number): string {
   if (!total) return '—'
@@ -49,14 +42,14 @@ function SegmentTable({ title, periods }: { title: string; periods: SegmentPerio
             {periods.map((p, i) => (
               <tr key={p.fiscalLabel + i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className="whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-xs font-medium text-gray-900">{p.fiscalLabel}</td>
-                <td className="whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-right text-xs font-medium text-gray-900">{fmtMoney(p.total)}</td>
+                <td className="whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-right text-xs font-medium text-gray-900">{fmtUsdCompact(p.total)}</td>
                 {names.map((n) => {
                   const v = p.data[n]
                   return (
                     <td key={n} className="whitespace-nowrap border-b border-gray-100 px-2 py-1.5 text-right text-xs text-gray-700">
                       {v === undefined ? '—' : (
                         <>
-                          {fmtMoney(v)}
+                          {fmtUsdCompact(v)}
                           <span className="ml-1 text-gray-400">({pctOf(v, p.total)})</span>
                         </>
                       )}
@@ -142,9 +135,12 @@ export function RevenueSegmentsPanel({ securityId, kind, periodYears }: Props) {
             <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
               <CartesianGrid vertical={false} stroke="#f3f4f6" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9ca3af' }} interval={0} angle={chartData.length > 6 ? -35 : 0} textAnchor={chartData.length > 6 ? 'end' : 'middle'} height={chartData.length > 6 ? 44 : 24} />
-              <YAxis tickFormatter={(v: number) => fmtMoney(v)} tick={{ fontSize: 10, fill: '#9ca3af' }} width={56} />
+              {/* One decimal on the axis: a tick is read at a glance and
+                  "$150.0B" carries the same information as "$150.00B" in less
+                  space. The table and tooltip keep the default two. */}
+              <YAxis tickFormatter={(v: number) => fmtUsdCompact(v, 1)} tick={{ fontSize: 10, fill: '#9ca3af' }} width={56} />
               <Tooltip
-                formatter={(value, name) => [fmtMoney(Number(value)), String(name)]}
+                formatter={(value, name) => [fmtUsdCompact(Number(value)), String(name)]}
                 contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }}
               />
               <Legend wrapperStyle={{ fontSize: 10 }} />

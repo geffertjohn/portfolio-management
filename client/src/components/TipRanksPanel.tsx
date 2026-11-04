@@ -10,7 +10,7 @@ import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { TipRanksAnalystModal } from '@/components/TipRanksAnalystModal'
 import { RangeBar } from '@/components/RangeBar'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
-import { EMPTY, fmtDecimalPct, fmtSignedPct, fmtUsd } from '@/lib/formatters'
+import { EMPTY, consensusColor, fmtDecimalPct, fmtSignedPct, fmtUsd } from '@/lib/formatters'
 import { formatDate } from '@/lib/fundFormat'
 
 /* ── Consensus donut ───────────────────────────────────────────────────────── */
@@ -70,9 +70,6 @@ function ConsensusDonut({ c }: { c: StreetConsensus }) {
     </div>
   )
 }
-
-const consensusColor = (label: string): string =>
-  label.includes('Buy') ? 'text-green-700' : label.includes('Sell') ? 'text-red-600' : 'text-amber-600'
 
 function Legend({ swatch, label, n }: { swatch: string; label: string; n: number }) {
   return (
