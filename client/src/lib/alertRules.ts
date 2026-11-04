@@ -2,8 +2,6 @@ import { supabase } from './supabase'
 
 export interface AlertEvent {
   id: number
-  /** Null for a non-rule alert — the threshold engine was deleted. */
-  rule_id: number | null
   security_id: string
   metric_field: string
   actual_value: number | null

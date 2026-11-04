@@ -263,6 +263,76 @@ describe('the committee write API still exists', () => {
   })
 })
 
+/**
+ * Two objects were filed as dead schema on 3 Nov 2026 and both findings were
+ * wrong. They are pinned here because the mistake is cheap to repeat: in each
+ * case the evidence for "dead" was a count, and the count was real.
+ */
+describe('the objects that only LOOK dead', () => {
+  it('keeps holdings_change_log, which a trigger on positions still writes', () => {
+    // Filed as "208 rows, zero readers — archive and drop". It has no reader,
+    // but it does have a writer: positions_audit -> log_position_change(),
+    // AFTER INSERT OR UPDATE OR DELETE on positions, appending since Apr 2026.
+    // Dropping the table would make every write to positions fail, which is
+    // every allocation import and every History grid edit.
+    expect(SCHEMA).toContain('CREATE TABLE IF NOT EXISTS "public"."holdings_change_log"')
+    expect(SCHEMA).toMatch(
+      /CREATE (OR REPLACE )?TRIGGER "positions_audit" AFTER INSERT OR DELETE OR UPDATE ON "public"\."positions"/i,
+    )
+    expect(SCHEMA).toMatch(/EXECUTE FUNCTION "public"\."log_position_change"/i)
+    expect(SCHEMA).toMatch(/INSERT INTO holdings_change_log/i)
+  })
+
+  it('keeps the 3y/5y block on portfolio, which is pre-inception and not dead', () => {
+    // Filed as ">=18 of 147 columns all-null and unreferenced". 25 of the 26
+    // all-null columns are 3-year or 5-year metrics, and the oldest of the 19
+    // models is 2.5 years old -- while every ONE-year sibling is populated on
+    // 18 of 19. The workbook carries the whole block; there is simply no
+    // three-year figure yet. They start filling in Apr 2027.
+    //
+    // Dropping them would delete the landing place for that data AND break the
+    // next workbook import, because the importers map sheet header straight to
+    // DB column with no whitelist (gotcha 7).
+    const start = SCHEMA.indexOf('CREATE TABLE IF NOT EXISTS "public"."portfolio"')
+    expect(start).toBeGreaterThan(-1)
+    const ddl = SCHEMA.slice(start, SCHEMA.indexOf(');', start))
+    for (const col of [
+      'annualized_three_year_total_return', 'annualized_five_year_total_return',
+      'annualized_ten_year_total_return', 'historical_sharpe_3y', 'historical_sharpe_5y',
+      'historical_sortino_3y', 'max_drawdown_3y', 'max_drawdown_5y', 'tracking_error_3y',
+      'upside_downside_3y', 'market_alpha_36_month', 'quarterly_market_beta_36_month',
+      'monthly_standard_deviation_annualized_3y', 'best_return_three_year',
+      'worst_return_three_year',
+    ]) {
+      expect(ddl, col).toContain(`"${col}"`)
+    }
+    // ...and the one-year siblings that prove the block is live, not dead.
+    for (const col of ['historical_sharpe_1y', 'max_drawdown_1y', 'market_alpha_12_month']) {
+      expect(ddl, col).toContain(`"${col}"`)
+    }
+  })
+
+  it('has actually dropped the three objects that WERE dead', () => {
+    // alert_rules (0 rows, no reader, no writer) and the FK column whose only
+    // meaning was pointing at it; portfolio.next_rebalance_date (null on all
+    // 19, its only writer uncalled). alert_events itself SURVIVES.
+    expect(SCHEMA).not.toContain('"public"."alert_rules"')
+    expect(SCHEMA).toContain('CREATE TABLE IF NOT EXISTS "public"."alert_events"')
+    const ae = SCHEMA.slice(
+      SCHEMA.indexOf('CREATE TABLE IF NOT EXISTS "public"."alert_events"'),
+      SCHEMA.indexOf(');', SCHEMA.indexOf('CREATE TABLE IF NOT EXISTS "public"."alert_events"')),
+    )
+    expect(ae).not.toContain('"rule_id"')
+    expect(ae).toContain('"threshold_value"')  // kept: an alert still has a number
+    const pf = SCHEMA.slice(
+      SCHEMA.indexOf('CREATE TABLE IF NOT EXISTS "public"."portfolio"'),
+      SCHEMA.indexOf(');', SCHEMA.indexOf('CREATE TABLE IF NOT EXISTS "public"."portfolio"')),
+    )
+    expect(pf).not.toContain('"next_rebalance_date"')
+    expect(pf).toContain('"last_rebalance_date"')  // populated, left alone
+  })
+})
+
 describe('the parser itself', () => {
   it('fails loudly on a constraint that is not there', () => {
     // Otherwise a renamed constraint would quietly stop being checked.

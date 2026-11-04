@@ -496,14 +496,20 @@ export function SecurityDetailPage() {
                       <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Last Reviewed</p>
                       <p className="mt-1 text-gray-900">
                         {reviewSchedule.last_reviewed_at
-                          ? new Date(reviewSchedule.last_reviewed_at).toLocaleDateString()
+                          ? formatDate(reviewSchedule.last_reviewed_at)
                           : <span className="text-gray-400">Never</span>}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Next Review</p>
                       <p className={`mt-1 font-medium ${isOverdue(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-red-600' : isDueSoon(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-amber-600' : 'text-gray-900'}`}>
-                        {new Date(reviewSchedule.next_review_at).toLocaleDateString()}
+                        {/* reviewDueDay, not the raw column: next_review_at is a
+                            timestamptz holding a calendar DAY, so reading it as a
+                            local instant renders Feb 10 for a row holding the 11th
+                            (gotcha 24). The colour beside it already normalised;
+                            only the value did not, so this page and /reviews
+                            disagreed by a day on the same row. */}
+                        {formatDate(reviewDueDay(reviewSchedule.next_review_at))}
                       </p>
                     </div>
                   </div>

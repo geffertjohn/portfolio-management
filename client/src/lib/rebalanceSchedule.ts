@@ -5,10 +5,12 @@
  * three are threshold breaches: tiers 1 and 2 in `allocationBands.ts`, tier 3 in
  * `positionBands.ts`.
  *
- * NOTHING IS STORED. `portfolio.next_rebalance_date` exists but is null on every
- * portfolio, and seeding it would mean computing it from the allocation
- * snapshots anyway — so the snapshots are read directly and the derived date is
- * never written back. `portfolio_allocations` already IS the rebalance record:
+ * NOTHING IS STORED. `portfolio.next_rebalance_date` used to exist, null on all
+ * 19 portfolios, with its only writer (`updatePortfolioRebalanceDates`) called
+ * from nowhere; both were dropped in Nov 2026. Seeding it would have meant
+ * computing it from the allocation snapshots anyway — so the snapshots are read
+ * directly and the derived date is never written back. `last_rebalance_date` is
+ * populated and survives. `portfolio_allocations` already IS the rebalance record:
  * each `effective_date` is one rebalance, which is what the History grid means
  * by "Each column is a rebalance; the rightmost is current."
  *

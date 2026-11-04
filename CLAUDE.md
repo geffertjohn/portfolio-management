@@ -88,13 +88,12 @@ respectively. Don't repurpose them.
 | `review_schedules` | `security_id` | `TEXT → securities2.security_id` |
 | `review_log` | `security_id` | `TEXT → securities2.security_id` |
 | `action_items` | `security_id` | `TEXT → securities2.security_id` (nullable) |
-| `alert_rules` | `security_id` | `TEXT → securities2.security_id` (nullable) |
 | `alert_events` | `security_id` | `TEXT → securities2.security_id` |
 | `communication_log` | `security_id` | `TEXT → securities2.security_id` (nullable) |
 | `substitutions` | `incumbent_security_id`, `proposed_security_id` | `TEXT → securities2.security_id` |
 | `positions` | `security_id` | `TEXT → securities2.security_id` (current target allocation) |
 | `portfolio_allocations` | `security_id` | `TEXT` — **no DB FK** (stages import symbols not yet in securities2); dated allocation snapshots |
-| `holdings_change_log` | `security_id` | `TEXT → securities2.security_id` (legacy; not used for performance) |
+| `holdings_change_log` | `security_id` | `TEXT → securities2.security_id` (the **`positions` audit trail**, written by a trigger — see Audit & Governance surfaces) |
 | `security_related_securities` | `security_id` | `TEXT → securities2.security_id` |
 
 When querying any of these tables by security, pass `security.security_id` (the text ticker), not `security.id`.
@@ -568,7 +567,7 @@ On the Overview tab. News and Press Releases are company-specific feeds, side by
 - Use `/stable/news/stock?symbols=` and `/stable/news/press-releases?symbols=` — **NOT** the `*-latest` endpoints, which return a GLOBAL feed and ignore the symbol filter. Results come back newest-first; no client-side sorting.
 - Each item shows publisher · date above the title (title links out); no domain/url text, no snippet.
 - "Alerts" is a separate placeholder card under Analysts (not part of `NewsAlertsPanel`).
-- **Alert-rules management was removed as dead code.** The `alert_rules` table still exists, but the rule CRUD UI (`AlertRulesSection`) and the firing engine (`fireAlertIfBreached`) were never wired up and are deleted. `lib/alertRules.ts` keeps only the live path: `fetchUnacknowledgedAlerts` + `acknowledgeAlert` (the HomePage "Performance Alerts" list reads/acks `alert_events`). Rebuild the rule/fire side deliberately if alerts are wanted — don't assume it exists.
+- **Alert-rules management was removed as dead code, and the table is now gone too.** The rule CRUD UI (`AlertRulesSection`) and the firing engine (`fireAlertIfBreached`) were never wired up and were deleted; **`alert_rules` itself was dropped in Nov 2026** (0 rows, no reader, no writer), along with `alert_events.rule_id`, whose only meaning was the FK into it. **`alert_events` survives** and is untouched — it is the HomePage alert surface and the at-risk breach alert is its live producer; `threshold_value` is kept, since an alert can carry the number it breached without a rule row behind it. `lib/alertRules.ts` keeps only the live path: `fetchUnacknowledgedAlerts` + `acknowledgeAlert` (the HomePage "Performance Alerts" list reads/acks `alert_events`). Rebuild the rule/fire side deliberately if alerts are wanted — don't assume it exists.
 
 ### At-Risk is run by the committee, not by hand (Oct 2026)
 
@@ -1315,7 +1314,7 @@ The Actions page is a **unified command center**, not a plain to-do list. It sho
 
 ## Audit & Governance surfaces
 
-Four live surfaces that carried **no entry here at all** until Nov 2026 — which
+Five live surfaces that carried **no entry here at all** until Nov 2026 — which
 is how a reader concluded the app had no audit trail. All four are the
 regulatory half of the tool, so they are worth knowing before touching the
 tables they read.
@@ -1343,6 +1342,18 @@ tables they read.
   best-interest documentation requirement. Labels and the per-action reason sets
   (`REASON_OPTIONS_BY_ACTION`, `REASON_OPTIONS_BY_MONITOR_ACTION`) live in that
   module.
+- **`holdings_change_log` is the `positions` audit trail** — the fifth surface,
+  and the one nobody knew was there. The **`positions_audit` trigger** runs
+  `log_position_change()` on every insert, update and delete of `positions` and
+  appends a row: ticker, `change_type` (`add`/`remove`/`weight_change`), old and
+  new weight, `changed_at`. It has been writing continuously since Apr 2026 and
+  no application code touches it. **`positions` is NOT covered by `log_audit`**
+  (the nine-table list above), so this is the only record of who changed a
+  target weight and to what. It was twice recorded in this document as a dead
+  legacy table with "no writer anywhere" and was proposed for deletion in the
+  Nov 2026 audit; dropping it would make **every write to `positions` fail** —
+  every allocation import and every History grid edit. `schemaContract.test.ts`
+  now pins the table and the trigger together.
 
 ## Documents (Express file store)
 
@@ -1374,7 +1385,7 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 
 **One file drives all three Allocation sub-tabs**, through `lib/allocationImport.ts`: History is `portfolio_allocations`, Positions is the NEWEST snapshot (`syncPositionsFromLatestSnapshot`), and the Change Log is **derived from the history** — so the three cannot disagree.
 
-- **`lib/allocationChanges.ts` computes the Change Log on read** by diffing consecutive snapshots (`deriveAllocationChanges`, pure and React-free). **`holdings_change_log` is DEAD** — it had a reader and no writer anywhere, so the tab showed whatever legacy rows were left behind (six for Foundation Conservative, none for most books, nothing for any import). Rebuilding it as a stored log would re-create exactly the drift it exists to report. The earliest snapshot is reported as **additions** — it is the opening position, and a log starting at the second change reads as though the book appeared from nowhere. Weight moves below 0.005pp are suppressed (a float round-trip renders "4.0% → 4.0%" otherwise).
+- **`lib/allocationChanges.ts` computes the Change Log on read** by diffing consecutive snapshots (`deriveAllocationChanges`, pure and React-free). **`holdings_change_log` is NOT the source, and the reason recorded here until Nov 2026 was wrong.** It said the table had "a reader and no writer anywhere". It has a live writer — the **`positions_audit` trigger** calls `log_position_change()` on every insert, update and delete of `positions`, and it has been appending continuously since Apr 2026. The real reason it cannot drive this tab is better: it logs a change to the **current target** — ticker, old weight, new weight, a wall-clock `changed_at` and **no `effective_date`** — so it cannot say which dated snapshot a change belongs to, which is the one thing a change log keyed by rebalance has to say. It also records only what reached `positions`, and two books' positions are not driven by their own history at all. Rebuilding this tab on it would re-create exactly the drift it exists to report. **Do not "drop the dead table"** — every write to `positions` would fail; `schemaContract.test.ts` guards it. The earliest snapshot is reported as **additions** — it is the opening position, and a log starting at the second change reads as though the book appeared from nowhere. Weight moves below 0.005pp are suppressed (a float round-trip renders "4.0% → 4.0%" otherwise).
 - **`lib/allocationImport.ts` is the single import path**, shared by the Settings card and the Allocation tab so the two cannot drift: `parseAllocationFile` → `checkAllocationImport` (preview, no writes) → `applyAllocationImport`. The caller records the `import_runs` row, so it is never logged twice.
 - **A missing ticker is NOT auto-created.** `syncPositionsFromLatestSnapshot` is all-or-nothing, and the import names the unknown symbols and stops at positions (history still lands). **Never create them via `createSecurityBySymbol`** — that calls FMP, and for a fund or ETF the identity and metrics belong to the YCharts workbook's `Securities` sheet (see "YCharts owns fund/ETF data"). FMP does not even serve these share classes: it returns nothing for VMSAX. `lib/portfolioAllocations.ts` owns the data layer (`fetchAllocationGrid`, `fetchAllocationSnapshots`, cell upsert, add/delete date, bulk import); `positions` still holds the *current* target allocation separately.
 
@@ -1406,6 +1417,27 @@ such loss. Model-portfolio performance now comes from **YCharts' own figures on
 rendered by the Total Returns block in `PortfolioOverview`. Don't rebuild it:
 recomputing a number we do not own meant owning its bugs. The file's own
 docstring carries this history — read it before adding anything here.
+
+**The 3 Yr / 5 Yr / 10 Yr columns are blank because the models are too young,
+not because the data is missing** (`lib/trackRecord.ts`, Nov 2026). The oldest
+of the 19 is **2.5 years old**; the first three-year figure arrives in **Apr
+2027**. The evidence is the one-year siblings — `historical_sharpe_1y`,
+`max_drawdown_1y`, `market_alpha_12_month` and the rest are populated on 18 of
+19 books while every `_3y`/`_5y` twin is null — so the workbook carries the
+whole block and there is simply nothing to carry yet.
+
+- **Do not drop those 25 columns.** They were filed as dead schema on the
+  strength of an all-null count. Dropping them would delete the landing place
+  for Apr 2027 *and* break the next workbook import, because the importers map
+  sheet header straight to DB column with no whitelist (gotcha 7).
+- **A pre-inception cell reads `n/a`, not an em-dash.** "No data" and "no track
+  record" are different claims, and the em-dash sat next to a benchmark cell
+  showing a real figure — inviting a comparison that cannot be made. The
+  benchmark figure in such a column keeps its value but loses its colour, and a
+  footnote names the inception date. `hasTrackRecordFor` returns **null** when
+  there is no inception date, and null is not treated as pre-inception.
+- One column list drives the header and both rows, so a relabel cannot
+  mis-pair the portfolio figure with the benchmark's.
 
 What remains is **`fetchPortfolioMovers(portfolioName, days)`** — not "how did
 the portfolio do" but "which holdings led and lagged", which needs no NAV
