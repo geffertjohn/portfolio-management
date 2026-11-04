@@ -3547,7 +3547,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      committee_check_payload: {
+        Args: { payload: Json; target: string }
+        Returns: undefined
+      }
+      committee_generated_columns: { Args: never; Returns: string[] }
+      committee_insert: {
+        Args: { payload: Json; target: string }
+        Returns: number
+      }
+      committee_update: {
+        Args: { payload: Json; row_id: number; target: string }
+        Returns: undefined
+      }
+      committee_writable_tables: { Args: never; Returns: string[] }
+      job_run_close: {
+        Args: {
+          p_errors?: string[]
+          p_items_considered?: number
+          p_items_written?: number
+          p_run_id: number
+          p_status: string
+          p_summary?: string
+        }
+        Returns: undefined
+      }
+      job_run_open: { Args: { p_job_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

@@ -14,21 +14,25 @@ differs if you write to it.
 **Before any other work**, open the row (Supabase MCP `execute_sql`):
 
 ```sql
-insert into job_runs (job_id) values ('post-earnings-brief') returning id;
+select job_run_open('post-earnings-brief');
 ```
 
 Keep that id. **As the very last step, whatever happened**, close it:
 
 ```sql
-update job_runs set
-  finished_at      = now(),
-  status           = 'success',   -- 'partial' if part of the work failed, 'failed' if none of it landed
-  items_considered = <n>,         -- candidates you looked at; 0 is a real answer
-  items_written    = <n>,         -- rows you actually wrote
-  summary          = $j$One line on what happened.$j$,
-  errors           = '{}'         -- array of error strings when status is not 'success'
-where id = <the id from the insert>;
+select job_run_close(
+  <the id from job_run_open>,
+  'success',                      -- 'partial' if part of the work failed, 'failed' if none of it landed
+  <items_considered>,             -- candidates you looked at; 0 is a real answer
+  <items_written>,                -- rows you actually wrote
+  $j$One line on what happened.$j$,
+  '{}'                            -- array of error strings when status is not 'success'
+);
 ```
+
+`job_run_close` **raises if it updates nothing**, so a heartbeat that fails to
+close is an error you will see rather than a row left open for `gradeJob` to
+report as a death three hours later.
 
 **Close the row even when there was nothing to do.** `items_considered = 13`
 with `items_written = 0` is the healthy-and-idle case, and it is precisely what
@@ -239,16 +243,18 @@ was written and are not rewritten.
 
 10. **LEGACY PARENTS.** Briefs written before Oct 2026 have `estimates`/`street_questions`/`thesis_checks`/`risk_checks` all null and are prose-only (some have a `watch_items` array in the superseded shape). For those: reconstruct what you reasonably can from the parent's prose into the new fields, keep the same object shapes, and **say in the commentary that the items were reconstructed from prose**. If the parent's security now has a `security_theses` row, use it to populate Section 2 properly and note that you did.
 
-11. **PERSIST** as a DRAFT via execute_sql. Dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb. Columns: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'post_earnings'`, `status = 'draft'`, **`parent_report_id` = the pre-brief's id (REQUIRED — a CHECK constraint rejects a post-earnings row without it)**, `thesis_id` (carry the parent's), **`fiscal_year` and `quarter` from the transcript entry (step 5b)**, `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, **`review_recommendations`**, `thesis`, `bull_case`, `bear_case`, `thesis_status`, `current_price`, `sources`. Leave `portfolio_name`, `addition_id`, `watch_items` null.
+11. **PERSIST** as a DRAFT through `committee_insert('research_reports', jsonb_build_object(…))`, which validates every key against the live table before writing. Dollar-quoted literals (`$brief$ … $brief$`) for all text/jsonb. Keys: `security_id` (UPPER), `author_role = 'research_analyst'`, `report_type = 'post_earnings'`, `status = 'draft'`, **`parent_report_id` = the pre-brief's id (REQUIRED — a CHECK constraint rejects a post-earnings row without it)**, `thesis_id` (carry the parent's), **`fiscal_year` and `quarter` from the transcript entry (step 5b)**, `estimates`, `street_questions`, `thesis_checks`, `risk_checks`, **`review_recommendations`**, `thesis`, `bull_case`, `bear_case`, `thesis_status`, `current_price`, `sources`. Omit `portfolio_name`, `addition_id` and `watch_items` entirely rather than passing null — an unmentioned column keeps its default.
 
     **Then correct the parent pre-brief's period to match:**
 
     ```sql
-    update research_reports
-    set fiscal_year = <fy>, quarter = <q>
-    where id = <parent_report_id>
-      and (fiscal_year is distinct from <fy> or quarter is distinct from <q>);
+    select committee_update('research_reports', <parent_report_id>,
+      jsonb_build_object('fiscal_year', <fy>, 'quarter', <q>));
     ```
+
+    `committee_update` **raises when it matches no row**, so a parent id that is
+    wrong — or an RLS policy that blocks the write — stops the run instead of
+    reporting success and leaving the pair split.
 
     The pre-brief's period was a forecast made before the call; this one is
     observed. The Commentary timeline puts the pair on ONE row keyed by period,

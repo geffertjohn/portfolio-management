@@ -10,7 +10,6 @@
  * Soft-deleted via `deleted_at`.
  */
 import { supabase } from './supabase'
-import type { Json } from '@/types/database.types'
 
 export type RiskVerdict = 'pass' | 'warn' | 'veto'
 export type RiskScope = 'candidate' | 'portfolio'
@@ -77,42 +76,16 @@ export async function fetchRiskReportsForAddition(additionId: number): Promise<R
   return (data ?? []).map((r) => mapRow(r as unknown as Record<string, unknown>))
 }
 
-export interface NewRiskReport {
-  scope: RiskScope
-  portfolio_name?: string | null
-  security_id?: string | null
-  addition_id?: number | null
-  concentration?: Record<string, unknown> | null
-  factor_exposures?: Record<string, unknown> | null
-  mandate_checks?: MandateCheck[] | null
-  verdict?: RiskVerdict
-  notes?: string | null
-}
 
-export async function insertRiskReport(input: NewRiskReport): Promise<number> {
-  const { data, error } = await supabase
-    .from('risk_reports')
-    .insert({
-      scope: input.scope,
-      portfolio_name: input.portfolio_name ?? null,
-      security_id: input.security_id ? input.security_id.toUpperCase() : null,
-      addition_id: input.addition_id ?? null,
-      concentration: (input.concentration ?? null) as unknown as Json,
-      factor_exposures: (input.factor_exposures ?? null) as unknown as Json,
-      mandate_checks: (input.mandate_checks ?? null) as unknown as Json,
-      verdict: input.verdict ?? 'pass',
-      notes: input.notes ?? null,
-    })
-    .select('id')
-    .single()
-  if (error) throw error
-  return data.id
-}
-
-export async function softDeleteRiskReport(id: number): Promise<void> {
-  const { error } = await supabase
-    .from('risk_reports')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
-}
+/**
+ * There is deliberately NO writer in this module.
+ *
+ * The committee's deliverables are written by the scheduled jobs, which run
+ * under launchd with a tool allowlist that excludes Bash — their only write
+ * channel is Supabase SQL, so a TypeScript writer could never be the path they
+ * take. `insert*` / `softDelete*` functions lived here with exactly one
+ * reference each (their own definition) and read as a guard over a path
+ * nothing used. The real guard is the `committee_insert` / `committee_update`
+ * SQL API, which validates a payload against the live table before writing and
+ * raises when a write matches no row. The app is read-only on this table.
+ */

@@ -63,7 +63,12 @@ BODY="$(printf '%s\n' "$RAW" | awk 'NR==1 && $0=="---" {fm=1; next} fm && $0=="-
 # A prompt that lost its heartbeat block cannot report whether it ran, which is
 # the whole point of moving off the app scheduler. Warn rather than refuse — the
 # digest is still worth having — but say so in the log.
-printf '%s' "$BODY" | grep -q job_runs || log "WARN — prompt carries no job_runs heartbeat; this run will be invisible in the app"
+# Match the CALL, not the word. The prompts discuss job_runs in prose, so
+# grepping the table name passed even for a prompt that never opened a row —
+# and after the write API landed, the opening statement stopped containing the
+# table name at all.
+printf '%s' "$BODY" | grep -q 'job_run_open' \
+  || log "WARN — prompt never calls job_run_open; this run will be invisible in the app"
 
 # Tools the jobs are allowed to use, named at SERVER level so a renamed FMP
 # endpoint does not silently lose access mid-run.

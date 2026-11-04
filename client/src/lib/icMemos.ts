@@ -94,40 +94,7 @@ export async function fetchIcMemosForAddition(additionId: number): Promise<IcMem
   return (data ?? []).map((r) => mapRow(r as unknown as Record<string, unknown>))
 }
 
-export interface NewIcMemo {
-  security_id: string
-  portfolio_name?: string | null
-  addition_id?: number | null
-  research_report_id?: number | null
-  risk_report_id?: number | null
-  proposed_weight?: number | null
-  pm_rationale?: string | null
-  recommendation?: IcDecision | null
-  rationale?: string | null
-  /** Defaults to 'pending_cio' — a synthesized memo is ready for the CIO's call. */
-  status?: IcStatus
-}
 
-export async function insertIcMemo(input: NewIcMemo): Promise<number> {
-  const { data, error } = await supabase
-    .from('ic_memos')
-    .insert({
-      security_id: input.security_id.toUpperCase(),
-      portfolio_name: input.portfolio_name ?? null,
-      addition_id: input.addition_id ?? null,
-      research_report_id: input.research_report_id ?? null,
-      risk_report_id: input.risk_report_id ?? null,
-      proposed_weight: input.proposed_weight ?? null,
-      pm_rationale: input.pm_rationale ?? null,
-      recommendation: input.recommendation ?? null,
-      rationale: input.rationale ?? null,
-      status: input.status ?? 'pending_cio',
-    })
-    .select('id')
-    .single()
-  if (error) throw error
-  return data.id
-}
 
 /**
  * Record the CIO's decision on a memo. Sets `decision`, `decided_by`, `decided_at`,
@@ -152,10 +119,15 @@ export async function recordIcDecision(
   if (error) throw error
 }
 
-export async function softDeleteIcMemo(id: number): Promise<void> {
-  const { error } = await supabase
-    .from('ic_memos')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
-}
+/**
+ * There is deliberately NO writer in this module.
+ *
+ * The committee's deliverables are written by the scheduled jobs, which run
+ * under launchd with a tool allowlist that excludes Bash — their only write
+ * channel is Supabase SQL, so a TypeScript writer could never be the path they
+ * take. `insert*` / `softDelete*` functions lived here with exactly one
+ * reference each (their own definition) and read as a guard over a path
+ * nothing used. The real guard is the `committee_insert` / `committee_update`
+ * SQL API, which validates a payload against the live table before writing and
+ * raises when a write matches no row. The app is read-only on this table.
+ */
