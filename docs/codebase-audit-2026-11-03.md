@@ -567,7 +567,7 @@ keeps in sync.
   schema) and `exportActionsCsv` into `lib/actions.ts`, where half the CSV concern
   already lives.
 
-### 23. CLAUDE.md: 1,334 lines, with wrong claims in it `[ ]`
+### 23. CLAUDE.md: 1,334 lines, with wrong claims in it `[x] DONE 4 Nov`
 
 It loads into every session, so a wrong line actively misleads. Verified wrong:
 
@@ -592,6 +592,50 @@ It loads into every session, so a wrong line actively misleads. Verified wrong:
 *"a gotcha belongs here only if it has no body section"*; add a short **Audit &
 Governance surfaces** section for `/audit`, households, the compliance hub and the
 trade-suitability log, which are live and entirely undocumented.
+
+**Done (PR #77). Every claim re-verified before acting — all seven were real**,
+and one was worse than recorded: the schedule had **two wrong times**
+(`at-risk-review` 09:25 → actually 09:00, `watchlist-research` 10:05 → 10:20)
+*and* omitted `earnings-call-summary` entirely. Read from the installed plists,
+which are the authority.
+
+Also wrong, and now corrected: the compliance hub is `CompliancePage.tsx` at
+`/settings/compliance` (`InvestmentCommitteePage` is a read-only reference page
+at a different route); `AllocationComparison.tsx` was deleted, not "left in
+place"; `mapSecurityJoin` has **one** importer, not four; `FundReturnTable` does
+not exist; the `fund_benchmarks_${securityId}` localStorage key **never existed
+in this tree** — the only two localStorage keys are the Actions filters and the
+notification settings. Gotcha 18 described the deleted performance engine and
+gotcha 19 instructed the reader to do precisely what its own body section
+forbids.
+
+**The gotchas are REORDERED, not renumbered** (they ran 1–20, 22, 25, 21, 23,
+24). Prose throughout cross-references them by number, so renumbering would have
+broken every reference to fix a cosmetic complaint.
+
+**On length, the finding was better than the proposal.** The job schedule was
+duplicated from `scripts/scheduled-jobs/README.md`, and **the copy here is the
+one that drifted while the README stayed right** — so the fix is to stop
+duplicating it, not to correct the copy. Both the schedule and the launchd
+runbook are now pointers; what stays is the part that is a convention rather
+than operations (prompts edited at `.claude/scheduled-tasks/…` and read from
+`main`, the symlink trap, the at-risk → post-earnings ordering). The file is
+~1,565 lines rather than the proposed ~925 — because it gained roughly 230 lines
+of genuinely new material during the audit work itself, and the remaining
+proposal (splitting deliverable shapes into `docs/research-deliverables.md`) was
+**not** done: those shapes sit beside the conventions that reference them, and
+fragmenting them looked more likely to cost accuracy than to save context.
+
+**The Audit & Governance section is added**, covering four live and entirely
+undocumented surfaces: `/audit` (read-only over an append-only table written by
+a `log_audit` trigger on **nine** tables, with no client-side writer), the
+compliance hub, households, and the trade-suitability log.
+
+**Guarded going forward** by `claudeMd.test.ts`: no named `.ts`/`.tsx` file may
+be absent from the tree (with an explicit `DELETED_ON_PURPOSE` list for the four
+named as history, each with a reason), and the gotchas must stay in order. Three
+of the seven errors were of the first kind. Both checks mutation-tested; neither
+can pass vacuously.
 
 ### 24. `supabase/archive/` makes greps lie `[ ]`
 
