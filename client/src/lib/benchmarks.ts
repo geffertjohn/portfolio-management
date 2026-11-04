@@ -201,17 +201,6 @@ export async function fetchBenchmarkByName(name: string): Promise<BenchmarkRetur
   return data as BenchmarkReturns | null
 }
 
-/** Returns the full model-portfolio benchmark row (Allocation Comparison tables). */
-export async function fetchBenchmarkAll(name: string): Promise<AnyRow | null> {
-  const { data, error } = await supabase
-    .from('model_portfolio_benchmarks')
-    .select('*')
-    .eq('security_name', name)
-    .maybeSingle()
-  if (error) throw error
-  return data as AnyRow | null
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Benchmark picker options (category + sector benchmark lists)
 // ─────────────────────────────────────────────────────────────────────────────

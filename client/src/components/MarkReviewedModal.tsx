@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { markReviewed, upsertReviewSchedule, type ReviewCadence } from '@/lib/reviewSchedules'
+import { markReviewed, type ReviewCadence } from '@/lib/reviewSchedules'
 import {
   RECOMMENDATION_OPTIONS, RECOMMENDATION_LABELS, RECOMMENDATION_COLORS,
   CONVICTION_OPTIONS, CONVICTION_LABELS, OUTCOME_LABELS,
@@ -13,6 +13,7 @@ import { fetchScorecardMetrics } from '@/lib/fmpRatios'
 import { fetchAnalystData } from '@/lib/fmpAnalyst'
 import { fetchQuote } from '@/lib/fmpMarket'
 import { beatRate, fetchTipRanksSymbolSummary } from '@/lib/fmpTipranks'
+import { buildReviewSnapshot } from '@/lib/reviewSnapshot'
 import { fmtDecimalPct, fmtUsd, fmtUtcLongDate, toLocalDateInputValue, EMPTY } from '@/lib/formatters'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { fetchLatestPostEarningsBrief, composeReviewRationale } from '@/lib/researchReports'
@@ -26,7 +27,6 @@ import { fetchCategoryBenchmark, fetchPeerGroupBenchmark } from '@/lib/benchmark
 
 /** 'schedule' — set/update cadence + next review date, no log entry.
  *  'review'   — log a completed review and advance the schedule. */
-export type ReviewModalMode = 'schedule' | 'review'
 
 interface MarkReviewedModalProps {
   open: boolean
@@ -34,7 +34,6 @@ interface MarkReviewedModalProps {
   securityId: string
   securitySymbol: string
   currentCadence: ReviewCadence
-  mode: ReviewModalMode
   /**
    * The fund/ETF record, or `null` for a stock — this ONE prop selects the path.
    *
@@ -53,18 +52,6 @@ interface MarkReviewedModalProps {
   nextEarnings?: string | null
   /** Company name for the evidence PDF's header. Stocks read it from FMP. */
   companyName?: string | null
-}
-
-const CADENCE_OPTIONS: { value: ReviewCadence; label: string; months: number }[] = [
-  { value: 'quarterly',   label: 'Quarterly (every 3 months)',   months: 3  },
-  { value: 'semi_annual', label: 'Semi-Annual (every 6 months)', months: 6  },
-  { value: 'annual',      label: 'Annual (every 12 months)',     months: 12 },
-]
-
-function addMonths(date: Date, months: number): Date {
-  const d = new Date(date)
-  d.setMonth(d.getMonth() + months)
-  return d
 }
 
 /** Parses a YYYY-MM-DD string and returns the date `days` later, or null. */
@@ -105,15 +92,13 @@ function SnapRow({ label, value }: { label: string; value: string }) {
 }
 
 export function MarkReviewedModal({
-  open, onClose, securityId, securitySymbol, currentCadence, mode,
+  open, onClose, securityId, securitySymbol, currentCadence,
   fundSecurity, lastEarnings, nextEarnings, companyName,
 }: MarkReviewedModalProps) {
   const isFund = fundSecurity !== null
   const dialogRef = useRef<HTMLDialogElement>(null)
   const queryClient = useQueryClient()
-  const [cadence, setCadence] = useState<ReviewCadence>(currentCadence)
   const [reviewDate, setReviewDate] = useState(toDateInputValue(new Date()))
-  const [nextReviewOverride, setNextReviewOverride] = useState('')
   const [notes, setNotes] = useState('')
   // Stock-specific decision state
   const [recommendation, setRecommendation] = useState<Recommendation | ''>('')
@@ -208,25 +193,14 @@ export function MarkReviewedModal({
   // Reset fields when modal opens
   useEffect(() => {
     if (open) {
-      setCadence(currentCadence)
       setReviewDate(toDateInputValue(new Date()))
       setNotes('')
       setRecommendation('')
       setConviction('')
       setFundMainOutcome(null)
       setFundAtRisk(false)
-      const cadenceMonths = CADENCE_OPTIONS.find((o) => o.value === currentCadence)?.months ?? 3
-      setNextReviewOverride(toDateInputValue(addMonths(new Date(), cadenceMonths)))
     }
   }, [open, currentCadence])
-
-  // Keep next review in sync with cadence changes (schedule mode)
-  useEffect(() => {
-    if (mode === 'schedule') {
-      const cadenceMonths = CADENCE_OPTIONS.find((o) => o.value === cadence)?.months ?? 3
-      setNextReviewOverride(toDateInputValue(addMonths(new Date(), cadenceMonths)))
-    }
-  }, [cadence, mode])
 
   useEffect(() => {
     const d = dialogRef.current
@@ -251,7 +225,7 @@ export function MarkReviewedModal({
 
   // Stock evidence — fetched on-demand (dedupes with the detail page's queries),
   // shown in the modal and frozen into the review for audit defense.
-  const snapshotEnabled = open && mode === 'review' && !isFund
+  const snapshotEnabled = open && !isFund
   const { data: scorecard } = useQuery({
     queryKey: QUERY_KEYS.scorecardMetrics(securityId),
     queryFn: () => fetchScorecardMetrics(securityId),
@@ -279,7 +253,7 @@ export function MarkReviewedModal({
 
   // Fund evidence — benchmark index names for the PDF header (dedupe with the
   // embedded FundMonitoringPanel's queries via shared keys).
-  const fundSnapEnabled = open && mode === 'review' && fundSecurity !== null
+  const fundSnapEnabled = open && fundSecurity !== null
   const { data: categoryBenchmark } = useQuery({
     queryKey: QUERY_KEYS.categoryBenchmark(fundSecurity?.ycharts_benchmark_category ?? ''),
     queryFn: () => fetchCategoryBenchmark(fundSecurity!.ycharts_benchmark_category!),
@@ -291,54 +265,23 @@ export function MarkReviewedModal({
     enabled: fundSnapEnabled && !!fundSecurity?.peer_group_name,
   })
 
-  function buildSnapshot(): ReviewMetricsSnapshot {
-    return {
-      capturedAt: new Date().toISOString(),
-      price: quote?.price ?? null,
-      scorecard: {
-        operatingMargin: scorecard?.operatingMargin ?? null,
-        fcfMargin: scorecard?.fcfMargin ?? null,
-        revGrowthTtm: scorecard?.revGrowthTtm ?? null,
-        epsGrowthTtm: scorecard?.epsGrowthTtm ?? null,
-        revCagr3y: scorecard?.revCagr3y ?? null,
-        epsCagr3y: scorecard?.epsCagr3y ?? null,
-      },
-      analyst: {
-        consensus: analyst?.grades?.consensus ?? null,
-        targetConsensus: analyst?.priceTarget?.targetConsensus ?? null,
-        numberOfAnalysts: analyst?.priceTarget?.numberOfAnalysts ?? null,
-        strongBuy: analyst?.grades?.strongBuy ?? null,
-        buy: analyst?.grades?.buy ?? null,
-        hold: analyst?.grades?.hold ?? null,
-        sell: analyst?.grades?.sell ?? null,
-        strongSell: analyst?.grades?.strongSell ?? null,
-      },
-      tipranks: tipranks
-        ? {
-            totalRecommendations: tipranks.totalRecommendations,
-            distinctAnalysts: tipranks.distinctAnalysts,
-            buy: tipranks.buy,
-            hold: tipranks.hold,
-            sell: tipranks.sell,
-            upgraded: tipranks.actions.upgraded,
-            downgraded: tipranks.actions.downgraded,
-            beatRate: beatRate(tipranks),
-            averageReturn: tipranks.averageReturn,
-          }
-        : null,
-    }
-  }
+  /**
+   * The frozen evidence, built by `lib/reviewSnapshot.ts`.
+   *
+   * It lived here as a closure until Nov 2026, where nothing could test the
+   * one mapping that makes a stock review reconstructable (audit §22).
+   */
+  const buildSnapshot = (): ReviewMetricsSnapshot => buildReviewSnapshot({
+    capturedAt: new Date().toISOString(),
+    quote, scorecard, analyst, tipranks,
+    tipranksBeatRate: tipranks ? beatRate(tipranks) : null,
+  })
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedules })
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedule(securityId) })
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewLog(securityId) })
   }
-
-  const scheduleMutation = useMutation({
-    mutationFn: () => upsertReviewSchedule(securityId, cadence, new Date(nextReviewOverride + 'T00:00:00')),
-    onSuccess: () => { invalidateAll(); onClose() },
-  })
 
   /**
    * The at-risk flag wins the enum. Maintain and At-Risk toggle independently,
@@ -460,7 +403,7 @@ export function MarkReviewedModal({
 
       await markReviewed({
         securityId,
-        cadence: isFund ? 'quarterly' : cadence,
+        cadence: isFund ? 'quarterly' : currentCadence,
         notes,
         // Funds: keep editable review date + cadence-based next review.
         // Stocks: completion = today, scheduled = last earnings + 1, next = next earnings + 1.
@@ -496,7 +439,7 @@ export function MarkReviewedModal({
     },
   })
 
-  const activeMutation = mode === 'schedule' ? scheduleMutation : reviewMutation
+  const activeMutation = reviewMutation
   const isPending = activeMutation.isPending
 
   const handleClose = () => {
@@ -511,33 +454,28 @@ export function MarkReviewedModal({
   // Ready once either selection is made. Notes are optional for funds now that
   // Propose -- the one outcome that required a written rationale -- is gone.
   const fundOutcomeReady = fundMainOutcome !== null || fundAtRisk
-  // Review mode is submittable only when required fields are filled.
+  // Submittable only when the required fields are filled.
   // Stocks require a recommendation and a written rationale.
   const stockReviewReady = !!recommendation && notes.trim() !== ''
-  const reviewReady = mode !== 'review' || (!!reviewDate && (isFund ? fundOutcomeReady : stockReviewReady))
-  const scheduleReady = mode !== 'schedule' || !!nextReviewOverride
+  const reviewReady = !!reviewDate && (isFund ? fundOutcomeReady : stockReviewReady)
 
   return (
     <dialog ref={dialogRef} tabIndex={-1} onCancel={handleClose}
       className={`max-h-[90vh] w-full rounded-lg border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/30 ${
-        mode === 'review' ? (isFund ? 'max-w-3xl' : 'max-w-2xl') : 'max-w-md'
+        isFund ? 'max-w-3xl' : 'max-w-2xl'
       }`}>
       <form onSubmit={handleSubmit} className="max-h-[90vh] overflow-y-auto p-6">
 
         {/* Header */}
-        <h2 className="text-lg font-semibold text-gray-900">
-          {mode === 'schedule' ? 'Set Review Schedule' : 'Mark as Reviewed'}
-        </h2>
+        <h2 className="text-lg font-semibold text-gray-900">Mark as Reviewed</h2>
         <p className="mt-1 text-sm text-gray-500">
-          {mode === 'schedule'
-            ? `${securitySymbol} — configure the review cadence and next review date.`
-            : `${securitySymbol} — log a completed review and advance the schedule.`}
+          {`${securitySymbol} — log a completed review and advance the schedule.`}
         </p>
 
         <div className="mt-4 space-y-4">
 
-          {/* Review date — review mode only */}
-          {mode === 'review' && (
+          {/* Review date */}
+          {(
             isFund ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700">Review Date</label>
@@ -565,24 +503,9 @@ export function MarkReviewedModal({
             )
           )}
 
-          {/* Cadence — schedule mode only (cadence is otherwise set by the model portfolio) */}
-          {mode === 'schedule' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Review Cadence</label>
-              <select
-                value={cadence}
-                onChange={(e) => setCadence(e.target.value as ReviewCadence)}
-                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500">
-                {CADENCE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {/* Evidence block — funds/ETFs. The on-page Category/Peer group monitoring
               block, frozen into the uploaded PDF as evidence at the review date. */}
-          {mode === 'review' && fundSecurity && (
+          {fundSecurity && (
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Evidence at review <span className="font-normal text-gray-400">(saved to Documents as a PDF)</span>
@@ -597,22 +520,8 @@ export function MarkReviewedModal({
             </div>
           )}
 
-          {/* Next review date — schedule mode: editable */}
-          {mode === 'schedule' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Next Review Date</label>
-              <input
-                type="date"
-                value={nextReviewOverride}
-                onChange={(e) => setNextReviewOverride(e.target.value)}
-                required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-              />
-            </div>
-          )}
-
-          {/* Next review display — review mode, non-fund: next earnings + 1 day, read-only */}
-          {mode === 'review' && !isFund && (
+          {/* Next review display — non-fund: next earnings + 1 day, read-only */}
+          {!isFund && (
             <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
               <p className="text-xs font-medium text-gray-500">Next review will be set to</p>
               <p className="mt-0.5 text-sm font-semibold text-gray-900">
@@ -622,7 +531,7 @@ export function MarkReviewedModal({
           )}
 
           {/* Evidence snapshot — stocks only. Frozen into the review on submit. */}
-          {mode === 'review' && !isFund && (
+          {!isFund && (
             <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2.5">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Evidence at review
@@ -647,8 +556,7 @@ export function MarkReviewedModal({
             </div>
           )}
 
-          {/* ── Review-only fields ── */}
-          {mode === 'review' && (
+          {(
             <>
               {/* Outcome (funds) / Recommendation (stocks) — required */}
               <div>
@@ -816,11 +724,9 @@ export function MarkReviewedModal({
             Cancel
           </button>
           <button type="submit"
-            disabled={isPending || !reviewReady || !scheduleReady}
+            disabled={isPending || !reviewReady}
             className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50">
-            {isPending
-              ? 'Saving…'
-              : mode === 'schedule' ? 'Save Schedule' : 'Mark as Reviewed'}
+            {isPending ? 'Saving…' : 'Mark as Reviewed'}
           </button>
         </div>
       </form>

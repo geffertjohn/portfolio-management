@@ -168,7 +168,6 @@ interface TooltipPayloadItem {
 interface FinancialsTooltipProps {
   active?: boolean
   payload?: TooltipPayloadItem[]
-  metric: Metric
   metricDef: { label: string; isEps: boolean }
 }
 
@@ -473,10 +472,7 @@ export function FinancialsSection({ security }: Props) {
             />
             <Tooltip
               content={
-                <FinancialsTooltip
-                  metric={metric}
-                  metricDef={metricDef}
-                />
+                <FinancialsTooltip metricDef={metricDef} />
               }
             />
             <Line

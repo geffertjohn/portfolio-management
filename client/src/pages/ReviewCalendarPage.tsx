@@ -226,7 +226,6 @@ export function ReviewCalendarPage() {
           securityId={reviewing.securityId}
           securitySymbol={reviewing.symbol}
           currentCadence={reviewing.cadence}
-          mode="review"
           fundSecurity={reviewing.isFund ? fundRecord ?? null : null}
           lastEarnings={reviewing.lastEarnings}
           nextEarnings={reviewing.nextEarnings}

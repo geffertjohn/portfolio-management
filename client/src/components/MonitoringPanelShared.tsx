@@ -69,7 +69,6 @@ export function MetricCard({
   displayValue: string
   rawValue: number | null
   neutral: number
-  scale: number
   higherIsBetter: boolean
   benchmarkValue?: number | null
   benchmark2Value?: number | null
