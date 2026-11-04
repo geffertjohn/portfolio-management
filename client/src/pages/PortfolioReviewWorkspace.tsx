@@ -20,6 +20,11 @@ import { ThesisScorecardSection } from '@/components/ThesisScorecardSection'
 import { WatchlistStatusSection } from '@/components/WatchlistStatusSection'
 import { DeepReviewSection } from '@/components/DeepReviewSection'
 import { ConvictionRankingSection } from '@/components/ConvictionRankingSection'
+import { FundScorecardReviewSection } from '@/components/review/FundScorecardReviewSection'
+import { ReviewAtRiskSection } from '@/components/review/ReviewAtRiskSection'
+import { fetchActiveAtRisk, addToAtRisk, removeFromAtRisk } from '@/lib/atRisk'
+import { atRiskMetricsFromScorecard } from '@/lib/fundAtRisk'
+import type { ScorecardCohort, ScorecardRow } from '@/lib/fundScorecard'
 import { PortfolioConstructionSection } from '@/components/PortfolioConstructionSection'
 import { formatDate } from '@/lib/fundFormat'
 import { toLocalDateInputValue } from '@/lib/formatters'
@@ -87,6 +92,74 @@ export function PortfolioReviewWorkspace() {
     // not via a mid-session refetch).
     gcTime: 0,
   })
+
+  /**
+   * The At-Risk list, for the fund quarterly review's scorecard step and its
+   * summary. Fetched under the shared key so a flag raised here also refreshes
+   * the At-Risk page and the Actions hub.
+   */
+  const { data: atRiskAll = [] } = useQuery({
+    queryKey: QUERY_KEYS.atRisk,
+    queryFn: fetchActiveAtRisk,
+    enabled: !!portfolio,
+  })
+
+  /** Foundation / Hybrid / ETF / Fixed Income — everything that is not Equity. */
+  const isFundBook = !!portfolio && portfolio.portfolio_strategy !== 'Equity'
+
+  const [flagging, setFlagging] = useState<string | null>(null)
+  const [clearing, setClearing] = useState<string | null>(null)
+  const [atRiskError, setAtRiskError] = useState<string | null>(null)
+
+  const refreshAtRisk = (securityId: string) => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRisk })
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.atRiskBySecurity(securityId) })
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.allActions })
+  }
+
+  /**
+   * Flag a fund from its scorecard.
+   *
+   * The failing readings go WITH it: `addToAtRisk` sizes the sell timer on how
+   * many failed, so an empty array takes the longest rung and leaves nothing to
+   * re-measure — which is how IAGG ended up with a timer into Sept 2027 and no
+   * metrics at all. `nextEarnings` is deliberately omitted: a fund does not
+   * report, so the day table is the right basis rather than a borrowed date.
+   */
+  const flagAtRisk = async (
+    { securityId, cohort, rows, note }: {
+      securityId: string
+      cohort: ScorecardCohort
+      rows: ScorecardRow[]
+      note: string
+    },
+  ) => {
+    setAtRiskError(null)
+    setFlagging(securityId)
+    try {
+      const metrics = atRiskMetricsFromScorecard(rows, cohort)
+      if (metrics.length === 0) throw new Error('No bottom-tier metric to record — nothing was flagged.')
+      await addToAtRisk(securityId, metrics, note.trim() || null, 'manual')
+      refreshAtRisk(securityId)
+    } catch (e) {
+      setAtRiskError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setFlagging(null)
+    }
+  }
+
+  const clearAtRisk = async (entryId: number, securityId: string, reason: string) => {
+    setAtRiskError(null)
+    setClearing(securityId)
+    try {
+      await removeFromAtRisk(entryId, reason, 'manual')
+      refreshAtRisk(securityId)
+    } catch (e) {
+      setAtRiskError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClearing(null)
+    }
+  }
 
   // ── Edit state (seeded from the draft) ──────────────────────────────────
   const [items, setItems] = useState<ReviewChecklistItem[]>([])
@@ -281,6 +354,26 @@ export function PortfolioReviewWorkspace() {
           ) : active === SUMMARY ? (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">Summary &amp; complete</h2>
+
+              {/* At-Risk leads the summary: what this book is watching, and
+                  anything this review added to it.
+                  Fund books only, for now. It would read just as well on an
+                  Equity review, but the stock At-Risk list is owned by the
+                  at-risk-review job and adding a second surface onto it was
+                  not what was asked for. */}
+              {init && isFundBook && (
+                <ReviewAtRiskSection
+                  positions={positions}
+                  atRisk={atRiskAll}
+                  draftStartedAt={init.draft.reviewedAt}
+                  clearing={clearing}
+                  onClear={clearAtRisk}
+                />
+              )}
+              {atRiskError && (
+                <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{atRiskError}</p>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">Summary notes <span className="text-gray-400">(optional)</span></label>
                 <textarea
@@ -333,6 +426,14 @@ export function PortfolioReviewWorkspace() {
 
               {active === 'performance_attribution' && <AttributionMovers portfolioId={id} />}
               {active === 'position_sizing' && <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} portfolioName={id} />}
+              {active === 'scorecard_review' && (
+                <FundScorecardReviewSection
+                  positions={positions}
+                  atRisk={atRiskAll}
+                  flagging={flagging}
+                  onFlag={flagAtRisk}
+                />
+              )}
               {active === 'full_monitoring' && (
                 <HoldingMonitorGrid positions={positions} assessments={assessments} onChange={setHoldingField} />
               )}
