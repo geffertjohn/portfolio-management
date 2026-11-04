@@ -308,6 +308,36 @@ write time.
     load when its two vars are missing, so importing any lib that happens to
     also hold a data-access function would fail before a pure function ran. They
     point nowhere; no test performs I/O.
+- **`schemaContract.test.ts` asserts the code still agrees with the DATABASE**,
+  by reading `supabase/schema.sql` — which CI already forces to stay current, so
+  it is an offline copy of what the live DB will accept. No connection, no
+  Docker, no credentials. Three rules, and the first two point in opposite
+  directions deliberately:
+  - **`*_OPTIONS` ⊆ CHECK** — every value the UI can WRITE must be one the DB
+    accepts, or the save 400s at runtime.
+  - **`*_LABELS` ⊇ CHECK** — every value the DB can HOLD must have a label, or a
+    stored row renders blank. An OPTIONS list NARROWER than its CHECK is
+    legitimate and common: a retired value stays permitted so old rows keep
+    their meaning while the way to record a new one is gone
+    (`review_log.outcome` is the standing example), which is why equality is the
+    wrong assertion in both directions.
+  - **A numeric guard matches the constraint it stands in for** —
+    `isStorablePositionWeight` against `positions_allocation_pct_check`. That
+    pairing is why the file exists: `positions.allocation_pct` is constrained
+    0–100 and `portfolio_allocations.weight` is not constrained at all, so the
+    History grid could hold a weight Positions would reject.
+  - It also asserts that each **partial unique index that encodes a documented
+    rule still exists** (the pre/post-brief dedupes, one draft + one current
+    thesis, one live watchlist idea per ticker, …) — dropping one silently
+    re-opens the defect it was added for.
+  - **A bare TS union with no runtime list is locked three ways** via the
+    `Exhaustive<>` helper: `tsc` fails if the UNION drifts from the literal, and
+    the test fails if the DATABASE does. Covers `Rating`, `ReportType`,
+    `ThesisStatus` and `ImportSource`.
+  - **It is NOT a substitute for integration tests against a real Postgres** —
+    those would also cover FKs, RLS and PostgREST behaviour. This is the cheap
+    half, and it closes the one failure this repo keeps repeating: a constraint
+    and the code meant to mirror it drifting apart with nothing noticing.
 - **The suite is wired into both gates** — the pre-commit hook and CI run it
   alongside typecheck and lint.
 - **`quarterlyBrief.test.ts` carries the one test that is a safety property, not
@@ -1293,8 +1323,8 @@ the workbook cost nothing.
 ### Import provenance — `import_runs`
 
 YCharts figures carry **no as-of date of their own**, so a months-old number
-renders identically to a fresh one. Every import logs a row: `source` (one of six,
-CHECK-constrained), `file_name`, `imported_at`, `rows_written`, `errors`. The
+renders identically to a fresh one. Every import logs a row: `source` (one of four,
+CHECK-constrained — it was six before the Sep 2026 consolidation), `file_name`, `imported_at`, `rows_written`, `errors`. The
 newest run per source is that dataset's stamp.
 
 - Data layer `lib/importRuns.ts`. **`recordImportRuns` never throws** — the data is
