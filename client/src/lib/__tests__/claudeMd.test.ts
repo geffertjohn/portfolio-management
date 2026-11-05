@@ -69,6 +69,7 @@ const REMOVED_ON_PURPOSE = new Set([
   'AnalystCoveragePanel',           // deleted Oct 2026; header covers the price
   'AlertRulesSection',              // rule CRUD UI, deleted with the firing engine
   'CompliancePanel',                // per-portfolio tab, replaced by the Settings hub
+  'NotificationsPage',              // deleted Nov 2026 (audit §19); named as the mistake not to repeat
   'Median',                         // FMP's targetMedian field, not ours
   'TypeError',                      // JS builtin
 ])

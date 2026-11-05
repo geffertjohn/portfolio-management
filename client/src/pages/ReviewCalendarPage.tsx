@@ -188,6 +188,10 @@ export function ReviewCalendarPage() {
           <p className="mt-1 text-gray-600">
             Complete quarterly, semi-annual, and annual security reviews.{' '}
             <a href="/actions" className="text-blue-600 hover:underline">See all actions →</a>
+            {' · '}
+            {/* The companion question: this page says what is owed now, that
+                one says which calls were owed and never answered. */}
+            <a href="/reviews/coverage" className="text-blue-600 hover:underline">Coverage report →</a>
           </p>
           {refreshing && (
             <p className="mt-1 text-xs text-gray-400">Refreshing stock earnings dates from FMP…</p>
