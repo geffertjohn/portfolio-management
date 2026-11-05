@@ -73,6 +73,10 @@ describe('isOverdue / isDueSoon', () => {
 })
 
 describe('redatedStockSchedules', () => {
+  // MSI's real situation: schedule dated Oct 30 from a superseded estimate while
+  // the stored next-earnings date read Nov 4. TODAY sits before both, so the
+  // correction is a plain forward re-date of a row not yet due.
+  const TODAY = '2026-10-28'
   const row = (over: Partial<Parameters<typeof redatedStockSchedules>[0][0]> = {}) => ({
     security_id: 'MSI',
     next_review_at: '2026-10-30T00:00:00Z',
@@ -82,34 +86,84 @@ describe('redatedStockSchedules', () => {
   })
 
   it('moves a schedule that disagrees with its earnings date to that date plus one', () => {
-    expect(redatedStockSchedules([row()])).toEqual([
+    expect(redatedStockSchedules([row()], TODAY)).toEqual([
       { securityId: 'MSI', from: '2026-10-30', nextReviewAt: '2026-11-05T00:00:00Z' },
     ])
   })
 
   it('returns nothing when the schedule already agrees', () => {
-    expect(redatedStockSchedules([row({ next_review_at: '2026-11-05T00:00:00Z' })])).toEqual([])
+    expect(redatedStockSchedules([row({ next_review_at: '2026-11-05T00:00:00Z' })], TODAY)).toEqual([])
   })
 
   it('agrees across the two storage conventions', () => {
     // Local midnight EST for the same calendar day must not look like a mismatch.
-    expect(redatedStockSchedules([row({ next_review_at: '2026-11-05T04:00:00Z' })])).toEqual([])
+    expect(redatedStockSchedules([row({ next_review_at: '2026-11-05T04:00:00Z' })], TODAY)).toEqual([])
   })
 
   it('leaves an outstanding review for a call that already happened', () => {
     // Due on/before last earnings + 1: the advisor still owes that review, and
     // pushing it to the next call would erase the obligation.
-    expect(redatedStockSchedules([row({ next_review_at: '2026-08-06T00:00:00Z' })])).toEqual([])
+    expect(redatedStockSchedules([row({ next_review_at: '2026-08-06T00:00:00Z' })], TODAY)).toEqual([])
   })
 
   it('skips a row with no earnings date to derive from', () => {
-    expect(redatedStockSchedules([row({ next_earnings_release: null })])).toEqual([])
+    expect(redatedStockSchedules([row({ next_earnings_release: null })], TODAY)).toEqual([])
   })
 
   it('crosses a month and a year boundary without slipping a day', () => {
+    // Both dates ahead of TODAY, so only the arithmetic is under test.
     expect(redatedStockSchedules([row({
       next_earnings_release: '2026-12-31', next_review_at: '2026-06-01T00:00:00Z',
       last_earnings_release: '2026-05-01',
-    })])[0].nextReviewAt).toBe('2027-01-01T00:00:00Z')
+    })], '2026-05-15')[0].nextReviewAt).toBe('2027-01-01T00:00:00Z')
+  })
+
+  describe('a review that has already fallen due is never deferred', () => {
+    /**
+     * HOOD, live on 5 Nov 2026, and the reason this guard exists.
+     *
+     * Its stored `next_earnings_release` read 4 Nov, so the schedule was dated
+     * 5 Nov — but the call had actually been held on 27 Oct and was never
+     * reviewed (last reviewed 4 May). The FMP top-up corrected the dates to
+     * `last = 27 Oct, next = 9 Feb`, and because 5 Nov falls AFTER 28 Oct the
+     * outstanding-review guard above could not see it. The re-date then moved a
+     * review due that very day out to 10 Feb 2027, cancelling the review of the
+     * October call outright.
+     *
+     * A schedule dated off an estimate that never happened lands in exactly
+     * that blind spot: between the real call and the next one.
+     */
+    const hood = {
+      security_id: 'HOOD',
+      next_review_at: '2026-11-05T00:00:00Z',
+      last_earnings_release: '2026-10-27',
+      next_earnings_release: '2027-02-09',
+    }
+
+    it('does not push a review due TODAY into the next quarter', () => {
+      expect(redatedStockSchedules([hood], '2026-11-05')).toEqual([])
+    })
+
+    it('does not push an OVERDUE review into the next quarter', () => {
+      expect(redatedStockSchedules([hood], '2026-11-20')).toEqual([])
+    })
+
+    it('still re-dates a row that is not yet due', () => {
+      // The guard must not disarm the feature it sits inside.
+      expect(redatedStockSchedules([hood], '2026-11-04')).toEqual([
+        { securityId: 'HOOD', from: '2026-11-05', nextReviewAt: '2027-02-10T00:00:00Z' },
+      ])
+    })
+
+    it('still corrects a due row when the target is also due', () => {
+      // Nothing is being deferred here — both dates are in the past, so the
+      // correction makes the row agree with the call it belongs to.
+      expect(redatedStockSchedules(
+        [{ ...hood, next_earnings_release: '2026-10-20' }],
+        '2026-11-05',
+      )).toEqual([
+        { securityId: 'HOOD', from: '2026-11-05', nextReviewAt: '2026-10-21T00:00:00Z' },
+      ])
+    })
   })
 })

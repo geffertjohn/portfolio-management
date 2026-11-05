@@ -230,8 +230,36 @@ function addUtcDays(isoDate: string, days: number): string {
  *
  * Pure — pass it rows already filtered to stocks (funds are cadence-driven and
  * have no earnings date to derive from). Returns only the rows that must change.
+ *
+ * **A re-date may correct a date; it may never retire a review that has already
+ * fallen due.** Two guards do that, and the second was missing until Nov 2026:
+ *
+ * - An outstanding review for a call that already happened is left alone
+ *   (`current <= last_earnings_release + 1`). That covers the ordinary case —
+ *   the stock reported, the review is due, and the next earnings date has
+ *   already rolled a quarter forward.
+ * - But it only covers it when the review date sits at or before that call.
+ *   **A schedule dated off a next-earnings ESTIMATE that never happened lands
+ *   between the real call and the next one, where the first guard cannot see
+ *   it.** HOOD was live proof on 5 Nov 2026: stored `next_earnings_release`
+ *   read 4 Nov, so its review was dated 5 Nov, while the call had actually
+ *   been held on 27 Oct and was never reviewed (last reviewed 4 May). The FMP
+ *   top-up corrected the dates to `last = 27 Oct, next = 9 Feb`; 5 Nov is
+ *   after 28 Oct, so the first guard passed and the re-date moved a review due
+ *   THAT DAY out to 10 Feb 2027 — silently cancelling the review of the
+ *   October call.
+ *
+ * So a row already due (today or earlier) is never pushed into the future. It
+ * stays where it is and stays visible; nothing is moved BACKWARD, because that
+ * would assert a missed review from a date no call was held on. Whether the
+ * calendar should go further and date such a row from the call it actually
+ * missed is a separate question — 27 of 54 stocks currently carry an unreviewed
+ * call — and deliberately not decided here.
  */
-export function redatedStockSchedules(rows: ScheduleRedateInput[]): ScheduleRedate[] {
+export function redatedStockSchedules(
+  rows: ScheduleRedateInput[],
+  today: string,
+): ScheduleRedate[] {
   const out: ScheduleRedate[] = []
   for (const r of rows) {
     if (!r.next_earnings_release || !r.next_review_at) continue
@@ -243,6 +271,8 @@ export function redatedStockSchedules(rows: ScheduleRedateInput[]): ScheduleReda
     if (current === target) continue
     // Outstanding review for a call that already happened — leave it alone.
     if (r.last_earnings_release && current <= addUtcDays(r.last_earnings_release, 1)) continue
+    // Already due, and the correction would defer it. Leave it on the calendar.
+    if (current <= today && target > today) continue
     out.push({ securityId: r.security_id, from: current, nextReviewAt: `${target}T00:00:00Z` })
   }
   return out
@@ -492,4 +522,105 @@ export function isDueSoon(nextReviewAt: string, withinDays = 14): boolean {
   soon.setDate(soon.getDate() + withinDays)
   const d = new Date(nextReviewAt)
   return d >= now && d <= soon
+}
+
+/**
+ * Which scheduled securities no longer sit in ANY book. Pure.
+ *
+ * The mirror of `newScheduleWrites`, and the reason it has to exist: the
+ * purchase path creates a schedule, and until Nov 2026 nothing retired one.
+ * Selling out of every book left the timer standing, so VTABX — gone from the
+ * last book in Mar 2026 — was still carrying a review due 9 Dec 2026, and
+ * APDFX, sold out of its last book on 1 Oct, one due 29 Dec. Both would have
+ * come up on the Review Calendar and in the Actions hub as reviews due for
+ * funds the firm does not own. In an audit-defence tool that is worse than
+ * noise: a review recorded against an unheld security is a false record of
+ * process.
+ *
+ * **Held in one book is held.** The set of holders is collapsed before the
+ * difference is taken, because a security typically sits in several — APDFX
+ * was in six — and removing it from one is a rebalance, not a sale. Comparing
+ * per-position rather than per-security would retire a live holding's timer on
+ * the first book it left.
+ *
+ * `held` is every *live* position (`deleted_at is null`); the two delete paths
+ * disagree on how they remove a row — `deletePosition` soft-deletes for
+ * regulatory retention while the allocation import hard-deletes — so the
+ * caller filters on that column rather than on the shape of the deletion.
+ */
+export function retiredSchedules(scheduled: string[], held: string[]): string[] {
+  const holding = new Set(held.map((s) => s?.trim()).filter(Boolean))
+  return [...new Set(scheduled.map((s) => s?.trim()).filter(Boolean))]
+    .filter((id) => !holding.has(id as string))
+    .sort() as string[]
+}
+
+/**
+ * Retire the review schedules of securities that have left every book.
+ *
+ * **Called from the three paths that take a security out of `positions`** —
+ * `deletePosition`, `updatePosition` (the outgoing ticker) and
+ * `syncPositionsFromLatestSnapshot` (its `gone` set). Pass the securities whose
+ * position was just removed; this re-reads `positions` to confirm none of them
+ * is still held elsewhere before deleting anything.
+ *
+ * **The row is deleted, not flagged.** A schedule is a forward-looking timer,
+ * not a record — the reviews themselves live in `review_log` and are untouched,
+ * and `review_schedules` is one of the nine tables the `log_audit` trigger
+ * covers, so the deletion is itself recorded. Keeping the row and merely hiding
+ * it would be worse than either: `ensureReviewSchedules` filters to the
+ * *unscheduled*, so a hidden row would block a clean re-seed and a re-purchased
+ * fund would come back carrying a date from its previous life — the
+ * manufactured-overdue claim `seededStockSchedules` exists to refuse.
+ *
+ * **It never throws**, for the same reason as `ensureReviewSchedules`: the
+ * position is already gone by the time this runs, so a failure here must not
+ * report a completed sale as failed. The calendar's sweep is the backstop.
+ */
+export async function retireReviewSchedules(securityIds: string[]): Promise<number> {
+  const candidates = [...new Set(securityIds.map((s) => s?.trim()).filter(Boolean))] as string[]
+  if (candidates.length === 0) return 0
+
+  try {
+    const [scheduled, held] = await Promise.all([
+      supabase.from('review_schedules').select('security_id').in('security_id', candidates),
+      supabase.from('positions').select('security_id').in('security_id', candidates).is('deleted_at', null),
+    ])
+    if (scheduled.error) throw scheduled.error
+    if (held.error) throw held.error
+
+    const retire = retiredSchedules(
+      (scheduled.data ?? []).map((r) => r.security_id),
+      (held.data ?? []).map((r) => r.security_id),
+    )
+    if (retire.length === 0) return 0
+
+    const { error } = await supabase.from('review_schedules').delete().in('security_id', retire)
+    if (error) throw error
+    return retire.length
+  } catch (err) {
+    console.warn('retireReviewSchedules: could not retire', candidates, err)
+    return 0
+  }
+}
+
+/**
+ * Every scheduled security that no book holds — the calendar's sweep.
+ *
+ * The sale-path wiring above cannot reach a row whose position was removed
+ * before it existed, and nothing will ever call it for those again. This is the
+ * same backstop-beside-the-write-path shape the seeding side already has, and
+ * it is what lets the two stranded rows heal without hand-written SQL.
+ */
+export async function fetchOrphanedSchedules(): Promise<string[]> {
+  const [scheduled, held] = await Promise.all([
+    supabase.from('review_schedules').select('security_id'),
+    supabase.from('positions').select('security_id').is('deleted_at', null),
+  ])
+  if (scheduled.error) throw scheduled.error
+  if (held.error) throw held.error
+  return retiredSchedules(
+    (scheduled.data ?? []).map((r) => r.security_id),
+    (held.data ?? []).map((r) => r.security_id),
+  )
 }
