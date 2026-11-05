@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isDueSoon, isOverdue, redatedStockSchedules, reviewDueDay,
   outstandingCallReviewDay, effectiveReviewDay,
+  needsEarningsCheck, correctedFutureEarnings,
 } from '../reviewSchedules'
 
 /**
@@ -275,5 +276,131 @@ describe('an unreviewed call is surfaced as overdue', () => {
     expect(outstandingCallReviewDay(stock({
       last_reviewed_at: '2026-10-20T04:00:00Z', last_earnings_release: '2026-10-13T00:00:00Z',
     }))).toBeNull()
+  })
+})
+
+describe('asking FMP about a date that is wrong but still in the future', () => {
+  /**
+   * HOOD, and the reason this rule exists. Its stored `next_earnings_release`
+   * read 4 Nov 2026 while the call was actually held on 27 Oct. Every refresh
+   * path tested null-or-past, so the bad date passed every one of them for six
+   * weeks while `last_earnings_release` sat a whole quarter behind on 29 July.
+   *
+   * `pre-earnings-brief` screens candidates on that stored date, so HOOD was
+   * never a candidate during its real window; by the time the stored date
+   * brought it into view the print was a week past and the job correctly
+   * refused to write expectations for a call already held. Because
+   * `research_reports_post_needs_parent` makes a post-brief impossible without
+   * a pre-brief, that quarter can never be briefed at all.
+   */
+  const TODAY = '2026-10-20'
+
+  it('checks a date reporting inside the horizon, though it is in the FUTURE', () => {
+    // The new case. On 20 Oct, HOOD's stored 4 Nov is 15 days out — inside the
+    // window, so it gets asked, and FMP would have said 27 Oct with a week to
+    // spare before the real call.
+    expect(needsEarningsCheck('2026-11-04', TODAY)).toBe(true)
+  })
+
+  it('still checks a null date', () => {
+    expect(needsEarningsCheck(null, TODAY)).toBe(true)
+    expect(needsEarningsCheck(undefined, TODAY)).toBe(true)
+  })
+
+  it('still checks a date in the past', () => {
+    expect(needsEarningsCheck('2026-10-19', TODAY)).toBe(true)
+  })
+
+  it('does NOT check a date today', () => {
+    // A call today is not stale — gotcha from #97: refreshing it would advance
+    // the stored date past that call and skip the review due tomorrow. It is
+    // inside the horizon, so it is checked for that reason, not for staleness.
+    expect(needsEarningsCheck('2026-10-20', TODAY)).toBe(true)
+  })
+
+  it('leaves a far-off date alone', () => {
+    // The bound that keeps this cheap: six of fifty-four held stocks on the day
+    // it was written, not all of them on every calendar mount.
+    expect(needsEarningsCheck('2026-11-11', TODAY)).toBe(false)
+    expect(needsEarningsCheck('2027-02-09', TODAY)).toBe(false)
+  })
+
+  it('treats the horizon edge as inside it', () => {
+    expect(needsEarningsCheck('2026-11-10', TODAY)).toBe(true)  // exactly 21 days
+    expect(needsEarningsCheck('2026-11-11', TODAY)).toBe(false) // 22
+  })
+
+  it('takes a horizon the caller chooses', () => {
+    expect(needsEarningsCheck('2026-11-04', TODAY, 7)).toBe(false)
+    expect(needsEarningsCheck('2026-11-04', TODAY, 30)).toBe(true)
+  })
+
+  it('reads a full timestamp the same as a bare day', () => {
+    expect(needsEarningsCheck('2027-02-09T00:00:00Z', TODAY)).toBe(false)
+  })
+})
+
+describe('reporting a future earnings date that MOVED', () => {
+  const TODAY = '2026-10-20'
+
+  it('names a symbol whose upcoming date changed', () => {
+    // The HOOD signature: still ahead of us, and not where we thought.
+    expect(correctedFutureEarnings(
+      new Map([['HOOD', '2026-11-04']]),
+      [{ symbol: 'HOOD', nextEarnings: '2026-10-27' }],
+      TODAY,
+    )).toEqual(['HOOD'])
+  })
+
+  it('stays quiet on a routine roll-forward from a PAST date', () => {
+    // A date that went past and advanced a quarter is upkeep, not a finding.
+    // Reporting it would bury the one line that matters.
+    expect(correctedFutureEarnings(
+      new Map([['AAPL', '2026-10-13']]),
+      [{ symbol: 'AAPL', nextEarnings: '2027-02-04' }],
+      TODAY,
+    )).toEqual([])
+  })
+
+  it('stays quiet when the date did not move', () => {
+    expect(correctedFutureEarnings(
+      new Map([['NVDA', '2026-11-18']]),
+      [{ symbol: 'NVDA', nextEarnings: '2026-11-18' }],
+      TODAY,
+    )).toEqual([])
+  })
+
+  it('stays quiet when there was no date to compare', () => {
+    // A first population is not a correction.
+    expect(correctedFutureEarnings(
+      new Map([['NEW', null]]),
+      [{ symbol: 'NEW', nextEarnings: '2026-12-01' }],
+      TODAY,
+    )).toEqual([])
+  })
+
+  it('stays quiet when FMP returned nothing', () => {
+    // Nothing was written, so nothing was corrected.
+    expect(correctedFutureEarnings(
+      new Map([['HOOD', '2026-11-04']]),
+      [{ symbol: 'HOOD', nextEarnings: null }],
+      TODAY,
+    )).toEqual([])
+  })
+
+  it('compares on the day part, not the timestamp', () => {
+    expect(correctedFutureEarnings(
+      new Map([['X', '2026-11-04T00:00:00Z']]),
+      [{ symbol: 'X', nextEarnings: '2026-11-04' }],
+      TODAY,
+    )).toEqual([])
+  })
+
+  it('reports several, sorted', () => {
+    expect(correctedFutureEarnings(
+      new Map([['WMT', '2026-11-19'], ['HOOD', '2026-11-04']]),
+      [{ symbol: 'WMT', nextEarnings: '2026-11-17' }, { symbol: 'HOOD', nextEarnings: '2026-10-27' }],
+      TODAY,
+    )).toEqual(['HOOD', 'WMT'])
   })
 })
