@@ -3075,6 +3075,14 @@ CREATE OR REPLACE TRIGGER "audit_review_schedules" AFTER INSERT OR DELETE OR UPD
 
 
 
+CREATE OR REPLACE TRIGGER "audit_securities2_ins_del" AFTER INSERT OR DELETE ON "public"."securities2" FOR EACH ROW EXECUTE FUNCTION "public"."log_audit"();
+
+
+
+CREATE OR REPLACE TRIGGER "audit_securities2_update" AFTER UPDATE ON "public"."securities2" FOR EACH ROW WHEN ((("old"."category_name" IS DISTINCT FROM "new"."category_name") OR ("old"."preferred_benchmark1_id" IS DISTINCT FROM "new"."preferred_benchmark1_id") OR ("old"."preferred_benchmark2_id" IS DISTINCT FROM "new"."preferred_benchmark2_id") OR ("old"."scorecard_cohort" IS DISTINCT FROM "new"."scorecard_cohort") OR ("old"."alt_1" IS DISTINCT FROM "new"."alt_1") OR ("old"."alt_2" IS DISTINCT FROM "new"."alt_2") OR ("old"."alt_3" IS DISTINCT FROM "new"."alt_3"))) EXECUTE FUNCTION "public"."log_audit"();
+
+
+
 CREATE OR REPLACE TRIGGER "category_benchmarks_updated_at" BEFORE UPDATE ON "public"."category_benchmarks" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 

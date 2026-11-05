@@ -103,10 +103,12 @@ respectively. Don't repurpose them.
       show it. The save error is rendered, never swallowed — the
       benchmark-picker lesson, for the same reason: this is a governed value
       the allocation tables read.
-    - **`securities2` carries no audit trigger**, so unlike the nine
-      `log_audit` tables this change leaves no trail. Same caveat as
-      `model_portfolio_data`; worth knowing before relying on it in an
-      examination.
+    - **This IS audited** (Nov 2026). `securities2` joined the `log_audit`
+      tables the day after this shipped, conditionally: `category_name` is one
+      of the seven decision columns whose change writes an `audit_log` row, so
+      a hand-set classification now leaves a trail with its old and new value.
+      See Audit & Governance surfaces. (`model_portfolio_data` still has no
+      trigger — that caveat stands for it.)
 - **`equity_style_internal` is the stock vocabulary's dead twin.** 42 of the 43
   stocks carrying it hold a value identical to `category_name`, 12 stocks have
   a category and no style at all, and **META disagrees with itself** —
@@ -1907,12 +1909,43 @@ tables they read.
 
 - **`audit_log` + `/audit` (`AuditLogPage`, `lib/auditLog.ts`)** — a **read-only**
   surface over an append-only table, with CSV export. **Nothing in the app writes
-  it:** a Postgres trigger (`log_audit`) does, on **nine** tables —
+  it:** a Postgres trigger (`log_audit`) does, on **ten** tables —
   `action_items`, `at_risk`, `clients`, `compliance_rules`,
   `firm_compliance_rules`, `investment_policy_statements`,
-  `portfolio_allocations`, `prospects`, `review_schedules`. Adding a trigger is
-  how a table joins the log; there is no client-side path, and there should not
-  be one.
+  `portfolio_allocations`, `prospects`, `review_schedules`, and **`securities2`
+  (Nov 2026, conditionally — see below)**. Adding a trigger is how a table joins
+  the log; there is no client-side path, and there should not be one.
+  - **`securities2` is the only CONDITIONAL one, and that is the design.** It is
+    93 columns wide and **59 of its 102 rows are rewritten on a normal day** by
+    the YCharts workbook and `refreshSecurityFromFMP`; logging every write would
+    add **~199 MB a year to a 2 MB `audit_log`** and bury a governed edit roughly
+    one row in 1,800 — the "signal that cries wolf" failure already paid for with
+    `never_run` and "AI research pending". So **`audit_securities2_ins_del`**
+    logs inserts and deletes unconditionally, while
+    **`audit_securities2_update`** carries a `WHEN` clause and fires only when a
+    **decision** column actually changes value: `category_name`,
+    `preferred_benchmark1_id`, `preferred_benchmark2_id`, `scorecard_cohort`,
+    `alt_1`/`alt_2`/`alt_3`.
+    - **Two triggers because a `WHEN` clause cannot reference `OLD` on an
+      INSERT**, and **`IS DISTINCT FROM`, not `<>`**, because every one of those
+      columns is nullable and setting one for the first time is exactly the
+      manual category edit this was added to record.
+    - **An absence therefore means "no decision was recorded", not "the row did
+      not change".** Do not read the gap as the full history of a security.
+    - Useful side effect: when the **workbook** changes a fund's
+      `category_name` — a new Morningstar spelling, the gotcha-23 vector — that
+      is a real value change and IS logged, while the same import rewriting the
+      return columns is not.
+    - `schemaContract.test.ts` pins both triggers, the `WHEN`, the governed
+      column list and the absence of vendor columns, because the easy future
+      mistake is to "make it consistent with the other nine".
+  - **`AUDITED_TABLES` in `lib/auditLog.ts` had drifted BOTH ways** and was
+    corrected in the same change. It listed **`positions`**, which is not a
+    `log_audit` table at all — its `positions_audit` trigger runs
+    `log_position_change()` into `holdings_change_log` — so filtering by it
+    could only ever return nothing; and it omitted **`firm_compliance_rules`**,
+    which carries a real trigger and 11 rows that were reachable only under
+    "All". Keep that list matched to the triggers.
 - **Compliance Rules hub — `pages/settings/CompliancePage.tsx`,
   `/settings/compliance`** (data layer `lib/compliance.ts`). `firm_compliance_rules`
   is firm-wide, `compliance_rules` per-portfolio. **Not** `InvestmentCommitteePage`,

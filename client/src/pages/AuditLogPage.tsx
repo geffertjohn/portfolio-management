@@ -23,7 +23,10 @@ const TABLE_LABELS: Record<AuditedTable, string> = {
   at_risk: 'At-Risk',
   prospects: 'Watchlist',
   action_items: 'Action Items',
-  positions: 'Positions',
+  firm_compliance_rules: 'Firm Compliance Rules',
+  // Decisions only — a governed classification or comparator changing. The
+  // vendor columns are rewritten daily and deliberately not logged.
+  securities2: 'Securities',
   portfolio_allocations: 'Allocations',
   investment_policy_statements: 'IPS',
 }
