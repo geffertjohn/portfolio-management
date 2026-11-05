@@ -9,6 +9,7 @@ export const QUERY_KEYS = {
   prospects: ['prospects'] as const,
   reviewSchedules: ['review_schedules'] as const,
   reviewCoverage: ['review_coverage'] as const,
+  committeeDocs: ['committee_docs'] as const,
   reviewSchedule: (securityId: string) => ['review_schedules', securityId] as const,
   reviewLog: (securityId: string) => ['review_log', securityId] as const,
   actionItems: ['action_items'] as const,

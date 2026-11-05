@@ -440,7 +440,7 @@ export function ResearchCard({
   parentDate?: string | null
   /**
    * Whether the card states WHAT it is — the author role, the pre/post-earnings
-   * badge, the draft badge and the written date.
+   * badge and the written date.
    *
    * Default true, because the three list surfaces (IC review, watchlist
    * research, the security's standing research) stack several reports and the
@@ -464,7 +464,6 @@ export function ResearchCard({
         {/* The thesis verdict stays regardless — it is the post-brief's finding,
             not a restatement of what kind of document this is. */}
         {status && <Badge className={status.className}>{status.label}</Badge>}
-        {showIdentity && r.status === 'draft' && <Badge className="bg-sky-100 text-sky-700">Draft</Badge>}
         {r.rating && <Badge className="bg-gray-100 text-gray-700">{RATING_LABEL[r.rating]}</Badge>}
         {r.conviction && <span className="text-xs text-gray-500">Conviction: {CONVICTION_LABEL[r.conviction]}</span>}
         {(r.fair_value != null || r.current_price != null) && (

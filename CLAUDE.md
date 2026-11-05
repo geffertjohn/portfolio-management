@@ -1716,6 +1716,66 @@ it before touching anything here. The split that makes the system work:
   "Revise thesis" button, which opens version N+1. The published record is authored by the
   advisor, with the reports it drew on recorded in `source_report_ids`.
 
+## Committee Reports (`/committee`) — the first firm-wide view of the output
+
+`lib/committeeReports.ts` merges the five deliverable tables — `research_reports`,
+`earnings_call_summaries`, `risk_reports`, `ic_memos`, `portfolio_review_memos` —
+into one feed (Nov 2026). **Every existing reader of them is scoped to a single
+security, portfolio or candidate**, so until this page the answer to "what has
+the committee produced" did not exist anywhere: 115 research reports, 41 call
+summaries and 78 risk reports sat written and unreadable in aggregate.
+
+- **Status is NOT rendered as a state.** 102 of the 115 research reports and
+  **all** 41 call summaries carry `status = 'draft'`, and **nothing in the app
+  has ever written `'final'`** — no code path promotes one. So "draft" never
+  meant provisional, it meant "written by a job", and presenting it as a queue
+  of unapproved work invents an approval step the firm does not run. The column
+  stays (it is the record as written, and the jobs still set it); the `Draft`
+  badge in `icReviewCards` was removed. **`ic_memos.status` is the exception and
+  is kept** — there it is the real CIO decision (`pending_cio` / `approved` /
+  `rejected`), written by `recordIcDecision` and routed on by the Actions hub.
+  One table's vestigial column is not another's.
+- **Read-only and derived.** Nothing here writes, and no copy is stored.
+- **`CommitteeDoc.id` is `table:rowId`**, because the five tables number
+  independently — `research_reports` 41 and `earnings_call_summaries` 41 are
+  different documents and a bare id collides.
+- **`docHref` has three cases, and the middle one is the trap.** A held security
+  opens its detail page (where the Commentary tab renders the document); a
+  **ticker with no `securities2` row opens `/research/:symbol`**, because
+  `research_reports.security_id` has no FK precisely so an unheld watchlist idea
+  can carry research — routing those to `/security/null` is the documented
+  navigation bug. A portfolio document opens its portfolio, URL-encoded (two
+  live books contain spaces and one an ampersand).
+- **Grouped the way the advisor filters, not by table**: pre- and post-earnings
+  briefs are two report types in one table and one thing to the reader, while a
+  risk report and an IC memo are separate tables under one `memos`/`risk` split.
+- **`CommitteeFeed` is shared by the dashboard section and the page** so the two
+  cannot describe the same document differently — the `fundScorecard` split
+  applied to a feed. `limit` bounds EACH table, not the total, so one chatty
+  source cannot crowd the others out.
+
+**The dashboard was restructured around it** (`HomePage`, Nov 2026). It carried
+six stat cards over the Action Center band, and **four of them restated counts
+the band already derived from the same `fetchAllActions` model** — overdue
+reviews, portfolio reviews, open actions, alerts — so one fact printed three
+times (band, card, list) while the committee's 235 documents appeared nowhere.
+Those four are gone. The two that survive (At-Risk, Watchlist) moved INTO the
+band as inventory rather than a worklist: a watchlist idea is not overdue.
+The page now reads as what is owed → what was written → what is coming →
+whether the machinery works → the detail the band can only count.
+
+- **`upcomingEarnings`** (in `reviewSchedules.ts`, pure) is the forward half.
+  Every other review surface answers what is owed NOW; none said what was about
+  to land, though that decides whether the week holds three reviews or none. It
+  reads rows the calendar has already fetched, so it costs no query, and
+  **excludes funds through the classifier** — a fund review is cadence-driven.
+  A call TODAY is included (its review is due tomorrow); a call already held is
+  the overdue surface's business.
+- **A loading `fetchAllActions` renders `—`, never `0`.** It fans out over nine
+  sources and takes seconds; rendering zero while it resolves says "nothing is
+  overdue" on the front page of an audit-defence tool, which is a false
+  statement rather than a placeholder. It read 0/0/0/0 for ~20s before this.
+
 ## Actions Hub (`/actions`)
 
 The Actions page is a **unified command center**, not a plain to-do list. It shows one `UnifiedAction[]` assembled by **per-source adapters** in **`lib/actions.ts`** (`fetchAllActions`), keeping each domain single-sourced.

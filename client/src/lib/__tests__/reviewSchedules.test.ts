@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isDueSoon, isOverdue, redatedStockSchedules, reviewDueDay,
   outstandingCallReviewDay, effectiveReviewDay,
-  needsEarningsCheck, correctedFutureEarnings,
+  needsEarningsCheck, correctedFutureEarnings, upcomingEarnings,
+  type ReviewScheduleWithSecurity,
 } from '../reviewSchedules'
 
 /**
@@ -402,5 +403,69 @@ describe('reporting a future earnings date that MOVED', () => {
       [{ symbol: 'WMT', nextEarnings: '2026-11-17' }, { symbol: 'HOOD', nextEarnings: '2026-10-27' }],
       TODAY,
     )).toEqual(['HOOD', 'WMT'])
+  })
+})
+
+describe('the calls about to land', () => {
+  /**
+   * The forward half of the calendar. Every other review surface answers what
+   * is owed NOW; none says what is about to arrive, though that is what decides
+   * whether the week holds three reviews or none. Fixtures are the live book on
+   * 5 Nov 2026.
+   */
+  const TODAY = '2026-11-05'
+
+  const stock = (symbol: string, next: string | null): ReviewScheduleWithSecurity => ({
+    id: 1, security_id: symbol, cadence: 'quarterly',
+    last_reviewed_at: null, next_review_at: '2026-12-01',
+    created_at: TODAY, updated_at: TODAY,
+    symbol, name: symbol, broad_asset_class: null, security_numeric_id: 7,
+    last_earnings_release: null, next_earnings_release: next,
+    detailed_security_type: 'Stock', peer_group_name: null,
+    fund_company_name: null, fund_family: null, expense_ratio_generic: null,
+  })
+
+  it('lists only the calls inside the horizon, soonest first', () => {
+    // AMAT reports 12 Nov; NVDA and HD on the 17th, outside a 7-day window.
+    const rows = [stock('NVDA', '2026-11-17'), stock('AMAT', '2026-11-12'), stock('HD', '2026-11-17')]
+    expect(upcomingEarnings(rows, TODAY, 7).map((c) => c.symbol)).toEqual(['AMAT'])
+    expect(upcomingEarnings(rows, TODAY, 14).map((c) => c.symbol)).toEqual(['AMAT', 'HD', 'NVDA'])
+  })
+
+  it('carries the review each call will schedule', () => {
+    // release + 1 day, the same date `MarkReviewedModal` writes.
+    const [c] = upcomingEarnings([stock('AMAT', '2026-11-12')], TODAY, 7)
+    expect(c.reviewDueOn).toBe('2026-11-13')
+    expect(c.inDays).toBe(7)
+  })
+
+  it('includes a call TODAY', () => {
+    // DUK reported the morning this was built; its review is due tomorrow, so
+    // it belongs on the forward list rather than the overdue one.
+    const [c] = upcomingEarnings([stock('DUK', TODAY)], TODAY, 7)
+    expect(c.inDays).toBe(0)
+    expect(c.reviewDueOn).toBe('2026-11-06')
+  })
+
+  it('drops a call that has already happened', () => {
+    // That is the overdue-review surface's business, not this one's.
+    expect(upcomingEarnings([stock('HOOD', '2026-10-27')], TODAY, 7)).toEqual([])
+  })
+
+  it('drops a stock with no stored date rather than guessing', () => {
+    expect(upcomingEarnings([stock('X', null)], TODAY, 7)).toEqual([])
+  })
+
+  it('excludes FUNDS through the classifier', () => {
+    // A fund review is cadence-driven and has no call to wait for. Classified
+    // by fund signals, not by a column test — the `peer_group_name` route.
+    const fund = { ...stock('VBTLX', '2026-11-10'), detailed_security_type: null,
+      peer_group_name: 'Intermediate Core Bond' }
+    expect(upcomingEarnings([fund], TODAY, 7)).toEqual([])
+  })
+
+  it('reads a full timestamp the same as a bare day', () => {
+    const [c] = upcomingEarnings([stock('AMAT', '2026-11-12T00:00:00Z')], TODAY, 7)
+    expect(c.callOn).toBe('2026-11-12')
   })
 })
