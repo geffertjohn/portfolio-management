@@ -1180,6 +1180,25 @@ forty percent each, which `hasConvictionTiers` already says in the model editor.
   step shows proposal and recommendation side by side with **neither
   pre-selected**. Defaulting to the committee would make the decision an
   acceptance; defaulting to the advisor would make the handoff ceremonial.
+- **The handoff has NO GATE, and an empty one reached the queue** (Nov 2026).
+  Review 30 (Foundation Conservative) was handed off with all four
+  pre-committee sections ticked `done` but **no `holding_reviews` rows, null
+  `considerations` and no section notes** — `requestCommitteeReview` stamps the
+  queue and assumes "the per-holding proposals are already on
+  `holding_reviews` by this point", which nothing enforces. The committee's
+  entire input was missing. **`portfolio-committee-review` now skips such a
+  review** rather than briefing three roles on nothing, leaves
+  `committee_requested_at` standing (withdrawing is the advisor's call) and
+  names it in the summary. The app-side gate is NOT built; the job is the only
+  thing stopping an empty handoff today.
+- **The committee prompt's model lookup joined on the wrong key** and was
+  fixed in the same change. `portfolio_model_map` keys on the portfolio's own
+  `security_id` — a YCharts id like `P:2371412` — **not on its name**, so
+  `where pm.security_id = :portfolio` matched nothing for all sixteen fund
+  books and would have handed the PM a construction question with no targets
+  to answer it against. Go through `portfolio` as `useResolvedModelPortfolio`
+  does, and report a missing mapping rather than falling back to
+  `investment_objective`, which is not unique.
 - **`committee_requested_at` IS the queue, and the stage is DERIVED.**
   `committeeStage()` reads two facts — requested or not, memo or not — and
   there is deliberately no stored status column, which could contradict either.

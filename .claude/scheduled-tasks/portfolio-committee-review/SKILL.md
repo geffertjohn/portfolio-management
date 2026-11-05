@@ -92,10 +92,36 @@ the book: construction, risk, and the regime it is being run into.
    "No annual review is awaiting the committee." and STOP (after closing the
    heartbeat).
 
-2. **CAP THE RUN AT TWO REVIEWS**, oldest handoff first. Three agents per
+2. **SKIP AN EMPTY HANDOFF — do not brief a committee on nothing.**
+
+   The app lets a review be handed off with the sections merely ticked, and one
+   was: review 30 (Foundation Conservative) reached the queue on 5 Nov 2026
+   with **no `holding_reviews` rows, null `considerations` and no section
+   notes**. Step 5 below hands each role "the advisor's considerations and
+   proposals" — with none to hand over, the roles answer a portfolio nobody has
+   stated a view on, which is the "memo that talks past it" that step warns
+   against. Worse, the order is the control: the advisor's proposals are
+   recorded BEFORE the committee looks, and a memo written first means anything
+   they write afterwards cannot be shown to be independent. Only one live memo
+   is allowed per review, so a premature one is in the way.
+
+   ```sql
+   select
+     (select count(*) from holding_reviews
+       where review_log_id = :review_log_id and proposed_decision is not null) as proposals,
+     (select nullif(trim(coalesce(considerations, '')), '')
+       from portfolio_review_log where id = :review_log_id) as considerations;
+   ```
+
+   **Zero proposals AND no considerations → write nothing for that review.**
+   Leave `committee_requested_at` standing — withdrawing it is the advisor's
+   call, not yours — and name the review in the summary as awaiting a view.
+   Either one present is enough to proceed.
+
+3. **CAP THE RUN AT TWO REVIEWS**, oldest handoff first. Three agents per
    review and a whole book to read; list the rest as "queued" for the next run.
 
-3. **READ THE BOOK AND WHAT THE ADVISOR SAID.** For each review:
+4. **READ THE BOOK AND WHAT THE ADVISOR SAID.** For each review:
 
    ```sql
    -- current targets
@@ -109,17 +135,28 @@ the book: construction, risk, and the regime it is being run into.
    from holding_reviews
    where review_log_id = :review_log_id and proposed_decision is not null;
 
-   -- the model the book is run against
-   select * from model_portfolio_data m
+   -- the model the book is run against.
+   -- portfolio_model_map keys on the portfolio's OWN security_id -- a YCharts
+   -- id like 'P:2371412' -- NOT on its name, so joining the map on :portfolio
+   -- matches nothing and hands the PM a construction question with no targets
+   -- to answer it against. Go through `portfolio` the way the app does.
+   select m.* from model_portfolio_data m
    join portfolio_model_map pm on pm.model_portfolio_id = m.id
-   where pm.security_id = :portfolio;
+   join portfolio p on p.security_id = pm.security_id
+   where p.name = :portfolio;
    ```
+
+   **If that returns no row, say so in the memo and stop** rather than
+   assessing construction against nothing. An unmapped portfolio falls back to
+   `investment_objective` in the app, but an objective is not unique, so a
+   guess here would be a construction verdict measured against the wrong
+   model -- worse than reporting that the mapping is missing.
 
    Also read the fund scorecard columns on `securities2` for each holding —
    the rank and ratio columns the app's scorecard uses. The advisor has just
    worked through them; you are reading the same evidence, not new evidence.
 
-4. **DISPATCH THE THREE ROLES** via the Agent tool, in one message so they run
+5. **DISPATCH THE THREE ROLES** via the Agent tool, in one message so they run
    together. These resolve from `.claude/agents/*.md`, so there is no inlined
    copy to keep in sync.
 
@@ -142,7 +179,7 @@ the book: construction, risk, and the regime it is being run into.
    answering a portfolio the advisor has already formed a view on, and a
    committee that cannot see that view produces a memo that talks past it.
 
-5. **SYNTHESISE ONE MEMO.** Not three. The advisor reads one document and
+6. **SYNTHESISE ONE MEMO.** Not three. The advisor reads one document and
    decides; three unreconciled opinions make that their job rather than yours.
    Where the roles disagree, say so in the summary — a disagreement between the
    PM and the risk manager is information, not a defect to smooth over.
@@ -155,7 +192,7 @@ the book: construction, risk, and the regime it is being run into.
    **Recommend a change only where you have something to say.** A memo that
    lists every holding with "keep" teaches the reader to skim it.
 
-6. **WRITE THE RISK REPORT**, portfolio-scoped, through the committee API:
+7. **WRITE THE RISK REPORT**, portfolio-scoped, through the committee API:
 
    ```sql
    select committee_insert('risk_reports', $j$ {
@@ -168,7 +205,7 @@ the book: construction, risk, and the regime it is being run into.
 
    Keep the returned id for the memo.
 
-7. **WRITE THE MEMO**, one per review, through the same API:
+8. **WRITE THE MEMO**, one per review, through the same API:
 
    ```sql
    select committee_insert('portfolio_review_memos', $j$ {
@@ -191,7 +228,7 @@ the book: construction, risk, and the regime it is being run into.
    step unable to say which read it is deciding against. If it raises, the
    review already has a memo — treat that as success, not failure, and move on.
 
-8. **DO NOT TOUCH THE REVIEW ITSELF.** `portfolio_review_log` is not on the
+9. **DO NOT TOUCH THE REVIEW ITSELF.** `portfolio_review_log` is not on the
    committee write allowlist, deliberately: the advisor owns the review and
    completes it. Your memo appearing is what moves the review forward.
 
