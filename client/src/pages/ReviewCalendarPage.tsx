@@ -5,6 +5,7 @@ import {
   fetchReviewSchedules, isOverdue, isDueSoon, redatedStockSchedules, applyScheduleRedates,
   fetchUnscheduledHeldSecurities, ensureReviewSchedules,
   fetchOrphanedSchedules, retireReviewSchedules,
+  effectiveReviewDay, outstandingCallReviewDay,
   reviewDueDay, type ReviewCadence,
 } from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -148,19 +149,34 @@ export function ReviewCalendarPage() {
     reviewing?.isFund === true &&
     (reviewing.numericId == null || fundRecordError || (!fundRecordLoading && fundRecord === null))
 
-  const filtered = schedules.filter((s) => {
-    if (filter === 'overdue') return isOverdue(reviewDueDay(s.next_review_at))
-    if (filter === 'due_soon') return isDueSoon(reviewDueDay(s.next_review_at)) && !isOverdue(reviewDueDay(s.next_review_at))
-    return true
-  })
+  // Every status here reads the EFFECTIVE day — the schedule, or an earlier
+  // call this stock was never reviewed for. A stock's schedule points at its
+  // NEXT call, so until Nov 2026 a review nobody did stopped being asked for:
+  // 27 of 54 stocks carried an unreviewed call and twenty showed a comfortable
+  // future date, six of them never reviewed at all.
+  const filtered = schedules
+    .filter((s) => {
+      const due = effectiveReviewDay(s)
+      if (filter === 'overdue') return isOverdue(due)
+      if (filter === 'due_soon') return isDueSoon(due) && !isOverdue(due)
+      return true
+    })
+    // Re-sort on the EFFECTIVE day. `fetchReviewSchedules` orders by the stored
+    // `next_review_at`, so without this a row pulled back to the call it missed
+    // keeps its old place: DUK at 92 days overdue sorted BELOW HOOD at 8,
+    // which is the opposite of what a worst-first worklist is for.
+    .slice()
+    .sort((a, b) => effectiveReviewDay(a).localeCompare(effectiveReviewDay(b)))
 
-  const overdueCount = schedules.filter((s) => isOverdue(reviewDueDay(s.next_review_at))).length
-  const dueSoonCount = schedules.filter((s) => isDueSoon(reviewDueDay(s.next_review_at)) && !isOverdue(reviewDueDay(s.next_review_at))).length
+  const overdueCount = schedules.filter((s) => isOverdue(effectiveReviewDay(s))).length
+  const dueSoonCount = schedules.filter((s) => {
+    const due = effectiveReviewDay(s)
+    return isDueSoon(due) && !isOverdue(due)
+  }).length
 
-  function rowStatus(nextReviewAt: string) {
-    const nextReview = reviewDueDay(nextReviewAt)
-    if (isOverdue(nextReview)) return 'overdue'
-    if (isDueSoon(nextReview)) return 'due_soon'
+  function rowStatus(due: string) {
+    if (isOverdue(due)) return 'overdue'
+    if (isDueSoon(due)) return 'due_soon'
     return null
   }
 
@@ -245,7 +261,13 @@ export function ReviewCalendarPage() {
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {filtered.map((s) => {
-                const status = rowStatus(s.next_review_at)
+                const due = effectiveReviewDay(s)
+                // Set only when an unreviewed call is what makes this row due,
+                // rather than the schedule. The date alone cannot say that, and
+                // an unexplained date jumping backwards reads as a bug.
+                const missedCall =
+                  due !== reviewDueDay(s.next_review_at) ? outstandingCallReviewDay(s) : null
+                const status = rowStatus(due)
                 return (
                   <tr key={s.id} className={status === 'overdue' ? 'bg-red-50' : status === 'due_soon' ? 'bg-amber-50' : ''}>
                     <td className="whitespace-nowrap px-4 py-3">
@@ -262,7 +284,14 @@ export function ReviewCalendarPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-gray-500">
                       {s.last_reviewed_at ? formatDate(s.last_reviewed_at) : <span className="text-gray-400">Never</span>}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">{formatDate(reviewDueDay(s.next_review_at))}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                      {formatDate(due)}
+                      {missedCall && (
+                        <span className="block text-xs font-normal text-red-700">
+                          for the call of {formatDate(s.last_earnings_release!)}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       {status ? <StatusBadge variant={status} /> : <span className="text-xs text-gray-400">On track</span>}
                     </td>

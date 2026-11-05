@@ -834,6 +834,44 @@ from the call it actually missed is undecided** — 27 of 54 stocks carry an
 unreviewed call, 20 of them showing a future review date, so it is a product
 question, not a cleanup.
 
+**An unreviewed call is surfaced as OVERDUE** (`outstandingCallReviewDay` /
+`effectiveReviewDay`, Nov 2026). A stock's schedule is
+`next_earnings_release + 1` — a FUTURE date — so the fact that the PREVIOUS
+call came and went unreviewed was recorded nowhere the calendar or the Actions
+hub reads, and a review nobody did simply stopped being asked for. On 5 Nov
+2026 that was **27 of 54 stocks**: twenty showing a comfortable future date,
+six never reviewed at all (MU, JNJ, JPM, BLK, TSM, HCA), and WMT, NVDA and HD
+more than seventy days past a call. The Overdue count went 3 → 23.
+
+- **Derived, never stored.** Re-dating those rows backward drifts: the daily
+  FMP top-up moves `last_earnings_release` forward, so a stored overdue date
+  would stay anchored to the older call while the real obligation moved on.
+  Same reasoning as the derived Change Log and `committeeStage`.
+- **The EARLIER of the two obligations wins**, not the derived one. UBER is the
+  live case: its schedule reads 4 Nov while the call it has not reviewed was
+  held on the 4th, so the outstanding day derives to the 5th and taking that
+  alone would make a row already overdue read as due tomorrow.
+- **A review ON the call day counts as covering it.** Earnings land pre-market
+  or post-close and the scheduled date is the day after. Claiming otherwise
+  manufactures an overdue row, and a signal that cries wolf gets dismissed —
+  what `never_run` and the Watchlist's "AI research pending" already cost. No
+  live row sits on that boundary (strict and lenient both give 27).
+- **It names the MOST RECENT unreviewed call, not every one ever missed.** A
+  stock that reports again while still unreviewed moves its obligation to the
+  new print, so this answers "what is owed now". "Which calls were never
+  reviewed" is a coverage report over `review_log` and is **not built**.
+- **Funds return null via the classifier**, not a column test — a fund review
+  is cadence-driven and has no call to be behind on.
+- **Four surfaces read the one value**, because this page has already disagreed
+  with `/reviews` about the same row (by a day, over gotcha 24) and this would
+  have re-opened it by a quarter: the calendar's status/counts/cell, the
+  Actions hub adapter (where the aging line carries "92d overdue"), and both
+  `Next Review` blocks plus the header badge on `SecurityDetailPage`. **The
+  calendar re-sorts on the effective day** — `fetchReviewSchedules` orders by
+  the stored column, so without it DUK at 92 days overdue sorted BELOW HOOD at
+  8. A row pulled back to its missed call says *for the call of <date>*; the
+  date alone cannot say that, and an unexplained backward jump reads as a bug.
+
 **The SALE path retires the schedule, mirroring the purchase path**
 (`retireReviewSchedules` + the pure `retiredSchedules`, Nov 2026). Nothing did
 until then, so selling out of every book left the timer standing: VTABX, gone

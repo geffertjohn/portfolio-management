@@ -18,7 +18,10 @@ import { AlternativesPanel } from '@/components/AlternativesPanel'
 import { CreateActionItemModal } from '@/components/CreateActionItemModal'
 import { MarkReviewedModal } from '@/components/MarkReviewedModal'
 import { ReviewLogSection } from '@/components/ReviewLogSection'
-import { fetchReviewScheduleBySecurity, isOverdue, isDueSoon, reviewDueDay } from '@/lib/reviewSchedules'
+import {
+  fetchReviewScheduleBySecurity, isOverdue, isDueSoon, reviewDueDay,
+  effectiveReviewDay, outstandingCallReviewDay,
+} from '@/lib/reviewSchedules'
 import { formatDate } from '@/lib/fundFormat'
 import { fetchPortfoliosHoldingSecurity } from '@/lib/positions'
 import { useSecurityDetail } from '@/hooks/useSecurityDetail'
@@ -86,6 +89,26 @@ export function SecurityDetailPage() {
     queryFn: () => fetchReviewScheduleBySecurity(security!.security_id),
     enabled: !!security?.security_id,
   })
+
+  // The day this review is operatively due — its schedule, or an earlier call
+  // the security was never reviewed for. Computed ONCE and used by the header
+  // badge and both Next Review blocks, because this page has already disagreed
+  // with /reviews about the same row (by a day, over gotcha 24) and the
+  // unreviewed-call rule would re-open that by a QUARTER.
+  //
+  // Built from the STORED `securities2` earnings columns rather than the live
+  // FMP fetch below, which is what the calendar and the Actions hub read, so
+  // the three surfaces agree by construction. The page's own write-through
+  // keeps the stored value current.
+  const reviewDue = security && reviewSchedule
+    ? effectiveReviewDay({ ...security, next_review_at: reviewSchedule.next_review_at,
+                            last_reviewed_at: reviewSchedule.last_reviewed_at })
+    : null
+  const reviewMissedCall = security && reviewSchedule
+    && reviewDue !== reviewDueDay(reviewSchedule.next_review_at)
+    ? outstandingCallReviewDay({ ...security, next_review_at: reviewSchedule.next_review_at,
+                                  last_reviewed_at: reviewSchedule.last_reviewed_at })
+    : null
 
   // Earnings dates & analyst consensus — fetched live from FMP for stocks
   const { data: earningsDates } = useQuery({
@@ -232,14 +255,14 @@ export function SecurityDetailPage() {
                   At-Risk
                 </button>
               )}
-              {reviewSchedule && isOverdue(reviewDueDay(reviewSchedule.next_review_at)) && (
+              {reviewDue && isOverdue(reviewDue) && (
                 <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
                   Review Overdue
                 </span>
               )}
-              {reviewSchedule &&
-                !isOverdue(reviewDueDay(reviewSchedule.next_review_at)) &&
-                isDueSoon(reviewDueDay(reviewSchedule.next_review_at)) && (
+              {reviewDue &&
+                !isOverdue(reviewDue) &&
+                isDueSoon(reviewDue) && (
                   <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
                     Review Due Soon
                   </span>
@@ -502,15 +525,20 @@ export function SecurityDetailPage() {
                     </div>
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Next Review</p>
-                      <p className={`mt-1 font-medium ${isOverdue(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-red-600' : isDueSoon(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-amber-600' : 'text-gray-900'}`}>
-                        {/* reviewDueDay, not the raw column: next_review_at is a
-                            timestamptz holding a calendar DAY, so reading it as a
-                            local instant renders Feb 10 for a row holding the 11th
-                            (gotcha 24). The colour beside it already normalised;
-                            only the value did not, so this page and /reviews
-                            disagreed by a day on the same row. */}
-                        {formatDate(reviewDueDay(reviewSchedule.next_review_at))}
+                      {/* `reviewDue`, shared with the header badge and /reviews —
+                          never the raw column. It is a timestamptz holding a
+                          calendar DAY, so reading it as a local instant renders
+                          Feb 10 for a row holding the 11th (gotcha 24), and it
+                          points at the NEXT call even when an earlier one was
+                          never reviewed. */}
+                      <p className={`mt-1 font-medium ${reviewDue && isOverdue(reviewDue) ? 'text-red-600' : reviewDue && isDueSoon(reviewDue) ? 'text-amber-600' : 'text-gray-900'}`}>
+                        {reviewDue ? formatDate(reviewDue) : EMPTY}
                       </p>
+                      {reviewMissedCall && (
+                        <p className="text-xs text-red-700">
+                          for the call of {formatDate(security.last_earnings_release!)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -628,14 +656,21 @@ export function SecurityDetailPage() {
                       </div>
                       <div>
                         <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Next Review</p>
-                        {/* reviewDueDay, not the raw column: this is a calendar
-                            day stored as timestamptz (gotcha 24). */}
+                        {/* `reviewDue`, shared with the header badge and /reviews.
+                            A calendar day stored as timestamptz (gotcha 24), and
+                            it points at the NEXT call even when an earlier one
+                            was never reviewed. */}
                         <p className={`mt-1 font-medium ${
-                          isOverdue(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-red-600'
-                          : isDueSoon(reviewDueDay(reviewSchedule.next_review_at)) ? 'text-amber-600'
+                          reviewDue && isOverdue(reviewDue) ? 'text-red-600'
+                          : reviewDue && isDueSoon(reviewDue) ? 'text-amber-600'
                           : 'text-gray-900'}`}>
-                          {formatDate(reviewDueDay(reviewSchedule.next_review_at))}
+                          {reviewDue ? formatDate(reviewDue) : EMPTY}
                         </p>
+                        {reviewMissedCall && (
+                          <p className="text-xs text-red-700">
+                            for the call of {formatDate(security.last_earnings_release!)}
+                          </p>
+                        )}
                       </div>
                       <div>
                         {/* Stock reviews are earnings-driven, so the cadence a
