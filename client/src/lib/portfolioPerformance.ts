@@ -130,27 +130,79 @@ export interface PortfolioMovers {
 export type UnpricedReason = 'no_ycharts_figure' | 'no_price_series'
 
 /**
- * The YCharts column carrying a fund's own total return over `days`.
+ * An attribution window, named rather than counted in days.
  *
- * Only the two windows the attribution block shows are mapped, because those
- * are the only ones the workbook's `Securities` sheet carries. An unmapped
- * window returns null, which makes the fund unpriced rather than quietly
- * measured over some other period.
+ * **YTD is calendar-anchored, so a day count cannot express it.** It is 309
+ * days on 5 November and 5 days on 5 January, and the YCharts column behind it
+ * is a calendar figure, not a rolling one — keying the lookup on `days` would
+ * have meant inventing a number that is wrong on every date but one, and
+ * silently mapping a fund's calendar YTD onto a rolling 309-day request. The
+ * window is therefore its own type, and each leg of the fetch (the stored
+ * column for funds, the price series for stocks) resolves it in its own terms.
  */
-function storedReturnFor(stored: StoredSecurityReturns, days: number): number | null {
-  if (days === 30) return stored.oneMonth
-  if (days === 90) return stored.threeMonth
-  return null
+export type AttributionWindow = '1m' | '3m' | 'ytd' | '1y'
+
+export const ATTRIBUTION_WINDOW_LABELS: Record<AttributionWindow, string> = {
+  '1m': '1 Month',
+  '3m': '3 Month',
+  ytd: 'Year to Date',
+  '1y': '1 Year',
 }
 
 /**
- * Per-holding total return over the trailing `days` window for the portfolio's
+ * The YCharts column carrying a fund's own total return over a window.
+ *
+ * Every window the attribution block can show is mapped. An unmapped one would
+ * return null, which makes the fund unpriced rather than quietly measured over
+ * some other period — the same refusal as a missing figure.
+ *
+ * **Exported so the mapping itself is tested.** It is the one place a window
+ * could silently read the wrong column, and the failure is invisible on screen:
+ * YTD pointed at the three-month figure renders two identical rankings under
+ * two different headings, which reads as a coincidence rather than a bug.
+ */
+export function storedReturnFor(
+  stored: StoredSecurityReturns,
+  window: AttributionWindow,
+): number | null {
+  switch (window) {
+    case '1m': return stored.oneMonth
+    case '3m': return stored.threeMonth
+    case 'ytd': return stored.ytd
+    case '1y': return stored.oneYear
+  }
+}
+
+/**
+ * The first day of an attribution window, for the price-series leg.
+ *
+ * Stocks have no published figure to read, so their return is computed from
+ * dividend-adjusted closes between this day and today. **YTD anchors on
+ * 1 January of the current year** — the same definition the YCharts column
+ * uses, so a book holding both is measured consistently; the other three step
+ * back a fixed span.
+ *
+ * Exported and pure because the two definitions of YTD agreeing is the whole
+ * reason a mixed book can be ranked at all.
+ */
+export function attributionWindowStart(window: AttributionWindow, today: Date): Date {
+  const d = new Date(today)
+  switch (window) {
+    case '1m': d.setDate(d.getDate() - 30); return d
+    case '3m': d.setDate(d.getDate() - 90); return d
+    case '1y': d.setFullYear(d.getFullYear() - 1); return d
+    case 'ytd': return new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  }
+}
+
+/**
+ * Per-holding total return over one attribution `window` for the portfolio's
  * holdings, sorted best→worst by contribution.
  *
  * **A fund's or ETF's return is READ from YCharts, not recomputed.** The
  * workbook's `Securities` sheet is the system of record for fund returns, so
- * this reads `securities2.{one,three}_month_total_return_nav` for anything the
- * classifier calls a fund or ETF, and falls to FMP dividend-adjusted closes
+ * this reads the matching `securities2.*_total_return_nav` column for anything
+ * the classifier calls a fund or ETF, and falls to FMP dividend-adjusted closes
  * only for single stocks, which have no published figure to read.
  *
  * That split is not a preference, it is a coverage fact: FMP prices none of the
@@ -166,7 +218,7 @@ function storedReturnFor(stored: StoredSecurityReturns, days: number): number | 
  */
 export async function fetchPortfolioMovers(
   portfolioName: string,
-  days = 30,
+  window: AttributionWindow = '1m',
 ): Promise<PortfolioMovers> {
   const positions = await fetchPositionsByPortfolioId(portfolioName)
   // Keyed UPPER because the uploaded file and the positions table do not agree
@@ -216,11 +268,12 @@ export async function fetchPortfolioMovers(
   let returnsAsOf: string | null = null
 
   const today = new Date()
-  // Buffer the fetch window so a base price exists across weekends/holidays.
-  const from = new Date(today); from.setDate(from.getDate() - days - 15)
-  const fromStr = from.toISOString().slice(0, 10)
-  const base = new Date(today); base.setDate(base.getDate() - days)
+  const base = attributionWindowStart(window, today)
   const baseStr = base.toISOString().slice(0, 10)
+  // Buffer the fetch window so a base price exists across weekends/holidays —
+  // 1 January is never a trading day, so YTD depends on this.
+  const from = new Date(base); from.setDate(from.getDate() - 15)
+  const fromStr = from.toISOString().slice(0, 10)
 
   // A holding that cannot be priced keeps its WEIGHT here rather than being
   // dropped, so the caller can account for it instead of losing it.
@@ -243,7 +296,7 @@ export async function fetchPortfolioMovers(
       // Funds and ETFs: YCharts owns the figure. No fallback to the price feed,
       // deliberately — see the note above this function.
       if (sec?.isFund) {
-        const ret = storedReturnFor(sec, days)
+        const ret = storedReturnFor(sec, window)
         if (ret == null) return { symbol, weight, reason: 'no_ycharts_figure' }
         if (sec.updatedAt && (returnsAsOf == null || sec.updatedAt > returnsAsOf)) {
           returnsAsOf = sec.updatedAt

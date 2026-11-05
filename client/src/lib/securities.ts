@@ -271,7 +271,16 @@ export interface StoredSecurityReturns {
   /** Decimal (0.0155 = +1.55%), or null when YCharts carries no figure. */
   oneMonth: number | null
   threeMonth: number | null
-  /** Import stamp on the row — the as-of for both figures above. */
+  /**
+   * Calendar year to date, and trailing twelve months.
+   *
+   * Added for the fund ANNUAL review, which reads over horizons a monthly
+   * review has no use for. All 44 held fund and ETF securities carry both, so
+   * the longer windows add no unpriced rows.
+   */
+  ytd: number | null
+  oneYear: number | null
+  /** Import stamp on the row — the as-of for every figure above. */
   updatedAt: string | null
 }
 
@@ -285,7 +294,7 @@ export async function fetchStoredSecurityReturns(
   const { data, error } = await supabase
     .from('securities2')
     .select(
-      'id, security_id, security_name, detailed_security_type, peer_group_name, fund_company_name, fund_family, expense_ratio_generic, one_month_total_return_nav, three_month_total_return_nav, updated_at',
+      'id, security_id, security_name, detailed_security_type, peer_group_name, fund_company_name, fund_family, expense_ratio_generic, one_month_total_return_nav, three_month_total_return_nav, ytd_total_return_nav, one_year_total_return_nav, updated_at',
     )
     .in('security_id', symbols)
   if (error) throw error
@@ -298,6 +307,8 @@ export async function fetchStoredSecurityReturns(
       isFund: isFundOrEtfSecurity(row),
       oneMonth: num(row.one_month_total_return_nav),
       threeMonth: num(row.three_month_total_return_nav),
+      ytd: num(row.ytd_total_return_nav),
+      oneYear: num(row.one_year_total_return_nav),
       updatedAt: row.updated_at ?? null,
     })
   }

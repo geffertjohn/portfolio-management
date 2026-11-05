@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   startOrResumeDraft, saveReviewDraft, completeReview, nextReviewDateFor,
-  CADENCE_LABELS, PORTFOLIO_CADENCES, cadencesForStrategy,
+  CADENCE_LABELS, PORTFOLIO_CADENCES, cadencesForStrategy, attributionWindowsFor,
   type PortfolioCadence, type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
 import {
@@ -471,7 +471,12 @@ export function PortfolioReviewWorkspace() {
                 </label>
               </div>
 
-              {active === 'performance_attribution' && <AttributionMovers portfolioId={id} />}
+              {active === 'performance_attribution' && (
+                <AttributionMovers
+                  portfolioId={id}
+                  windows={attributionWindowsFor(cadence, portfolio.portfolio_strategy)}
+                />
+              )}
               {active === 'position_sizing' && <PositionSizingCheck positions={positions} modelPortfolio={modelPortfolio} portfolioName={id} />}
               {active === 'considerations' && (
                 <ConsiderationsSection

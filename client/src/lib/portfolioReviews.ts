@@ -8,6 +8,7 @@
  * advances only that cadence's `next_review_at` and appends a structured,
  * checklist-bearing record to `portfolio_review_log` (frozen for audit defense).
  */
+import type { AttributionWindow } from './portfolioPerformance'
 import { supabase } from './supabase'
 import type { Json } from '@/types/database.types'
 // Date helpers shared with the per-security review schedule.
@@ -128,6 +129,30 @@ const FUND_ANNUAL_TASKS: ReviewTaskDef[] = [
  * never fitted a book of five funds at twenty to forty percent each, which
  * `hasConvictionTiers` already says in the model editor.
  */
+/**
+ * Which trailing windows the attribution section shows.
+ *
+ * **The fund ANNUAL review reads over 3 Month, YTD and 1 Year**; every other
+ * review keeps 1 Month and 3 Month. A fund book has no monthly review at all,
+ * so its annual is the one sitting furthest from the last look at the numbers,
+ * and ranking a year's decisions against a thirty-day window measures noise —
+ * a bond sleeve's month says nothing about whether holding it for the year was
+ * right. The shorter pair stays everywhere else: an Equity monthly is a
+ * thirty-day check by definition, and the quarterly that absorbs it inherits
+ * that job (see `advanceSchedule`).
+ *
+ * The authoritative resolver, beside `reviewTasksFor` and for the same reason:
+ * a rule about what a cadence shows belongs in one place, not spread across
+ * the page that renders it.
+ */
+export function attributionWindowsFor(
+  cadence: PortfolioCadence,
+  strategy: string | null | undefined,
+): AttributionWindow[] {
+  const isFundBook = strategy !== 'Equity'
+  return isFundBook && cadence === 'annual' ? ['3m', 'ytd', '1y'] : ['1m', '3m']
+}
+
 export function reviewTasksFor(
   cadence: PortfolioCadence,
   strategy: string | null | undefined,
