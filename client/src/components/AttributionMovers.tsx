@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  fetchPortfolioMovers, type HoldingMover, type PortfolioMovers,
+  fetchPortfolioMovers, ATTRIBUTION_WINDOW_LABELS,
+  type HoldingMover, type PortfolioMovers, type AttributionWindow,
 } from '@/lib/portfolioPerformance'
 import type { UnpricedReason } from '@/lib/portfolioPerformance'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -9,13 +10,16 @@ import { formatDate } from '@/lib/fundFormat'
 
 interface AttributionMoversProps {
   portfolioId: string
+  /**
+   * Which trailing windows to show, from `attributionWindowsFor`.
+   *
+   * Passed in rather than fixed here: a fund book's ANNUAL review reads over
+   * 3 Month, YTD and 1 Year, while every other review keeps the shorter pair.
+   * The rule lives beside `reviewTasksFor` in `lib/portfolioReviews.ts`, so a
+   * component cannot be the second place that decides what a cadence shows.
+   */
+  windows: AttributionWindow[]
 }
-
-/** Trailing windows shown in the attribution block. */
-const WINDOWS: { label: string; days: number }[] = [
-  { label: '1 Month', days: 30 },
-  { label: '3 Month', days: 90 },
-]
 
 function MoverList({ title, rows }: { title: string; rows: HoldingMover[] }) {
   return (
@@ -138,11 +142,15 @@ function Reconciliation({ data }: { data: PortfolioMovers }) {
  */
 const SPLIT_MIN_HOLDINGS = 11
 
-/** One trailing window: top-5 / bottom-5 holdings by total return over `days`. */
-function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: number; label: string }) {
+/** One trailing window: top-5 / bottom-5 holdings by total return over it. */
+function MoverWindow({ portfolioId, window }: {
+  portfolioId: string
+  window: AttributionWindow
+}) {
+  const label = ATTRIBUTION_WINDOW_LABELS[window]
   const { data, isLoading, error } = useQuery({
-    queryKey: QUERY_KEYS.portfolioMovers(portfolioId, days),
-    queryFn: () => fetchPortfolioMovers(portfolioId, days),
+    queryKey: QUERY_KEYS.portfolioMovers(portfolioId, window),
+    queryFn: () => fetchPortfolioMovers(portfolioId, window),
     staleTime: 5 * 60 * 1000,
   })
 
@@ -217,13 +225,13 @@ function MoverWindow({ portfolioId, days, label }: { portfolioId: string; days: 
   )
 }
 
-export function AttributionMovers({ portfolioId }: AttributionMoversProps) {
+export function AttributionMovers({ portfolioId, windows }: AttributionMoversProps) {
   return (
     <div className="mt-2 rounded-md border border-gray-100 bg-gray-50 p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Trailing Returns</p>
       <div className="mt-3 space-y-4">
-        {WINDOWS.map((w) => (
-          <MoverWindow key={w.days} portfolioId={portfolioId} days={w.days} label={w.label} />
+        {windows.map((w) => (
+          <MoverWindow key={w} portfolioId={portfolioId} window={w} />
         ))}
       </div>
     </div>
