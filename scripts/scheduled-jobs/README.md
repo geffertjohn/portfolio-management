@@ -97,3 +97,58 @@ the WORK did, and a row left open is how a death mid-run surfaces.
 The seven tasks are **disabled**, not deleted, so re-enabling them is one call
 if this needs reverting — but then both would run. `sync.mjs` is no longer part
 of the live path; it remains only for that revert.
+
+### This already happened (Nov 2026)
+
+Three of the seven — `post-earnings-brief`, `pre-earnings-brief` and
+`earnings-call-summary` — were found **enabled alongside their LaunchAgents**,
+so each ran twice a day. Eleven double-run days across seven jobs, and
+`reviews-due-digest` managed three on 31 Oct. It is not harmless: the two
+`pre-earnings-brief` runs on 2 Nov both wrote, which is where the duplicate
+pre-briefs for APP, ELF and DUK came from.
+
+**The app scheduler bypasses the lock below**, because it runs the prompt
+inside Claude Code rather than through `run-job.sh` — so nothing in this script
+can defend against it. Configuration is the only guard.
+
+Two things make it easy to spot:
+
+- A launchd run starts within a few seconds of its slot (`09:30:0x`). An app
+  run carries a per-task jitter and only fires while Claude Code is open, so it
+  lands at an **irregular time**, often catching up hours late.
+- ```sql
+  select job_id, started_at::date, count(*) from job_runs
+  group by 1, 2 having count(*) > 1 order by 2 desc;
+  ```
+
+To check what the app scheduler currently thinks it owns, list the tasks and
+confirm every one reads `enabled: false` with no `nextRunAt`.
+
+## The lock, and why a dead run no longer blocks the next one
+
+`run-job.sh` takes `$JOBS_HOME/locks/<task>.lock` with `mkdir`, an atomic
+test-and-set, and releases it from an EXIT trap.
+
+**The trap does not cover every death.** A SIGKILL, or the machine sleeping,
+logging out or losing power mid-run, leaves the directory behind with no
+process to release it — and every later run then reads a lock it can never
+clear. On 4 Nov 2026 `post-earnings-brief` started at 09:30:05, logged no
+`DONE`, `TIMEOUT` or `FAIL`, and left its lock; the next morning's run logged
+`SKIP` and did nothing. That day's briefs existed only because the duplicate
+app-scheduler run wrote them outside this script — one bug silently covering
+for another.
+
+The lock now records the holder's **pid**, and a run that finds the lock held:
+
+- **respects it** when that pid is alive *and* is a `run-job.sh` — two copies of
+  a drafting job writing at once is how duplicate briefs appear;
+- **reclaims it** otherwise, logging `RECLAIM`, which covers both a dead holder
+  and a lock written without a pid.
+
+The command is checked as well as the pid because pids are recycled, and an
+unrelated process inheriting the number would otherwise block the job forever.
+A stuck lock can still be cleared by hand:
+
+```bash
+rmdir ~/portfolio-jobs/locks/<task>.lock
+```
