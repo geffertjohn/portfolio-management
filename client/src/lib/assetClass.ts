@@ -89,7 +89,13 @@ export const ASSET_CLASS_BY_CATEGORY: Record<string, AssetClassKey> = {
  * stored-column option this module's header describes has become worth taking.
  */
 export const ASSET_CLASS_OVERRIDES: Record<string, AssetClassKey> = {
-  // Morningstar publishes no category for BRK.B.
+  // BRK.B. The reason recorded here was "Morningstar publishes no category",
+  // and that is no longer true: the row carries `Large Cap Core`, which would
+  // resolve to `large_cap_blend`. So this override now overrides a PRESENT
+  // category and the two disagree on the sleeve. Left as value deliberately
+  // rather than silently re-sleeving a governed classification on the strength
+  // of a vendor string; BRK.B is not currently held, so nothing turns on it
+  // today. Revisit with the advisor rather than deleting on sight.
   'BRK.B': 'large_cap_value',
 }
 

@@ -66,9 +66,36 @@ respectively. Don't repurpose them.
 - `ASSET_CLASS_OVERRIDES` is a per-ticker escape hatch (currently only `BRK.B`,
   for which Morningstar publishes no category). **Keep it short** — a growing list
   means the category map is wrong.
-- **Known gap:** securities created by ticker (`createSecurityBySymbol`) are seeded
-  from FMP, which supplies no Morningstar category, so they resolve to `null` until
-  a YCharts workbook import fills `category_name`.
+- **Known gap, and the remedy this bullet used to name DOES NOT EXIST for a
+  stock.** It said a ticker-created security resolves to `null` "until a YCharts
+  workbook import fills `category_name`". Traced Nov 2026: **nothing has written
+  a stock's category since Sep 2026, and nothing can.**
+  - A stock's `category_name` — and its near-twin `equity_style_internal` —
+    came from the **per-ticker YCharts security template**, via
+    `securities2ExcelUpload.ts`. That file was **deleted in `0f50b03`** ("six
+    import cards become two") together with the two single-security cards. Both
+    columns were in its `TEXT_COLS` and neither was in its `SKIP` set.
+  - **The workbook's `Securities` sheet is funds only**, so it cannot stand in:
+    the last import wrote exactly **46** rows and `securities2` holds exactly
+    **46** funds. Every fund row was updated by it; no stock row was.
+  - **FMP supplies no Morningstar category.** `createSecurityBySymbol` inserts
+    `{ security_id }` and calls `refreshSecurityFromFMP`, which writes six
+    columns — name, sector, industry, description and the two earnings dates.
+    Category is not among them.
+  - **It has not bitten yet only because no stock has been created since.** The
+    four securities added after the deletion (VBTLX, VMSAX, VVIAX, VIGAX) are
+    all mutual funds and were filled by the workbook. The next stock added by
+    ticker gets `category_name = null`, resolves to no asset class, and its
+    weight drops out of every allocation rollup it appears in — reported only
+    as an "unclassified weight" line. **There is no import path left; today it
+    would take a manual DB edit.**
+- **`equity_style_internal` is the stock vocabulary's dead twin.** 42 of the 43
+  stocks carrying it hold a value identical to `category_name`, 12 stocks have
+  a category and no style at all, and **META disagrees with itself** —
+  `category_name = 'Large Cap Growth'` against `equity_style_internal =
+  'Large Cap Core'`, which are different sleeves. `resolveAssetClass` reads
+  `category_name`, so the category wins; the style column is read only as a
+  display fallback on `SecurityDetailPage`. Do not start reading it.
 - **A new vendor spelling is now reported AT THE IMPORT**, which is where one
   arrives (Nov 2026). `unmappedCategories(categories)` lives beside the map,
   `fundBulkUpload` runs the workbook's categories through it, and the import
