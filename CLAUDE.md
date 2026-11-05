@@ -1398,6 +1398,25 @@ What belongs here, because it is a convention rather than operations:
   Code was running, which is how two jobs read as `running` all day while doing
   nothing. Its copies are disabled, not deleted — re-enabling them without
   unloading the agents would run everything twice.
+  - **That warning was violated, and it cost real documents** (found Nov 2026).
+    Three of the seven app tasks were enabled alongside their LaunchAgents, so
+    each ran twice daily — **eleven double-run days across seven jobs**. Both
+    `pre-earnings-brief` runs on 2 Nov wrote, which is where the duplicate
+    pre-briefs for APP, ELF and DUK came from. **The app scheduler bypasses
+    `run-job.sh` entirely**, so its lock cannot defend against this;
+    configuration is the only guard. A launchd run starts within seconds of its
+    slot, an app run at an irregular catch-up time — that difference is how to
+    tell them apart in `job_runs`.
+- **A run that DIES holding the lock used to block the job for good.**
+  `run-job.sh` takes `locks/<task>.lock` with `mkdir` and releases it from an
+  EXIT trap, which a SIGKILL or a sleeping machine never fires. On 4 Nov 2026
+  `post-earnings-brief` died at 09:30 leaving its lock, and the next morning's
+  run logged `SKIP` and did nothing — that day's briefs existed only because
+  the duplicate app-scheduler run wrote them outside the script, one bug
+  covering for another. The lock now records its holder's pid and is
+  **reclaimed when that holder is gone**, while a live `run-job.sh` is still
+  respected. The command is checked alongside the pid, since a recycled pid
+  would otherwise block the job forever.
 - **A prompt is edited at `.claude/scheduled-tasks/<taskId>/SKILL.md` and nowhere
   else.** The live path reads `git show main:…`, so an edit reaches the jobs when
   it is MERGED, not when it is saved — and a job can never run a half-finished

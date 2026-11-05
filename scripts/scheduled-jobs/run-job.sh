@@ -42,13 +42,68 @@ mkdir -p "$LOGDIR" "$LOCKDIR"
 LOG="$LOGDIR/$TASK-$(date +%Y-%m-%d).log"
 log() { printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
 
-# A hung run must not block tomorrow's. mkdir is the atomic test-and-set.
+# A hung run must not block tomorrow's — and until Nov 2026 it DID.
+#
+# `mkdir` is an atomic test-and-set, and the EXIT trap releases it on every
+# ordinary end, including a timeout and most signals. What it cannot cover is a
+# SIGKILL or the machine sleeping, logging out or losing power mid-run: the trap
+# never fires and the directory outlives the process that made it. From then on
+# every future run reads a lock it can never clear.
+#
+# That is not hypothetical. post-earnings-brief started at 09:30 on 4 Nov 2026,
+# died without logging DONE, TIMEOUT or FAIL, and left the lock behind; at 09:30
+# the next morning the job logged SKIP and did nothing. The day's briefs were
+# only written because the app scheduler — the duplicate-run bug being fixed in
+# the same change — happened to run the prompt outside this script. One failure
+# silently covering for another is the worst way to keep working.
+#
+# So the lock now records its HOLDER and is reclaimed when that holder is gone.
+# A live run is still respected, which is the behaviour worth keeping: two
+# copies of a drafting job writing at once is how duplicate briefs appear.
 LOCK="$LOCKDIR/$TASK.lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
-  log "SKIP — $LOCK exists, a previous run is still going (or died holding it)"
-  exit 0
-fi
-trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+
+lock_age_secs() {
+  local mtime; mtime="$(stat -f %m "$LOCK" 2>/dev/null)" || return 1
+  printf '%s' $(( $(date +%s) - mtime ))
+}
+
+# True when the recorded pid is a run-job.sh that is still going. The command
+# is checked as well as the pid, because pids are recycled and an unrelated
+# process inheriting the number would otherwise block this job indefinitely.
+holder_is_alive() {
+  local pid="$1"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  ps -o command= -p "$pid" 2>/dev/null | grep -q 'run-job\.sh' || return 1
+  return 0
+}
+
+take_lock() {
+  if mkdir "$LOCK" 2>/dev/null; then
+    printf '%s\n' "$$" > "$LOCK/pid"
+    return 0
+  fi
+  local holder age
+  holder="$(cat "$LOCK/pid" 2>/dev/null)"
+  age="$(lock_age_secs)" || age="unknown"
+  if holder_is_alive "$holder"; then
+    log "SKIP — $TASK is still running as pid $holder (lock ${age}s old)"
+    return 1
+  fi
+  log "RECLAIM — $LOCK was held by a dead run (pid=${holder:-unknown}, ${age}s old); taking it"
+  rm -rf "$LOCK"
+  # Re-test rather than assume: two agents reclaiming at once must not both win.
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    log "SKIP — lost the race to reclaim $LOCK"
+    return 1
+  fi
+  printf '%s\n' "$$" > "$LOCK/pid"
+  return 0
+}
+
+take_lock || exit 0
+# rm -rf, not rmdir: the lock directory now holds the pid file.
+trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
 
 cd "$REPO" || { log "FAIL — cannot cd to $REPO"; exit 1; }
 
