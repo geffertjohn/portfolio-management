@@ -705,3 +705,76 @@ export function effectiveReviewDay(r: OutstandingReviewInput): string {
   if (!outstanding) return scheduled
   return outstanding < scheduled ? outstanding : scheduled
 }
+
+/**
+ * Whether a stock's stored earnings dates should be re-read from FMP.
+ *
+ * **A stored `next_earnings_release` that is WRONG but still in the FUTURE is
+ * invisible to a past-only staleness test**, and that cost HOOD its earnings
+ * briefs. Its stored date read 4 Nov 2026 while the call was actually held on
+ * 27 Oct. Every refresh path tested for null-or-past, so the bad date was
+ * never questioned: the Review Calendar's top-up skipped it for six weeks, and
+ * `last_earnings_release` sat on 29 July — a whole quarter behind — until
+ * somebody happened to open the security page.
+ *
+ * The consequence was not cosmetic. `pre-earnings-brief` screens candidates on
+ * the stored date, so HOOD was never a candidate during its real window; by
+ * the time the stored date brought it into view the print was a week past and
+ * the job correctly refused to write an expectations document for a call that
+ * had already happened. **And `research_reports_post_needs_parent` makes a
+ * post-brief impossible without a pre-brief**, so that quarter can never be
+ * briefed at all. Eight held stocks were in this state for Q3 FY2026.
+ *
+ * **There is no way to know a future date is wrong except to ask**, so the
+ * trigger is the stored date claiming a call is COMING UP — the only case
+ * where being wrong costs anything. Three reasons to check:
+ *
+ * - **null** — never populated, so there is nothing to schedule from.
+ * - **in the past** — the original test, and still right.
+ * - **within `horizonDays`** — the new one. A stock reporting soon is a stock
+ *   whose date had better be correct, because the pre-earnings window is only
+ *   about four days wide and a brief missed is a brief that cannot be written
+ *   later.
+ *
+ * `horizonDays` defaults to 21: it comfortably covers an estimate that moves
+ * up by up to three weeks (HOOD's was eight days), while bounding the work to
+ * the near-term reporters — six of the fifty-four held stocks on the day this
+ * was written, rather than all of them on every calendar mount.
+ */
+export function needsEarningsCheck(
+  nextEarnings: string | null | undefined,
+  today: string,
+  horizonDays = 21,
+): boolean {
+  if (!nextEarnings) return true
+  const day = nextEarnings.slice(0, 10)
+  if (day < today) return true
+  return day <= addUtcDays(today, horizonDays)
+}
+
+/**
+ * A stored next-earnings date that MOVED while still in the future.
+ *
+ * Reported separately from a routine roll-forward because it is a different
+ * fact: a date that merely went past and advanced a quarter is upkeep, while a
+ * future date that changed means the window the brief and review jobs were
+ * working to was wrong — the HOOD signature. The advisor should know a brief
+ * may have been missed, not just that some data was refreshed.
+ */
+export function correctedFutureEarnings(
+  before: Map<string, string | null>,
+  after: Array<{ symbol: string; nextEarnings: string | null }>,
+  today: string,
+): string[] {
+  const out: string[] = []
+  for (const a of after) {
+    const had = before.get(a.symbol)
+    if (!had || !a.nextEarnings) continue
+    const oldDay = had.slice(0, 10)
+    // Only a date that was still AHEAD of us: one already in the past was
+    // caught by the old test and advancing it is expected.
+    if (oldDay < today) continue
+    if (oldDay !== a.nextEarnings.slice(0, 10)) out.push(a.symbol)
+  }
+  return out.sort()
+}

@@ -461,9 +461,24 @@ export async function createSecurityBySymbol(symbol: string): Promise<void> {
  * Review Calendar reads from going stale. Only non-empty values are written, so
  * a partial FMP response never blanks a good stored value.
  */
-export async function refreshSecurityFromFMP(symbol: string): Promise<void> {
+/**
+ * What FMP said about a symbol's earnings dates on this pass.
+ *
+ * Returned so a caller can tell a date that MOVED from one that was merely
+ * refreshed. The write itself is unconditional whenever FMP supplies a value,
+ * so correcting a wrong future date never needed a code change — nothing was
+ * asking FMP about those symbols in the first place (`needsEarningsCheck`).
+ */
+export interface EarningsRefresh {
+  symbol: string
+  lastEarnings: string | null
+  nextEarnings: string | null
+}
+
+export async function refreshSecurityFromFMP(symbol: string): Promise<EarningsRefresh> {
   const sym = symbol.trim().toUpperCase()
-  if (!sym) return
+  const none: EarningsRefresh = { symbol: sym, lastEarnings: null, nextEarnings: null }
+  if (!sym) return none
 
   const [profileRes, earningsRes] = await Promise.allSettled([
     fetchProfile(sym),
@@ -484,10 +499,16 @@ export async function refreshSecurityFromFMP(symbol: string): Promise<void> {
     set('last_earnings_release', earningsRes.value.lastEarnings)
     set('next_earnings_release', earningsRes.value.nextEarnings)
   }
-  if (Object.keys(patch).length === 0) return
+  const seen: EarningsRefresh = {
+    symbol: sym,
+    lastEarnings: patch.last_earnings_release ?? null,
+    nextEarnings: patch.next_earnings_release ?? null,
+  }
+  if (Object.keys(patch).length === 0) return seen
 
   const { error } = await supabase.from('securities2').update(patch).eq('security_id', sym)
   if (error) throw error
+  return seen
 }
 
 /**
@@ -501,17 +522,19 @@ export async function refreshSecurityFromFMP(symbol: string): Promise<void> {
  *
  * Returns the number of symbols successfully refreshed.
  */
-export async function refreshSecuritiesFromFMP(symbols: string[], concurrency = 4): Promise<number> {
+export async function refreshSecuritiesFromFMP(
+  symbols: string[],
+  concurrency = 4,
+): Promise<EarningsRefresh[]> {
   const queue = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))]
-  let refreshed = 0
+  const refreshed: EarningsRefresh[] = []
 
   async function worker(): Promise<void> {
     for (;;) {
       const sym = queue.shift()
       if (!sym) return
       try {
-        await refreshSecurityFromFMP(sym)
-        refreshed++
+        refreshed.push(await refreshSecurityFromFMP(sym))
       } catch {
         // One symbol failing must not stop the batch.
       }

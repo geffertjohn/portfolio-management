@@ -807,6 +807,38 @@ security showed on the calendar. HCA (Equity Income 2.50%, EI&CG 1.25%) and TSM
 - **The staleness test is strictly `< today`.** A stock whose call is *today*
   has a review due tomorrow; treating it as stale would advance the stored date
   past that call and skip the review.
+- **A stored date that is WRONG but still in the FUTURE is invisible to a
+  past-only test, and that cost HOOD its earnings briefs** (Nov 2026).
+  `needsEarningsCheck` now also asks FMP about any stock reporting **within 21
+  days**, because there is no way to know a future date is wrong except to ask,
+  and a near-term reporter is the only case where being wrong costs anything.
+  HOOD's stored date read 4 Nov against a call actually held on **27 Oct**;
+  nothing questioned it for six weeks while `last_earnings_release` sat a
+  quarter behind on 29 July. `pre-earnings-brief` screens on that stored date,
+  so HOOD was never a candidate in its real window, and by the time the stored
+  date brought it into view the job **correctly** refused to write expectations
+  for a print already past. Since `research_reports_post_needs_parent` makes a
+  post-brief impossible without a pre-brief, **that quarter can never be
+  briefed** — eight held stocks were in this state for Q3 FY2026 (BLK, GLW,
+  HCA, HOOD, JPM, NXPI, VZ, WELL), each showing a quarterly brief built from a
+  call summary alone with no pair behind it.
+  - **21 days is a bound, not a guess**: it covers an estimate moving up by up
+    to three weeks (HOOD's moved eight days) against a pre-earnings window only
+    about four days wide, while asking about **six** of the fifty-four held
+    stocks rather than all of them on every mount. It catches both directions —
+    a date stored LATER than reality (the fatal one) now, and one stored
+    earlier (JNJ: 20 Jan vs 26 Jan) when it enters the horizon.
+  - **The write-back itself never needed changing.** `refreshSecurityFromFMP`
+    always wrote whatever FMP supplied, and the security detail page's
+    write-through has always compared stored against live. Nothing was *asking*
+    FMP about those symbols — the gate was the whole bug.
+  - **`correctedFutureEarnings` reports a moved future date on its own line**,
+    separately from a routine roll-forward: a date that went past and advanced
+    a quarter is upkeep, while a future date that changed means the brief and
+    review jobs were working to the wrong day. `refreshSecuritiesFromFMP`
+    returns `EarningsRefresh[]` rather than a count so the caller can tell the
+    two apart. NVDA was the live case on the first run — stored 18 Nov against
+    FMP's 17th.
 
 **The stock contract has TWO arms, and an audit that checks only the first
 raises false positives.** `next_review_at = next_earnings_release + 1 day`,

@@ -6,6 +6,7 @@ import {
   fetchUnscheduledHeldSecurities, ensureReviewSchedules,
   fetchOrphanedSchedules, retireReviewSchedules,
   effectiveReviewDay, outstandingCallReviewDay,
+  needsEarningsCheck, correctedFutureEarnings,
   reviewDueDay, type ReviewCadence,
 } from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -42,6 +43,7 @@ export function ReviewCalendarPage() {
   const [redatedCount, setRedatedCount] = useState<number | null>(null)
   const [seededCount, setSeededCount] = useState<number | null>(null)
   const [retiredCount, setRetiredCount] = useState<number | null>(null)
+  const [corrected, setCorrected] = useState<string[]>([])
   const didRefresh = useRef(false)
 
   // Two corrections, and the second does NOT depend on the first.
@@ -56,10 +58,13 @@ export function ReviewCalendarPage() {
 
     const stocksIn = (rows: typeof schedules) => rows.filter((s) => s.symbol && !isFundOrEtfSecurity(s))
     const today = new Date().toISOString().slice(0, 10)
-    // STRICTLY before today, as it has always been: a stock whose call is TODAY
-    // has a review due tomorrow, and refreshing it would advance the stored
-    // date past that call and skip the review entirely.
-    const isStale = (d: string | null | undefined) => d == null || d.slice(0, 10) < today
+    // Null, past, OR reporting within three weeks. The old test was past-only,
+    // and a stored date that is WRONG but still in the future passes it — which
+    // is how HOOD's 4 Nov date survived six weeks against a call actually held
+    // on 27 Oct, and cost it the earnings-brief pair for that quarter. There is
+    // no way to know a future date is wrong except to ask, so the near-term
+    // reporters get asked. See `needsEarningsCheck`.
+    const needsCheck = (d: string | null | undefined) => needsEarningsCheck(d, today)
 
     setRefreshing(true)
     void (async () => {
@@ -90,15 +95,25 @@ export function ReviewCalendarPage() {
       // schedule from a stale date, so without this it could never be seeded
       // and so could never be refreshed.
       const stale = [
-        ...stocksIn(rows).filter((s) => isStale(s.next_earnings_release)).map((s) => s.symbol),
-        ...unscheduled.filter((c) => isStale(c.next_earnings_release)).map((c) => c.security_id),
+        ...stocksIn(rows).filter((s) => needsCheck(s.next_earnings_release)).map((s) => s.symbol),
+        ...unscheduled.filter((c) => needsCheck(c.next_earnings_release)).map((c) => c.security_id),
       ]
+      // What those symbols claimed BEFORE the refresh, so a date that moved
+      // while still in the future can be told from a routine roll-forward.
+      const was = new Map<string, string | null>([
+        ...stocksIn(rows).map((s) => [s.symbol, s.next_earnings_release] as const),
+        ...unscheduled.map((c) => [c.security_id, c.next_earnings_release] as const),
+      ])
 
       if (stale.length > 0) {
-        const n = await refreshSecuritiesFromFMP(stale)
-        setRefreshedCount(n)
+        const seen = await refreshSecuritiesFromFMP(stale)
+        setRefreshedCount(seen.length)
+        // A future date that CHANGED is a different fact from one that merely
+        // went past: it means the window the brief and review jobs worked to
+        // was wrong, so it is reported on its own line.
+        setCorrected(correctedFutureEarnings(was, seen, today))
         // Re-read so the seed and re-date below see the dates FMP just supplied.
-        if (n > 0) {
+        if (seen.length > 0) {
           rows = await fetchReviewSchedules()
           unscheduled = await fetchUnscheduledHeldSecurities()
         }
@@ -199,6 +214,16 @@ export function ReviewCalendarPage() {
           {!refreshing && refreshedCount != null && refreshedCount > 0 && (
             <p className="mt-1 text-xs text-gray-400">
               Updated earnings dates for {refreshedCount} stock{refreshedCount === 1 ? '' : 's'}.
+            </p>
+          )}
+          {/* Its own line, and the strongest of them: a future earnings date
+              that moved means the pre-earnings job was screening on the wrong
+              day, and a brief missed cannot be written later — the post-brief
+              needs a parent that will never exist. */}
+          {!refreshing && corrected.length > 0 && (
+            <p className="mt-1 text-xs text-amber-700">
+              Corrected an upcoming earnings date for {corrected.join(', ')} — a brief or
+              review window may have been wrong.
             </p>
           )}
           {/* Said separately: a held security with no schedule was invisible
