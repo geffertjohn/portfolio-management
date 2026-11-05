@@ -7,7 +7,7 @@
  * positions.security_id is the text ticker (e.g. "UITB"), a FK to securities2.security_id.
  */
 import { supabase } from './supabase'
-import { ensureReviewSchedules } from './reviewSchedules'
+import { ensureReviewSchedules, retireReviewSchedules } from './reviewSchedules'
 import { formatPortfolioSecuritySymbol } from '@/lib/positionDisplay'
 import type { PortfolioPosition } from '@/types/position'
 
@@ -38,6 +38,8 @@ export async function updatePosition(
     // Swapping one holding for another: the INCOMING security is new to this
     // book even though the row count did not change.
     await ensureReviewSchedules([newSecurityId])
+    // ...and the OUTGOING one may have just left its last book.
+    await retireReviewSchedules([oldSecurityId])
   } else {
     const { error } = await supabase
       .from('positions')
@@ -61,6 +63,9 @@ export async function deletePosition(
     .eq('security_id', securityId)
     .is('deleted_at', null)
   if (error) throw error
+  // A security that has left its LAST book should stop asking to be reviewed.
+  // Never throws; the position is already gone.
+  await retireReviewSchedules([securityId])
 }
 
 export async function createPosition(

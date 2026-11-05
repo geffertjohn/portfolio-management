@@ -813,9 +813,51 @@ raises false positives.** `next_review_at = next_earnings_release + 1 day`,
 **unless** the review is outstanding for a call that already happened
 (`next_review_at <= last_earnings_release + 1`), in which case
 `redatedStockSchedules` deliberately leaves it where it is rather than pushing
-it a quarter out. On 4 Nov 2026 that was 51 rows on the first arm and 3 on the
-second (AMD, ETN, UBER, which had just reported) — checking only the first
-arm reports those three as violations.
+it a quarter out. On 5 Nov 2026 that was 47 rows on the first arm and 7 on the
+second (the names that had just reported) — checking only the first arm reports
+those seven as violations.
+
+**A re-date may correct a date; it may never retire a review that has already
+fallen due** (Nov 2026). The outstanding-review arm above only sees a review
+dated at or BEFORE the call it belongs to, and a schedule dated off a
+next-earnings ESTIMATE that never happened lands in the blind spot between the
+real call and the next one. HOOD was live proof: stored `next_earnings_release`
+read 4 Nov so its review was dated 5 Nov, while the call had been held on
+27 Oct and never reviewed (last reviewed 4 May). The FMP top-up corrected the
+dates to `last = 27 Oct, next = 9 Feb`; 5 Nov is after 28 Oct, the first arm
+passed, and the re-date moved a review due THAT DAY out to 10 Feb 2027 —
+cancelling the October call's review outright. `redatedStockSchedules` now
+takes `today` and skips a row already due whose correction would defer it.
+Nothing is moved BACKWARD: that would assert a missed review from a date no
+call was held on. **Whether the calendar should go further and date such a row
+from the call it actually missed is undecided** — 27 of 54 stocks carry an
+unreviewed call, 20 of them showing a future review date, so it is a product
+question, not a cleanup.
+
+**The SALE path retires the schedule, mirroring the purchase path**
+(`retireReviewSchedules` + the pure `retiredSchedules`, Nov 2026). Nothing did
+until then, so selling out of every book left the timer standing: VTABX, gone
+from its last book in Mar 2026, still carried a review due 9 Dec 2026, and
+APDFX, sold on 1 Oct, one due 29 Dec. Both would have come up on the Review
+Calendar and in the Actions hub as reviews due for funds the firm does not own
+— in an audit-defence tool a review recorded against an unheld security is a
+false record of process, not merely noise. Wired into the three writers that
+take a security out of `positions`: `deletePosition`, `updatePosition` (the
+outgoing ticker) and `syncPositionsFromLatestSnapshot` (its `gone` set).
+- **Held in one book is held.** The holders are collapsed before the difference
+  is taken — APDFX sat in six books, and leaving one is a rebalance, not a sale.
+  `retireReviewSchedules` re-reads `positions` for exactly this, so a caller can
+  pass whatever it just removed.
+- **The row is deleted, not flagged.** A schedule is a forward-looking timer;
+  the reviews themselves are in `review_log`, and `review_schedules` is one of
+  the nine `log_audit` tables, so the deletion is recorded. Hiding the row
+  instead would be worse than either — `ensureReviewSchedules` filters to the
+  *unscheduled*, so a hidden row blocks a clean re-seed and a re-purchased fund
+  comes back carrying a date from its previous life.
+- **The calendar sweeps too** (`fetchOrphanedSchedules`), because the sale-path
+  wiring cannot reach a row whose position was removed before it existed. It
+  runs FIRST, so the FMP top-up does not spend a call on an unheld security and
+  the re-date does not move a review nobody should be asked to do.
 
 `review_log.review_date` persists the scheduled due date alongside `reviewed_at`. `markReviewed()` takes an options object with explicit `reviewDate` / `nextReviewAt`; when omitted (funds), it falls back to cadence-based scheduling. Funds keep the legacy editable-date + cadence flow. `review_schedules.cadence` is NOT NULL, so always write a cadence value even when it's UI-hidden.
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   fetchReviewSchedules, isOverdue, isDueSoon, redatedStockSchedules, applyScheduleRedates,
   fetchUnscheduledHeldSecurities, ensureReviewSchedules,
+  fetchOrphanedSchedules, retireReviewSchedules,
   reviewDueDay, type ReviewCadence,
 } from '@/lib/reviewSchedules'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
@@ -39,6 +40,7 @@ export function ReviewCalendarPage() {
   const [refreshedCount, setRefreshedCount] = useState<number | null>(null)
   const [redatedCount, setRedatedCount] = useState<number | null>(null)
   const [seededCount, setSeededCount] = useState<number | null>(null)
+  const [retiredCount, setRetiredCount] = useState<number | null>(null)
   const didRefresh = useRef(false)
 
   // Two corrections, and the second does NOT depend on the first.
@@ -60,6 +62,22 @@ export function ReviewCalendarPage() {
 
     setRefreshing(true)
     void (async () => {
+      let rows = schedules
+
+      // Retire FIRST, so nothing below works on a security the firm no longer
+      // owns: the top-up would spend an FMP call on its earnings date and the
+      // re-date would move a review nobody should be asked to do. These are the
+      // rows the sale-path wiring cannot reach, because their positions were
+      // removed before it existed and nothing will call it for them again.
+      const orphaned = await fetchOrphanedSchedules()
+      if (orphaned.length > 0) {
+        const n = await retireReviewSchedules(orphaned)
+        if (n > 0) {
+          setRetiredCount(n)
+          rows = await fetchReviewSchedules()
+        }
+      }
+
       // A held stock with NO schedule row is invisible to everything here, and
       // the two corrections below cannot reach it: the top-up reads schedule
       // rows and the re-date is a per-row UPDATE. So find them first.
@@ -71,11 +89,10 @@ export function ReviewCalendarPage() {
       // schedule from a stale date, so without this it could never be seeded
       // and so could never be refreshed.
       const stale = [
-        ...stocksIn(schedules).filter((s) => isStale(s.next_earnings_release)).map((s) => s.symbol),
+        ...stocksIn(rows).filter((s) => isStale(s.next_earnings_release)).map((s) => s.symbol),
         ...unscheduled.filter((c) => isStale(c.next_earnings_release)).map((c) => c.security_id),
       ]
 
-      let rows = schedules
       if (stale.length > 0) {
         const n = await refreshSecuritiesFromFMP(stale)
         setRefreshedCount(n)
@@ -97,12 +114,12 @@ export function ReviewCalendarPage() {
         rows = await fetchReviewSchedules()
       }
 
-      const redates = redatedStockSchedules(stocksIn(rows))
+      const redates = redatedStockSchedules(stocksIn(rows), today)
       if (redates.length > 0) {
         await applyScheduleRedates(redates)
         setRedatedCount(redates.length)
       }
-      if (stale.length > 0 || seeded > 0 || redates.length > 0) {
+      if (orphaned.length > 0 || stale.length > 0 || seeded > 0 || redates.length > 0) {
         await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.reviewSchedules })
       }
     })()
@@ -175,6 +192,13 @@ export function ReviewCalendarPage() {
           )}
           {/* Said separately from the line above: a re-dated review is a date
               the advisor was being shown wrongly, not routine data upkeep. */}
+          {!refreshing && retiredCount != null && retiredCount > 0 && (
+            <p className="text-xs text-gray-500">
+              Retired {retiredCount} review schedule{retiredCount === 1 ? '' : 's'} for
+              {retiredCount === 1 ? ' a security' : ' securities'} no portfolio holds.
+            </p>
+          )}
+
           {!refreshing && redatedCount != null && redatedCount > 0 && (
             <p className="mt-1 text-xs text-gray-400">
               Re-dated {redatedCount} review{redatedCount === 1 ? '' : 's'} whose earnings date had moved.

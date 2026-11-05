@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { seededStockSchedules, newScheduleWrites, type ScheduleSeedInput } from '../reviewSchedules'
+import {
+  seededStockSchedules, newScheduleWrites, retiredSchedules,
+  type ScheduleSeedInput,
+} from '../reviewSchedules'
 
 /**
  * Nothing creates a `review_schedules` row when a stock is bought — the only
@@ -194,5 +197,50 @@ describe('what a newly held security gets', () => {
     ], TODAY)
     expect(w).toHaveLength(2)
     expect(new Set(w.map((x) => x.securityId)).size).toBe(2)
+  })
+})
+
+describe('retiring the schedule of a security that has left every book', () => {
+  /**
+   * The mirror of the seeding above, and the gap it closes was found by the
+   * same kind of query. The purchase path creates a schedule; until Nov 2026
+   * nothing retired one. VTABX left its last book in Mar 2026 and was still
+   * carrying a review due 9 Dec 2026; APDFX, sold out of its last book on
+   * 1 Oct, one due 29 Dec. Both would have come up on the Review Calendar and
+   * in the Actions hub as reviews due for funds the firm does not own.
+   */
+  it('retires a schedule once no book holds the security', () => {
+    expect(retiredSchedules(['VTABX', 'APDFX', 'VOO'], ['VOO'])).toEqual(['APDFX', 'VTABX'])
+  })
+
+  it('KEEPS the schedule of a security still held in another book', () => {
+    // The case that makes a per-position check wrong. APDFX sat in six books;
+    // leaving one of them is a rebalance, not a sale, and retiring on the first
+    // departure would have stopped a live holding being reviewed.
+    expect(retiredSchedules(['APDFX'], ['APDFX'])).toEqual([])
+  })
+
+  it('retires nothing when every scheduled security is held', () => {
+    expect(retiredSchedules(['VOO', 'AAPL'], ['AAPL', 'VOO', 'MSFT'])).toEqual([])
+  })
+
+  it('ignores a held security that has no schedule', () => {
+    // That is the seeding side's job, not this one's. Returning it here would
+    // make the two halves fight over the same row.
+    expect(retiredSchedules(['VOO'], ['VOO', 'HCA'])).toEqual([])
+  })
+
+  it('dedupes and trims, since `held` arrives one row per position', () => {
+    // `positions` is keyed (portfolio_name, security_id), so a security in four
+    // books arrives four times.
+    expect(retiredSchedules([' VTABX ', 'VTABX'], ['VOO', 'VOO', ' VOO '])).toEqual(['VTABX'])
+  })
+
+  it('retires everything when the book is empty', () => {
+    // Stated so the behaviour is deliberate rather than incidental: the caller
+    // scopes the read, and `syncPositionsFromLatestSnapshot` deletes per
+    // portfolio for symbols absent from the target, so `positions` is never
+    // globally emptied mid-import.
+    expect(retiredSchedules(['VOO'], [])).toEqual(['VOO'])
   })
 })

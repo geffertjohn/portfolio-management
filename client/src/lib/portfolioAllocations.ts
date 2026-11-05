@@ -9,7 +9,7 @@
  * Weights are stored as percent points (e.g. 6.50 = 6.5%).
  */
 import { supabase } from './supabase'
-import { ensureReviewSchedules } from './reviewSchedules'
+import { ensureReviewSchedules, retireReviewSchedules } from './reviewSchedules'
 
 export interface AllocationSnapshot {
   effective_date: string // YYYY-MM-DD
@@ -256,6 +256,9 @@ export async function syncPositionsFromLatestSnapshot(
     const { error } = await supabase
       .from('positions').delete().eq('portfolio_name', portfolioName).in('security_id', gone)
     if (error) throw error
+    // Dropped from THIS book; `retireReviewSchedules` re-checks the others and
+    // retires only the timers of securities that no book holds any more.
+    await retireReviewSchedules(gone)
   }
 
   const toInsert = symbols.filter((s) => !currentSet.has(s))
