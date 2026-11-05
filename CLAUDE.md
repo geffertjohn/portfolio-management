@@ -84,11 +84,29 @@ respectively. Don't repurpose them.
     Category is not among them.
   - **It has not bitten yet only because no stock has been created since.** The
     four securities added after the deletion (VBTLX, VMSAX, VVIAX, VIGAX) are
-    all mutual funds and were filled by the workbook. The next stock added by
-    ticker gets `category_name = null`, resolves to no asset class, and its
-    weight drops out of every allocation rollup it appears in — reported only
-    as an "unclassified weight" line. **There is no import path left; today it
-    would take a manual DB edit.**
+    all mutual funds and were filled by the workbook.
+  - **CLOSED Nov 2026: a stock's category is now set BY HAND on its page.**
+    `setSecurityCategory` in `lib/securities.ts` is the only writer that
+    exists, and the control is the `Category` cell in the stock header.
+    - **A fixed list, never a text box** (`STOCK_CATEGORY_OPTIONS`). The
+      failure being closed is a `category_name` the map cannot place; free
+      text would let a typo, or a fund-side spelling like "Large Blend" on a
+      stock, recreate it one keystroke at a time and silently.
+      `assetClass.test.ts` asserts **every option resolves** and that each uses
+      the stock grid — the `*_OPTIONS ⊆ CHECK` discipline applied to a
+      vocabulary rather than a constraint.
+    - **Stocks only.** A fund's category comes from the workbook, so a
+      hand-edit would be overwritten by the next import without warning. The
+      fund page has its own layout and never renders this cell.
+    - **Unset is amber and says "excluded from allocation"**, because an
+      unclassified stock leaves the rollup and nothing else on that page would
+      show it. The save error is rendered, never swallowed — the
+      benchmark-picker lesson, for the same reason: this is a governed value
+      the allocation tables read.
+    - **`securities2` carries no audit trigger**, so unlike the nine
+      `log_audit` tables this change leaves no trail. Same caveat as
+      `model_portfolio_data`; worth knowing before relying on it in an
+      examination.
 - **`equity_style_internal` is the stock vocabulary's dead twin.** 42 of the 43
   stocks carrying it hold a value identical to `category_name`, 12 stocks have
   a category and no style at all, and **META disagrees with itself** —

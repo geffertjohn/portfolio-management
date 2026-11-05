@@ -6,7 +6,9 @@ import {
   isFundOrEtfSecurity,
   refreshSecurityFromFMP,
   setScorecardCohort,
+  setSecurityCategory,
 } from '@/lib/securities'
+import { STOCK_CATEGORY_OPTIONS } from '@/lib/assetClass'
 import type { ScorecardCohort } from '@/lib/fundScorecard'
 import { fetchAtRiskBySecurity } from '@/lib/atRisk'
 import { RemoveFromAtRiskModal } from '@/components/RemoveFromAtRiskModal'
@@ -177,6 +179,23 @@ export function SecurityDetailPage() {
   // the review judges the fund by.
   const cohortMutation = useMutation({
     mutationFn: (cohort: ScorecardCohort) => setScorecardCohort(id, cohort),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: QUERY_KEYS.security(id) }) },
+  })
+
+  /**
+   * A stock's asset-class category, set by hand because nothing else can.
+   *
+   * The per-ticker YCharts template that used to write it went in Sep 2026,
+   * the workbook's Securities sheet is funds only and FMP supplies none — so
+   * until this, a stock added by ticker resolved to no asset class and its
+   * weight silently left every allocation rollup it appeared in.
+   *
+   * The error is SHOWN, never swallowed: this is a governed classification the
+   * allocation tables read, and a selection that looks applied but was not is
+   * worse than a visible failure (the benchmark-picker lesson).
+   */
+  const categoryMutation = useMutation({
+    mutationFn: (category: string | null) => setSecurityCategory(security!.security_id, category),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: QUERY_KEYS.security(id) }) },
   })
 
@@ -408,9 +427,38 @@ export function SecurityDetailPage() {
                   </div>
                   <div className="min-w-0">
                     <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                      Peer Group
+                      {isStock ? 'Category' : 'Peer Group'}
                     </dt>
-                    <dd className="mt-1 text-sm text-gray-900">{security.category_name ?? security.equity_style_internal ?? security.peer_group_name ?? '—'}</dd>
+                    {isStock ? (
+                      <dd className="mt-1">
+                        {/* Editable for STOCKS only. A fund's category comes from
+                            the workbook, and a hand-edit there would be silently
+                            overwritten by the next import. */}
+                        <select
+                          value={security.category_name ?? ''}
+                          disabled={categoryMutation.isPending}
+                          onChange={(e) => categoryMutation.mutate(e.target.value || null)}
+                          className={`w-full rounded-md border bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none disabled:opacity-60 ${
+                            security.category_name ? 'border-gray-300 text-gray-900' : 'border-amber-300 text-amber-700'
+                          }`}
+                        >
+                          {/* Unset is amber and says so: an unclassified stock
+                              drops out of the allocation rollup, and nothing on
+                              THIS page would otherwise show that. */}
+                          <option value="">Not set — excluded from allocation</option>
+                          {STOCK_CATEGORY_OPTIONS.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        {categoryMutation.isError && (
+                          <p className="mt-1 text-xs text-red-600">
+                            Could not save: {(categoryMutation.error as Error).message}
+                          </p>
+                        )}
+                      </dd>
+                    ) : (
+                      <dd className="mt-1 text-sm text-gray-900">{security.category_name ?? security.peer_group_name ?? '—'}</dd>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">

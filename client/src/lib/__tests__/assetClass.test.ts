@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories,
+import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories, STOCK_CATEGORY_OPTIONS,
 } from '../assetClass'
 
 const sec = (security_id: string, category_name: string | null) => ({ security_id, category_name })
@@ -125,5 +125,42 @@ describe('spotting a vocabulary the map has never seen', () => {
       'Small Cap Core', 'Small Cap Growth', 'Small Growth',
     ]
     expect(unmappedCategories(inUse)).toEqual([])
+  })
+})
+
+describe('the stock category picker can only write placeable values', () => {
+  /**
+   * The `*_OPTIONS ⊆ CHECK` discipline from `schemaContract.test.ts`, applied
+   * to a vocabulary rather than a constraint. The picker exists because a
+   * stock's category has had no writer since Sep 2026; an option it can write
+   * that `resolveAssetClass` then refuses would recreate the exact bug it was
+   * added to close, one selection at a time.
+   */
+
+  it('places EVERY option the picker offers', () => {
+    expect(unmappedCategories([...STOCK_CATEGORY_OPTIONS])).toEqual([])
+  })
+
+  it('offers the STOCK spellings, never the fund ones', () => {
+    // "Large Blend" and "Large Cap Core" are one sleeve under two vocabularies.
+    // Offering the fund spelling on a stock is how a second spelling enters the
+    // book, which is gotcha 23's whole mechanism.
+    for (const option of STOCK_CATEGORY_OPTIONS) {
+      expect(option, `${option} should use the stock grid`).toMatch(/Cap (Core|Growth|Value)$/)
+    }
+  })
+
+  it('covers the style grid the held book actually uses', () => {
+    // Every category the 55 held stocks carry on 5 Nov 2026. An option missing
+    // here means an existing stock cannot be re-selected to its own category.
+    const inUse = [
+      'Large Cap Core', 'Large Cap Growth', 'Large Cap Value',
+      'Mid Cap Core', 'Mid Cap Growth', 'Small Cap Core', 'Small Cap Growth',
+    ]
+    for (const c of inUse) expect([...STOCK_CATEGORY_OPTIONS], c).toContain(c)
+  })
+
+  it('offers no duplicates', () => {
+    expect(new Set(STOCK_CATEGORY_OPTIONS).size).toBe(STOCK_CATEGORY_OPTIONS.length)
   })
 })

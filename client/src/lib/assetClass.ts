@@ -124,6 +124,38 @@ export function assetClassLabel(key: AssetClassKey | null | undefined): string |
  * summing to 100% with nothing saying why.
  */
 /**
+ * The categories a STOCK can be given by hand, on the security page.
+ *
+ * **A stock's category has had no writer since Sep 2026.** It came from the
+ * per-ticker YCharts template (`securities2ExcelUpload.ts`), deleted with the
+ * two single-security import cards; the workbook's `Securities` sheet is funds
+ * only, and FMP supplies no Morningstar category. So a stock added by ticker
+ * resolved to no asset class and its weight left every allocation rollup it
+ * appeared in, reported only as an "unclassified weight" line.
+ *
+ * **It is a fixed list, not a text box.** The failure this closes is a
+ * `category_name` the map cannot place; a free-text field would let a typo or
+ * a fund-side spelling ("Large Blend" on a stock) recreate it one keystroke at
+ * a time, and silently. `assetClass.test.ts` asserts every option here
+ * resolves, so the picker cannot write a value the resolver will reject — the
+ * same `*_OPTIONS ⊆ CHECK` discipline `schemaContract.test.ts` applies to the
+ * database.
+ *
+ * These are the STOCK style-grid spellings ("Core"), not the fund ones
+ * ("Blend"), because mixing the two vocabularies on one asset type is how a
+ * second spelling of one sleeve gets into the book — see gotcha 23.
+ */
+export const STOCK_CATEGORY_OPTIONS = [
+  'Large Cap Value',
+  'Large Cap Core',
+  'Large Cap Growth',
+  'Mid Cap Core',
+  'Mid Cap Growth',
+  'Small Cap Core',
+  'Small Cap Growth',
+] as const
+
+/**
  * Which of these vendor categories the map cannot place.
  *
  * **The question is whether the CATEGORY is known, not whether a particular
