@@ -69,6 +69,27 @@ respectively. Don't repurpose them.
 - **Known gap:** securities created by ticker (`createSecurityBySymbol`) are seeded
   from FMP, which supplies no Morningstar category, so they resolve to `null` until
   a YCharts workbook import fills `category_name`.
+- **A new vendor spelling is now reported AT THE IMPORT**, which is where one
+  arrives (Nov 2026). `unmappedCategories(categories)` lives beside the map,
+  `fundBulkUpload` runs the workbook's categories through it, and the import
+  banner names any the map cannot place. It is returned as its own field, **not
+  in `errors`** — the row writes fine, so folding it into errors would mark a
+  clean import partial and push a false failure into `import_runs`.
+  - **It probes with a synthetic ticker**, because the question is whether the
+    CATEGORY is known, not whether one holding resolves: asking with a real
+    ticker lets `ASSET_CLASS_OVERRIDES` or the cash branch report a vocabulary
+    as mapped and the next security carrying it falls straight through.
+  - **A MISSING category is not an unmapped one** and is deliberately not
+    reported — that is the FMP-created security above, a different problem, and
+    warning on it would cry wolf on every new ticker.
+  - **`assetClass.test.ts` pins the 23 categories the live book actually uses**,
+    so dropping either emerging-market spelling or `Multisector Bond` now fails
+    the suite. That assertion is the one that would have caught the VMSAX case.
+  - **`scripts/audit/asset-class-coverage.ts`** answers the same question across
+    the whole book on demand (`npx vite-node scripts/audit/asset-class-coverage.ts`),
+    calling the same helper so the script and the importer cannot disagree. On
+    5 Nov 2026 every held security resolved, and all 23 categories in
+    `securities2` — held or not — were mapped.
 
 ### Two identifiers — use the right one for the right purpose
 
@@ -1955,7 +1976,7 @@ A portfolio's allocation **history** lives in `portfolio_allocations` — one ro
 - **Portfolio detail tabs** (`PortfolioDetailPage`): top-level **Overview · Allocation · Reviews · Documents**. **Allocation sub-tabs** are **Positions · History · Change Log · Candidates** — Change Log and Candidates were moved from top-level into Allocation, and the **Comparison sub-tab was removed** (`AllocationComparison.tsx` was deleted with it in `c3ee3ff`; this used to say the file was left in place, and it was not).
 - **UI:** the **Allocation → History** sub-tab (`AllocationHistoryPanel`) is the editable grid (dates as columns, securities as rows, per-date totals, add/delete date, add ticker). Production-editable. It carries the **"Import allocations"** action (`ImportAllocationsModal`), which **previews before it writes** — dates, holdings, per-date totals, and any unknown tickers — because the import REPLACES every stored date and re-points Positions. A per-date total that is not 100% is flagged amber: that is a broken file, not a rounding quirk.
 - **The Overview's Asset Class Allocation table has NO actual/holdings column for FUND portfolios** (`PortfolioOverview`, Nov 2026) — same reasoning: their positions are the uploaded snapshot, so the comparison column restated the target beside it. The legend's second figure and the "Actual holdings as of …" basis line go with it. **Equity portfolios are unchanged** and keep all three. Two consequences were handled rather than accepted:
-  - **The band status went with the column** (`STATUS_CLASS` ambers the actual figure). A class held outside the model is therefore restated as a red line beneath the table — otherwise removing the column would silently remove the finding. Foundation Conservative is the live case: **VWEAX 7% and VMSAX 3% sit in sleeves its model does not fund**.
+  - **The band status went with the column** (`STATUS_CLASS` ambers the actual figure). A class held outside the model is therefore restated as a red line beneath the table — otherwise removing the column would silently remove the finding. **The Foundation Conservative example this bullet used to give is no longer true, and was never a model gap.** It read "VWEAX 7% and VMSAX 3% sit in sleeves its model does not fund"; model 166 funds high yield at exactly 7% and multisector at exactly 3%, and the book sits on model sleeve by sleeve. The symptom was gotcha 23 — `Multisector Bond` was missing from `ASSET_CLASS_BY_CATEGORY`, so VMSAX resolved to `null` and its sleeve read 0 against a funded target. Adding the category fixed it. **An unclassified holding looks exactly like an unfunded sleeve on that table**, which is why the finding was written up as a model problem for weeks; check `resolveAssetClass` before concluding a model does not fund something.
   - **Fund portfolios now measure bands against POSITIONS, not the Documents file.** `holdingWeights` preferred the newest parseable file in `Portfolio Documents`, which for a fund book is whatever was last uploaded there and may describe an older lineup — Foundation Conservative's positions carry VMSAX while that CSV is the earlier six-holding book. Equity portfolios still prefer the file, which is the whole point for them ("has the market moved me out of band?").
 - **A hand edit in the History grid writes through to `positions` — but only the newest column, and only that one holding** (`syncPositionForGridEdit`, Nov 2026). "One allocation file drives History, Positions and the Change Log" was true of the IMPORT path only; the manual path changed history and left `positions` stale in the database, with the two sibling sub-tabs disagreeing and nothing saying so. `isCurrentTargetDate` decides which column counts — an edit to an older column is history and writes nothing.
   - **It is deliberately NOT a wholesale `syncPositionsFromLatestSnapshot`.** That deletes every position absent from the snapshot, and on today's book two portfolios would lose rows: **Equity Income & Core Growth** (a derived blend whose positions are computed from its parents — 25 of its 80 rows), and **ETF Conservative**, whose newest snapshot is sixteen months older than its positions, so a sync would quietly revert a live book to a 2025 lineup. Editing one cell does not authorise rewriting a book.

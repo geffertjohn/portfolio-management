@@ -223,6 +223,18 @@ export function ImportExportPage() {
                 runs.push({ source: 'ycharts_funds', rows: r.succeeded, errors: r.errors })
                 parts.push(`${r.succeeded} fund${r.succeeded !== 1 ? 's' : ''}`)
                 if (r.failed > 0) parts.push(`${r.failed} fund(s) failed: ${r.errors[0] ?? ''}`)
+                // Said on the import, because the import is when a new vendor
+                // vocabulary arrives. Downstream the only trace is a stray
+                // "unclassified weight" line on one portfolio page, which
+                // reads as a data quirk rather than a mapping gap (gotcha 23).
+                if (r.unmappedCategories.length > 0) {
+                  parts.push(
+                    `${r.unmappedCategories.length} unmapped categor`
+                    + `${r.unmappedCategories.length === 1 ? 'y' : 'ies'} — holdings in `
+                    + `${r.unmappedCategories.map((c) => `"${c}"`).join(', ')} will show as `
+                    + 'unclassified weight until added to ASSET_CLASS_BY_CATEGORY',
+                  )
+                }
               } catch (e) {
                 const msg = e instanceof Error ? e.message : 'unknown error'
                 runs.push({ source: 'ycharts_funds', rows: 0, errors: [msg], status: 'failed' })
