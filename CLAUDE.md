@@ -872,6 +872,63 @@ more than seventy days past a call. The Overdue count went 3 → 23.
   8. A row pulled back to its missed call says *for the call of <date>*; the
   date alone cannot say that, and an unexplained backward jump reads as a bug.
 
+**The COVERAGE REPORT answers the other half: which calls were never
+answered** (`lib/reviewCoverage.ts`, `/reviews/coverage`, Nov 2026).
+`outstandingCallReviewDay` names only the MOST RECENT unreviewed call, so a
+stock that reports again while still unreviewed moves its obligation to the new
+print and the older miss stops being counted — and the regulatory claim is that
+the firm reviewed each holding after each print, not after the latest one. This
+walks the full call history against `review_log` and reports every gap. On the
+first run: **54 held stocks, every one carrying at least one unanswered call,
+75 missed against 72 reviewed — 49% of 147 answerable calls.**
+
+- **Read-only and derived; it writes and stores nothing.** The call history and
+  `review_log` are already the records of fact, so a coverage table would be a
+  third copy that drifts from both — the Change Log argument again.
+- **The WINDOW is the whole design, and the report names which floor it used.**
+  Coverage starts at the LATER of `process_start` (the first review this system
+  ever recorded, **derived from `review_log`, never hardcoded** — 13 Apr 2026)
+  and `first_held` (earliest dated evidence the firm owned it). A report
+  charging the firm for calls before it held a security, or before the tool
+  recorded any review, is worse than none: every finding is one nobody could
+  have acted on, and the reader discounts the whole artifact. **All 55 held
+  stocks predate the process floor today**, so `first_held` binds for nothing
+  now and for everything bought from here on.
+- **A fresh print is `pending`, not `missed`.** A call is answerable only once
+  `release + 1 day` has passed — the date `MarkReviewedModal` schedules and the
+  same "due today is not overdue" line `isOverdue` draws. DUK reported the
+  morning this was built; counting it would have led the list with a false
+  finding. **`rate` divides by answerable calls only**, or the figure would
+  drift down and back up every quarter for reasons unrelated to the work, and
+  it is **null rather than 0% or 100%** when nothing is answerable.
+- **A review answers the call it FOLLOWS, up to the next one** — by window, not
+  by proximity. Nearest-call matching would credit a late review to the call it
+  happened to be closest to rather than the one it addressed, and on a book
+  where most names run more than 45 days behind the two differ constantly.
+  Same-day counts (earnings land pre-market or post-close); the day before does
+  not, or the report becomes a rubber stamp.
+- **A security whose history cannot be read is REPORTED, not dropped** — and a
+  200 carrying an empty array counts as unreadable too, since every public
+  company reports. A holding missing from an audit report reads as one with
+  nothing to answer for, which is the opposite of what a feed gap means.
+- **Ordered by the OLDEST gap, not the miss count**: one call unanswered for a
+  year is a worse finding than three unanswered last quarter. The **CSV is one
+  row per CALL**, built beside the rule like `buildActionsCsv` — "DUK, 2 of 3"
+  invites the next question, while the 4 Aug call and the date its review fell
+  due answers it.
+- **Its own page, not a tab on the calendar**: one FMP request per holding
+  (bounded concurrency 4, `staleTime` 15min, `refetchOnWindowFocus` off), which
+  a weekly worklist should not pay for, and the two are read at different
+  times. Reached from the Review Calendar header; **deliberately not in the
+  nav** — a governed surface nobody opens is the `NotificationsPage` mistake.
+- **`fetchEarningsReleaseDates`** in `lib/fmpMarket.ts` is the shared reader of
+  `/stable/earnings`; `fetchEarningsDates` now derives last/next from it, so
+  the two cannot disagree about what a release date is.
+- **`review_log` has NO `deleted_at`** — it is insert/read/delete only, so
+  there is no soft-delete filter to apply and the rows that exist are the
+  review record. A `.is('deleted_at', null)` on it 400s at runtime; the
+  schema-typed client checks `.select()` columns but not filter columns.
+
 **The SALE path retires the schedule, mirroring the purchase path**
 (`retireReviewSchedules` + the pure `retiredSchedules`, Nov 2026). Nothing did
 until then, so selling out of every book left the timer standing: VTABX, gone

@@ -79,13 +79,30 @@ export interface EarningsDates {
   nextEarnings: string | null
 }
 
-export async function fetchEarningsDates(symbol: string): Promise<EarningsDates> {
+/**
+ * Every release date `/stable/earnings` carries, oldest first.
+ *
+ * The same request `fetchEarningsDates` makes — it keeps only the two nearest
+ * dates, and the review COVERAGE report needs the history behind them. One
+ * reader of the endpoint, so the two cannot disagree about what a release date
+ * is. Past and scheduled releases are both returned; the caller decides, since
+ * `epsActual` being null marks a scheduled one but is also null on the
+ * occasional past release FMP has not filled, so the DATE is the reliable test.
+ *
+ * `limit=12` is three years of quarters, which comfortably covers a window
+ * that opens when this tool recorded its first review.
+ */
+export async function fetchEarningsReleaseDates(symbol: string): Promise<string[]> {
   const rows = asArray(await fmpFetch(`${FMP_STABLE}/earnings?symbol=${fmpSymbol(symbol)}&limit=12&apikey=${apiKey()}`))
-  const today = new Date().toISOString().slice(0, 10)
-  const dates = rows
+  return rows
     .map((r) => (typeof r.date === 'string' ? r.date : null))
     .filter((d): d is string => d != null && /^\d{4}-\d{2}-\d{2}$/.test(d))
     .sort() // ISO strings sort chronologically
+}
+
+export async function fetchEarningsDates(symbol: string): Promise<EarningsDates> {
+  const dates = await fetchEarningsReleaseDates(symbol)
+  const today = new Date().toISOString().slice(0, 10)
   return {
     lastEarnings: [...dates].reverse().find((d) => d <= today) ?? null,
     nextEarnings: dates.find((d) => d > today) ?? null,

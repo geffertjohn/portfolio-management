@@ -17,6 +17,7 @@ const WatchlistPage = lazy(() => import('@/pages/WatchlistPage').then((m) => ({ 
 const AtRiskPage = lazy(() => import('@/pages/AtRiskPage').then((m) => ({ default: m.AtRiskPage })))
 const IndexMoversPage = lazy(() => import('@/pages/IndexMoversPage').then((m) => ({ default: m.IndexMoversPage })))
 const ReviewCalendarPage = lazy(() => import('@/pages/ReviewCalendarPage').then((m) => ({ default: m.ReviewCalendarPage })))
+const ReviewCoveragePage = lazy(() => import('@/pages/ReviewCoveragePage').then((m) => ({ default: m.ReviewCoveragePage })))
 const ActionItemsPage = lazy(() => import('@/pages/ActionItemsPage').then((m) => ({ default: m.ActionItemsPage })))
 const ClientsPage = lazy(() => import('@/pages/ClientsPage').then((m) => ({ default: m.ClientsPage })))
 const ClientDetailPage = lazy(() => import('@/pages/ClientDetailPage').then((m) => ({ default: m.ClientDetailPage })))
@@ -49,6 +50,7 @@ function App() {
           <Route path="at-risk" element={<Page><AtRiskPage /></Page>} />
           <Route path="index-movers" element={<Page><IndexMoversPage /></Page>} />
           <Route path="reviews" element={<Page><ReviewCalendarPage /></Page>} />
+          <Route path="reviews/coverage" element={<Page><ReviewCoveragePage /></Page>} />
           <Route path="actions" element={<Page><ActionItemsPage /></Page>} />
           <Route path="clients" element={<Page><ClientsPage /></Page>} />
           <Route path="clients/:clientId" element={<Page><ClientDetailPage /></Page>} />
