@@ -778,3 +778,58 @@ export function correctedFutureEarnings(
   }
   return out.sort()
 }
+
+/** A held stock whose call is coming up, with the review it will trigger. */
+export interface UpcomingCall {
+  symbol: string
+  name: string | null
+  securityNumericId: number | null
+  /** The release day, `YYYY-MM-DD`. */
+  callOn: string
+  /** The review it will schedule — release + 1 day, as `MarkReviewedModal` does. */
+  reviewDueOn: string
+  /** Whole days from today; 0 is today. */
+  inDays: number
+}
+
+/**
+ * Held stocks reporting within `days`, soonest first.
+ *
+ * The forward half of the review calendar. Every other review surface answers
+ * what is owed NOW — overdue rows, unanswered calls, coverage gaps — and none
+ * of them says what is about to land, though that is what decides whether this
+ * week has three reviews in it or none. It is also the window the
+ * `pre-earnings-brief` job works to, so a stock listed here with no brief
+ * behind it is the gap that cost HOOD its quarter (see `needsEarningsCheck`).
+ *
+ * **Funds are excluded through the shared classifier**, not a column test: a
+ * fund review is cadence-driven and has no call to wait for.
+ *
+ * Pure, and it reads rows the calendar has already fetched — no new query.
+ */
+export function upcomingEarnings(
+  rows: ReviewScheduleWithSecurity[],
+  today: string,
+  days = 7,
+): UpcomingCall[] {
+  const horizon = addUtcDays(today, days)
+  return rows
+    .filter((r) => !isFundOrEtfSecurity(r))
+    .flatMap((r) => {
+      const d = r.next_earnings_release?.slice(0, 10)
+      // Strictly on or after today: a call that has already happened is the
+      // overdue-review surface's business, not this one's.
+      if (!d || d < today || d > horizon) return []
+      return [{
+        symbol: r.symbol,
+        name: r.name,
+        securityNumericId: r.security_numeric_id,
+        callOn: d,
+        reviewDueOn: addUtcDays(d, 1),
+        inDays: Math.round(
+          (Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
+        ),
+      }]
+    })
+    .sort((a, b) => a.callOn.localeCompare(b.callOn) || a.symbol.localeCompare(b.symbol))
+}
