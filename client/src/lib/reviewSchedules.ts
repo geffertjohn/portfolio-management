@@ -624,3 +624,84 @@ export async function fetchOrphanedSchedules(): Promise<string[]> {
     (held.data ?? []).map((r) => r.security_id),
   )
 }
+
+/** Fields the outstanding-call rule reads. Classifier columns gate it to stocks. */
+export interface OutstandingReviewInput {
+  next_review_at: string
+  last_reviewed_at: string | null
+  last_earnings_release: string | null
+  detailed_security_type?: string | null
+  peer_group_name?: string | null
+  fund_company_name?: string | null
+  fund_family?: string | null
+  expense_ratio_generic?: number | null
+}
+
+/**
+ * The day a review fell due for a call that has not been reviewed, or null.
+ *
+ * **A stock's schedule points at its NEXT call, so a review nobody did simply
+ * stopped being asked for.** `next_review_at` is `next_earnings_release + 1`,
+ * which is a future date; the fact that the PREVIOUS call came and went
+ * unreviewed is recorded nowhere the calendar reads. On 5 Nov 2026 that was 27
+ * of 54 stocks, twenty of them showing a comfortable future date — including
+ * six never reviewed at all (MU, JNJ, JPM, BLK, TSM, HCA), and WMT, NVDA and
+ * HD more than seventy days past a call.
+ *
+ * **Derived, never stored.** The alternative was to re-date those rows
+ * backward, and it drifts: the daily FMP top-up moves
+ * `last_earnings_release` forward, so a stock that reports again without being
+ * reviewed would leave a stored date anchored to the older call while the real
+ * obligation moved on. Deriving re-reads both facts every time and always names
+ * the most recent unreviewed call — the same reasoning as the derived Change
+ * Log and `committeeStage`.
+ *
+ * **Strictly BEFORE the call is the test.** A review recorded on the call day
+ * itself counts as covering it: earnings land pre-market or post-close and the
+ * scheduled date is the day after, so the advisor reviewing that same day is
+ * plausibly reviewing the print. Claiming otherwise would manufacture an
+ * overdue row, and a signal that cries wolf gets dismissed — the lesson
+ * `never_run` and the Watchlist's "AI research pending" already cost. No live
+ * row sits on that boundary today (strict and lenient both give 27), so the
+ * conservative reading costs nothing and cannot be wrong in the direction that
+ * matters.
+ *
+ * **It names the MOST RECENT unreviewed call, not every one ever missed.** If a
+ * stock reports again while still unreviewed, the obligation moves to the new
+ * print and the older miss stops being counted — so this answers "what is owed
+ * now", not "which calls were never reviewed". That second question is a
+ * coverage report over `review_log`, which holds the full history; it is a
+ * different feature and deliberately not built here.
+ *
+ * **Funds return null**, via the shared classifier rather than a column test: a
+ * fund review is cadence-driven and has no call to be behind on. No fund
+ * carries a `last_earnings_release` today, but stocks carry stale
+ * `*_total_return_nav` residue from the deleted `fmpSync` and this column is
+ * written by the same vanished path, so gating on the classifier rather than on
+ * the date being present is the habit that convention asks for.
+ */
+export function outstandingCallReviewDay(r: OutstandingReviewInput): string | null {
+  if (isFundOrEtfSecurity(r)) return null
+  if (!r.last_earnings_release) return null
+  const call = r.last_earnings_release.slice(0, 10)
+  if (r.last_reviewed_at && r.last_reviewed_at.slice(0, 10) >= call) return null
+  return addUtcDays(call, 1)
+}
+
+/**
+ * The day a review is operatively due: its schedule, or an earlier unreviewed
+ * call, whichever comes FIRST.
+ *
+ * The earlier of the two, not the derived one, because both are real
+ * obligations and the oldest is the one that should drive the status and the
+ * aging line. UBER is the live case that needs it — its schedule reads 4 Nov
+ * while the call it has not reviewed was held on the 4th, so the outstanding
+ * day derives to the 5th and taking the derived date alone would make a row
+ * already overdue read as due tomorrow.
+ */
+export function effectiveReviewDay(r: OutstandingReviewInput): string {
+  const scheduled = reviewDueDay(r.next_review_at)
+  const outstanding = outstandingCallReviewDay(r)
+  if (!outstanding) return scheduled
+  return outstanding < scheduled ? outstanding : scheduled
+}

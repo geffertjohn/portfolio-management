@@ -16,7 +16,7 @@ import {
   type ActionCategory,
   type ActionPriority,
 } from './actionItems'
-import { fetchReviewSchedules, isOverdue, isDueSoon, reviewDueDay } from './reviewSchedules'
+import { fetchReviewSchedules, isOverdue, isDueSoon, effectiveReviewDay } from './reviewSchedules'
 import { formatDate } from './fundFormat'
 import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReviews'
 import { fetchUnacknowledgedAlerts } from './alertRules'
@@ -563,7 +563,11 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
   const manualActions = manual.map(manualToAction)
 
   const reviewActions: UnifiedAction[] = reviews.map((s) => {
-    const due = reviewDueDay(s.next_review_at)
+    // The schedule, or an earlier call this stock never got reviewed for. A
+    // stock's schedule points at its NEXT call, so a review nobody did had
+    // stopped being asked for here as well as on the calendar — and the aging
+    // line is exactly where "how far behind" belongs.
+    const due = effectiveReviewDay(s)
     return {
       key: `review:${s.security_id}`,
       category: 'security',
@@ -580,7 +584,7 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
   })
 
   // `next_review_at` is passed through RAW here, unlike the security reviews
-  // above which go through `reviewDueDay`. This column holds real INSTANTS — the
+  // above which go through `effectiveReviewDay`. This column holds real INSTANTS — the
   // seed trigger writes `now()`, microseconds and all
   // (`2026-06-30T00:08:28.751295Z`) — so its LOCAL day is the intended day, and
   // forcing it to UTC would move those rows a day forward. See `localDayKey`.

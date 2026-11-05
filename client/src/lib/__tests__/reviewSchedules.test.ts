@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isDueSoon, isOverdue, redatedStockSchedules, reviewDueDay } from '../reviewSchedules'
+import {
+  isDueSoon, isOverdue, redatedStockSchedules, reviewDueDay,
+  outstandingCallReviewDay, effectiveReviewDay,
+} from '../reviewSchedules'
 
 /**
  * Every assertion here is about a DAY being read as a day. The column is a
@@ -165,5 +168,112 @@ describe('redatedStockSchedules', () => {
         { securityId: 'HOOD', from: '2026-11-05', nextReviewAt: '2026-10-21T00:00:00Z' },
       ])
     })
+  })
+})
+
+describe('an unreviewed call is surfaced as overdue', () => {
+  /**
+   * A stock's schedule is `next_earnings_release + 1`, which is a FUTURE date,
+   * so the fact that the PREVIOUS call came and went unreviewed was recorded
+   * nowhere the calendar or the Actions hub reads. On 5 Nov 2026 that was 27 of
+   * 54 stocks — twenty showing a comfortable future date, six of them never
+   * reviewed at all (MU, JNJ, JPM, BLK, TSM, HCA), and WMT, NVDA and HD more
+   * than seventy days past a call.
+   *
+   * Derived rather than written back to `next_review_at`: the daily FMP top-up
+   * moves `last_earnings_release` forward, so a stored overdue date would stay
+   * anchored to the older call while the real obligation moved on.
+   */
+  const stock = (over: Partial<Parameters<typeof effectiveReviewDay>[0]> = {}) => ({
+    next_review_at: '2027-01-21T00:00:00Z',
+    last_reviewed_at: null,
+    last_earnings_release: '2026-10-13',
+    detailed_security_type: 'Common Stock',
+    ...over,
+  })
+
+  it('dates a never-reviewed holding from the call it missed', () => {
+    // JNJ: held, never reviewed, schedule reading 21 Jan 2027.
+    expect(outstandingCallReviewDay(stock())).toBe('2026-10-14')
+    expect(effectiveReviewDay(stock())).toBe('2026-10-14')
+  })
+
+  it('reports nothing once the review happened AFTER the call', () => {
+    expect(outstandingCallReviewDay(stock({ last_reviewed_at: '2026-10-20' }))).toBeNull()
+    expect(effectiveReviewDay(stock({ last_reviewed_at: '2026-10-20' }))).toBe('2027-01-21')
+  })
+
+  it('treats a review ON the call day as covering it', () => {
+    // Earnings land pre-market or post-close and the scheduled date is the day
+    // after, so same-day counts. Claiming otherwise manufactures an overdue row,
+    // and no live row sits on this boundary (strict and lenient both give 27).
+    expect(outstandingCallReviewDay(stock({ last_reviewed_at: '2026-10-13' }))).toBeNull()
+  })
+
+  it('reports a review one day BEFORE the call as outstanding', () => {
+    // The other side of that boundary: the print had not happened yet.
+    expect(outstandingCallReviewDay(stock({ last_reviewed_at: '2026-10-12' }))).toBe('2026-10-14')
+  })
+
+  it('keeps the EARLIER obligation when the schedule is already behind', () => {
+    // UBER, live: schedule 4 Nov against a call on the 4th, so the outstanding
+    // day derives to the 5th. Taking the derived date alone would make a row
+    // already overdue read as due tomorrow.
+    const uber = stock({
+      next_review_at: '2026-11-04T00:00:00Z',
+      last_reviewed_at: '2026-05-18',
+      last_earnings_release: '2026-11-04',
+    })
+    expect(outstandingCallReviewDay(uber)).toBe('2026-11-05')
+    expect(effectiveReviewDay(uber)).toBe('2026-11-04')
+  })
+
+  it('leaves a row already sitting at its call alone', () => {
+    // AMD/ETN/APP/ELF/ALL/MSI — six of the 27, where arm 2 of the re-date has
+    // already parked the schedule on the call. Nothing should move.
+    const amd = stock({
+      next_review_at: '2026-11-04T00:00:00Z',
+      last_reviewed_at: '2026-05-18',
+      last_earnings_release: '2026-11-03',
+    })
+    expect(effectiveReviewDay(amd)).toBe('2026-11-04')
+  })
+
+  it('ignores a FUND, which has no call to be behind on', () => {
+    // Via the shared classifier, not a column test: a fund review is
+    // cadence-driven. No fund carries a last_earnings_release today, but this
+    // column was written by the same deleted `fmpSync` that left stale
+    // `*_total_return_nav` residue on stocks.
+    const fund = stock({ detailed_security_type: 'Mutual Fund', last_reviewed_at: '2026-09-09' })
+    expect(outstandingCallReviewDay(fund)).toBeNull()
+    expect(effectiveReviewDay(fund)).toBe('2027-01-21')
+  })
+
+  it('ignores an ETF for the same reason', () => {
+    expect(outstandingCallReviewDay(stock({ detailed_security_type: 'ETF' }))).toBeNull()
+  })
+
+  it('classifies a blank type by fund signals, not by assuming stock', () => {
+    // The ambiguous branch of `classifySecurity`: a peer group means fund.
+    expect(outstandingCallReviewDay(stock({
+      detailed_security_type: null, peer_group_name: 'Intermediate Core Bond',
+    }))).toBeNull()
+  })
+
+  it('reports nothing when there is no call on record', () => {
+    expect(outstandingCallReviewDay(stock({ last_earnings_release: null }))).toBeNull()
+    expect(effectiveReviewDay(stock({ last_earnings_release: null }))).toBe('2027-01-21')
+  })
+
+  it('crosses a month boundary without slipping a day', () => {
+    expect(outstandingCallReviewDay(stock({ last_earnings_release: '2026-10-31' }))).toBe('2026-11-01')
+  })
+
+  it('reads a full timestamp the same as a bare day', () => {
+    // `last_reviewed_at` is a timestamptz and `last_earnings_release` arrives
+    // either way; both are compared on their UTC date part (gotcha 24).
+    expect(outstandingCallReviewDay(stock({
+      last_reviewed_at: '2026-10-20T04:00:00Z', last_earnings_release: '2026-10-13T00:00:00Z',
+    }))).toBeNull()
   })
 })
