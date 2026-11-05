@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass } from '../assetClass'
+import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories,
+} from '../assetClass'
 
 const sec = (security_id: string, category_name: string | null) => ({ security_id, category_name })
 
@@ -63,5 +64,66 @@ describe('assetClassLabel', () => {
   it('has no label for an absent key', () => {
     expect(assetClassLabel(null)).toBeNull()
     expect(assetClassLabel(undefined)).toBeNull()
+  })
+})
+
+describe('spotting a vocabulary the map has never seen', () => {
+  /**
+   * Gotcha 23, caught at the import instead of on a portfolio page. A
+   * `category_name` the map lacks resolves to null, the weight drops out of
+   * the rollup, and the only trace is an "unclassified weight" line under one
+   * table — which reads as a data quirk, not a mapping gap. Three of the four
+   * emerging-market holdings sat that way across six portfolios because
+   * Morningstar publishes two spellings and only one was mapped.
+   */
+
+  it('names a category the map does not carry', () => {
+    expect(unmappedCategories(['Bank Loan', 'Large Blend'])).toEqual(['Bank Loan'])
+  })
+
+  it('says nothing when every category is known', () => {
+    expect(unmappedCategories(['Large Blend', 'High Yield Bond', 'Multisector Bond'])).toEqual([])
+  })
+
+  it('returns the SET, not one entry per row', () => {
+    // A workbook repeats a category once per fund; the caller wants the
+    // vocabulary, not the row count.
+    expect(unmappedCategories(['Bank Loan', 'Bank Loan', 'Bank Loan'])).toEqual(['Bank Loan'])
+  })
+
+  it('sorts, so the warning reads the same twice', () => {
+    expect(unmappedCategories(['Preferred Stock', 'Bank Loan'])).toEqual(['Bank Loan', 'Preferred Stock'])
+  })
+
+  it('ignores a MISSING category rather than calling it unmapped', () => {
+    // An absent category is the FMP-created security — a known, different
+    // problem. Reporting it here would cry wolf on every new ticker.
+    expect(unmappedCategories([null, undefined, '', '   '])).toEqual([])
+  })
+
+  it('matches the map case- and whitespace-insensitively, as the resolver does', () => {
+    expect(unmappedCategories(['  large blend  '])).toEqual([])
+  })
+
+  it('is not fooled by a per-ticker OVERRIDE', () => {
+    // The probe uses a synthetic ticker on purpose: BRK.B resolves only
+    // because of its override, so asking with that ticker would report its
+    // category as mapped and let the next security carrying it fall through.
+    expect(unmappedCategories(['Some Category Only BRK.B Has'])).toEqual(['Some Category Only BRK.B Has'])
+  })
+
+  it('covers every category the live book actually uses', () => {
+    // The 23 distinct `category_name` values in securities2 on 5 Nov 2026,
+    // held or not. This is the assertion that would have failed while
+    // "Diversified Emerging Markets" and "Multisector Bond" were missing.
+    const inUse = [
+      'Diversified Emerging Markets', 'Diversified Emerging Mkts', 'Foreign Large Blend',
+      'Global Bond-USD Hedged', 'High Yield Bond', 'Intermediate Core Bond',
+      'Intermediate Core-Plus Bond', 'Large Blend', 'Large Cap Core', 'Large Cap Growth',
+      'Large Cap Value', 'Large Growth', 'Large Value', 'Mid Cap Core', 'Mid Cap Growth',
+      'Mid-Cap Blend', 'Mid-Cap Growth', 'Multisector Bond', 'Small Blend',
+      'Small Cap Core', 'Small Cap Growth', 'Small Growth',
+    ]
+    expect(unmappedCategories(inUse)).toEqual([])
   })
 })

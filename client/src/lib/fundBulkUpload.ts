@@ -20,6 +20,7 @@
  * so values match the plain-ticker format stored in securities2.
  */
 
+import { unmappedCategories as unmappedCategoriesIn } from './assetClass'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import {
@@ -157,6 +158,22 @@ export type BulkUploadResult = {
   succeeded: number
   failed: number
   errors: string[]
+  /**
+   * Vendor categories in this workbook that `resolveAssetClass` cannot place.
+   *
+   * **Deliberately NOT an error.** The row writes fine; what breaks is
+   * downstream, where the holding's weight drops out of the allocation rollup
+   * and surfaces only as an "unclassified weight" line on one portfolio page
+   * (gotcha 23). Putting it in `errors` would mark a clean import partial and
+   * push a false failure into `import_runs`.
+   *
+   * It is reported HERE because the workbook is where a new vocabulary
+   * enters. Three of the four emerging-market holdings sat unclassified across
+   * six portfolios because Morningstar publishes both "Diversified Emerging
+   * Mkts" and "Diversified Emerging Markets" and only one was mapped — and the
+   * import that introduced the second spelling said nothing.
+   */
+  unmappedCategories: string[]
 }
 
 const BATCH_SIZE = 50
@@ -194,6 +211,8 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
   }
 
   if (records.length === 0) throw new Error('No valid fund rows found in the file.')
+
+  const unmapped = unmappedCategoriesIn(records.map((r) => r.category_name as string | null))
 
   let succeeded = 0
   let failed = 0
@@ -255,5 +274,5 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
     }
   }
 
-  return { total: records.length, succeeded, failed, errors }
+  return { total: records.length, succeeded, failed, errors, unmappedCategories: unmapped }
 }

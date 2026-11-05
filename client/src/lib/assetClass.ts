@@ -117,6 +117,35 @@ export function assetClassLabel(key: AssetClassKey | null | undefined): string |
  * weight, never be silently dropped from a rollup, or the tier totals stop
  * summing to 100% with nothing saying why.
  */
+/**
+ * Which of these vendor categories the map cannot place.
+ *
+ * **The question is whether the CATEGORY is known, not whether a particular
+ * holding resolves**, so this probes with a synthetic ticker: an override or
+ * the cash branch would otherwise mask a vocabulary the map has never seen,
+ * and the next security carrying it would fall straight through.
+ *
+ * Lives here, beside the map, because this is the vocabulary's home and the
+ * importers that call it must not each grow their own copy of the rule.
+ * Returns distinct, trimmed, sorted — a workbook repeats a category once per
+ * fund and the caller wants the set.
+ */
+export function unmappedCategories(
+  categories: Iterable<string | null | undefined>,
+): string[] {
+  const out = new Set<string>()
+  for (const raw of categories) {
+    const category = typeof raw === 'string' ? raw.trim() : ''
+    // A missing category is not an unmapped one — it is the FMP-created
+    // security the module header describes, and a different problem.
+    if (category === '') continue
+    if (resolveAssetClass({ security_id: '__unmapped_probe__', category_name: category }) === null) {
+      out.add(category)
+    }
+  }
+  return [...out].sort()
+}
+
 export function resolveAssetClass(
   security: { security_id: string; category_name: string | null },
 ): AssetClassKey | null {
