@@ -62,9 +62,20 @@ function ProspectCard({
   // AI research for this ticker, produced by the analysts in Claude Code. Reports
   // are portfolio-scoped, so keep the ones aimed at a portfolio this idea names
   // plus any unscoped report.
+  //
+  // NOT FETCHED FOR A FUND, which removes every committee block on the card in
+  // one place — the rating badge, the conviction, the bear/base/bull line and
+  // the AI Research drawer all hang off this list, so gating the fetch is what
+  // makes them structurally impossible rather than individually hidden. The
+  // watchlist-research job no longer runs on funds (it rates a company's
+  // business, which is not what a fund is judged by), so for one of them this
+  // query could only ever return rows written before that rule existed —
+  // VBTLX carried two, now soft-deleted. Showing those would advertise an
+  // analysis the firm has decided not to do.
   const { data: allResearch = [] } = useQuery({
     queryKey: QUERY_KEYS.researchReports(entry.security_id),
     queryFn: () => fetchResearchReports(entry.security_id),
+    enabled: !isFund,
   })
   const research = allResearch
     .filter((r) => r.portfolio_name == null || entry.portfolios.includes(r.portfolio_name))
@@ -273,7 +284,7 @@ function ProspectCard({
       >
         <span className="text-xs text-gray-400">
           {onOpen
-            ? 'Open research →'
+            ? isFund ? 'Open security →' : 'Open research →'
             : `${displayType} not in your securities`}
         </span>
         <button
