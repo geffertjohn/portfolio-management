@@ -80,7 +80,7 @@ export function ConsiderationsSection({
               <th className="py-1 pr-2 font-medium">Holding</th>
               <th className="py-1 pr-2 font-medium w-20 text-right">Weight</th>
               <th className="py-1 pr-2 font-medium w-36">Proposal</th>
-              <th className="py-1 pr-2 font-medium w-28">Target %</th>
+              <th className="py-1 pr-2 font-medium w-20">Target %</th>
               <th className="py-1 font-medium">Rationale <span className="font-normal text-gray-400">(optional)</span></th>
             </tr>
           </thead>
@@ -93,13 +93,13 @@ export function ConsiderationsSection({
               const wantsWeight = decision === 'increase' || decision === 'reduce' || decision === 'replace'
               return (
                 <tr key={h.securityId} className="border-t border-gray-100">
-                  <td className="whitespace-nowrap py-1.5 pr-2 font-medium text-gray-800" title={h.name ?? undefined}>
+                  <td className="whitespace-nowrap py-1.5 pr-2 align-top font-medium text-gray-800" title={h.name ?? undefined}>
                     {h.ticker}
                   </td>
-                  <td className="py-1.5 pr-2 text-right tabular-nums text-gray-500">
+                  <td className="py-1.5 pr-2 align-top text-right tabular-nums text-gray-500">
                     {h.weight.toFixed(2)}%
                   </td>
-                  <td className="py-1.5 pr-2">
+                  <td className="py-1.5 pr-2 align-top">
                     <select
                       value={decision}
                       disabled={locked}
@@ -112,7 +112,7 @@ export function ConsiderationsSection({
                       ))}
                     </select>
                   </td>
-                  <td className="py-1.5 pr-2">
+                  <td className="py-1.5 pr-2 align-top">
                     {wantsWeight ? (
                       <input
                         type="number" min={0} max={100} step={0.25}
@@ -125,14 +125,23 @@ export function ConsiderationsSection({
                       <span className="text-xs text-gray-300">—</span>
                     )}
                   </td>
-                  <td className="py-1.5">
-                    <input
-                      type="text"
+                  <td className="py-1.5 align-top">
+                    {/*
+                      A rationale worth recording runs to paragraphs, so this is a
+                      growing textarea rather than the single-line input it was. A
+                      real one here reached 1,043 characters and a 265px input
+                      showed about thirty of them — the advisor was handed a view
+                      recorded in their name that they could not read, which is the
+                      MarkReviewedModal lesson over again. Capped so seven of these
+                      do not push the handoff button off the page.
+                    */}
+                    <AutoGrowTextarea
                       value={a?.proposedRationale ?? ''}
                       disabled={locked}
                       placeholder={decision ? 'Why…' : ''}
-                      onChange={(e) => onChange(h.securityId, 'proposedRationale', e.target.value || null)}
-                      className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-900 focus:border-gray-500 focus:outline-none disabled:bg-gray-50"
+                      maxHeightPx={200}
+                      onChange={(v) => onChange(h.securityId, 'proposedRationale', v || null)}
+                      className="w-full min-h-[2rem] rounded border border-gray-300 px-1.5 py-1 text-xs leading-relaxed text-gray-900 focus:border-gray-500 focus:outline-none disabled:bg-gray-50"
                     />
                   </td>
                 </tr>
