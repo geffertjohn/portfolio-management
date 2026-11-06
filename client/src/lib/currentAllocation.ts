@@ -50,8 +50,18 @@ export const DERIVED_ACTUAL_BLENDS: Record<string, { source: string; weight: num
  */
 export async function fetchLatestActualAllocation(
   portfolioName: string,
+  /**
+   * The bucket listing, when the caller already has one.
+   *
+   * Without this each call re-listed the whole bucket. The Actions page does
+   * that once per portfolio inside a loop, on top of two more listings of its
+   * own — SEVEN identical requests, each of which took 5.9 seconds before the
+   * route was rewritten. Passing the list down is explicit and, unlike a cache,
+   * cannot go stale behind an upload.
+   */
+  knownFiles?: StoredFile[],
 ): Promise<CurrentAllocation | null> {
-  const { files } = await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)
+  const files = knownFiles ?? (await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)).files
 
   const own = await latestFileFor(files, portfolioName)
   if (own) return { ...own, derivedFrom: null }

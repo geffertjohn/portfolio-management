@@ -199,21 +199,47 @@ app.delete('/api/folders', async (req, res) => {
  */
 app.get('/api/files', async (req, res) => {
   const bucket = resolveBucket(req.query.bucket)
-  const { data: topLevel, error: fErr } = await adminSupabase.storage
-    .from(bucket)
-    .list('', { limit: 500 })
 
-  if (fErr) {
-    res.status(500).json({ error: fErr.message })
+  // ONE INDEXED READ, not 1 + N Storage API round trips.
+  //
+  // This used to call Storage's list('') for the folders and then list(folder)
+  // for each one: 7 HTTP round trips to return 15 files, measured at 5.9
+  // SECONDS. The Actions page made that same call seven times, which was most
+  // of the ~50 seconds it took to render. Supabase keeps the object index in
+  // Postgres, so the same answer is a single query.
+  //
+  // The RESPONSE IS DELIBERATELY UNCHANGED, including one wart. The old walk
+  // went exactly one level deep, so a nested path like
+  // `compliance/strategic asset allocation models/file.pdf` surfaced the middle
+  // segment as a FILE with null size and mimetype. Four surfaces read this
+  // route; a performance change is the wrong moment to alter what they see, so
+  // the shaping below reproduces that entry rather than quietly dropping it.
+  const { data, error } = await adminSupabase.rpc('list_bucket_objects', { p_bucket: bucket })
+
+  if (error) {
+    res.status(500).json({ error: error.message })
     return
   }
 
-  if (!topLevel || topLevel.length === 0) {
-    res.json({ files: [], folders: [] })
-    return
+  type ObjectRow = {
+    id: string
+    name: string
+    size: number | null
+    mimetype: string | null
+    created_at: string
+    updated_at: string
   }
+  const rows = (data ?? []) as ObjectRow[]
 
-  const folderNames = topLevel.map((item) => item.name).sort()
+  // Postgres renders a timestamptz as `...462019+00:00`; the Storage API
+  // returned `...462Z`. Callers SORT on this string (latestFileFor picks the
+  // newest file by it), so the two formats must not be allowed to mix across a
+  // deploy or a rebuild. Normalised back to the shape every caller already saw.
+  const iso = (v: string | null): string => {
+    if (!v) return ''
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString()
+  }
 
   const allFiles: Array<{
     id: string
@@ -225,29 +251,50 @@ app.get('/api/files', async (req, res) => {
     updatedAt: string
     createdAt: string
   }> = []
+  const folderSet = new Set<string>()
+  const nestedSeen = new Set<string>()
 
-  await Promise.all(
-    folderNames.map(async (folderName) => {
-      const { data: files, error: fErr2 } = await adminSupabase.storage
-        .from(bucket)
-        .list(folderName, { limit: 500 })
-      if (fErr2 || !files) return
-      for (const f of files) {
-        if (f.name === KEEP_FILE) continue // skip placeholders
-        allFiles.push({
-          id: f.id ?? `${folderName}/${f.name}`,
-          name: f.name,
-          folder: folderName,
-          fullPath: `${folderName}/${f.name}`,
-          size: (f.metadata as any)?.size ?? null,
-          mimetype: (f.metadata as any)?.mimetype ?? null,
-          updatedAt: f.updated_at ?? f.created_at ?? '',
-          createdAt: f.created_at ?? '',
-        })
-      }
-    })
-  )
+  for (const o of rows) {
+    const parts = o.name.split('/')
+    if (parts.length < 2) continue           // a bare object at the bucket root
+    const folder = parts[0]
+    folderSet.add(folder)
 
+    const rest = parts.slice(1)
+    if (rest[0] === KEEP_FILE) continue      // placeholder that makes a folder exist
+
+    if (rest.length === 1) {
+      allFiles.push({
+        id: o.id,
+        name: rest[0],
+        folder,
+        fullPath: o.name,
+        size: o.size,
+        mimetype: o.mimetype,
+        updatedAt: iso(o.updated_at) || iso(o.created_at),
+        createdAt: iso(o.created_at),
+      })
+    } else {
+      // Deeper than one level: the old walk reported the next segment as a
+      // metadata-less "file", once. Reproduced, including the empty dates it
+      // produced, so callers see exactly what they saw before.
+      const key = `${folder}/${rest[0]}`
+      if (nestedSeen.has(key)) continue
+      nestedSeen.add(key)
+      allFiles.push({
+        id: key,
+        name: rest[0],
+        folder,
+        fullPath: key,
+        size: null,
+        mimetype: null,
+        updatedAt: '',
+        createdAt: '',
+      })
+    }
+  }
+
+  const folderNames = [...folderSet].sort()
   allFiles.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   res.json({ files: allFiles, folders: folderNames })
 })
