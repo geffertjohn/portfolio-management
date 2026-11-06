@@ -360,6 +360,14 @@ export function getBroadAssetClass(security: {
 export interface ProfileAssetFlags {
   isEtf?: boolean | null
   isFund?: boolean | null
+  /**
+   * False when FMP returned no record for the symbol at all.
+   *
+   * `fetchProfile` builds a zero-valued Profile from an empty response, so
+   * without this an unknown ticker and a genuine stock are identical —
+   * isEtf=false, isFund=false for both.
+   */
+  found?: boolean
 }
 
 /**
@@ -381,11 +389,34 @@ export interface ProfileAssetFlags {
  */
 export function getProspectDisplayType(
   security: SecurityClassInput | null,
-  profile: ProfileAssetFlags | null,
+  /**
+   * `undefined` = not asked yet. `null` = asked, and FMP had nothing.
+   *
+   * Those are different facts and the caller must not collapse them: the first
+   * is ignorance, the second is evidence.
+   */
+  profile: ProfileAssetFlags | null | undefined,
 ): SecurityDisplayType {
   if (security) return getSecurityDisplayType(security)
   if (profile?.isEtf) return 'ETF'
   if (profile?.isFund) return 'Mutual fund'
+
+  // FMP HAS NO RECORD OF THIS TICKER, which is itself the answer.
+  //
+  // YCHARTS OWNS FUND CLASSIFICATION; FMP IS ONLY A STOPGAP UNTIL IT ARRIVES.
+  //
+  // A fund idea reaches `securities2` on the next YCharts refresh, and from
+  // then on the first branch decides and this never runs. What follows covers
+  // the window before that — and for a STOCK it is permanent, because the
+  // workbook's Securities sheet is funds-only, so a stock idea never gets a
+  // securities2 row at all.
+  //
+  // FMP covers US stocks comprehensively but misses 11 of this book's 27 mutual
+  // funds, all institutional share classes. So a ticker it has never heard of
+  // is far more likely a fund than a listed company nobody has indexed.
+  if (profile && profile.found === false) return 'Mutual fund'
+
+  // Still waiting on FMP. Provisional, and it settles within a request.
   return 'Stock'
 }
 
@@ -510,6 +541,12 @@ export async function fetchSecurities(): Promise<Security[]> {
     .from('securities2')
     .select('id, security_id, security_name, detailed_security_type, peer_group_name, fund_company_name, category_name, equity_style_internal')
     .neq('security_id', '$Cash')
+    // Benchmark proxies are in securities2 only to carry a benchmark's
+    // composition — an index has none of its own. Every caller of this is a
+    // "choose a security" picker, where 33 index trackers the firm neither
+    // holds nor watches are noise. A proxy the firm DOES hold is not flagged,
+    // so it still appears.
+    .eq('is_benchmark_proxy', false)
     .order('security_id', { ascending: true })
 
   if (error) throw error

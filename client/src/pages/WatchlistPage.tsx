@@ -142,7 +142,7 @@ function ProspectCard({
                 up, so this says which it is and when it resolves.
               */
               <span
-                title="The ticker reaches securities2 on the next YCharts refresh (weekdays, early morning), and the category appears with it."
+                title="A fund's category comes from the YCharts workbook, not by hand — the refresh adds this ticker to the sheet and the category arrives with it, on the next weekday morning run. (A hand-set category would be overwritten by the next import, which is why only stocks have that control.)"
                 className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
               >
                 Category pending
@@ -283,9 +283,19 @@ function ProspectCard({
         onClick={(e) => e.stopPropagation()}
       >
         <span className="text-xs text-gray-400">
+          {/*
+            A fund with no securities2 row is the one card with nowhere to go:
+            ResearchPage is stock-only, so there is no page to open. Saying only
+            "not in your securities" states an absence and stops — and since the
+            watchlist now drives the YCharts refresh, something IS coming and the
+            card should say so. A stock never lands here: it opens the on-demand
+            research page on a bare ticker.
+          */}
           {onOpen
             ? isFund ? 'Open security →' : 'Open research →'
-            : `${displayType} not in your securities`}
+            : isFund
+              ? 'Added to the next YCharts refresh — its page appears tomorrow morning'
+              : `${displayType} not in your securities`}
         </span>
         <button
           type="button"
@@ -336,13 +346,21 @@ export function WatchlistPage() {
       retry: false,
     })),
   })
-  const profileBySymbol = new Map<string, Profile | null>(
-    unknownSymbols.map((s, i) => [s, profileQueries[i]?.data ?? null]),
+  // `undefined` while the query is pending, `null` once FMP has answered with
+  // nothing. Do NOT collapse them with `?? null`: an empty profile is evidence
+  // the ticker is a fund FMP does not cover, and reading it as "not asked yet"
+  // filed RSIYX as a stock.
+  const profileBySymbol = new Map<string, Profile | null | undefined>(
+    unknownSymbols.map((s, i) => [s, profileQueries[i]?.data]),
   )
 
   const resolved = entries.map((entry) => {
-    const profile = entry.securities2 ? null : profileBySymbol.get(entry.security_id) ?? null
-    return { entry, profile, type: getProspectDisplayType(entry.securities2, profile) }
+    const profile = entry.securities2 ? null : profileBySymbol.get(entry.security_id)
+    return {
+      entry,
+      profile: profile ?? null,
+      type: getProspectDisplayType(entry.securities2, entry.securities2 ? null : profile),
+    }
   })
 
   return (

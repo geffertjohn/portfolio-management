@@ -106,7 +106,7 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
     Watchlist page and the research page, so selecting a ticker here usually
     costs no request at all.
   */
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: QUERY_KEYS.profile(selectedId ?? ''),
     queryFn: () => fetchProfile(selectedId as string),
     enabled: open && !!selectedId && !selected,
@@ -120,7 +120,19 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
     the question is not asked for one — asking it would invite an answer the
     Watchlist does not show and nothing reads.
   */
-  const isFund = selectedId ? isFundIdea(getProspectDisplayType(selected, profile ?? null)) : false
+  // `selected ? null : profile` passes the TRI-STATE through: `undefined` is
+  // "not asked yet", `null` is "asked, and FMP had nothing". Collapsing them
+  // with `?? null` is what filed RSIYX — a mutual fund FMP does not cover — as
+  // a stock, and offered it a portfolio picker.
+  const isFund = selectedId
+    ? isFundIdea(getProspectDisplayType(selected, selected ? null : profile))
+    : false
+
+  // A disabled query (the ticker is already in securities2, so YCharts has the
+  // answer) is not loading; only a real in-flight fetch is. Showing neither
+  // branch until it settles beats flashing the wrong one in a form the advisor
+  // is filling in.
+  const identifying = !!selectedId && !selected && profileLoading
   const typedTicker = search.trim().toUpperCase()
   const hasExactMatch = securities.some((s) => s.security_id.toUpperCase() === typedTicker)
 
@@ -211,7 +223,13 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
           )}
         </div>
 
-        {selectedId && !isFund && (
+        {identifying && (
+          <p className="rounded-md bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
+            Checking whether this is a stock or a fund&hellip;
+          </p>
+        )}
+
+        {selectedId && !identifying && !isFund && (
           <>
             {/* Which portfolio(s) is this being considered for — one entry each. */}
             <div>
@@ -256,7 +274,7 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
           either: those two roles rate a COMPANY, with a bull and bear case on
           a business, which is not what a fund is judged by.
         */}
-        {selectedId && isFund && (
+        {selectedId && !identifying && isFund && (
           <div className="space-y-2 rounded-md bg-teal-50 px-3 py-2.5">
             <p className="text-xs text-teal-800">
               <span className="font-semibold">Categorised, not placed.</span> A fund is
