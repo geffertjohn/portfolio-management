@@ -197,9 +197,14 @@ These are different features and **must not be conflated**:
     `scripts/refresh/watchlist-tickers.cjs`) and the macro's
     `SyncWatchlistTickers` reconciles it into column B before the fetch, so the
     fund is in `securities2` the next morning. **The sheet already had the
-    machinery** — rows 49–101 are 53 spare rows pre-wired with
-    `=YCI($B<row>, <col>$2)`, so one string populates 83 columns and
-    `fundBulkUpload` needs no change. Full rules in
+    machinery, and it GROWS** — a row pre-wired with `=YCP($B<row>, <col>$2)`
+    populates 82 columns from one string, and `fundBulkUpload` needs no change.
+    The 53 spare rows it shipped with were just where someone stopped filling
+    formulas down, so `EnsureFundRow` copies the last row down when they run
+    out: **there is no cap on how many funds the watchlist can carry.**
+    `MAX_FUND_ROW` (1,000) guards a defect, not the product. A wired row with
+    no ticker returns empty rather than an error, so spare rows cost nothing
+    until used. Full rules in
     `scripts/refresh/README.md`; three worth knowing here: **the roster is held
     ∪ watched** (so a watched-then-bought fund is never released while it is
     owned), **stocks are excluded** (the sheet is funds-only), and **the macro

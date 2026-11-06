@@ -76,6 +76,15 @@ Private Const ROSTER_COL   As Long = 2
 Private Const TICKER_COL   As Long = 2   ' Securities!B - the only literal on the row
 Private Const FIRST_FUND_ROW As Long = 3 ' 1 = group banner, 2 = DB column names
 
+' A guard, not a product limit.
+'
+' The sheet GROWS when it runs out of pre-wired rows, so there is no cap on how
+' many funds the watchlist can carry — the 53 spare rows it shipped with were
+' just where someone stopped filling formulas down, and treating that as a rule
+' would have put an arbitrary ceiling on an idea list. This bound exists only so
+' a defect cannot extend the sheet without end; it is reported, never silent.
+Private Const MAX_FUND_ROW As Long = 1000
+
 ' Cell that carries the refresh timestamp, read back by the importer.
 '
 ' A dedicated sheet on purpose: the three importers select sheets BY NAME, so a
@@ -395,7 +404,9 @@ Private Sub SyncWatchlistTickers()
     For i = 0 To desired.Count - 1
         sym = desired.Keys()(i)
         If FindTickerRow(ws, sym, lastRow) = 0 Then
-            r = FirstFreeFundRow(ws, lastRow)
+            ' lastRow is ByRef here: the sheet may grow, and every later
+            ' FindTickerRow and FirstFreeFundRow has to see the new bound.
+            r = EnsureFundRow(ws, lastRow)
             If r = 0 Then
                 note = note & sym & " "
             Else
@@ -412,8 +423,9 @@ Private Sub SyncWatchlistTickers()
     ' appears - so say it where the Mac side will see it. Not fatal: the rest
     ' of the refresh is still worth having.
     If Len(note) > 0 Then
-        WriteNote "WATCHLIST: no free rows on " & ws.Name & " for: " & note & _
-                  "- extend the YCI() formulas below row " & lastRow & "."
+        WriteNote "WATCHLIST: " & ws.Name & " has reached the " & MAX_FUND_ROW & _
+                  "-row guard, so these were not placed: " & note & _
+                  "- raise MAX_FUND_ROW if the book really is this large."
     End If
     Exit Sub
 
@@ -497,6 +509,45 @@ Private Function FindTickerRow(ByVal ws As Worksheet, ByVal sym As String, _
             Exit Function
         End If
     Next r
+End Function
+
+' A row for one more fund, extending the sheet if every wired row is taken.
+'
+' THE SHEET IS GROWN RATHER THAN PRE-SIZED. It shipped with 53 spare rows, which
+' is simply where someone stopped filling formulas down — not a decision about
+' how many funds may be watched. Picking a bigger fixed number would only move
+' the ceiling; copying a row down when one is needed removes it.
+'
+' It copies an EXPLICIT B..lastCol range, never ws.Rows(n): a whole-row copy
+' touches all 16,384 columns. xlPasteFormulas adjusts the relative reference
+' ($B101 -> $B102) so the new row is exactly what a fill-down would produce,
+' which is the same reason fill-sheet-formulas.ps1 pastes rather than writes
+' formula text. The ticker cell is a literal, so it is cleared after the paste.
+'
+' A grown row costs nothing until it is used: a wired row with no ticker returns
+' empty, not an error, so it neither feeds the error-ratio guard nor asks
+' YCharts for anything. Only a row carrying a ticker costs a fetch.
+Private Function EnsureFundRow(ByVal ws As Worksheet, ByRef lastRow As Long) As Long
+    Dim r As Long, lastCol As Long
+
+    r = FirstFreeFundRow(ws, lastRow)
+    If r > 0 Then
+        EnsureFundRow = r
+        Exit Function
+    End If
+
+    ' Refuse rather than grow without end; the caller reports what it dropped.
+    If lastRow >= MAX_FUND_ROW Then Exit Function
+
+    lastCol = ws.UsedRange.Column + ws.UsedRange.Columns.Count - 1
+    ws.Range(ws.Cells(lastRow, TICKER_COL), ws.Cells(lastRow, lastCol)).Copy
+    ws.Range(ws.Cells(lastRow + 1, TICKER_COL), ws.Cells(lastRow + 1, lastCol)) _
+        .PasteSpecial xlPasteFormulas
+    Application.CutCopyMode = False
+
+    lastRow = lastRow + 1
+    ws.Cells(lastRow, TICKER_COL).ClearContents
+    EnsureFundRow = lastRow
 End Function
 
 ' The first pre-wired row with no ticker. Bounded by the used range, so it can
