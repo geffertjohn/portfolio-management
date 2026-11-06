@@ -124,6 +124,13 @@ async function main(): Promise<void> {
     }
     runs.push({ source: 'ycharts_funds', rows: r.succeeded, errors: r.errors })
     notes.push(`${r.succeeded} funds`)
+    // A PER-ROW failure above the floor is not a failed import, so it raises no
+    // action and prints no count anyone would notice — the run says "47 funds"
+    // one day and "46 funds" the next, and the security that dropped out simply
+    // stops refreshing. It happened on 2026-11-06: `VVIAX: TypeError: fetch
+    // failed`, one transient network error, recorded in import_runs.errors and
+    // visible nowhere else. Same reasoning as the benchmark warnings above.
+    for (const e of r.errors) console.warn(`WARN  fund row failed: ${e}`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     runs.push({ source: 'ycharts_funds', rows: 0, errors: [msg], status: 'failed' })
@@ -138,6 +145,7 @@ async function main(): Promise<void> {
     }
     runs.push({ source: 'ycharts_portfolios', rows: r.succeeded, errors: r.errors })
     notes.push(`${r.succeeded} portfolios`)
+    for (const e of r.errors) console.warn(`WARN  portfolio row failed: ${e}`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     runs.push({ source: 'ycharts_portfolios', rows: 0, errors: [msg], status: 'failed' })

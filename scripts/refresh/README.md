@@ -244,6 +244,47 @@ the start of a run would read as an abort and kill a refresh that was working.
 Running out of pre-wired rows is the case that writes one; extend the `YCI()`
 formulas below row 101 to add slots.
 
+### A missing FORMULA reads exactly like a missing FIGURE
+
+**Seven columns on the `Securities` sheet stopped at row 45** while the rest ran
+to 101, and an eighth had an interior gap in rows 50–56. Found 6 Nov 2026 by
+asking why VUG's peer-group scorecard showed no Information Ratio 3Y.
+
+The failure is silent by construction. An absent formula leaves an **empty**
+cell, not an errored one — so it does not count toward the macro's error-ratio
+guard, the importer reads NULL exactly as it would for a figure the vendor does
+not publish, and the app renders a clean `—`. Nothing anywhere distinguishes
+"YCharts has no value for this" from "nobody wrote a formula here".
+
+What it cost: `information_ratio_rank` and `information_ratio_peer_group_rank`
+feed **Information Ratio 3Y, which carries 20% of the fund scorecard on both
+cohorts** — the joint-largest weight. Four funds were affected (VVIAX, VIGAX and
+VMSAX, added to the sheet on 4 Nov, and VUG, the first watchlist fund to land in
+a spare row). The scorecard sums an unscored metric as zero and still prints
+`/100`, so VUG's 74.3 was 74.3 of **80 available**. A committee memo read the
+same nulls on VMSAX and reported them as a vendor coverage gap on the
+Multisector Bond category; they were nothing of the kind.
+
+```bash
+scripts/refresh/fill-sheet-formulas.ps1            # dry run (via prlctl exec)
+scripts/refresh/fill-sheet-formulas.ps1 -Apply     # back up, fill, save
+```
+
+It fills by **copy/paste of a populated cell**, not by writing a formula string:
+Excel adjusts the relative reference (`$B45` → `$B46`) on paste, so each cell
+gets exactly what a fill-down would have produced and the script never parses
+`YCP()` syntax. It looks for **any** cell in the band with no formula rather than
+for where a fill-down stopped — the interior gap above is invisible to a
+"last populated row" test. Idempotent: run it after adding rows to the sheet.
+
+**Close any interactive Excel first.** `New-Object -ComObject Excel.Application`
+attaches to a RUNNING instance rather than starting its own, so with the
+workbook already open the script drives that session instead — which is how the
+first `-Apply` run on 6 Nov ended up partially applied, with a stranded
+`EXCEL.EXE` and a `~$Ycharts.xlsm` lock left behind. The lock is the expensive
+part: `watch-trigger.cmd` clears it before each launch, but a lock plus a live
+Excel at 05:30 is how one hang costs two runs.
+
 ### Deploying a macro change
 
 `Ycharts.bas` is versioned here as text because the workbook is binary. Until
