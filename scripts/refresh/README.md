@@ -44,13 +44,21 @@
 > with `Application.Calculation` already manual — which needs a throwaway
 > workbook open first, since the property cannot be set with none.
 >
-> **Next step when resuming:** paste `Ycharts.bas` into ThisWorkbook (manual —
-> programmatic VBA import needs "Trust access to the VBA project object model"),
-> then do one timed run to replace the guessed `MIN_WAIT_SECS` (240s) and the
-> 25-minute outer timeout with real numbers.
+> **Both halves are built and running.** This block used to end "Only the VM
+> half is unbuilt", which contradicted its own first line by several weeks.
+> The app-side half — `import_runs`, the `data_refresh` action in
+> `lib/actions.ts`, the headless importer — and the VM half are all live.
 >
-> The app-side half — `import_runs`, the `data_refresh` action, the headless
-> importer — **is finished, tested and live.** Only the VM half is unbuilt.
+> **Deploying the macro is no longer a paste.** That instruction said
+> programmatic VBA import needs "Trust access to the VBA project object model",
+> which is true and is now simply done: `scripts/refresh/deploy-macro.sh`
+> turns the setting on for the edit and back off after. See *Deploying a macro
+> change* below.
+>
+> `MIN_WAIT_SECS` (240s) has real numbers behind it now rather than a guess:
+> the 6 Nov 2026 run produced its output **400s** after the trigger, so the
+> floor is doing its job without being the binding constraint. The 25-minute
+> outer timeout has never been reached by a run that was working.
 
 Unattended daily refresh of the YCharts workbook on the Mac Studio, feeding the
 same importers the app's Import page uses.
@@ -89,10 +97,18 @@ save mid-stream on a sheet that had not started yet.
 permanently destroy the template — a workbook that can never refresh again.
 Nothing in the macro touches it.
 
-**The VM is a worker, not a service.** Windows wants ~4GB of an 8GB machine, so
-it is resumed, used, and suspended. Suspending (not shutting down) preserves the
-logged-in Windows session, so auto-login inside Windows is only the recovery path
-for a cold start — a host power cut or a Parallels update.
+**The VM is a worker, not a service.** It is resumed, used, and suspended.
+Suspending (not shutting down) preserves the logged-in Windows session, so
+auto-login inside Windows is only the recovery path for a cold start — a host
+power cut or a Parallels update.
+
+The memory argument that used to be given here — "Windows wants ~4GB of an 8GB
+machine" — **described the Mac mini that was evaluated and dropped.** The Studio
+has **64GB** and the VM is allocated **16GB** (`sysctl hw.memsize`, `prlctl list
+-i`, 6 Nov 2026), so giving the RAM back is no longer the reason. The reasons
+that survive are that a suspended VM is not drawing power or running Windows
+Update against the workbook, and that a resume is the only path that leaves the
+logged-in session — and therefore the YCharts add-in — intact.
 
 **The Mac asks rather than tells — but it CAN see.** `prlctl exec` does work on
 this licence, and the shutdown path depends on it: on 2026-11-03 it read the
@@ -103,7 +119,10 @@ that is wrong and was corrected on 2026-11-04.
 What `prlctl exec` cannot do is start an **interactive** Excel inside the
 logged-in session — a process it starts has no desktop to draw on, which is the
 actual reason for the trigger file. So the Mac drops one in the shared folder
-and `watch-trigger.cmd`, run by Task Scheduler every 2 minutes, picks it up. This beats scheduling the refresh
+and `watch-trigger.cmd`, run by Task Scheduler every 2 minutes **for one hour
+from 05:25 on weekdays**, picks it up. The script itself does not poll — it
+tests for the trigger once and exits; the repetition is the task's
+(`PT2M`/`PT1H`, `StopAtDurationEnd`). This beats scheduling the refresh
 on Windows' own clock, because the Mac controls when the VM is actually awake —
 and unlike a logon-triggered task, a polled one still fires after a resume.
 
@@ -173,6 +192,121 @@ prlctl exec "Windows 11" cmd.exe /c 'copy "C:\portfolio\Ycharts.xlsm" "\\Mac\Hom
 Row counts alone will not catch a stale import — compare a known return value
 against the DB, which is how that one was found.
 
+## Watchlist funds reach the sheet by themselves
+
+Adding a fund to the app's Watchlist used to populate nothing. The fund columns
+come from this workbook, so the ticker had to be typed into the `Securities`
+sheet by hand and the next refresh waited for, with nothing anywhere to remind
+anyone — an idea could sit for weeks carrying no category, no cohort and no
+scorecard, which is every measure a fund is actually judged by.
+
+```
+refresh.sh
+  └─ watchlist-tickers.cjs → inbox/WATCHLIST.txt   (held ∪ watched, YCharts symbols)
+       └─ Workbook_Open → SyncWatchlistTickers     (reconciles Securities!B)
+            └─ the row's 83 YCI() formulas resolve in the same fetch
+                 └─ import-workbook.cjs → securities2   (unchanged)
+```
+
+**The sheet already had the machinery.** Rows 49–101 are 53 spare rows carrying
+the full set of `=YCI($B<row>, <col>$2)` formulas with an empty ticker, so a
+symbol written into column B populates all 83 columns and `fundBulkUpload`
+picks it up with no change at all — it skips all-empty rows and keys on
+`security_id`. Nothing authors a formula; one string is written.
+
+**The macro writes the ticker, not the Mac.** `prlctl exec` runs as SYSTEM,
+which has no YCharts add-in, so a save from that side turns every `YCI()` into
+`#NAME?` and silently destroys the cached values the importers read.
+`Workbook_Open` runs as the logged-on user, where the add-in resolves.
+
+**The roster is held ∪ watched, and that is the whole of the removal logic.**
+`SyncWatchlistTickers` clears only rows it added itself — remembered in
+`Control!B`, which the importers never read — so the hand-entered holdings are
+never at risk. But a fund that is watched, then bought, then dropped from the
+watchlist *is* one of its own rows, and releasing it would stop a **held** fund
+refreshing with nothing to show why. Holdings stay in the roster for as long as
+they are owned, so a row is released only when the fund is neither held nor
+watched. Two sold funds (`M:APDFX`, `M:VTABX`) sit outside the roster entirely
+because a person entered them; they keep refreshing until a person removes them.
+
+**Stocks are excluded.** The `Securities` sheet is funds-only and its 83 columns
+are fund fields, so a stock ticker there would produce a row of errors rather
+than a security. Asset type comes from `securities2` first and FMP `/profile`
+only for what it cannot answer; **no FMP profile means mutual fund**, not
+unknown, because FMP covers US stocks comprehensively while missing eleven of
+the book's twenty-seven mutual funds (`VMSAX`, `BIMIX`, `EICOX` and the rest are
+all institutional share classes).
+
+**Warnings go to `watchlist-note.txt`, never `refresh-error.txt`.** The latter is
+the macro's abort signal and `refresh.sh` fails the whole run the moment it
+appears — it polls for it while waiting for the output — so a note written at
+the start of a run would read as an abort and kill a refresh that was working.
+Running out of pre-wired rows is the case that writes one; extend the `YCI()`
+formulas below row 101 to add slots.
+
+### A missing FORMULA reads exactly like a missing FIGURE
+
+**Seven columns on the `Securities` sheet stopped at row 45** while the rest ran
+to 101, and an eighth had an interior gap in rows 50–56. Found 6 Nov 2026 by
+asking why VUG's peer-group scorecard showed no Information Ratio 3Y.
+
+The failure is silent by construction. An absent formula leaves an **empty**
+cell, not an errored one — so it does not count toward the macro's error-ratio
+guard, the importer reads NULL exactly as it would for a figure the vendor does
+not publish, and the app renders a clean `—`. Nothing anywhere distinguishes
+"YCharts has no value for this" from "nobody wrote a formula here".
+
+What it cost: `information_ratio_rank` and `information_ratio_peer_group_rank`
+feed **Information Ratio 3Y, which carries 20% of the fund scorecard on both
+cohorts** — the joint-largest weight. Four funds were affected (VVIAX, VIGAX and
+VMSAX, added to the sheet on 4 Nov, and VUG, the first watchlist fund to land in
+a spare row). The scorecard sums an unscored metric as zero and still prints
+`/100`, so VUG's 74.3 was 74.3 of **80 available**. A committee memo read the
+same nulls on VMSAX and reported them as a vendor coverage gap on the
+Multisector Bond category; they were nothing of the kind.
+
+```bash
+scripts/refresh/fill-sheet-formulas.ps1            # dry run (via prlctl exec)
+scripts/refresh/fill-sheet-formulas.ps1 -Apply     # back up, fill, save
+```
+
+It fills by **copy/paste of a populated cell**, not by writing a formula string:
+Excel adjusts the relative reference (`$B45` → `$B46`) on paste, so each cell
+gets exactly what a fill-down would have produced and the script never parses
+`YCP()` syntax. It looks for **any** cell in the band with no formula rather than
+for where a fill-down stopped — the interior gap above is invisible to a
+"last populated row" test. Idempotent: run it after adding rows to the sheet.
+
+**Close any interactive Excel first.** `New-Object -ComObject Excel.Application`
+attaches to a RUNNING instance rather than starting its own, so with the
+workbook already open the script drives that session instead — which is how the
+first `-Apply` run on 6 Nov ended up partially applied, with a stranded
+`EXCEL.EXE` and a `~$Ycharts.xlsm` lock left behind. The lock is the expensive
+part: `watch-trigger.cmd` clears it before each launch, but a lock plus a live
+Excel at 05:30 is how one hang costs two runs.
+
+### Deploying a macro change
+
+`Ycharts.bas` is versioned here as text because the workbook is binary. Until
+Nov 2026 the only way to deploy it was to paste it into ThisWorkbook by hand.
+
+```bash
+scripts/refresh/deploy-macro.sh            # dry run: probe and report
+scripts/refresh/deploy-macro.sh --apply    # back up, replace, save
+```
+
+**Always dry-run first.** The dry run opens the workbook exactly as the real one
+does and reports how many `#NAME?` cells it sees — that number is the entire
+safety argument, because it says whether this account can open the file without
+destroying it. A healthy report is `0 #NAME? of ~17,800 populated cells`. The
+`--apply` path backs the workbook up to `C:\portfolio\Ycharts-pre-vbaedit-<stamp>.xlsm`
+first and reads the module back before saving.
+
+**Run a full refresh by hand afterwards.** A VBA *compile* error stops
+`Workbook_Open` firing at all, so the flag is never claimed, no output appears,
+and the run dies on the 25-minute timeout — tomorrow as well as today. The only
+proof the module still runs is a run.
+
 ## Registry gotcha: prlctl exec writes to the WRONG hive
 
 `prlctl exec` runs as **NT AUTHORITY\SYSTEM**, so `HKCU:` inside it resolves to
@@ -188,12 +322,19 @@ $sid = (New-Object System.Security.Principal.NTAccount('johngeffert')).Translate
 $sec = "Registry::HKEY_USERS\$sid\Software\Microsoft\Office\16.0\Excel\Security"
 ```
 
-The tell is `Trusted Locations` listing `C:\WINDOWS\system32\config\systemprofile\...`
-paths — that is SYSTEM's Excel, not yours.
+**The "tell" this section used to give does not work.** It said `Trusted
+Locations` listing `C:\WINDOWS\system32\config\systemprofile\...` paths meant
+you were looking at SYSTEM's Excel. Reading the interactive user's own hive on
+6 Nov 2026 returns three of those paths among its seven, because they are
+Office's defaults — so that test gives a false positive every time. Check the
+HIVE you are reading instead: translate the account to a SID and address
+`HKEY_USERS\<sid>` explicitly, as above.
 
 ## Why macros actually run
 
-`VBAWarnings = 1` ("enable all macros") is set in the user's hive. That, not any
+`VBAWarnings = 1` ("enable all macros") is set in the user's hive (verified
+6 Nov 2026, along with `C:\portfolio\` appearing in that hive's Trusted
+Locations). That, not any
 trusted location, is what lets `Workbook_Open` fire unattended. It is broader
 than this job needs — a dedicated single-purpose VM makes it defensible, but it
 is worth knowing it is the load-bearing setting. `C:\portfolio\` is also
@@ -206,15 +347,25 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
 
 1. **Install Node** — if the host has git but no node or npm.
    `brew install node`, or the installer from nodejs.org.
-2. `git clone` the repo to `~/portfolio-management`, then `npm install`.
+2. `git clone` the repo, then `npm install`. **The path matters:**
+   `refresh.sh` defaults to `REPO="$HOME/Developer/Portfolio Management"`, and
+   that is where the live checkout is. This step used to say
+   `~/portfolio-management`, which does not exist on the Studio — following it
+   would leave every run reporting a missing `.env`. Override `REPO` if you
+   clone elsewhere.
 3. Copy `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` into
    `~/portfolio-management/.env`. The anon key is enough — RLS is open on these
    tables, so this is no more privileged than the browser bundle. **No
    service-role key.**
 4. `sh scripts/refresh/build.sh` to produce `import-workbook.cjs`.
 5. `mkdir -p ~/portfolio-refresh/{inbox,processed,failed,logs}`
-   No Parallels config needed: "Shared Profile" already maps the Mac home to
-   `Z:`, so this becomes `Z:\portfolio-refresh\inbox\` automatically.
+   No Parallels config needed: "Shared Profile" already exposes the Mac home to
+   the guest. **Address it by UNC, never by drive letter** — the guest reaches
+   it as `\\Mac\Home\portfolio-refresh\inbox\`, which is what the macro and
+   `watch-trigger.cmd` both use. Parallels' letters differ per machine (the
+   mini mapped `Z:` to the Mac home; the Studio maps `Y:` to Home and `Z:` to
+   AllFiles) and mapped drives are per-session, so they are invisible to
+   anything outside the interactive logon.
 6. Install the agent:
    ```
    cp scripts/refresh/com.john.ycharts-refresh.plist ~/Library/LaunchAgents/
@@ -264,6 +415,28 @@ bash scripts/refresh/refresh.sh                      # the whole pipeline
 node scripts/refresh/import-workbook.cjs <file>      # just the import half
 ```
 
+**A by-hand run needs the guest watcher kicked, in another terminal.** This
+section used to imply `refresh.sh` was self-contained and it is not.
+
+`watch-trigger.cmd` **does not poll** — despite what its own comment and the
+diagram above suggest. It tests for the trigger once (`if not exist "%TRIGGER%"
+goto :eof`) and exits. The two minutes belong to the **task**, whose trigger
+reads `PT2M` every `PT1H` with `StopAtDurationEnd`, starting 05:25, weekdays
+(read from `schtasks /query /tn "YCharts Refresh Watcher" /xml`, 6 Nov 2026).
+
+**So a trigger is only ever noticed between 05:25 and 06:25 on a weekday.** Drop
+one at any other time and `refresh.sh` waits its full 25 minutes and reports
+`no output after 1500s` — which reads exactly like a hung Excel and is not.
+Start the watcher yourself:
+
+```
+prlctl exec "Windows 11" schtasks.exe /run /tn "YCharts Refresh Watcher"
+```
+
+Excel should appear in **Session 1 (Console)** within ~20s — `tasklist /FI
+"IMAGENAME eq EXCEL.EXE"`. Session 0 means it was launched by SYSTEM, which has
+no add-in, and the run will abort on the error-ratio guard.
+
 Rebuild `import-workbook.cjs` after changing any importer — it is a bundle, not
 a live reference:
 
@@ -273,6 +446,9 @@ sh scripts/refresh/build.sh
 
 ## Not automated
 
-**Portfolio allocations.** `importAllocationSnapshots` runs delete-then-insert,
-making it the one destructive importer, and `portfolio_allocations` changes
-rarely. It stays a deliberate manual upload on the Import page.
+**Portfolio allocations.** `importAllocationSnapshots` runs delete-then-insert
+(verified 6 Nov 2026), making it the one destructive importer, and
+`portfolio_allocations` changes rarely. It stays a deliberate manual upload —
+now from **two** surfaces, not one: Settings → Import / Export, and the
+portfolio's own Allocation → History tab, which previews before it writes. Both
+share `lib/allocationImport.ts`, so they cannot drift.

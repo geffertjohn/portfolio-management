@@ -9,8 +9,20 @@
 # so a change can look fine in the browser yet break `tsc`. This hook is the
 # local mirror of the CI gate (.github/workflows/ci.yml).
 
-# Fast path: only run the (slower) TS checks when client TS/TSX is staged.
-if git diff --cached --name-only --diff-filter=ACM | grep -qE '^client/src/.*\.(ts|tsx)$'; then
+# Fast path: only run the (slower) TS checks when something the suite covers is
+# staged.
+#
+# CLAUDE.md and scripts/ are in that set, and NOT as a courtesy: the suite reads
+# both. `claudeMd.test.ts` asserts that every file and exported identifier
+# CLAUDE.md names still exists, and it indexes `scripts/` as well as
+# `client/src`, so a documentation-only commit can break CI while no TypeScript
+# changed. That is exactly what happened on 2026-11-06: a commit touching only
+# CLAUDE.md and scripts/refresh/ named a VBA sub the index had not yet been
+# widened to see, this hook did not fire because no client TS was staged, and
+# CI caught it instead. `schemaContract.test.ts` reads `supabase/schema.sql` for
+# the same reason.
+if git diff --cached --name-only --diff-filter=ACM \
+   | grep -qE '^(client/src/.*\.(ts|tsx)|CLAUDE\.md|scripts/.*|supabase/schema\.sql)$'; then
   echo "pre-commit: running client typecheck + lint…"
 
   if ! npm run --silent --prefix client typecheck; then

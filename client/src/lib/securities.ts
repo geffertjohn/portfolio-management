@@ -248,6 +248,57 @@ export function getSecurityDisplayType(security: SecurityClassInput): SecurityDi
   return kind === 'etf' ? 'ETF' : kind === 'fund' ? 'Mutual fund' : 'Stock'
 }
 
+/**
+ * The asset-type flags FMP's `/profile` carries.
+ *
+ * Declared structurally rather than importing `Profile` from `lib/fmpMarket`,
+ * so the classifier stays free of the FMP client — this module is imported by
+ * almost everything and should not drag a fetch layer along with it.
+ */
+export interface ProfileAssetFlags {
+  isEtf?: boolean | null
+  isFund?: boolean | null
+}
+
+/**
+ * The display type of a WATCHLIST idea, which usually is not in `securities2`.
+ *
+ * That is the whole difficulty: `classifySecurity` reads columns, an unheld
+ * idea has none, and the classifier's honest answer with nothing to read is
+ * `stock` — so every fund idea would be filed as a stock. FMP's own profile
+ * flags are the only signal available before a ticker is ever added.
+ *
+ * `securities2` WINS when there is a row, because its `detailed_security_type`
+ * comes from YCharts, which owns fund classification here; FMP is the fallback,
+ * not the authority.
+ *
+ * Lives beside `classifySecurity` rather than in the page, because the Watchlist
+ * page and the Add-to-watchlist modal both need it and must not disagree about
+ * whether an idea is a fund — one decides how a card is labelled and the other
+ * decides whether a portfolio is even asked for.
+ */
+export function getProspectDisplayType(
+  security: SecurityClassInput | null,
+  profile: ProfileAssetFlags | null,
+): SecurityDisplayType {
+  if (security) return getSecurityDisplayType(security)
+  if (profile?.isEtf) return 'ETF'
+  if (profile?.isFund) return 'Mutual fund'
+  return 'Stock'
+}
+
+/**
+ * True for a watchlist idea that is a fund or ETF.
+ *
+ * Funds are not identified by portfolio: a fund idea is categorised by its
+ * `securities2.category_name` instead, so neither the card nor the Add modal
+ * shows a portfolio for one. A stock idea still names the books it is being
+ * considered for.
+ */
+export function isFundIdea(type: SecurityDisplayType): boolean {
+  return type !== 'Stock'
+}
+
 /** ETF / mutual fund — fund-specific UI (returns table, scorecards, etc.). */
 export function isFundOrEtfSecurity(security: SecurityClassInput): boolean {
   return classifySecurity(security) !== 'stock'
