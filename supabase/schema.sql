@@ -222,6 +222,28 @@ COMMENT ON FUNCTION "public"."job_run_open"("p_job_id" "text") IS 'Open a job_ru
 
 
 
+CREATE OR REPLACE FUNCTION "public"."list_bucket_objects"("p_bucket" "text") RETURNS TABLE("id" "text", "name" "text", "size" bigint, "mimetype" "text", "created_at" timestamp with time zone, "updated_at" timestamp with time zone)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+  select o.id::text,
+         o.name,
+         (o.metadata->>'size')::bigint,
+         o.metadata->>'mimetype',
+         o.created_at,
+         o.updated_at
+  from storage.objects o
+  where o.bucket_id = p_bucket
+$$;
+
+
+ALTER FUNCTION "public"."list_bucket_objects"("p_bucket" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."list_bucket_objects"("p_bucket" "text") IS 'Raw storage.objects rows for one bucket, for the Express /api/files route. Replaces 1+N Storage API calls (5.9s for 15 files) with one indexed read. Service role only: a listing names every document the firm holds.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."log_audit"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -4316,6 +4338,11 @@ GRANT ALL ON FUNCTION "public"."job_run_close"("p_run_id" bigint, "p_status" "te
 GRANT ALL ON FUNCTION "public"."job_run_open"("p_job_id" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."job_run_open"("p_job_id" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."job_run_open"("p_job_id" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."list_bucket_objects"("p_bucket" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."list_bucket_objects"("p_bucket" "text") TO "service_role";
 
 
 

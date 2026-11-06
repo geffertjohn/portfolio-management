@@ -2041,6 +2041,25 @@ whether the machinery works → the detail the band can only count.
 
 ## Actions Hub (`/actions`)
 
+**The hub fetches the bucket listing ONCE and passes it down.** It used to make
+**seven identical requests** for the same 15 files — one in `fetchDriftActions`,
+one in `fetchAllocationBandActions`, and one more inside every
+`fetchLatestActualAllocation` call, which both of those made in a loop. At 5.9s
+each that was most of the page's load. `fetchLatestActualAllocation(name, files?)`
+now takes the listing, and `fetchAllActions` fetches it before the fan-out.
+**A parameter, not a cache** — a cache would go stale behind an upload, and
+uploads invalidate a TanStack key this path does not use.
+
+**Both per-portfolio loops run in parallel.** Each was a `for` with an `await`
+in its body, so six portfolios meant six serialised rounds of download-and-parse.
+Nothing in either depends on the previous portfolio's answer.
+
+Measured on the same page: **52.4s and never rendering → 4.3s**, one bucket
+listing instead of seven. What remains is ~14 signed-URL downloads, because
+drift and the allocation bands each resolve the same portfolio's file
+separately; sharing that result between the two sources is the next win.
+
+
 The Actions page is a **unified command center**, not a plain to-do list. It shows one `UnifiedAction[]` assembled by **per-source adapters** in **`lib/actions.ts`** (`fetchAllActions`), keeping each domain single-sourced.
 
 - **Two kinds of action.** **Manual** tasks are real `action_items` rows (created, completed, snoozed, recurring). **Derived** actions are projected **READ-ONLY** from their own authoritative tables and carry a **route into their own workflow** — they are completed **THERE, never from the Actions page** (no derived state is duplicated into `action_items`). Sources: `review_schedules`, `portfolio_review_schedules`, `ic_memos` (`pending_cio`), `security_additions` (`draft`), `alert_events`, `at_risk` (sell timer), drift breaches (computed from `positions`), `import_runs` (a YCharts refresh that failed or did not fire) and `job_runs` (a scheduled routine that died or missed a run — see the heartbeat convention above).
@@ -2171,6 +2190,23 @@ tables they read.
   now pins the table and the trigger together.
 
 ## Documents (Express file store)
+
+**`/api/files` is ONE indexed read, not a Storage walk.** It used to call
+Storage's `list('')` for the folders and then `list(folder)` for each one —
+**7 HTTP round trips to return 15 files, measured at 5.9 seconds**. Supabase
+keeps the object index in Postgres, so `public.list_bucket_objects(p_bucket)`
+(SECURITY DEFINER, EXECUTE granted to **service_role only**, because a listing
+names every document the firm holds) answers the same question in one query.
+**0.79s cold, ~0.3s warm**, and the HTTP response is byte-identical — verified
+field by field against the old output, including the timestamp FORMAT, since
+callers sort on `updatedAt` as a string.
+
+- **One wart is reproduced deliberately.** The old walk went exactly one level
+  deep, so a nested path like `compliance/strategic asset allocation models/x.pdf`
+  surfaced the middle segment as a FILE with null size and mimetype. Four
+  surfaces read this route; a performance change is the wrong moment to alter
+  what they see.
+
 
 Files live in **Supabase Storage**, brokered by the Express server (`server/`, `/api/files|upload|folders|files/signed-url`) which holds the service-role key. The client lives in **`lib/documents.ts`** (`fetchAllFiles`, `uploadFile`, `deleteFile`, `getSignedUrl`, `createFolder`, `deleteFolder`, `formatBytes`, `isServerUnreachable`, `StoredFile`).
 

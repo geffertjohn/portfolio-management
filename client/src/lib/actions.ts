@@ -20,8 +20,11 @@ import { fetchReviewSchedules, isOverdue, isDueSoon, effectiveReviewDay } from '
 import { formatDate } from './fundFormat'
 import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReviews'
 import { fetchUnacknowledgedAlerts } from './alertRules'
-import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET } from './documents'
-import { fetchLatestActualAllocation, portfoliosWithActualAllocation } from './currentAllocation'
+import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET, type StoredFile } from './documents'
+import {
+  fetchLatestActualAllocation, portfoliosWithActualAllocation,
+  type CurrentAllocation,
+} from './currentAllocation'
 import { fetchRebalanceSchedules } from './rebalanceSchedule'
 import { fetchPositionsByPortfolioId } from './positions'
 import { computePositionBands, isCashTicker } from './positionBands'
@@ -211,27 +214,28 @@ async function fetchCandidateActions(): Promise<UnifiedAction[]> {
 //
 // Only portfolios with an uploaded allocation file can be evaluated; the rest
 // have no actual to compare against and are skipped rather than reported clean.
-async function fetchDriftActions(): Promise<UnifiedAction[]> {
-  let files
-  try {
-    files = (await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)).files
-  } catch {
-    // The Express file store being down must not take out the whole Actions hub.
-    return []
-  }
+async function fetchDriftActions(files: StoredFile[] | null): Promise<UnifiedAction[]> {
+  // The Express file store being down must not take out the whole Actions hub.
+  if (!files) return []
+
   const folders = new Set(files.map((f) => f.folder).filter(Boolean) as string[])
   const withFiles = [...portfoliosWithActualAllocation(folders)]
   if (withFiles.length === 0) return []
 
-  const out: UnifiedAction[] = []
-  for (const name of withFiles) {
+  // IN PARALLEL. This was a `for` loop with an await in its body, so six
+  // portfolios meant six serialised rounds of "download a spreadsheet and parse
+  // it" — and each round re-listed the whole bucket, because
+  // fetchLatestActualAllocation did that for itself until it learned to take a
+  // listing. Nothing here depends on the previous portfolio's answer.
+  const results = await Promise.all(
+    withFiles.map(async (name): Promise<UnifiedAction | null> => {
     try {
       const [actual, positions, model] = await Promise.all([
-        fetchLatestActualAllocation(name),
+        fetchLatestActualAllocation(name, files),
         fetchPositionsByPortfolioId(name),
         resolveModelForPortfolio(name),
       ])
-      if (!actual || positions.length === 0) continue
+      if (!actual || positions.length === 0) return null
 
       const bands = computePositionBands(positions, model)
       let breaches = 0
@@ -240,9 +244,9 @@ async function fetchDriftActions(): Promise<UnifiedAction[]> {
         if (a == null) continue
         if ((b.lower != null && a < b.lower - 0.005) || (b.upper != null && a > b.upper + 0.005)) breaches++
       }
-      if (breaches === 0) continue
+      if (breaches === 0) return null
 
-      out.push({
+      return {
         key: `drift:${name}`,
         category: 'trade' as const,
         source: 'drift' as const,
@@ -254,13 +258,14 @@ async function fetchDriftActions(): Promise<UnifiedAction[]> {
         dueDate: null,
         priority: 'medium' as const,
         isManual: false,
-      })
+      }
     } catch {
       // One unreadable portfolio must not drop the others.
-      continue
+      return null
     }
-  }
-  return out
+  }),
+  )
+  return results.filter((a): a is UnifiedAction => a !== null)
 }
 
 // ── Derived: asset-class allocation out of band (tiers 1 and 2) ─────────────
@@ -273,7 +278,7 @@ async function fetchDriftActions(): Promise<UnifiedAction[]> {
 //
 // Batched deliberately. This spans 19 portfolios, so per-portfolio lookups would
 // mean ~57 round trips; the reference data is fetched once and joined in memory.
-async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
+async function fetchAllocationBandActions(files: StoredFile[] | null): Promise<UnifiedAction[]> {
   const [portfoliosRes, mapRes, models, positionsRes, securities] = await Promise.all([
     supabase.from('portfolio').select('name, security_id, investment_objective'),
     supabase.from('portfolio_model_map').select('security_id, model_portfolio_id'),
@@ -292,12 +297,24 @@ async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
   // Files are optional: a file store that is down must not take out the hub, it
   // just means every portfolio falls back to its position targets.
   let withActual = new Set<string>()
-  try {
-    const { files } = await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)
+  if (files) {
     withActual = portfoliosWithActualAllocation(
       new Set(files.map((f) => f.folder).filter(Boolean) as string[]),
     )
-  } catch { /* fall through to position targets */ }
+  }
+
+  // Resolved UP FRONT and in parallel. The loop below used to await one of
+  // these per portfolio, and each await re-listed the whole bucket — the two
+  // together were most of the ~50 seconds this page took to render. Nothing in
+  // the loop depends on another portfolio's allocation.
+  const actualByPortfolio = new Map<string, CurrentAllocation | null>()
+  await Promise.all([...withActual].map(async (name) => {
+    try {
+      actualByPortfolio.set(name, await fetchLatestActualAllocation(name, files ?? undefined))
+    } catch {
+      actualByPortfolio.set(name, null)  // falls back to position targets below
+    }
+  }))
 
   const modelById = new Map(models.map((m) => [m.id, m]))
   const mappedModel = new Map(
@@ -322,12 +339,8 @@ async function fetchAllocationBandActions(): Promise<UnifiedAction[]> {
 
     let weights: Map<string, number> | null = null
     let basis: 'actual' | 'holdings' = 'holdings'
-    if (withActual.has(name)) {
-      try {
-        const actual = await fetchLatestActualAllocation(name)
-        if (actual) { weights = actual.weights; basis = 'actual' }
-      } catch { /* fall back to targets below */ }
-    }
+    const actual = actualByPortfolio.get(name)
+    if (actual) { weights = actual.weights; basis = 'actual' }
     if (!weights) weights = posByPortfolio.get(name) ?? null
     if (!weights || weights.size === 0) continue
 
@@ -544,6 +557,20 @@ function fmtScheduleDate(isoDate: string): string {
 
 // ── Assemble everything ─────────────────────────────────────────────────────
 export async function fetchAllActions(): Promise<UnifiedAction[]> {
+  // ONE bucket listing for the whole hub, fetched before the fan-out and handed
+  // to the two sources that need it. They used to fetch it themselves, and so
+  // did `fetchLatestActualAllocation` on every call inside their loops: SEVEN
+  // identical requests for the same 15 files. A parameter rather than a cache,
+  // because a cache would go stale behind an upload and this one cannot.
+  let portfolioFiles: StoredFile[] | null = null
+  try {
+    portfolioFiles = (await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)).files
+  } catch {
+    // The Express file store being down must not take out the whole hub; the
+    // two sources that need it return nothing and the other ten still load.
+    portfolioFiles = null
+  }
+
   const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh, allocationBands, scheduledRebalances, jobHealth] = await Promise.all([
     fetchActionItems(),
     fetchReviewSchedules(),
@@ -552,9 +579,9 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     fetchActiveAtRisk(),
     fetchIcActions(),
     fetchCandidateActions(),
-    fetchDriftActions(),
+    fetchDriftActions(portfolioFiles),
     fetchDataRefreshActions(),
-    fetchAllocationBandActions(),
+    fetchAllocationBandActions(portfolioFiles),
     fetchScheduledRebalanceActions(),
     fetchJobHealthActions(),
   ])
