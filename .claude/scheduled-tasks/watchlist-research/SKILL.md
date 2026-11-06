@@ -74,12 +74,18 @@ Nobody is at the keyboard. **Any tool call that asks for approval stalls the run
 1. **FIND IDEAS WITH NO RESEARCH.**
 
    ```sql
-   select p.id prospect_id, p.security_id, p.created_at::date added
+   select p.id prospect_id, p.security_id, p.created_at::date added,
+          s.detailed_security_type, s.peer_group_name
    from prospects p
+   left join securities2 s on s.security_id = p.security_id
    where p.removed_at is null
      and not exists (
        select 1 from research_reports r
        where r.security_id = p.security_id and r.deleted_at is null)
+     -- STOCKS ONLY. See the fund rule below.
+     and coalesce(s.detailed_security_type, '') not in
+         ('etf', 'mutual_fund', 'fund', 'open-end fund', 'exchange-traded fund')
+     and s.peer_group_name is null
    order by p.created_at;
    ```
 
@@ -87,9 +93,25 @@ Nobody is at the keyboard. **Any tool call that asks for approval stalls the run
 
    Note it does **not** read `prospect_portfolios`. You do not need the portfolios, and fetching them invites using them.
 
-2. **CAP THE RUN AT FIVE IDEAS**, oldest first. Two agents per name, so five is ten agents and a long run. List the rest as "queued" — they are picked up on the next run.
+2. **DO NOT RUN THE ROLES ON A FUND OR ETF — AND SQL ALONE CANNOT TELL YOU.**
 
-3. **RUN THE TWO ROLES** for each idea, one ticker at a time:
+   The two roles rate a **company**: a business, what must be true for it to work, a fair value, a bull case and an independent bear case. A fund has no business to analyse. What a fund is judged by is its scorecard against the cohort its `category_name` names, which comes from the YCharts workbook and needs no committee at all — so research written here would be an opinion about a thing that is not what the fund is.
+
+   The filter above catches a fund **already in `securities2`**. It does not catch a newly watched one, because `prospects.security_id` has no FK and a fund's row only arrives on the next YCharts refresh — so on the day it is added, a fund looks exactly like a stock to that query.
+
+   **So for every candidate the query returns whose `detailed_security_type` was NULL, ask FMP before dispatching anything:**
+
+   ```
+   mcp__…__company / profile  →  isEtf, isFund
+   ```
+
+   - `isEtf` or `isFund` true → **skip it**, and name it in the digest as a fund, not as a failure.
+   - **No profile at all → ALSO SKIP.** FMP covers US stocks comprehensively but misses a good share of institutional mutual-fund share classes, so an empty profile is far more likely to be a fund than a stock nobody has heard of. Skipping costs a day; running two analysts on a bond fund writes a document that reads like research and is not.
+   - A profile that is neither → a stock, proceed.
+
+3. **CAP THE RUN AT FIVE IDEAS**, oldest first. Two agents per name, so five is ten agents and a long run. List the rest as "queued" — they are picked up on the next run.
+
+4. **RUN THE TWO ROLES** for each idea, one ticker at a time:
 
    ```
    Agent({ subagent_type: 'research-analyst',  prompt: '…' })
@@ -105,7 +127,7 @@ Nobody is at the keyboard. **Any tool call that asks for approval stalls the run
    - The two roles are independent. The devil's advocate must **not** be handed the analyst's thesis to react to; an independent bear case is the point, and feeding it the bull case produces a rebuttal instead.
    - Both roles read TipRanks via ToolSearch and are told to **weight analyst opinion by track record, not head count** — a consensus badge counts voices, not accuracy.
 
-4. **PERSIST WHAT THEY RETURN.**
+5. **PERSIST WHAT THEY RETURN.**
 
    Write through `committee_insert`, one call per role. It validates the payload
    against the live table before writing and raises on a key the table does not
@@ -154,7 +176,7 @@ Nobody is at the keyboard. **Any tool call that asks for approval stalls the run
    - **`status` is `draft`.** Nobody has read it yet. The earnings jobs draft too.
    - **Write no `risk_reports` row and no `ic_memos` row.** A memo is a committee recommendation to buy something at a size, and there is no size here. The analyst's rating is the deliverable.
 
-5. **DIGEST.** Per idea: ticker, the analyst rating and conviction, the three targets (bear / base / bull) against the current price, the buy-below price or "not price-limited" with what would change it, the bear case in a line, and the single thing that would change the rating. Then list **queued** ideas (over the five-name cap) and anything that failed, with why.
+6. **DIGEST.** Per idea: ticker, the analyst rating and conviction, the three targets (bear / base / bull) against the current price, the buy-below price or "not price-limited" with what would change it, the bear case in a line, and the single thing that would change the rating. Then list **queued** ideas (over the five-name cap) and anything that failed, with why.
 
 ## Guardrails
 

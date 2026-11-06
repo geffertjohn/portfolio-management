@@ -44,13 +44,21 @@
 > with `Application.Calculation` already manual — which needs a throwaway
 > workbook open first, since the property cannot be set with none.
 >
-> **Next step when resuming:** paste `Ycharts.bas` into ThisWorkbook (manual —
-> programmatic VBA import needs "Trust access to the VBA project object model"),
-> then do one timed run to replace the guessed `MIN_WAIT_SECS` (240s) and the
-> 25-minute outer timeout with real numbers.
+> **Both halves are built and running.** This block used to end "Only the VM
+> half is unbuilt", which contradicted its own first line by several weeks.
+> The app-side half — `import_runs`, the `data_refresh` action in
+> `lib/actions.ts`, the headless importer — and the VM half are all live.
 >
-> The app-side half — `import_runs`, the `data_refresh` action, the headless
-> importer — **is finished, tested and live.** Only the VM half is unbuilt.
+> **Deploying the macro is no longer a paste.** That instruction said
+> programmatic VBA import needs "Trust access to the VBA project object model",
+> which is true and is now simply done: `scripts/refresh/deploy-macro.sh`
+> turns the setting on for the edit and back off after. See *Deploying a macro
+> change* below.
+>
+> `MIN_WAIT_SECS` (240s) has real numbers behind it now rather than a guess:
+> the 6 Nov 2026 run produced its output **400s** after the trigger, so the
+> floor is doing its job without being the binding constraint. The 25-minute
+> outer timeout has never been reached by a run that was working.
 
 Unattended daily refresh of the YCharts workbook on the Mac Studio, feeding the
 same importers the app's Import page uses.
@@ -89,10 +97,18 @@ save mid-stream on a sheet that had not started yet.
 permanently destroy the template — a workbook that can never refresh again.
 Nothing in the macro touches it.
 
-**The VM is a worker, not a service.** Windows wants ~4GB of an 8GB machine, so
-it is resumed, used, and suspended. Suspending (not shutting down) preserves the
-logged-in Windows session, so auto-login inside Windows is only the recovery path
-for a cold start — a host power cut or a Parallels update.
+**The VM is a worker, not a service.** It is resumed, used, and suspended.
+Suspending (not shutting down) preserves the logged-in Windows session, so
+auto-login inside Windows is only the recovery path for a cold start — a host
+power cut or a Parallels update.
+
+The memory argument that used to be given here — "Windows wants ~4GB of an 8GB
+machine" — **described the Mac mini that was evaluated and dropped.** The Studio
+has **64GB** and the VM is allocated **16GB** (`sysctl hw.memsize`, `prlctl list
+-i`, 6 Nov 2026), so giving the RAM back is no longer the reason. The reasons
+that survive are that a suspended VM is not drawing power or running Windows
+Update against the workbook, and that a resume is the only path that leaves the
+logged-in session — and therefore the YCharts add-in — intact.
 
 **The Mac asks rather than tells — but it CAN see.** `prlctl exec` does work on
 this licence, and the shutdown path depends on it: on 2026-11-03 it read the
@@ -103,7 +119,10 @@ that is wrong and was corrected on 2026-11-04.
 What `prlctl exec` cannot do is start an **interactive** Excel inside the
 logged-in session — a process it starts has no desktop to draw on, which is the
 actual reason for the trigger file. So the Mac drops one in the shared folder
-and `watch-trigger.cmd`, run by Task Scheduler every 2 minutes, picks it up. This beats scheduling the refresh
+and `watch-trigger.cmd`, run by Task Scheduler every 2 minutes **for one hour
+from 05:25 on weekdays**, picks it up. The script itself does not poll — it
+tests for the trigger once and exits; the repetition is the task's
+(`PT2M`/`PT1H`, `StopAtDurationEnd`). This beats scheduling the refresh
 on Windows' own clock, because the Mac controls when the VM is actually awake —
 and unlike a logon-triggered task, a polled one still fires after a resume.
 
@@ -262,12 +281,19 @@ $sid = (New-Object System.Security.Principal.NTAccount('johngeffert')).Translate
 $sec = "Registry::HKEY_USERS\$sid\Software\Microsoft\Office\16.0\Excel\Security"
 ```
 
-The tell is `Trusted Locations` listing `C:\WINDOWS\system32\config\systemprofile\...`
-paths — that is SYSTEM's Excel, not yours.
+**The "tell" this section used to give does not work.** It said `Trusted
+Locations` listing `C:\WINDOWS\system32\config\systemprofile\...` paths meant
+you were looking at SYSTEM's Excel. Reading the interactive user's own hive on
+6 Nov 2026 returns three of those paths among its seven, because they are
+Office's defaults — so that test gives a false positive every time. Check the
+HIVE you are reading instead: translate the account to a SID and address
+`HKEY_USERS\<sid>` explicitly, as above.
 
 ## Why macros actually run
 
-`VBAWarnings = 1` ("enable all macros") is set in the user's hive. That, not any
+`VBAWarnings = 1` ("enable all macros") is set in the user's hive (verified
+6 Nov 2026, along with `C:\portfolio\` appearing in that hive's Trusted
+Locations). That, not any
 trusted location, is what lets `Workbook_Open` fire unattended. It is broader
 than this job needs — a dedicated single-purpose VM makes it defensible, but it
 is worth knowing it is the load-bearing setting. `C:\portfolio\` is also
@@ -280,15 +306,25 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
 
 1. **Install Node** — if the host has git but no node or npm.
    `brew install node`, or the installer from nodejs.org.
-2. `git clone` the repo to `~/portfolio-management`, then `npm install`.
+2. `git clone` the repo, then `npm install`. **The path matters:**
+   `refresh.sh` defaults to `REPO="$HOME/Developer/Portfolio Management"`, and
+   that is where the live checkout is. This step used to say
+   `~/portfolio-management`, which does not exist on the Studio — following it
+   would leave every run reporting a missing `.env`. Override `REPO` if you
+   clone elsewhere.
 3. Copy `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` into
    `~/portfolio-management/.env`. The anon key is enough — RLS is open on these
    tables, so this is no more privileged than the browser bundle. **No
    service-role key.**
 4. `sh scripts/refresh/build.sh` to produce `import-workbook.cjs`.
 5. `mkdir -p ~/portfolio-refresh/{inbox,processed,failed,logs}`
-   No Parallels config needed: "Shared Profile" already maps the Mac home to
-   `Z:`, so this becomes `Z:\portfolio-refresh\inbox\` automatically.
+   No Parallels config needed: "Shared Profile" already exposes the Mac home to
+   the guest. **Address it by UNC, never by drive letter** — the guest reaches
+   it as `\\Mac\Home\portfolio-refresh\inbox\`, which is what the macro and
+   `watch-trigger.cmd` both use. Parallels' letters differ per machine (the
+   mini mapped `Z:` to the Mac home; the Studio maps `Y:` to Home and `Z:` to
+   AllFiles) and mapped drives are per-session, so they are invisible to
+   anything outside the interactive logon.
 6. Install the agent:
    ```
    cp scripts/refresh/com.john.ycharts-refresh.plist ~/Library/LaunchAgents/
@@ -369,6 +405,9 @@ sh scripts/refresh/build.sh
 
 ## Not automated
 
-**Portfolio allocations.** `importAllocationSnapshots` runs delete-then-insert,
-making it the one destructive importer, and `portfolio_allocations` changes
-rarely. It stays a deliberate manual upload on the Import page.
+**Portfolio allocations.** `importAllocationSnapshots` runs delete-then-insert
+(verified 6 Nov 2026), making it the one destructive importer, and
+`portfolio_allocations` changes rarely. It stays a deliberate manual upload —
+now from **two** surfaces, not one: Settings → Import / Export, and the
+portfolio's own Allocation → History tab, which previews before it writes. Both
+share `lib/allocationImport.ts`, so they cannot drift.

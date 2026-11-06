@@ -12,6 +12,8 @@ import { fetchPortfolios } from '@/lib/portfolio'
  */
 const DERIVED_BLEND_PORTFOLIOS = new Set(['Equity Income & Core Growth'])
 import { addProspect } from '@/lib/prospects'
+import { fetchProfile } from '@/lib/fmpMarket'
+import { getProspectDisplayType, isFundIdea } from '@/lib/securities'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 
 interface Props {
@@ -73,7 +75,10 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
       if (!selectedId) throw new Error('No security selected')
       await addProspect({
         securityId: selectedId,
-        portfolios: selectedPortfolios,
+        // Never for a fund, even if a selection survives from a ticker chosen
+        // before this one: the picker is not shown for one, so a portfolio
+        // here could only be a leftover the user cannot see.
+        portfolios: isFund ? [] : selectedPortfolios,
       })
     },
     onSuccess: () => {
@@ -92,6 +97,30 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
   }).slice(0, 50)
 
   const selected = securities.find((s) => s.security_id === selectedId) ?? null
+
+  /*
+    A ticker that is not in securities2 has no columns to classify, and the
+    classifier's honest answer with nothing to read is "stock" — so without
+    this every unheld fund would be offered a portfolio picker. Only asked for
+    when securities2 cannot answer, and it shares `QUERY_KEYS.profile` with the
+    Watchlist page and the research page, so selecting a ticker here usually
+    costs no request at all.
+  */
+  const { data: profile } = useQuery({
+    queryKey: QUERY_KEYS.profile(selectedId ?? ''),
+    queryFn: () => fetchProfile(selectedId as string),
+    enabled: open && !!selectedId && !selected,
+    staleTime: 1000 * 60 * 60 * 24,
+    retry: false,
+  })
+
+  /*
+    A FUND IS NOT IDENTIFIED BY A PORTFOLIO. Which book a fund would go in
+    follows from the sleeve it fills, which `category_name` already names, so
+    the question is not asked for one — asking it would invite an answer the
+    Watchlist does not show and nothing reads.
+  */
+  const isFund = selectedId ? isFundIdea(getProspectDisplayType(selected, profile ?? null)) : false
   const typedTicker = search.trim().toUpperCase()
   const hasExactMatch = securities.some((s) => s.security_id.toUpperCase() === typedTicker)
 
@@ -103,7 +132,10 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
     >
       <div className="border-b border-gray-100 px-6 py-4">
         <h2 className="text-base font-semibold text-gray-900">Add to watchlist</h2>
-        <p className="mt-0.5 text-xs text-gray-500">A security you're considering buying for a portfolio.</p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          A security you're considering buying. Stocks are considered for a portfolio;
+          funds are identified by their category.
+        </p>
       </div>
 
       <div className="space-y-5 px-6 py-5">
@@ -179,7 +211,7 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
           )}
         </div>
 
-        {selectedId && (
+        {selectedId && !isFund && (
           <>
             {/* Which portfolio(s) is this being considered for — one entry each. */}
             <div>
@@ -215,6 +247,38 @@ export function AddProspectModal({ open, onClose, presetSecurityId }: Props) {
               the comparison with current holdings happen later, when you move it to a candidate.
             </p>
           </>
+        )}
+
+        {/*
+          A FUND IS CATEGORISED, NOT PLACED. Which book it would go in follows
+          from the sleeve it fills, which `category_name` already names, so no
+          portfolio is asked for — and the research team is not run on it
+          either: those two roles rate a COMPANY, with a bull and bear case on
+          a business, which is not what a fund is judged by.
+        */}
+        {selectedId && isFund && (
+          <div className="space-y-2 rounded-md bg-teal-50 px-3 py-2.5">
+            <p className="text-xs text-teal-800">
+              <span className="font-semibold">Categorised, not placed.</span> A fund is
+              identified by its category rather than a portfolio, so there is nothing to
+              choose here.
+            </p>
+            {selected?.category_name ? (
+              <p className="text-xs text-teal-700">
+                Category: <span className="font-semibold">{selected.category_name}</span>
+              </p>
+            ) : (
+              <p className="text-xs text-teal-700">
+                The category arrives with the next YCharts refresh, which picks the ticker
+                up automatically — no spreadsheet edit needed.
+              </p>
+            )}
+            <p className="text-xs text-teal-700">
+              The AI research team is not run on funds: it rates a company's business with a
+              bull and bear case, which is not how a fund is judged. Its scorecard against
+              the cohort is.
+            </p>
+          </div>
         )}
 
         {mutation.isError && (

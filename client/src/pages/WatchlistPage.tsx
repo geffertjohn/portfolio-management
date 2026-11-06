@@ -13,7 +13,9 @@ import { fetchProfile, type Profile } from '@/lib/fmpMarket'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { AddProspectModal } from '@/components/AddProspectModal'
 import { ResearchCard } from '@/components/icReviewCards'
-import { getSecurityDisplayType, type SecurityDisplayType } from '@/lib/securities'
+import {
+  getProspectDisplayType, isFundIdea, type SecurityDisplayType,
+} from '@/lib/securities'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { fmtUsd, fmtDecimalPct } from '@/lib/formatters'
 import { PRICE_CASE_LABEL, gapToBuy } from '@/lib/priceTargets'
@@ -30,19 +32,6 @@ const COLUMNS: { type: SecurityDisplayType; label: string; badge: string }[] = [
   { type: 'ETF',         label: 'ETFs',         badge: 'bg-purple-100 text-purple-700' },
   { type: 'Mutual fund', label: 'Mutual Funds', badge: 'bg-green-100 text-green-700' },
 ]
-
-/**
- * An idea is usually NOT in securities2 — that is the point of a watchlist — so
- * the securities2 classifier has no columns to read and would call everything a
- * stock. FMP's own profile flags are the only signal available before a ticker
- * is ever added.
- */
-function displayTypeFor(entry: ProspectIdea, profile: Profile | null): SecurityDisplayType {
-  if (entry.securities2) return getSecurityDisplayType(entry.securities2)
-  if (profile?.isEtf) return 'ETF'
-  if (profile?.isFund) return 'Mutual fund'
-  return 'Stock'
-}
 
 function ProspectCard({
   entry,
@@ -65,6 +54,7 @@ function ProspectCard({
 }) {
   const sec = entry.securities2
   const name = sec?.security_name ?? profile?.companyName ?? null
+  const isFund = isFundIdea(displayType)
   // Stream by the idea's own ticker so candidates not in securities2 still get a live price.
   const live = useLiveQuote(streamable ? entry.security_id : null)
   const [showResearch, setShowResearch] = useState(false)
@@ -121,7 +111,33 @@ function ProspectCard({
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
-          {entry.portfolios.length === 0 ? (
+          {/*
+            A FUND IDEA IS IDENTIFIED BY ITS CATEGORY, NOT BY A PORTFOLIO.
+            Which book a fund would go in is decided by the sleeve it fills, and
+            the sleeve is what `category_name` names — so the category is the
+            fact worth carrying on the card, and it arrives on its own with the
+            YCharts row rather than being chosen when the idea is recorded. A
+            stock still names the books it is being considered for.
+          */}
+          {isFund ? (
+            entry.securities2?.category_name ? (
+              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+                {entry.securities2.category_name}
+              </span>
+            ) : (
+              /*
+                Not a missing value to hide: a newly watched fund has no
+                securities2 row until the next YCharts refresh picks the ticker
+                up, so this says which it is and when it resolves.
+              */
+              <span
+                title="The ticker reaches securities2 on the next YCharts refresh (weekdays, early morning), and the category appears with it."
+                className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+              >
+                Category pending
+              </span>
+            )
+          ) : entry.portfolios.length === 0 ? (
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs italic text-gray-500">
               No portfolio yet
             </span>
@@ -163,7 +179,13 @@ function ProspectCard({
               the watchlist-research job existed FCX sat here 23 days with
               nothing behind it. The job now picks these up, so the badge names
               what is true — queued, and what will clear it. */}
-          {research.length === 0 && (
+          {/* NOT shown for a fund. The job does not run on one and never will:
+              the two roles rate a company's business with a bull and bear case,
+              which is not what a fund is judged by. Leaving the badge here would
+              promise a document that is never coming — the same "describing an
+              absence as if something were coming" this badge was written to
+              stop. A fund carries its category instead. */}
+          {research.length === 0 && !isFund && (
             <span
               className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
               title="The watchlist-research job runs the lean investment committee over ideas with no research yet. It runs weekday mornings and takes the three oldest."
@@ -309,7 +331,7 @@ export function WatchlistPage() {
 
   const resolved = entries.map((entry) => {
     const profile = entry.securities2 ? null : profileBySymbol.get(entry.security_id) ?? null
-    return { entry, profile, type: displayTypeFor(entry, profile) }
+    return { entry, profile, type: getProspectDisplayType(entry.securities2, profile) }
   })
 
   return (
@@ -318,7 +340,8 @@ export function WatchlistPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Watchlist</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Investment ideas you're considering — for one or more portfolios, or none yet.
+            Investment ideas you're considering. Stocks are considered for one or more
+            portfolios; funds are identified by their category.
           </p>
         </div>
         <div className="flex items-center gap-3">

@@ -48,6 +48,15 @@ export interface ProspectIdea extends ProspectEntry {
     broad_asset_class: string | null
     detailed_security_type: string | null
     peer_group_name: string | null
+    /**
+     * How a FUND idea is identified, in place of a portfolio.
+     *
+     * Null until the ticker reaches `securities2`, which for a newly watched
+     * fund happens on the next YCharts refresh (see
+     * `scripts/refresh/README.md`) — so "not categorised yet" is a real and
+     * temporary state, not a missing value to paper over.
+     */
+    category_name: string | null
   } | null
 }
 
@@ -75,7 +84,7 @@ export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
       .in('prospect_id', rows.map((r) => r.id)),
     supabase
       .from('securities2')
-      .select('id, security_id, security_name, broad_asset_class, detailed_security_type, peer_group_name')
+      .select('id, security_id, security_name, broad_asset_class, detailed_security_type, peer_group_name, category_name')
       .in('security_id', [...new Set(rows.map((r) => r.security_id))]),
   ])
   if (links.error) throw links.error
