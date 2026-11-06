@@ -289,6 +289,9 @@ export type Database = {
           historical_sortino_1y: number | null
           historical_sortino_3y: number | null
           id: number
+          max_drawdown_3y: number | null
+          max_drawdown_5y: number | null
+          monthly_standard_deviation_annualized_3y: number | null
           one_month_total_return: number | null
           sales_growth_1_yr_generic: number | null
           sales_growth_3_yr_generic: number | null
@@ -311,6 +314,9 @@ export type Database = {
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
           id?: number
+          max_drawdown_3y?: number | null
+          max_drawdown_5y?: number | null
+          monthly_standard_deviation_annualized_3y?: number | null
           one_month_total_return?: number | null
           sales_growth_1_yr_generic?: number | null
           sales_growth_3_yr_generic?: number | null
@@ -333,6 +339,9 @@ export type Database = {
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
           id?: number
+          max_drawdown_3y?: number | null
+          max_drawdown_5y?: number | null
+          monthly_standard_deviation_annualized_3y?: number | null
           one_month_total_return?: number | null
           sales_growth_1_yr_generic?: number | null
           sales_growth_3_yr_generic?: number | null
@@ -1637,26 +1646,10 @@ export type Database = {
       }
       peer_group_benchmarks: {
         Row: {
-          "1_to_3_years_maturity_bond_exposure": number | null
-          "3_to_5_years_maturity_bond_exposure": number | null
-          a_bond_exposure_generic: number | null
-          aa_bond_exposure_generic: number | null
-          aaa_bond_exposure_generic: number | null
           annualized_daily_five_year_total_return: number | null
           annualized_daily_one_year_total_return: number | null
           annualized_daily_three_year_return: number | null
-          b_bond_exposure_generic: number | null
-          basic_materials_exposure: number | null
-          bb_bond_exposure_generic: number | null
-          bbb_bond_exposure_generic: number | null
-          below_b_bond_exposure_generic: number | null
-          communication_services_exposure: number | null
-          consumer_cyclical_exposure: number | null
-          consumer_defensive_exposure: number | null
-          energy_exposure: number | null
           eps_growth_1_yr_generic: number | null
-          financial_services_exposure: number | null
-          healthcare_exposure: number | null
           historical_sharpe_1y: number | null
           historical_sharpe_3y: number | null
           historical_sharpe_5y: number | null
@@ -1664,48 +1657,23 @@ export type Database = {
           historical_sortino_3y: number | null
           historical_sortino_5y: number | null
           id: number
-          industrials_exposure: number | null
-          maturity_10_to_20_years_generic: number | null
-          maturity_20_to_30_years_generic: number | null
-          maturity_5_to_10_years_generic: number | null
-          maturity_less_than_1_year_generic: number | null
           monthly_standard_deviation_annualized_1y: number | null
           one_month_total_return: number | null
-          over_30_years_maturity_bond_exposure: number | null
           peer_group_benchmark: string | null
           peer_group_category: string | null
           peer_group_ticker: string | null
           quarterly_standard_deviation_annualized_3y: number | null
           quarterly_standard_deviation_annualized_5y: number | null
-          real_estate_exposure: number | null
           sales_growth_1_yr_generic: number | null
-          technology_exposure: number | null
           three_month_total_return: number | null
           updated_at: string | null
-          utilities_exposure: number | null
           ytd_total_return: number | null
         }
         Insert: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          communication_services_exposure?: number | null
-          consumer_cyclical_exposure?: number | null
-          consumer_defensive_exposure?: number | null
-          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
-          financial_services_exposure?: number | null
-          healthcare_exposure?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
           historical_sharpe_5y?: number | null
@@ -1713,48 +1681,23 @@ export type Database = {
           historical_sortino_3y?: number | null
           historical_sortino_5y?: number | null
           id?: number
-          industrials_exposure?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
           monthly_standard_deviation_annualized_1y?: number | null
           one_month_total_return?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           peer_group_benchmark?: string | null
           peer_group_category?: string | null
           peer_group_ticker?: string | null
           quarterly_standard_deviation_annualized_3y?: number | null
           quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure?: number | null
           sales_growth_1_yr_generic?: number | null
-          technology_exposure?: number | null
           three_month_total_return?: number | null
           updated_at?: string | null
-          utilities_exposure?: number | null
           ytd_total_return?: number | null
         }
         Update: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          communication_services_exposure?: number | null
-          consumer_cyclical_exposure?: number | null
-          consumer_defensive_exposure?: number | null
-          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
-          financial_services_exposure?: number | null
-          healthcare_exposure?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
           historical_sharpe_5y?: number | null
@@ -1762,25 +1705,16 @@ export type Database = {
           historical_sortino_3y?: number | null
           historical_sortino_5y?: number | null
           id?: number
-          industrials_exposure?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
           monthly_standard_deviation_annualized_1y?: number | null
           one_month_total_return?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           peer_group_benchmark?: string | null
           peer_group_category?: string | null
           peer_group_ticker?: string | null
           quarterly_standard_deviation_annualized_3y?: number | null
           quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure?: number | null
           sales_growth_1_yr_generic?: number | null
-          technology_exposure?: number | null
           three_month_total_return?: number | null
           updated_at?: string | null
-          utilities_exposure?: number | null
           ytd_total_return?: number | null
         }
         Relationships: []
@@ -2862,28 +2796,12 @@ export type Database = {
       }
       sector_benchmarks: {
         Row: {
-          "1_to_3_years_maturity_bond_exposure": number | null
-          "3_to_5_years_maturity_bond_exposure": number | null
-          a_bond_exposure_generic: number | null
-          aa_bond_exposure_generic: number | null
-          aaa_bond_exposure_generic: number | null
           annualized_daily_five_year_total_return: number | null
           annualized_daily_one_year_total_return: number | null
           annualized_daily_three_year_return: number | null
-          b_bond_exposure_generic: number | null
-          basic_materials_exposure: number | null
-          bb_bond_exposure_generic: number | null
-          bbb_bond_exposure_generic: number | null
-          below_b_bond_exposure_generic: number | null
-          communication_services_exposure: number | null
-          consumer_cyclical_exposure: number | null
-          consumer_defensive_exposure: number | null
-          energy_exposure: number | null
           eps_growth_1_yr_generic: number | null
           eps_growth_3_yr_generic: number | null
           etf_proxy: string | null
-          financial_services_exposure: number | null
-          healthcare_exposure: number | null
           historical_sharpe_1y: number | null
           historical_sharpe_3y: number | null
           historical_sharpe_5y: number | null
@@ -2891,50 +2809,25 @@ export type Database = {
           historical_sortino_3y: number | null
           historical_sortino_5y: number | null
           id: number
-          industrials_exposure: number | null
-          maturity_10_to_20_years_generic: number | null
-          maturity_20_to_30_years_generic: number | null
-          maturity_5_to_10_years_generic: number | null
-          maturity_less_than_1_year_generic: number | null
           monthly_standard_deviation_annualized_1y: number | null
           one_month_total_return: number | null
-          over_30_years_maturity_bond_exposure: number | null
           quarterly_standard_deviation_annualized_3y: number | null
           quarterly_standard_deviation_annualized_5y: number | null
-          real_estate_exposure: number | null
           sales_growth_1_yr_generic: number | null
           sales_growth_3_yr_generic: number | null
           sector: string | null
           sector_benchmarks: string | null
-          technology_exposure: number | null
           three_month_total_return: number | null
           ticker: string
-          utilities_exposure: number | null
           ytd_total_return: number | null
         }
         Insert: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          communication_services_exposure?: number | null
-          consumer_cyclical_exposure?: number | null
-          consumer_defensive_exposure?: number | null
-          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
           eps_growth_3_yr_generic?: number | null
           etf_proxy?: string | null
-          financial_services_exposure?: number | null
-          healthcare_exposure?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
           historical_sharpe_5y?: number | null
@@ -2942,50 +2835,25 @@ export type Database = {
           historical_sortino_3y?: number | null
           historical_sortino_5y?: number | null
           id?: never
-          industrials_exposure?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
           monthly_standard_deviation_annualized_1y?: number | null
           one_month_total_return?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           quarterly_standard_deviation_annualized_3y?: number | null
           quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure?: number | null
           sales_growth_1_yr_generic?: number | null
           sales_growth_3_yr_generic?: number | null
           sector?: string | null
           sector_benchmarks?: string | null
-          technology_exposure?: number | null
           three_month_total_return?: number | null
           ticker: string
-          utilities_exposure?: number | null
           ytd_total_return?: number | null
         }
         Update: {
-          "1_to_3_years_maturity_bond_exposure"?: number | null
-          "3_to_5_years_maturity_bond_exposure"?: number | null
-          a_bond_exposure_generic?: number | null
-          aa_bond_exposure_generic?: number | null
-          aaa_bond_exposure_generic?: number | null
           annualized_daily_five_year_total_return?: number | null
           annualized_daily_one_year_total_return?: number | null
           annualized_daily_three_year_return?: number | null
-          b_bond_exposure_generic?: number | null
-          basic_materials_exposure?: number | null
-          bb_bond_exposure_generic?: number | null
-          bbb_bond_exposure_generic?: number | null
-          below_b_bond_exposure_generic?: number | null
-          communication_services_exposure?: number | null
-          consumer_cyclical_exposure?: number | null
-          consumer_defensive_exposure?: number | null
-          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
           eps_growth_3_yr_generic?: number | null
           etf_proxy?: string | null
-          financial_services_exposure?: number | null
-          healthcare_exposure?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
           historical_sharpe_5y?: number | null
@@ -2993,25 +2861,16 @@ export type Database = {
           historical_sortino_3y?: number | null
           historical_sortino_5y?: number | null
           id?: never
-          industrials_exposure?: number | null
-          maturity_10_to_20_years_generic?: number | null
-          maturity_20_to_30_years_generic?: number | null
-          maturity_5_to_10_years_generic?: number | null
-          maturity_less_than_1_year_generic?: number | null
           monthly_standard_deviation_annualized_1y?: number | null
           one_month_total_return?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           quarterly_standard_deviation_annualized_3y?: number | null
           quarterly_standard_deviation_annualized_5y?: number | null
-          real_estate_exposure?: number | null
           sales_growth_1_yr_generic?: number | null
           sales_growth_3_yr_generic?: number | null
           sector?: string | null
           sector_benchmarks?: string | null
-          technology_exposure?: number | null
           three_month_total_return?: number | null
           ticker?: string
-          utilities_exposure?: number | null
           ytd_total_return?: number | null
         }
         Relationships: []
@@ -3036,15 +2895,17 @@ export type Database = {
           bond_net: number | null
           broad_asset_class: string | null
           broad_category_group: string | null
+          cash_fixed_income_exposure: number | null
           cash_net: number | null
           category_index: string | null
           category_name: string | null
           communication_services_exposure_generic: number | null
           consumer_cyclical_exposure_generic: number | null
           consumer_defensive_exposure_generic: number | null
-          corporate_bond_exposure_generic: number | null
+          corporate_fixed_income_exposure_generic: number | null
           created_at: string
           deleted_at: string | null
+          derivative_fixed_income_exposure: number | null
           detailed_security_type: string | null
           developed_market_exposure: number | null
           effective_duration: number | null
@@ -3062,7 +2923,7 @@ export type Database = {
           five_year_total_return_rank_nav: number | null
           fund_company_name: string | null
           fund_family: string | null
-          government_bond_exposure_generic: number | null
+          government_fixed_income_exposure_generic: number | null
           healthcare_exposure_generic: number | null
           historical_sharpe_1y: number | null
           historical_sharpe_3y: number | null
@@ -3077,6 +2938,7 @@ export type Database = {
           information_ratio_rank: number | null
           investment_grade_bond_allocation_generic: number | null
           investment_strategy: string | null
+          is_benchmark_proxy: boolean
           large_market_cap_exposure_generic: number | null
           last_earnings_release: string | null
           long_description: string | null
@@ -3088,6 +2950,7 @@ export type Database = {
           monthly_standard_deviation_annualized_3y: number | null
           morningstar_industry: string | null
           morningstar_sector: string | null
+          municipal_fixed_income_exposure_generic: number | null
           next_earnings_release: string | null
           north_america_total_exposure_generic: number | null
           number_of_holdings_generic: number | null
@@ -3103,6 +2966,7 @@ export type Database = {
           one_year_total_return_peer_group_size_nav: number | null
           one_year_total_return_rank_category_size_nav: number | null
           one_year_total_return_rank_nav: number | null
+          other_fixed_income_exposure_generic: number | null
           peer_group_name: string | null
           preferred_benchmark1_id: number | null
           preferred_benchmark2_id: number | null
@@ -3164,15 +3028,17 @@ export type Database = {
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
+          cash_fixed_income_exposure?: number | null
           cash_net?: number | null
           category_index?: string | null
           category_name?: string | null
           communication_services_exposure_generic?: number | null
           consumer_cyclical_exposure_generic?: number | null
           consumer_defensive_exposure_generic?: number | null
-          corporate_bond_exposure_generic?: number | null
+          corporate_fixed_income_exposure_generic?: number | null
           created_at?: string
           deleted_at?: string | null
+          derivative_fixed_income_exposure?: number | null
           detailed_security_type?: string | null
           developed_market_exposure?: number | null
           effective_duration?: number | null
@@ -3190,7 +3056,7 @@ export type Database = {
           five_year_total_return_rank_nav?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
-          government_bond_exposure_generic?: number | null
+          government_fixed_income_exposure_generic?: number | null
           healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
@@ -3205,6 +3071,7 @@ export type Database = {
           information_ratio_rank?: number | null
           investment_grade_bond_allocation_generic?: number | null
           investment_strategy?: string | null
+          is_benchmark_proxy?: boolean
           large_market_cap_exposure_generic?: number | null
           last_earnings_release?: string | null
           long_description?: string | null
@@ -3216,6 +3083,7 @@ export type Database = {
           monthly_standard_deviation_annualized_3y?: number | null
           morningstar_industry?: string | null
           morningstar_sector?: string | null
+          municipal_fixed_income_exposure_generic?: number | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
           number_of_holdings_generic?: number | null
@@ -3231,6 +3099,7 @@ export type Database = {
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
+          other_fixed_income_exposure_generic?: number | null
           peer_group_name?: string | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
@@ -3292,15 +3161,17 @@ export type Database = {
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
+          cash_fixed_income_exposure?: number | null
           cash_net?: number | null
           category_index?: string | null
           category_name?: string | null
           communication_services_exposure_generic?: number | null
           consumer_cyclical_exposure_generic?: number | null
           consumer_defensive_exposure_generic?: number | null
-          corporate_bond_exposure_generic?: number | null
+          corporate_fixed_income_exposure_generic?: number | null
           created_at?: string
           deleted_at?: string | null
+          derivative_fixed_income_exposure?: number | null
           detailed_security_type?: string | null
           developed_market_exposure?: number | null
           effective_duration?: number | null
@@ -3318,7 +3189,7 @@ export type Database = {
           five_year_total_return_rank_nav?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
-          government_bond_exposure_generic?: number | null
+          government_fixed_income_exposure_generic?: number | null
           healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
@@ -3333,6 +3204,7 @@ export type Database = {
           information_ratio_rank?: number | null
           investment_grade_bond_allocation_generic?: number | null
           investment_strategy?: string | null
+          is_benchmark_proxy?: boolean
           large_market_cap_exposure_generic?: number | null
           last_earnings_release?: string | null
           long_description?: string | null
@@ -3344,6 +3216,7 @@ export type Database = {
           monthly_standard_deviation_annualized_3y?: number | null
           morningstar_industry?: string | null
           morningstar_sector?: string | null
+          municipal_fixed_income_exposure_generic?: number | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
           number_of_holdings_generic?: number | null
@@ -3359,6 +3232,7 @@ export type Database = {
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
+          other_fixed_income_exposure_generic?: number | null
           peer_group_name?: string | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null

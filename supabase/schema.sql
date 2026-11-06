@@ -552,11 +552,18 @@ CREATE TABLE IF NOT EXISTS "public"."category_benchmarks" (
     "sales_growth_1_yr_generic" numeric,
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "sales_growth_3_yr_generic" numeric,
-    "eps_growth_3_yr_generic" numeric
+    "eps_growth_3_yr_generic" numeric,
+    "max_drawdown_3y" numeric,
+    "max_drawdown_5y" numeric,
+    "monthly_standard_deviation_annualized_3y" numeric
 );
 
 
 ALTER TABLE "public"."category_benchmarks" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."category_benchmarks"."max_drawdown_3y" IS 'Survives from the composition attempt: derived from the price series, which an index has. Composition metrics (duration, sector, credit) return ERR: INVALID CALC for an index ticker and must come from the etf_proxy instead.';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."category_benchmarks_id_seq"
@@ -1281,31 +1288,6 @@ CREATE TABLE IF NOT EXISTS "public"."peer_group_benchmarks" (
     "quarterly_standard_deviation_annualized_5y" numeric,
     "eps_growth_1_yr_generic" numeric,
     "sales_growth_1_yr_generic" numeric,
-    "consumer_cyclical_exposure" numeric,
-    "financial_services_exposure" numeric,
-    "basic_materials_exposure" numeric,
-    "real_estate_exposure" numeric,
-    "communication_services_exposure" numeric,
-    "energy_exposure" numeric,
-    "industrials_exposure" numeric,
-    "technology_exposure" numeric,
-    "consumer_defensive_exposure" numeric,
-    "healthcare_exposure" numeric,
-    "utilities_exposure" numeric,
-    "aaa_bond_exposure_generic" numeric,
-    "aa_bond_exposure_generic" numeric,
-    "a_bond_exposure_generic" numeric,
-    "bbb_bond_exposure_generic" numeric,
-    "bb_bond_exposure_generic" numeric,
-    "b_bond_exposure_generic" numeric,
-    "below_b_bond_exposure_generic" numeric,
-    "maturity_less_than_1_year_generic" numeric,
-    "1_to_3_years_maturity_bond_exposure" numeric,
-    "3_to_5_years_maturity_bond_exposure" numeric,
-    "maturity_5_to_10_years_generic" numeric,
-    "maturity_10_to_20_years_generic" numeric,
-    "maturity_20_to_30_years_generic" numeric,
-    "over_30_years_maturity_bond_exposure" numeric,
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "peer_group_ticker" "text"
 );
@@ -1930,31 +1912,6 @@ CREATE TABLE IF NOT EXISTS "public"."sector_benchmarks" (
     "quarterly_standard_deviation_annualized_5y" numeric,
     "eps_growth_1_yr_generic" numeric,
     "sales_growth_1_yr_generic" numeric,
-    "consumer_cyclical_exposure" numeric,
-    "financial_services_exposure" numeric,
-    "basic_materials_exposure" numeric,
-    "real_estate_exposure" numeric,
-    "communication_services_exposure" numeric,
-    "energy_exposure" numeric,
-    "industrials_exposure" numeric,
-    "technology_exposure" numeric,
-    "consumer_defensive_exposure" numeric,
-    "healthcare_exposure" numeric,
-    "utilities_exposure" numeric,
-    "aaa_bond_exposure_generic" numeric,
-    "aa_bond_exposure_generic" numeric,
-    "a_bond_exposure_generic" numeric,
-    "bbb_bond_exposure_generic" numeric,
-    "bb_bond_exposure_generic" numeric,
-    "b_bond_exposure_generic" numeric,
-    "below_b_bond_exposure_generic" numeric,
-    "maturity_less_than_1_year_generic" numeric,
-    "1_to_3_years_maturity_bond_exposure" numeric,
-    "3_to_5_years_maturity_bond_exposure" numeric,
-    "maturity_5_to_10_years_generic" numeric,
-    "maturity_10_to_20_years_generic" numeric,
-    "maturity_20_to_30_years_generic" numeric,
-    "over_30_years_maturity_bond_exposure" numeric,
     "sales_growth_3_yr_generic" numeric,
     "eps_growth_3_yr_generic" numeric
 );
@@ -2074,8 +2031,8 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "investment_grade_bond_allocation_generic" numeric,
     "aaa_bond_exposure_generic" numeric,
     "bbb_bond_exposure_generic" numeric,
-    "government_bond_exposure_generic" numeric,
-    "corporate_bond_exposure_generic" numeric,
+    "government_fixed_income_exposure_generic" numeric,
+    "corporate_fixed_income_exposure_generic" numeric,
     "securitized_fixed_income_exposure_generic" numeric,
     "basic_materials_exposure_generic" numeric,
     "communication_services_exposure_generic" numeric,
@@ -2101,6 +2058,11 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "total_assets_under_management" numeric,
     "number_of_holdings_generic" integer,
     "one_year_fund_level_flows_to_aum" numeric,
+    "municipal_fixed_income_exposure_generic" numeric,
+    "cash_fixed_income_exposure" numeric,
+    "other_fixed_income_exposure_generic" numeric,
+    "derivative_fixed_income_exposure" numeric,
+    "is_benchmark_proxy" boolean DEFAULT false NOT NULL,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2117,6 +2079,10 @@ COMMENT ON COLUMN "public"."securities2"."scorecard_cohort" IS 'Cohort the fund/
 
 
 COMMENT ON COLUMN "public"."securities2"."one_year_fund_level_flows_to_aum" IS 'YCharts code is 1_year_fund_level_flows_to_aum; renamed here because a Postgres identifier cannot start with a digit. fundBulkUpload.COLUMN_REMAP bridges the sheet header to this name.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."is_benchmark_proxy" IS 'True when this row exists only to carry a benchmark''s composition: named as an etf_proxy by category_benchmarks or sector_benchmarks, and neither held nor watched. Recomputed by fundBulkUpload on every import. Hidden from fetchSecurities.';
 
 
 

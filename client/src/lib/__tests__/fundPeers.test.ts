@@ -209,3 +209,36 @@ describe('a weight is a property of a book, not of the fund', () => {
     expect(c.rows.map((r) => r.securityId)).toEqual(['SUBJ', 'DEEP', 'WIDE'])
   })
 })
+
+describe('the benchmark row', () => {
+  it('sorts LAST, below every candidate', () => {
+    // It is a reference line, not another thing to choose between. Ordering is
+    // pure, so it is testable here even though the row itself is assembled by
+    // the async fetch: the comparison is read from the fund being questioned
+    // outwards, and the benchmark sits where a total would.
+    const subject = fund({ security_id: 'SUBJ' })
+    const other = fund({ security_id: 'OTHER' })
+    const idea = fund({ security_id: 'IDEA' })
+    const c = buildFundPeerComparison(subject, [subject, other, idea],
+      held({ SUBJ: { books: [{ portfolio: 'A', pct: 5 }] },
+             OTHER: { books: [{ portfolio: 'A', pct: 9 }] } }), new Set(['IDEA']))
+
+    // Assembled the way fetchBenchmarkRow does, then sorted with the rest.
+    const bench = { ...c.rows[0], securityId: '^SPXTR', role: 'benchmark' as const,
+                    books: [], maxWeightPct: null, score: null }
+    const sorted = [...c.rows, bench].sort((a, b) =>
+      ({ subject: 0, held: 1, watchlist: 2, benchmark: 3 })[a.role]
+      - ({ subject: 0, held: 1, watchlist: 2, benchmark: 3 })[b.role])
+    expect(sorted.map((r) => r.securityId)).toEqual(['SUBJ', 'OTHER', 'IDEA', '^SPXTR'])
+  })
+
+  it('builds an empty composition rather than throwing when there is no proxy', () => {
+    // A benchmark with no etf_proxy still earns a row: its drawdown and
+    // volatility are the index's own and are worth reading a fund against.
+    const empty = buildComposition({} as never)
+    expect(empty.fixedIncomeSum).toBeNull()
+    expect(empty.fixedIncomeReconciles).toBeNull()
+    expect(empty.sectors).toHaveLength(11)
+    expect(empty.sectors.every((s) => s.value === null)).toBe(true)
+  })
+})

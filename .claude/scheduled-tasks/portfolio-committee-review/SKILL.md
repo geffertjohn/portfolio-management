@@ -156,6 +156,50 @@ the book: construction, risk, and the regime it is being run into.
    the rank and ratio columns the app's scorecard uses. The advisor has just
    worked through them; you are reading the same evidence, not new evidence.
 
+   **AND READ THE COMPOSITION COLUMNS. `select *`; do not pick a subset.**
+   `securities2` carries far more than the scorecard, and the scorecard ranks a
+   fund WITHIN its cohort — it can never tell you whether two funds in a
+   category are the same thing. That gap cost this job real work: the Nov 2026
+   Foundation Conservative memo answered the consolidation question on 60% vs
+   52% government and 0% vs 21% securitized, and the ballast question on a
+   5.213% yield against 5.81 years of duration, and **every one of those numbers
+   was fetched from the fund provider because the app held none of them.** It
+   holds all of them now.
+
+   - **Fixed income:** `effective_duration`, `sec_yield_generic`,
+     `average_credit_quality_score`, `investment_grade_bond_allocation_generic`,
+     `aaa_`/`bbb_bond_exposure_generic`.
+   - **The bond sector breakdown:** `government_`, `corporate_`, `securitized_`,
+     `municipal_` and `other_fixed_income_exposure*`. **Those five sum to 100%
+     of the bond sleeve** — measured on 28 of the 29 funds that report one.
+     **`cash_fixed_income_exposure` and `derivative_fixed_income_exposure` sit
+     OUTSIDE that 100%**; adding them holds for only 14 and reaches 120%.
+   - **The eleven Morningstar sectors**, plus size and region.
+   - **Risk the scorecard does not grade:** `max_drawdown_3y`/`_5y`,
+     `monthly_standard_deviation_annualized_3y`.
+   - **Fund health:** `turnover_ratio_generic`, `total_assets_under_management`,
+     `number_of_holdings_generic`, `one_year_fund_level_flows_to_aum`.
+
+   Three traps, each of which has already produced a wrong reading:
+
+   - **Never take the bond sectors from the `*_bond_exposure` family.** That
+     family is mostly credit ratings and countries; `government_bond_exposure_
+     generic` returns **0 on every bond fund** while VBILX is majority
+     treasuries. The sector breakdown is `*_fixed_income_exposure`.
+   - **Sector weights on a bond fund are noise.** They are a share of whatever
+     equity sleeve exists, so VWEAX reads **100% financial services** off almost
+     nothing. Decide which breakdown applies from `broad_asset_class`, never
+     from whether the numbers look complete — PWB is an all-equity ETF whose
+     bond sleeve YCharts reports as 100% government.
+   - **A weight is a property of a BOOK.** A fund at 33% in one portfolio and
+     25% in another is not 58% of anything; report the range and name the books.
+
+   **The advisor sees this same comparison** on each fund's page, built by
+   `lib/fundPeers.ts` — one cohort forced across the table so the scores are
+   comparable, behaviour and composition kept separate. Reach the same
+   conclusions from the same columns, or the memo and the page will disagree
+   about a fund in front of the person reading both.
+
 5. **DISPATCH THE THREE ROLES** via the Agent tool, in one message so they run
    together. These resolve from `.claude/agents/*.md`, so there is no inlined
    copy to keep in sync.

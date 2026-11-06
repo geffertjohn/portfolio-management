@@ -19,11 +19,12 @@
  * same comparison from here rather than restating it.
  */
 import { supabase } from '@/lib/supabase'
+import { hyphenVariants } from './benchmarks'
 import type { SecurityDetail } from './securities'
 import { buildFundScorecard, type ScorecardCohort } from './fundScorecard'
 
 /** Why a fund is in the comparison. */
-export type PeerRole = 'subject' | 'held' | 'watchlist'
+export type PeerRole = 'subject' | 'held' | 'watchlist' | 'benchmark'
 
 export interface FundComposition {
   effectiveDuration: number | null
@@ -90,6 +91,16 @@ export interface FundPeerRow {
   stdDev3y: number | null
   turnover: number | null
   holdings: number | null
+  /**
+   * For the benchmark row: the ETF its COMPOSITION was read from.
+   *
+   * The behaviour figures on that row are the index's own, but the composition
+   * is the tracking ETF's, because YCharts computes none for an index — every
+   * such metric returns `ERR: INVALID CALC`, measured on all 42 category rows.
+   * Two sources on one line, so the row has to say which is which rather than
+   * let a reader assume both came from the index.
+   */
+  compositionFrom: string | null
 }
 
 export interface FundPeerComparison {
@@ -222,12 +233,14 @@ export function buildFundPeerComparison(
       stdDev3y: num(s, 'monthly_standard_deviation_annualized_3y'),
       turnover: num(s, 'turnover_ratio_generic'),
       holdings: num(s, 'number_of_holdings_generic'),
+      compositionFrom: null,
     }
   })
 
-  // Subject first, then the other holdings by weight, then the ideas. A
-  // comparison is read from the thing being questioned outwards.
-  const order: Record<PeerRole, number> = { subject: 0, held: 1, watchlist: 2 }
+  // Subject first, then the other holdings by weight, then the ideas, then the
+  // benchmark. A comparison is read from the thing being questioned outwards,
+  // and the reference line belongs at the bottom where a total would sit.
+  const order: Record<PeerRole, number> = { subject: 0, held: 1, watchlist: 2, benchmark: 3 }
   rows.sort((a, b) =>
     order[a.role] - order[b.role]
     || (b.maxWeightPct ?? 0) - (a.maxWeightPct ?? 0)
@@ -288,7 +301,75 @@ export async function fetchFundPeerComparison(
 
   const watched = new Set((prospects.data ?? []).map((p) => p.security_id).filter(Boolean))
 
-  return buildFundPeerComparison(
+  const comparison = buildFundPeerComparison(
     subject, (universe.data ?? []) as unknown as SecurityDetail[], held, watched,
   )
+
+  const benchmark = await fetchBenchmarkRow(subject)
+  if (benchmark) comparison.rows = [...comparison.rows, benchmark]
+  return comparison
+}
+
+/**
+ * The category benchmark as a comparison row — behaviour from the INDEX,
+ * composition from its ETF PROXY.
+ *
+ * Two sources on one line, deliberately. YCharts holds a price series for an
+ * index, so drawdown and volatility are genuinely the index's and are the right
+ * figures to read a fund against. It holds no portfolio for one, so every
+ * composition metric returns `ERR: INVALID CALC` — measured on all 42 category
+ * rows — and the only honest source is the ETF that tracks it. The row records
+ * which ETF in `compositionFrom` so the panel can say so.
+ *
+ * The resolution chain is the app's existing one and not a new join:
+ * `securities2.ycharts_benchmark_category` is the key into
+ * `category_benchmarks.category`, because the two tables use DIFFERENT
+ * vocabularies — a fund's `category_name` reads "Large Growth" where the
+ * benchmark's `category` reads "US Large Cap Growth". Joining on `category_name`
+ * would match nothing.
+ *
+ * NO SCORE. Scoring the proxy would grade it against its own cohort, which says
+ * nothing about the fund being examined and would sit in the column where every
+ * other row carries a comparable number.
+ */
+async function fetchBenchmarkRow(subject: SecurityDetail): Promise<FundPeerRow | null> {
+  const key = (subject.ycharts_benchmark_category ?? '').trim()
+  if (key === '') return null
+
+  const { data: bm, error } = await supabase
+    .from('category_benchmarks')
+    .select('category_benchmark, category_ticker, etf_proxy, max_drawdown_3y, max_drawdown_5y, monthly_standard_deviation_annualized_3y')
+    .in('category', hyphenVariants(key))
+    .limit(1)
+    .maybeSingle()
+  if (error || !bm) return null
+
+  // The proxy carries the composition; without one there is nothing to show
+  // beyond the two risk figures, which is still worth a row.
+  let proxy: SecurityDetail | null = null
+  if (bm.etf_proxy) {
+    const { data } = await supabase.from('securities2').select('*')
+      .eq('security_id', bm.etf_proxy).maybeSingle()
+    proxy = (data as unknown as SecurityDetail) ?? null
+  }
+
+  return {
+    securityId: bm.category_ticker ?? '',
+    name: bm.category_benchmark,
+    role: 'benchmark',
+    books: [],
+    maxWeightPct: null,
+    expenseRatio: null,
+    score: null,
+    ownCohort: null,
+    composition: proxy
+      ? buildComposition(proxy)
+      : buildComposition({} as SecurityDetail),
+    maxDrawdown3y: typeof bm.max_drawdown_3y === 'number' ? bm.max_drawdown_3y : null,
+    stdDev3y: typeof bm.monthly_standard_deviation_annualized_3y === 'number'
+      ? bm.monthly_standard_deviation_annualized_3y : null,
+    turnover: null,
+    holdings: null,
+    compositionFrom: proxy ? bm.etf_proxy : null,
+  }
 }
