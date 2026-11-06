@@ -173,6 +173,80 @@ prlctl exec "Windows 11" cmd.exe /c 'copy "C:\portfolio\Ycharts.xlsm" "\\Mac\Hom
 Row counts alone will not catch a stale import — compare a known return value
 against the DB, which is how that one was found.
 
+## Watchlist funds reach the sheet by themselves
+
+Adding a fund to the app's Watchlist used to populate nothing. The fund columns
+come from this workbook, so the ticker had to be typed into the `Securities`
+sheet by hand and the next refresh waited for, with nothing anywhere to remind
+anyone — an idea could sit for weeks carrying no category, no cohort and no
+scorecard, which is every measure a fund is actually judged by.
+
+```
+refresh.sh
+  └─ watchlist-tickers.cjs → inbox/WATCHLIST.txt   (held ∪ watched, YCharts symbols)
+       └─ Workbook_Open → SyncWatchlistTickers     (reconciles Securities!B)
+            └─ the row's 83 YCI() formulas resolve in the same fetch
+                 └─ import-workbook.cjs → securities2   (unchanged)
+```
+
+**The sheet already had the machinery.** Rows 49–101 are 53 spare rows carrying
+the full set of `=YCI($B<row>, <col>$2)` formulas with an empty ticker, so a
+symbol written into column B populates all 83 columns and `fundBulkUpload`
+picks it up with no change at all — it skips all-empty rows and keys on
+`security_id`. Nothing authors a formula; one string is written.
+
+**The macro writes the ticker, not the Mac.** `prlctl exec` runs as SYSTEM,
+which has no YCharts add-in, so a save from that side turns every `YCI()` into
+`#NAME?` and silently destroys the cached values the importers read.
+`Workbook_Open` runs as the logged-on user, where the add-in resolves.
+
+**The roster is held ∪ watched, and that is the whole of the removal logic.**
+`SyncWatchlistTickers` clears only rows it added itself — remembered in
+`Control!B`, which the importers never read — so the hand-entered holdings are
+never at risk. But a fund that is watched, then bought, then dropped from the
+watchlist *is* one of its own rows, and releasing it would stop a **held** fund
+refreshing with nothing to show why. Holdings stay in the roster for as long as
+they are owned, so a row is released only when the fund is neither held nor
+watched. Two sold funds (`M:APDFX`, `M:VTABX`) sit outside the roster entirely
+because a person entered them; they keep refreshing until a person removes them.
+
+**Stocks are excluded.** The `Securities` sheet is funds-only and its 83 columns
+are fund fields, so a stock ticker there would produce a row of errors rather
+than a security. Asset type comes from `securities2` first and FMP `/profile`
+only for what it cannot answer; **no FMP profile means mutual fund**, not
+unknown, because FMP covers US stocks comprehensively while missing eleven of
+the book's twenty-seven mutual funds (`VMSAX`, `BIMIX`, `EICOX` and the rest are
+all institutional share classes).
+
+**Warnings go to `watchlist-note.txt`, never `refresh-error.txt`.** The latter is
+the macro's abort signal and `refresh.sh` fails the whole run the moment it
+appears — it polls for it while waiting for the output — so a note written at
+the start of a run would read as an abort and kill a refresh that was working.
+Running out of pre-wired rows is the case that writes one; extend the `YCI()`
+formulas below row 101 to add slots.
+
+### Deploying a macro change
+
+`Ycharts.bas` is versioned here as text because the workbook is binary. Until
+Nov 2026 the only way to deploy it was to paste it into ThisWorkbook by hand.
+
+```bash
+scripts/refresh/deploy-macro.sh            # dry run: probe and report
+scripts/refresh/deploy-macro.sh --apply    # back up, replace, save
+```
+
+**Always dry-run first.** The dry run opens the workbook exactly as the real one
+does and reports how many `#NAME?` cells it sees — that number is the entire
+safety argument, because it says whether this account can open the file without
+destroying it. A healthy report is `0 #NAME? of ~17,800 populated cells`. The
+`--apply` path backs the workbook up to `C:\portfolio\Ycharts-pre-vbaedit-<stamp>.xlsm`
+first and reads the module back before saving.
+
+**Run a full refresh by hand afterwards.** A VBA *compile* error stops
+`Workbook_Open` firing at all, so the flag is never claimed, no output appears,
+and the run dies on the 25-minute timeout — tomorrow as well as today. The only
+proof the module still runs is a run.
+
 ## Registry gotcha: prlctl exec writes to the WRONG hive
 
 `prlctl exec` runs as **NT AUTHORITY\SYSTEM**, so `HKCU:` inside it resolves to
@@ -263,6 +337,28 @@ here depends on personalization or on an activated licence.
 bash scripts/refresh/refresh.sh                      # the whole pipeline
 node scripts/refresh/import-workbook.cjs <file>      # just the import half
 ```
+
+**A by-hand run needs the guest watcher kicked, in another terminal.** This
+section used to imply `refresh.sh` was self-contained and it is not.
+
+`watch-trigger.cmd` **does not poll** — despite what its own comment and the
+diagram above suggest. It tests for the trigger once (`if not exist "%TRIGGER%"
+goto :eof`) and exits. The two minutes belong to the **task**, whose trigger
+reads `PT2M` every `PT1H` with `StopAtDurationEnd`, starting 05:25, weekdays
+(read from `schtasks /query /tn "YCharts Refresh Watcher" /xml`, 6 Nov 2026).
+
+**So a trigger is only ever noticed between 05:25 and 06:25 on a weekday.** Drop
+one at any other time and `refresh.sh` waits its full 25 minutes and reports
+`no output after 1500s` — which reads exactly like a hung Excel and is not.
+Start the watcher yourself:
+
+```
+prlctl exec "Windows 11" schtasks.exe /run /tn "YCharts Refresh Watcher"
+```
+
+Excel should appear in **Session 1 (Console)** within ~20s — `tasklist /FI
+"IMAGENAME eq EXCEL.EXE"`. Session 0 means it was launched by SYSTEM, which has
+no add-in, and the run will abort on the error-ratio guard.
 
 Rebuild `import-workbook.cjs` after changing any importer — it is a bundle, not
 a live reference:

@@ -188,6 +188,24 @@ These are different features and **must not be conflated**:
 - **Watchlist** (`prospects` + `prospect_portfolios`, `lib/prospects.ts`, `/watchlist`, nav "Watchlist") — an **idea list**: tickers being **considered for purchase** (not held). No metrics, no sell timer, no substitutions. Added from the security detail header ("+ Watchlist", `AddProspectModal`) or the page.
   - **One row per ticker, portfolios attached through `prospect_portfolios`** (Oct 2026). `prospects.target_portfolio` used to put the portfolio *in the idea's identity*, so one ticker under three portfolios was three rows and three cards, and an idea you had not placed yet could not be recorded at all. A partial unique index `(security_id) WHERE removed_at IS NULL` keeps one live idea per ticker; removed rows are exempt so a ticker can be watched, dropped and watched again. **Re-adding a watched ticker merges** — `addProspect` attaches the new portfolios to the open idea rather than failing on the index. **Zero portfolios is valid.**
   - **`security_id` has no FK** — watching a ticker you do not own is the normal case, so `securities2` is resolved through a separate lookup and is often null. Identity and asset type for those come from **FMP `/profile` (`companyName`, `isEtf`, `isFund`)**, because the `securities2` classifier has no columns to read and would call every unheld idea a stock.
+  - **A WATCHED FUND NOW REACHES THE WORKBOOK BY ITSELF** (Nov 2026). A fund's
+    columns come from the YCharts workbook, so adding one to the watchlist used
+    to populate nothing until someone remembered to type the ticker into the
+    `Securities` sheet and wait for a refresh — an idea could sit for weeks with
+    no category, no cohort and no scorecard, which is every measure a fund is
+    judged by. `refresh.sh` now writes `inbox/WATCHLIST.txt` (via
+    `scripts/refresh/watchlist-tickers.cjs`) and the macro's
+    `SyncWatchlistTickers` reconciles it into column B before the fetch, so the
+    fund is in `securities2` the next morning. **The sheet already had the
+    machinery** — rows 49–101 are 53 spare rows pre-wired with
+    `=YCI($B<row>, <col>$2)`, so one string populates 83 columns and
+    `fundBulkUpload` needs no change. Full rules in
+    `scripts/refresh/README.md`; three worth knowing here: **the roster is held
+    ∪ watched** (so a watched-then-bought fund is never released while it is
+    owned), **stocks are excluded** (the sheet is funds-only), and **the macro
+    clears only rows it added**, remembered in `Control!B`. A consequence:
+    `securities2` no longer equals the held fund set, the way it no longer
+    equals the held stock set.
   - **A card opens `/research/:ticker`** — the on-demand research page, which runs on a bare ticker. `ResearchPage` is **stock-only** (its scorecard is margins/growth, which FMP does not serve for funds), so an ETF/fund idea opens its `securities2` detail page instead when it has one. Do not point a stock idea at `/security/:id`: that is the held-security surface (positions, review schedule, documents, at-risk).
   - `prospects.thesis`, `prospects.conviction` and `prospects.target_price` are **dead columns** — the manual thesis/conviction went when AI research took over, and the target price went from the Add form and the card in Oct 2026 (a price you mean to pay is a sizing decision, which belongs to the candidate stage). The columns and their stored values are kept; nothing writes them. The displayed thesis/rating/conviction come from `research_reports`, filtered to the portfolios the idea names plus any unscoped report — and since `watchlist-research` now always writes unscoped, new research shows on every card regardless of the books an idea names.
   - **The Add-to-watchlist portfolio picker hides derived blends** (`DERIVED_BLEND_PORTFOLIOS` in `AddProspectModal`). Equity Income & Core Growth is a computed 50/50 of the two books it names, so a stock enters it only by being bought in one of them; offering it would invite an idea no book can act on.
@@ -569,11 +587,22 @@ advisor reconciles against, so a figure the sheet carries is **read**, not
 recomputed from a price feed. FMP's role is the stock side, where there is no
 published fund figure to read.
 
-This is a coverage fact before it is a preference: **FMP prices none of the
-institutional mutual-fund share classes these books hold.** Pricing every
-holding from FMP left Hybrid Conservative's attribution ranking 42% of itself,
-with its largest holding (BIMIX, 21%) among the 57% that silently vanished —
-while YCharts carried a figure for all thirteen the whole time.
+This is a coverage fact before it is a preference, and the fact is **partial
+coverage, not none** (measured 6 Nov 2026 against `/stable/profile` and
+`historical-price-eod`): FMP serves **all 19 ETFs** the book holds and **16 of
+its 27 mutual funds**, missing eleven — AVERX, BIMIX, DHRIX, EICOX, FTZIX,
+IDHIX, NSMRX, OBSIX, PGNPX, PYTRX and VMSAX, every one an institutional or
+boutique share class. This paragraph read "FMP prices none of the institutional
+mutual-fund share classes these books hold", which is too broad: VBTLX, FXAIX
+and the other Vanguard and Fidelity admiral classes all price fine.
+
+**The conclusion is unchanged, because partial coverage is the worse failure.**
+Pricing every holding from FMP left Hybrid Conservative's attribution ranking
+42% of itself, with its largest holding (BIMIX, 21%) among the 57% that
+silently vanished — while YCharts carried a figure for all thirteen the whole
+time. A feed that answers for two holdings in three produces a ranking that
+looks complete and is not, which is exactly why the rule is to read the sheet
+rather than to fall back per-ticker.
 
 - **`fetchPortfolioMovers` is the live example.** It reads
   `securities2.{one,three}_month_total_return_nav` for anything

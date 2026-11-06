@@ -53,6 +53,29 @@ Private Const OUTPUT_NAME  As String = "Ycharts-refreshed.xlsx"
 ' told apart, and the scheduler is the only side that can announce itself.
 Private Const UNATTENDED_FLAG As String = "\\Mac\Home\portfolio-refresh\inbox\UNATTENDED"
 
+' The roster of funds the app wants tracked, written by watchlist-tickers.cjs
+' immediately before the trigger is dropped. One YCharts symbol per line.
+'
+' ADDING A FUND TO THE WATCHLIST USED TO POPULATE NOTHING. Fund columns come
+' from this workbook, so the ticker had to be typed into the sheet by hand and
+' the next refresh waited for, with nothing anywhere to remind anyone. An idea
+' could sit for weeks carrying no category, no cohort and no scorecard - which
+' is every measure a fund is actually judged by.
+Private Const WATCHLIST_FILE As String = "\\Mac\Home\portfolio-refresh\inbox\WATCHLIST.txt"
+
+' The fund sheet, matched on a TRIMMED name: the tab is literally "Securities "
+' with a trailing space, and the importers already match it loosely for that
+' reason. Hard-coding the spelling here would make this silently find nothing.
+Private Const FUND_SHEET As String = "Securities"
+
+' Where the symbols this macro added are remembered, so it can tell its own
+' rows from the 46 hand-entered holdings and never release one of those.
+' Column B of the stamp sheet - A1 holds the refresh timestamp, and the
+' importers select sheets by name, so Control is invisible to all three.
+Private Const ROSTER_COL   As Long = 2
+Private Const TICKER_COL   As Long = 2   ' Securities!B - the only literal on the row
+Private Const FIRST_FUND_ROW As Long = 3 ' 1 = group banner, 2 = DB column names
+
 ' Cell that carries the refresh timestamp, read back by the importer.
 '
 ' A dedicated sheet on purpose: the three importers select sheets BY NAME, so a
@@ -92,6 +115,13 @@ Private Sub Workbook_Open()
 
     Application.DisplayAlerts = False
     Application.ScreenUpdating = False
+
+    ' Before the rebuild, not after: writing a ticker into column B is what
+    ' makes that row's 83 YCI() formulas resolve, so the new fund has to be in
+    ' place for the SAME fetch everything else is about to make. Added after,
+    ' it would sit empty until tomorrow.
+    SyncWatchlistTickers
+
     Application.CalculateFullRebuild
 
     startTime = Timer
@@ -301,4 +331,199 @@ Private Sub LogAndQuit(ByVal msg As String)
     ' WITHOUT saving discards the aborted state instead of persisting it.
     ThisWorkbook.Saved = True
     Application.Quit
+End Sub
+
+' ── Watchlist → sheet ────────────────────────────────────────────────────────
+
+' Reconcile column B of the fund sheet against the roster the Mac just wrote.
+'
+' THE SHEET ALREADY HAD THE MACHINERY. Rows 49-101 are 53 spare rows carrying
+' the full set of =YCI($B<row>, <col>$2) formulas with an empty ticker, so a
+' symbol written into column B populates all 83 columns on the next fetch and
+' the importer picks it up with no change at all - it skips all-empty rows and
+' keys on security_id. Nothing here authors a formula; it writes one string.
+'
+' WHY THE MACRO AND NOT THE MAC. prlctl exec runs as NT AUTHORITY\SYSTEM, a
+' profile with no YCharts add-in, so every YCI() resolves to #NAME? for that
+' account and a save from there silently destroys every cached value in the
+' workbook. Workbook_Open runs as the logged-on user, where the add-in works.
+'
+' THE ROSTER IS HELD UNION WATCHED, and that is what makes removal safe. This
+' clears only rows it added itself, so the hand-entered holdings are never at
+' risk - but a fund that is watched, then bought, then dropped from the
+' watchlist IS one of its own rows, and releasing it would stop a HELD fund
+' refreshing with nothing to show why. Holdings stay in the roster for as long
+' as they are owned, so a row comes back only when the fund is neither.
+'
+' A MISSING FILE IS NOT AN ERROR. The Mac-side script may legitimately not have
+' run - an older refresh.sh, a Supabase blip - and the right answer then is to
+' refresh exactly what the sheet already names rather than to clear it.
+Private Sub SyncWatchlistTickers()
+    Dim ws As Worksheet, ctl As Worksheet
+    Dim desired As Object, owned As Object
+    Dim lastRow As Long, r As Long, i As Long
+    Dim sym As String, note As String
+
+    On Error GoTo Bail
+
+    If Len(Dir$(WATCHLIST_FILE)) = 0 Then Exit Sub
+
+    Set ws = FindSheetByTrimmedName(FUND_SHEET)
+    If ws Is Nothing Then Exit Sub
+    Set ctl = ThisWorkbook.Worksheets(STAMP_SHEET)
+
+    Set desired = ReadSymbolFile(WATCHLIST_FILE)
+    ' An empty or unreadable roster releases every row this macro owns, which
+    ' is a far bigger action than any legitimate edit. Refuse it.
+    If desired.Count = 0 Then Exit Sub
+
+    Set owned = ReadRoster(ctl)
+    lastRow = ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
+
+    ' 1. Release rows this macro added that the app no longer wants.
+    For i = 0 To owned.Count - 1
+        sym = owned.Keys()(i)
+        If Not desired.Exists(sym) Then
+            r = FindTickerRow(ws, sym, lastRow)
+            If r > 0 Then ws.Cells(r, TICKER_COL).ClearContents
+        End If
+    Next i
+
+    ' 2. Place anything wanted that the sheet does not already carry. A symbol
+    '    already present is left where it is whether a person put it there or
+    '    this did, so nothing is ever entered twice.
+    For i = 0 To desired.Count - 1
+        sym = desired.Keys()(i)
+        If FindTickerRow(ws, sym, lastRow) = 0 Then
+            r = FirstFreeFundRow(ws, lastRow)
+            If r = 0 Then
+                note = note & sym & " "
+            Else
+                ws.Cells(r, TICKER_COL).Value = sym
+            End If
+        End If
+    Next i
+
+    ' 3. The roster becomes what the app asked for, so the next run's
+    '    comparison is against this one rather than the original 46.
+    WriteRoster ctl, desired
+
+    ' Running out of pre-wired rows is silent otherwise - the fund simply never
+    ' appears - so say it where the Mac side will see it. Not fatal: the rest
+    ' of the refresh is still worth having.
+    If Len(note) > 0 Then
+        WriteNote "WATCHLIST: no free rows on " & ws.Name & " for: " & note & _
+                  "- extend the YCI() formulas below row " & lastRow & "."
+    End If
+    Exit Sub
+
+Bail:
+    ' A fund that fails to appear must never cost the whole refresh.
+    WriteNote "WATCHLIST: skipped after error " & Err.Number & " - " & Err.Description
+End Sub
+
+' The fund tab is named "Securities " with a trailing space; match on Trim$ so
+' a tidied-up name does not break this.
+Private Function FindSheetByTrimmedName(ByVal wanted As String) As Worksheet
+    Dim ws As Worksheet
+    For Each ws In ThisWorkbook.Worksheets
+        If StrComp(Trim$(ws.Name), wanted, vbTextCompare) = 0 Then
+            Set FindSheetByTrimmedName = ws
+            Exit Function
+        End If
+    Next ws
+End Function
+
+' One symbol per line, blank lines and whitespace ignored. Returned as a
+' dictionary so membership is a lookup rather than a scan.
+Private Function ReadSymbolFile(ByVal filePath As String) As Object
+    ' Not named `line`: VBA's Line Input statement starts with that keyword and
+    ' a variable of the same name reads ambiguously to the parser.
+    Dim d As Object, f As Integer, ln As String
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+
+    On Error GoTo Done
+    f = FreeFile
+    Open filePath For Input As #f
+    Do While Not EOF(f)
+        Line Input #f, ln
+        ln = Trim$(ln)
+        If Len(ln) > 0 Then
+            If Not d.Exists(ln) Then d.Add ln, True
+        End If
+    Loop
+    Close #f
+
+Done:
+    Set ReadSymbolFile = d
+End Function
+
+Private Function ReadRoster(ByVal ctl As Worksheet) As Object
+    Dim d As Object, r As Long, v As String
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+
+    r = 1
+    Do While r < 1000
+        v = Trim$(CStr(ctl.Cells(r, ROSTER_COL).Value))
+        If Len(v) = 0 Then Exit Do
+        If Not d.Exists(v) Then d.Add v, True
+        r = r + 1
+    Loop
+
+    Set ReadRoster = d
+End Function
+
+Private Sub WriteRoster(ByVal ctl As Worksheet, ByVal d As Object)
+    Dim i As Long
+    ' Clear generously before rewriting: a shorter roster must not leave the
+    ' tail of a longer one behind to be read back as still-owned next time.
+    ctl.Range(ctl.Cells(1, ROSTER_COL), ctl.Cells(1000, ROSTER_COL)).ClearContents
+    For i = 0 To d.Count - 1
+        With ctl.Cells(i + 1, ROSTER_COL)
+            .NumberFormat = "@"
+            .Value = d.Keys()(i)
+        End With
+    Next i
+End Sub
+
+Private Function FindTickerRow(ByVal ws As Worksheet, ByVal sym As String, _
+                               ByVal lastRow As Long) As Long
+    Dim r As Long
+    For r = FIRST_FUND_ROW To lastRow
+        If StrComp(Trim$(CStr(ws.Cells(r, TICKER_COL).Value)), sym, vbTextCompare) = 0 Then
+            FindTickerRow = r
+            Exit Function
+        End If
+    Next r
+End Function
+
+' The first pre-wired row with no ticker. Bounded by the used range, so it can
+' only ever return a row whose YCI() formulas already exist - writing below
+' them would create a ticker with nothing to fetch it.
+Private Function FirstFreeFundRow(ByVal ws As Worksheet, ByVal lastRow As Long) As Long
+    Dim r As Long
+    For r = FIRST_FUND_ROW To lastRow
+        If Len(Trim$(CStr(ws.Cells(r, TICKER_COL).Value))) = 0 Then
+            FirstFreeFundRow = r
+            Exit Function
+        End If
+    Next r
+End Function
+
+' Append a line to the Mac-side WARNING file.
+'
+' DELIBERATELY NOT refresh-error.txt. That file is the macro's abort signal,
+' and refresh.sh fails the whole run the moment it appears - it polls for it
+' while waiting for the output, so a note written here at the start of the run
+' would be read as an abort and kill a refresh that was working perfectly.
+' This file is reported after a successful run and changes nothing.
+Private Sub WriteNote(ByVal msg As String)
+    Dim f As Integer
+    On Error Resume Next
+    f = FreeFile
+    Open OUTPUT_DIR & "watchlist-note.txt" For Append As #f
+    Print #f, Format(Now, "yyyy-mm-dd hh:nn:ss") & "  " & msg
+    Close #f
 End Sub
