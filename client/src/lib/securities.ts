@@ -285,6 +285,37 @@ export interface StoredSecurityReturns {
 }
 
 /** Keyed by UPPER ticker. Symbols with no `securities2` row are simply absent. */
+/**
+ * Set a stock's Morningstar-style category by hand.
+ *
+ * **The only writer of `category_name` for a stock that exists.** The
+ * per-ticker YCharts template that used to fill it was deleted in Sep 2026,
+ * the workbook's `Securities` sheet is funds only, and FMP supplies no
+ * category — so without this a stock added by ticker never resolves to an
+ * asset class and its weight silently leaves every allocation rollup.
+ *
+ * **Never call this for a fund or ETF.** Theirs comes from the workbook and a
+ * hand-edit would be overwritten by the next import without warning, which is
+ * worse than not offering the control at all.
+ *
+ * The caller must surface a failure rather than swallow it: this writes a
+ * governed classification that the allocation tables read, and a selection
+ * that looks applied but was not is worse than a visible error — the lesson
+ * from the benchmark picker.
+ */
+export async function setSecurityCategory(
+  securityId: string,
+  category: string | null,
+): Promise<void> {
+  const sym = securityId.trim().toUpperCase()
+  if (!sym) throw new Error('No security id')
+  const { error } = await supabase
+    .from('securities2')
+    .update({ category_name: category?.trim() || null })
+    .eq('security_id', sym)
+  if (error) throw error
+}
+
 export async function fetchStoredSecurityReturns(
   symbols: string[],
 ): Promise<Map<string, StoredSecurityReturns>> {

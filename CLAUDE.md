@@ -66,9 +66,56 @@ respectively. Don't repurpose them.
 - `ASSET_CLASS_OVERRIDES` is a per-ticker escape hatch (currently only `BRK.B`,
   for which Morningstar publishes no category). **Keep it short** — a growing list
   means the category map is wrong.
-- **Known gap:** securities created by ticker (`createSecurityBySymbol`) are seeded
-  from FMP, which supplies no Morningstar category, so they resolve to `null` until
-  a YCharts workbook import fills `category_name`.
+- **Known gap, and the remedy this bullet used to name DOES NOT EXIST for a
+  stock.** It said a ticker-created security resolves to `null` "until a YCharts
+  workbook import fills `category_name`". Traced Nov 2026: **nothing has written
+  a stock's category since Sep 2026, and nothing can.**
+  - A stock's `category_name` — and its near-twin `equity_style_internal` —
+    came from the **per-ticker YCharts security template**, via
+    `securities2ExcelUpload.ts`. That file was **deleted in `0f50b03`** ("six
+    import cards become two") together with the two single-security cards. Both
+    columns were in its `TEXT_COLS` and neither was in its `SKIP` set.
+  - **The workbook's `Securities` sheet is funds only**, so it cannot stand in:
+    the last import wrote exactly **46** rows and `securities2` holds exactly
+    **46** funds. Every fund row was updated by it; no stock row was.
+  - **FMP supplies no Morningstar category.** `createSecurityBySymbol` inserts
+    `{ security_id }` and calls `refreshSecurityFromFMP`, which writes six
+    columns — name, sector, industry, description and the two earnings dates.
+    Category is not among them.
+  - **It has not bitten yet only because no stock has been created since.** The
+    four securities added after the deletion (VBTLX, VMSAX, VVIAX, VIGAX) are
+    all mutual funds and were filled by the workbook.
+  - **CLOSED Nov 2026: a stock's category is now set BY HAND on its page.**
+    `setSecurityCategory` in `lib/securities.ts` is the only writer that
+    exists, and the control is the `Category` cell in the stock header.
+    - **A fixed list, never a text box** (`STOCK_CATEGORY_OPTIONS`). The
+      failure being closed is a `category_name` the map cannot place; free
+      text would let a typo, or a fund-side spelling like "Large Blend" on a
+      stock, recreate it one keystroke at a time and silently.
+      `assetClass.test.ts` asserts **every option resolves** and that each uses
+      the stock grid — the `*_OPTIONS ⊆ CHECK` discipline applied to a
+      vocabulary rather than a constraint.
+    - **Stocks only.** A fund's category comes from the workbook, so a
+      hand-edit would be overwritten by the next import without warning. The
+      fund page has its own layout and never renders this cell.
+    - **Unset is amber and says "excluded from allocation"**, because an
+      unclassified stock leaves the rollup and nothing else on that page would
+      show it. The save error is rendered, never swallowed — the
+      benchmark-picker lesson, for the same reason: this is a governed value
+      the allocation tables read.
+    - **This IS audited** (Nov 2026). `securities2` joined the `log_audit`
+      tables the day after this shipped, conditionally: `category_name` is one
+      of the seven decision columns whose change writes an `audit_log` row, so
+      a hand-set classification now leaves a trail with its old and new value.
+      See Audit & Governance surfaces. (`model_portfolio_data` still has no
+      trigger — that caveat stands for it.)
+- **`equity_style_internal` is the stock vocabulary's dead twin.** 42 of the 43
+  stocks carrying it hold a value identical to `category_name`, 12 stocks have
+  a category and no style at all, and **META disagrees with itself** —
+  `category_name = 'Large Cap Growth'` against `equity_style_internal =
+  'Large Cap Core'`, which are different sleeves. `resolveAssetClass` reads
+  `category_name`, so the category wins; the style column is read only as a
+  display fallback on `SecurityDetailPage`. Do not start reading it.
 - **A new vendor spelling is now reported AT THE IMPORT**, which is where one
   arrives (Nov 2026). `unmappedCategories(categories)` lives beside the map,
   `fundBulkUpload` runs the workbook's categories through it, and the import
@@ -1862,12 +1909,43 @@ tables they read.
 
 - **`audit_log` + `/audit` (`AuditLogPage`, `lib/auditLog.ts`)** — a **read-only**
   surface over an append-only table, with CSV export. **Nothing in the app writes
-  it:** a Postgres trigger (`log_audit`) does, on **nine** tables —
+  it:** a Postgres trigger (`log_audit`) does, on **ten** tables —
   `action_items`, `at_risk`, `clients`, `compliance_rules`,
   `firm_compliance_rules`, `investment_policy_statements`,
-  `portfolio_allocations`, `prospects`, `review_schedules`. Adding a trigger is
-  how a table joins the log; there is no client-side path, and there should not
-  be one.
+  `portfolio_allocations`, `prospects`, `review_schedules`, and **`securities2`
+  (Nov 2026, conditionally — see below)**. Adding a trigger is how a table joins
+  the log; there is no client-side path, and there should not be one.
+  - **`securities2` is the only CONDITIONAL one, and that is the design.** It is
+    93 columns wide and **59 of its 102 rows are rewritten on a normal day** by
+    the YCharts workbook and `refreshSecurityFromFMP`; logging every write would
+    add **~199 MB a year to a 2 MB `audit_log`** and bury a governed edit roughly
+    one row in 1,800 — the "signal that cries wolf" failure already paid for with
+    `never_run` and "AI research pending". So **`audit_securities2_ins_del`**
+    logs inserts and deletes unconditionally, while
+    **`audit_securities2_update`** carries a `WHEN` clause and fires only when a
+    **decision** column actually changes value: `category_name`,
+    `preferred_benchmark1_id`, `preferred_benchmark2_id`, `scorecard_cohort`,
+    `alt_1`/`alt_2`/`alt_3`.
+    - **Two triggers because a `WHEN` clause cannot reference `OLD` on an
+      INSERT**, and **`IS DISTINCT FROM`, not `<>`**, because every one of those
+      columns is nullable and setting one for the first time is exactly the
+      manual category edit this was added to record.
+    - **An absence therefore means "no decision was recorded", not "the row did
+      not change".** Do not read the gap as the full history of a security.
+    - Useful side effect: when the **workbook** changes a fund's
+      `category_name` — a new Morningstar spelling, the gotcha-23 vector — that
+      is a real value change and IS logged, while the same import rewriting the
+      return columns is not.
+    - `schemaContract.test.ts` pins both triggers, the `WHEN`, the governed
+      column list and the absence of vendor columns, because the easy future
+      mistake is to "make it consistent with the other nine".
+  - **`AUDITED_TABLES` in `lib/auditLog.ts` had drifted BOTH ways** and was
+    corrected in the same change. It listed **`positions`**, which is not a
+    `log_audit` table at all — its `positions_audit` trigger runs
+    `log_position_change()` into `holdings_change_log` — so filtering by it
+    could only ever return nothing; and it omitted **`firm_compliance_rules`**,
+    which carries a real trigger and 11 rows that were reachable only under
+    "All". Keep that list matched to the triggers.
 - **Compliance Rules hub — `pages/settings/CompliancePage.tsx`,
   `/settings/compliance`** (data layer `lib/compliance.ts`). `firm_compliance_rules`
   is firm-wide, `compliance_rules` per-portfolio. **Not** `InvestmentCommitteePage`,

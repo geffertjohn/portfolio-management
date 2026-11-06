@@ -269,6 +269,68 @@ describe('the committee write API still exists', () => {
  * wrong. They are pinned here because the mistake is cheap to repeat: in each
  * case the evidence for "dead" was a count, and the count was real.
  */
+describe('securities2 joins the audit log for DECISIONS only', () => {
+  /**
+   * Added Nov 2026 so a hand-set classification leaves a trail. It is the one
+   * `log_audit` table whose trigger is CONDITIONAL, and that is the whole
+   * design: `securities2` is 93 columns wide and 59 of its 102 rows are
+   * rewritten on a normal day by the YCharts workbook and
+   * `refreshSecurityFromFMP`. Logging every write would add ~199 MB a year to
+   * a 2 MB `audit_log` and bury a governed edit roughly one row in 1,800 —
+   * the "signal that cries wolf" failure this codebase has already paid for
+   * with `never_run` and "AI research pending".
+   *
+   * Pinned because the easy future mistake is to "make it consistent with the
+   * other nine" by replacing the pair with one unconditional trigger, which
+   * would reintroduce exactly that.
+   */
+
+  it('logs every INSERT and DELETE unconditionally', () => {
+    // A security entering or leaving the universe is a fact worth keeping
+    // whatever column carried it.
+    expect(SCHEMA).toMatch(
+      /CREATE (OR REPLACE )?TRIGGER "audit_securities2_ins_del" AFTER INSERT OR DELETE ON "public"\."securities2"/i,
+    )
+  })
+
+  it('logs an UPDATE only when a GOVERNED column changes value', () => {
+    const trigger = SCHEMA.split('\n').find((l) => l.includes('"audit_securities2_update"')) ?? ''
+    expect(trigger, 'the conditional update trigger must exist').toBeTruthy()
+    expect(trigger).toMatch(/AFTER UPDATE ON "public"\."securities2"/i)
+    // WHEN, not a bare AFTER UPDATE — without it the workbook's daily rewrite
+    // of the return columns would log 46 rows a day.
+    expect(trigger).toMatch(/\bWHEN\b/i)
+    for (const col of [
+      'category_name',
+      'preferred_benchmark1_id', 'preferred_benchmark2_id',
+      'scorecard_cohort',
+      'alt_1', 'alt_2', 'alt_3',
+    ]) {
+      expect(trigger, `${col} must be a logged decision`).toContain(`"${col}"`)
+    }
+  })
+
+  it('compares with IS DISTINCT FROM, so a null-to-value edit still logs', () => {
+    // These columns are all nullable, and setting one for the FIRST time is
+    // exactly the manual category edit the trigger was added to record. `<>`
+    // would return null there and the write would go unlogged.
+    const trigger = SCHEMA.split('\n').find((l) => l.includes('"audit_securities2_update"')) ?? ''
+    expect(trigger).toMatch(/IS DISTINCT FROM/i)
+    expect(trigger).not.toMatch(/"old"\."category_name" <> /i)
+  })
+
+  it('does NOT log the vendor columns the workbook rewrites daily', () => {
+    const trigger = SCHEMA.split('\n').find((l) => l.includes('"audit_securities2_update"')) ?? ''
+    for (const col of [
+      'one_month_total_return_nav', 'ytd_total_return_nav', 'one_year_total_return_nav',
+      'expense_ratio_generic', 'security_name', 'long_description',
+      'last_earnings_release', 'next_earnings_release',
+    ]) {
+      expect(trigger, `${col} is vendor data, not a decision`).not.toContain(`"${col}"`)
+    }
+  })
+})
+
 describe('the objects that only LOOK dead', () => {
   it('keeps holdings_change_log, which a trigger on positions still writes', () => {
     // Filed as "208 rows, zero readers — archive and drop". It has no reader,

@@ -17,14 +17,31 @@ export interface AuditLogEntry {
   changed_at: string
 }
 
+/**
+ * The tables whose writes reach `audit_log`, for the page's filter.
+ *
+ * **It must match the `log_audit` triggers, and it had drifted both ways.**
+ * `positions` was listed and is NOT one of them — its `positions_audit`
+ * trigger runs `log_position_change()` and writes `holdings_change_log`, a
+ * different table with a different shape — so filtering by it could only ever
+ * return nothing. And `firm_compliance_rules` carries a real trigger and 11
+ * rows but was absent, so those entries were reachable only under "All".
+ *
+ * `securities2` joined in Nov 2026, and is the one entry whose trigger is
+ * CONDITIONAL: inserts and deletes always, updates only when a governed
+ * column actually changes (see the migration, and `schemaContract.test.ts`).
+ * So an absence here means "no decision was recorded", not "nothing happened
+ * to the row" — the vendor columns are rewritten daily and never logged.
+ */
 export const AUDITED_TABLES = [
   'review_schedules',
   'compliance_rules',
+  'firm_compliance_rules',
   'clients',
   'at_risk',
   'prospects',
   'action_items',
-  'positions',
+  'securities2',
   'portfolio_allocations',
   'investment_policy_statements',
 ] as const
