@@ -1,0 +1,58 @@
+# Fund composition, risk and health metrics for the Securities sheet.
+#
+# Fed to add-sheet-columns.ps1. One YCharts metric code per line; the code is
+# written into row 2, where it is BOTH the argument YCP() reads and the column
+# name fundBulkUpload maps to securities2.
+#
+# All 33 were checked to exist for BOTH mutual funds and ETFs: one sheet serves
+# both, so a code present for only one errors on every row of the other type.
+# `emerging_market_exposure` is one trap - ETF-only; the shared code is the
+# _generic form below. The other is the FAMILY: *_bond_exposure is mostly
+# credit ratings and countries, while *_fixed_income_exposure is the
+# Morningstar sector breakdown that sums to the bond sleeve. Taking government
+# from the first returned 0 on every bond fund.
+#
+# ALTER TABLE securities2 BEFORE adding any of these to the workbook. The
+# importer has no whitelist, so a header with no matching column fails the
+# entire upsert batch.
+#
+# `1_year_fund_level_flows_to_aum` keeps its digit here because the header must
+# be the YCharts code; COLUMN_REMAP maps it to one_year_fund_level_flows_to_aum.
+
+effective_duration
+sec_yield_generic
+average_credit_quality_score
+investment_grade_bond_allocation_generic
+aaa_bond_exposure_generic
+bbb_bond_exposure_generic
+government_fixed_income_exposure_generic
+corporate_fixed_income_exposure_generic
+securitized_fixed_income_exposure_generic
+municipal_fixed_income_exposure_generic
+cash_fixed_income_exposure
+other_fixed_income_exposure_generic
+derivative_fixed_income_exposure
+basic_materials_exposure_generic
+communication_services_exposure_generic
+consumer_cyclical_exposure_generic
+consumer_defensive_exposure_generic
+energy_exposure
+financial_services_exposure
+healthcare_exposure_generic
+industrials_exposure
+real_estate_exposure
+technology_exposure_generic
+utilities_exposure_generic
+large_market_cap_exposure_generic
+medium_cap_exposure
+small_cap_exposure
+united_states_region_total_exposure_generic
+developed_market_exposure
+emerging_market_exposure_generic
+max_drawdown_3y
+max_drawdown_5y
+monthly_standard_deviation_annualized_3y
+turnover_ratio_generic
+total_assets_under_management
+number_of_holdings_generic
+1_year_fund_level_flows_to_aum

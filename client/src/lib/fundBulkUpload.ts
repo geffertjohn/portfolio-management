@@ -33,6 +33,11 @@ import {
 /** DB column name remap: template header → actual securities2 column name. */
 const COLUMN_REMAP: Record<string, string> = {
   inception_date_generic: 'inception_date',
+  // A Postgres identifier cannot start with a digit, and the sheet's header IS
+  // the YCharts metric code — it is passed as the argument to YCP() as well as
+  // read as a column name — so the header has to keep the digit and the DB
+  // column takes the spelled-out form.
+  '1_year_fund_level_flows_to_aum': 'one_year_fund_level_flows_to_aum',
 }
 
 const TEXT_COLS = new Set([

@@ -2068,6 +2068,39 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "alt_2" "text",
     "alt_3" "text",
     "scorecard_cohort" "text",
+    "effective_duration" numeric,
+    "sec_yield_generic" numeric,
+    "average_credit_quality_score" numeric,
+    "investment_grade_bond_allocation_generic" numeric,
+    "aaa_bond_exposure_generic" numeric,
+    "bbb_bond_exposure_generic" numeric,
+    "government_bond_exposure_generic" numeric,
+    "corporate_bond_exposure_generic" numeric,
+    "securitized_fixed_income_exposure_generic" numeric,
+    "basic_materials_exposure_generic" numeric,
+    "communication_services_exposure_generic" numeric,
+    "consumer_cyclical_exposure_generic" numeric,
+    "consumer_defensive_exposure_generic" numeric,
+    "energy_exposure" numeric,
+    "financial_services_exposure" numeric,
+    "healthcare_exposure_generic" numeric,
+    "industrials_exposure" numeric,
+    "real_estate_exposure" numeric,
+    "technology_exposure_generic" numeric,
+    "utilities_exposure_generic" numeric,
+    "large_market_cap_exposure_generic" numeric,
+    "medium_cap_exposure" numeric,
+    "small_cap_exposure" numeric,
+    "united_states_region_total_exposure_generic" numeric,
+    "developed_market_exposure" numeric,
+    "emerging_market_exposure_generic" numeric,
+    "max_drawdown_3y" numeric,
+    "max_drawdown_5y" numeric,
+    "monthly_standard_deviation_annualized_3y" numeric,
+    "turnover_ratio_generic" numeric,
+    "total_assets_under_management" numeric,
+    "number_of_holdings_generic" integer,
+    "one_year_fund_level_flows_to_aum" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2080,6 +2113,10 @@ COMMENT ON TABLE "public"."securities2" IS 'Extended fund metrics snapshot (secu
 
 
 COMMENT ON COLUMN "public"."securities2"."scorecard_cohort" IS 'Cohort the fund/ETF is reviewed against: category | peer. NULL = not yet chosen; review automation must skip and report these. App-managed only — the YCharts import never writes it.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."one_year_fund_level_flows_to_aum" IS 'YCharts code is 1_year_fund_level_flows_to_aum; renamed here because a Postgres identifier cannot start with a digit. fundBulkUpload.COLUMN_REMAP bridges the sheet header to this name.';
 
 
 

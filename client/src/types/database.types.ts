@@ -3018,6 +3018,7 @@ export type Database = {
       }
       securities2: {
         Row: {
+          aaa_bond_exposure_generic: number | null
           alpha_3y_vs_category: number | null
           alpha_peer_group_rank: number | null
           alpha_rank: number | null
@@ -3029,51 +3030,74 @@ export type Database = {
           annualized_daily_three_year_return: number | null
           annualized_five_year_total_return_nav: number | null
           annualized_three_year_total_return_nav: number | null
+          average_credit_quality_score: number | null
+          basic_materials_exposure_generic: number | null
+          bbb_bond_exposure_generic: number | null
           bond_net: number | null
           broad_asset_class: string | null
           broad_category_group: string | null
           cash_net: number | null
           category_index: string | null
           category_name: string | null
+          communication_services_exposure_generic: number | null
+          consumer_cyclical_exposure_generic: number | null
+          consumer_defensive_exposure_generic: number | null
+          corporate_bond_exposure_generic: number | null
           created_at: string
           deleted_at: string | null
           detailed_security_type: string | null
+          developed_market_exposure: number | null
+          effective_duration: number | null
+          emerging_market_exposure_generic: number | null
+          energy_exposure: number | null
           eps_growth_1_yr_generic: number | null
           equity_style_internal: string | null
           expense_ratio_generic: number | null
           expense_ratio_peer_group_rank: number | null
           expense_ratio_rank: number | null
+          financial_services_exposure: number | null
           five_year_total_return_peer_group_rank_nav: number | null
           five_year_total_return_peer_group_size_nav: number | null
           five_year_total_return_rank_category_size_nav: number | null
           five_year_total_return_rank_nav: number | null
           fund_company_name: string | null
           fund_family: string | null
+          government_bond_exposure_generic: number | null
+          healthcare_exposure_generic: number | null
           historical_sharpe_1y: number | null
           historical_sharpe_3y: number | null
           historical_sortino_1y: number | null
           historical_sortino_3y: number | null
           id: number
           inception_date: string | null
+          industrials_exposure: number | null
           information_ratio_3y_vs_category: number | null
           information_ratio_3y_vs_pg: number | null
           information_ratio_peer_group_rank: number | null
           information_ratio_rank: number | null
+          investment_grade_bond_allocation_generic: number | null
           investment_strategy: string | null
+          large_market_cap_exposure_generic: number | null
           last_earnings_release: string | null
           long_description: string | null
           market_alpha_3y_vs_pg: number | null
+          max_drawdown_3y: number | null
+          max_drawdown_5y: number | null
           max_manager_tenure: number | null
+          medium_cap_exposure: number | null
+          monthly_standard_deviation_annualized_3y: number | null
           morningstar_industry: string | null
           morningstar_sector: string | null
           next_earnings_release: string | null
           north_america_total_exposure_generic: number | null
+          number_of_holdings_generic: number | null
           one_month_total_return: number | null
           one_month_total_return_nav: number | null
           one_month_total_return_peer_group_rank_nav: number | null
           one_month_total_return_peer_group_size_nav: number | null
           one_month_total_return_rank_category_size_nav: number | null
           one_month_total_return_rank_nav: number | null
+          one_year_fund_level_flows_to_aum: number | null
           one_year_total_return_nav: number | null
           one_year_total_return_peer_group_rank_nav: number | null
           one_year_total_return_peer_group_size_nav: number | null
@@ -3082,15 +3106,20 @@ export type Database = {
           peer_group_name: string | null
           preferred_benchmark1_id: number | null
           preferred_benchmark2_id: number | null
+          real_estate_exposure: number | null
           rsquared_3y_vs_category: number | null
           rsquared_3y_vs_pg: number | null
           sales_growth_1_yr_generic: number | null
           scorecard_cohort: string | null
+          sec_yield_generic: number | null
+          securitized_fixed_income_exposure_generic: number | null
           security_id: string
           security_name: string | null
           sharpe_peer_group_rank: number | null
           sharpe_rank: number | null
+          small_cap_exposure: number | null
           stock_net: number | null
+          technology_exposure_generic: number | null
           three_month_total_return: number | null
           three_month_total_return_nav: number | null
           three_month_total_return_peer_group_rank_nav: number | null
@@ -3101,9 +3130,13 @@ export type Database = {
           three_year_total_return_peer_group_size_nav: number | null
           three_year_total_return_rank_category_size_nav: number | null
           three_year_total_return_rank_nav: number | null
+          total_assets_under_management: number | null
+          turnover_ratio_generic: number | null
+          united_states_region_total_exposure_generic: number | null
           updated_at: string
           upside_downside_5y_vs_category: number | null
           upside_downside_5y_vs_pg: number | null
+          utilities_exposure_generic: number | null
           ycharts_benchmark_category: string | null
           ytd_total_return: number | null
           ytd_total_return_nav: number | null
@@ -3113,6 +3146,7 @@ export type Database = {
           ytd_total_return_rank_nav: number | null
         }
         Insert: {
+          aaa_bond_exposure_generic?: number | null
           alpha_3y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
           alpha_rank?: number | null
@@ -3124,51 +3158,74 @@ export type Database = {
           annualized_daily_three_year_return?: number | null
           annualized_five_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
+          average_credit_quality_score?: number | null
+          basic_materials_exposure_generic?: number | null
+          bbb_bond_exposure_generic?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
           cash_net?: number | null
           category_index?: string | null
           category_name?: string | null
+          communication_services_exposure_generic?: number | null
+          consumer_cyclical_exposure_generic?: number | null
+          consumer_defensive_exposure_generic?: number | null
+          corporate_bond_exposure_generic?: number | null
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
+          developed_market_exposure?: number | null
+          effective_duration?: number | null
+          emerging_market_exposure_generic?: number | null
+          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
           equity_style_internal?: string | null
           expense_ratio_generic?: number | null
           expense_ratio_peer_group_rank?: number | null
           expense_ratio_rank?: number | null
+          financial_services_exposure?: number | null
           five_year_total_return_peer_group_rank_nav?: number | null
           five_year_total_return_peer_group_size_nav?: number | null
           five_year_total_return_rank_category_size_nav?: number | null
           five_year_total_return_rank_nav?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
+          government_bond_exposure_generic?: number | null
+          healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
           id?: number
           inception_date?: string | null
+          industrials_exposure?: number | null
           information_ratio_3y_vs_category?: number | null
           information_ratio_3y_vs_pg?: number | null
           information_ratio_peer_group_rank?: number | null
           information_ratio_rank?: number | null
+          investment_grade_bond_allocation_generic?: number | null
           investment_strategy?: string | null
+          large_market_cap_exposure_generic?: number | null
           last_earnings_release?: string | null
           long_description?: string | null
           market_alpha_3y_vs_pg?: number | null
+          max_drawdown_3y?: number | null
+          max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
+          medium_cap_exposure?: number | null
+          monthly_standard_deviation_annualized_3y?: number | null
           morningstar_industry?: string | null
           morningstar_sector?: string | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
+          number_of_holdings_generic?: number | null
           one_month_total_return?: number | null
           one_month_total_return_nav?: number | null
           one_month_total_return_peer_group_rank_nav?: number | null
           one_month_total_return_peer_group_size_nav?: number | null
           one_month_total_return_rank_category_size_nav?: number | null
           one_month_total_return_rank_nav?: number | null
+          one_year_fund_level_flows_to_aum?: number | null
           one_year_total_return_nav?: number | null
           one_year_total_return_peer_group_rank_nav?: number | null
           one_year_total_return_peer_group_size_nav?: number | null
@@ -3177,15 +3234,20 @@ export type Database = {
           peer_group_name?: string | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
+          real_estate_exposure?: number | null
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
           sales_growth_1_yr_generic?: number | null
           scorecard_cohort?: string | null
+          sec_yield_generic?: number | null
+          securitized_fixed_income_exposure_generic?: number | null
           security_id: string
           security_name?: string | null
           sharpe_peer_group_rank?: number | null
           sharpe_rank?: number | null
+          small_cap_exposure?: number | null
           stock_net?: number | null
+          technology_exposure_generic?: number | null
           three_month_total_return?: number | null
           three_month_total_return_nav?: number | null
           three_month_total_return_peer_group_rank_nav?: number | null
@@ -3196,9 +3258,13 @@ export type Database = {
           three_year_total_return_peer_group_size_nav?: number | null
           three_year_total_return_rank_category_size_nav?: number | null
           three_year_total_return_rank_nav?: number | null
+          total_assets_under_management?: number | null
+          turnover_ratio_generic?: number | null
+          united_states_region_total_exposure_generic?: number | null
           updated_at?: string
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
+          utilities_exposure_generic?: number | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null
@@ -3208,6 +3274,7 @@ export type Database = {
           ytd_total_return_rank_nav?: number | null
         }
         Update: {
+          aaa_bond_exposure_generic?: number | null
           alpha_3y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
           alpha_rank?: number | null
@@ -3219,51 +3286,74 @@ export type Database = {
           annualized_daily_three_year_return?: number | null
           annualized_five_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
+          average_credit_quality_score?: number | null
+          basic_materials_exposure_generic?: number | null
+          bbb_bond_exposure_generic?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
           cash_net?: number | null
           category_index?: string | null
           category_name?: string | null
+          communication_services_exposure_generic?: number | null
+          consumer_cyclical_exposure_generic?: number | null
+          consumer_defensive_exposure_generic?: number | null
+          corporate_bond_exposure_generic?: number | null
           created_at?: string
           deleted_at?: string | null
           detailed_security_type?: string | null
+          developed_market_exposure?: number | null
+          effective_duration?: number | null
+          emerging_market_exposure_generic?: number | null
+          energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
           equity_style_internal?: string | null
           expense_ratio_generic?: number | null
           expense_ratio_peer_group_rank?: number | null
           expense_ratio_rank?: number | null
+          financial_services_exposure?: number | null
           five_year_total_return_peer_group_rank_nav?: number | null
           five_year_total_return_peer_group_size_nav?: number | null
           five_year_total_return_rank_category_size_nav?: number | null
           five_year_total_return_rank_nav?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
+          government_bond_exposure_generic?: number | null
+          healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
           historical_sharpe_3y?: number | null
           historical_sortino_1y?: number | null
           historical_sortino_3y?: number | null
           id?: number
           inception_date?: string | null
+          industrials_exposure?: number | null
           information_ratio_3y_vs_category?: number | null
           information_ratio_3y_vs_pg?: number | null
           information_ratio_peer_group_rank?: number | null
           information_ratio_rank?: number | null
+          investment_grade_bond_allocation_generic?: number | null
           investment_strategy?: string | null
+          large_market_cap_exposure_generic?: number | null
           last_earnings_release?: string | null
           long_description?: string | null
           market_alpha_3y_vs_pg?: number | null
+          max_drawdown_3y?: number | null
+          max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
+          medium_cap_exposure?: number | null
+          monthly_standard_deviation_annualized_3y?: number | null
           morningstar_industry?: string | null
           morningstar_sector?: string | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
+          number_of_holdings_generic?: number | null
           one_month_total_return?: number | null
           one_month_total_return_nav?: number | null
           one_month_total_return_peer_group_rank_nav?: number | null
           one_month_total_return_peer_group_size_nav?: number | null
           one_month_total_return_rank_category_size_nav?: number | null
           one_month_total_return_rank_nav?: number | null
+          one_year_fund_level_flows_to_aum?: number | null
           one_year_total_return_nav?: number | null
           one_year_total_return_peer_group_rank_nav?: number | null
           one_year_total_return_peer_group_size_nav?: number | null
@@ -3272,15 +3362,20 @@ export type Database = {
           peer_group_name?: string | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
+          real_estate_exposure?: number | null
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
           sales_growth_1_yr_generic?: number | null
           scorecard_cohort?: string | null
+          sec_yield_generic?: number | null
+          securitized_fixed_income_exposure_generic?: number | null
           security_id?: string
           security_name?: string | null
           sharpe_peer_group_rank?: number | null
           sharpe_rank?: number | null
+          small_cap_exposure?: number | null
           stock_net?: number | null
+          technology_exposure_generic?: number | null
           three_month_total_return?: number | null
           three_month_total_return_nav?: number | null
           three_month_total_return_peer_group_rank_nav?: number | null
@@ -3291,9 +3386,13 @@ export type Database = {
           three_year_total_return_peer_group_size_nav?: number | null
           three_year_total_return_rank_category_size_nav?: number | null
           three_year_total_return_rank_nav?: number | null
+          total_assets_under_management?: number | null
+          turnover_ratio_generic?: number | null
+          united_states_region_total_exposure_generic?: number | null
           updated_at?: string
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
+          utilities_exposure_generic?: number | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null

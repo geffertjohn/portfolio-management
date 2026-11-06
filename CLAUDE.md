@@ -543,6 +543,46 @@ benchmarks** (the 56th is `$Cash`); they were set while the old picker worked.
   error. (`.catch(() => {})` was the old behaviour, on a path that could not
   fire.) On success it invalidates `QUERY_KEYS.security(id)`.
 
+### Comparing a fund with the alternatives in its category
+
+`lib/fundPeers.ts` (pure) + `FundPeerPanel` on the fund detail page, below the
+scorecards. **The scorecard ranks a fund WITHIN its cohort and can never say
+whether two funds in the same category are the same thing**, which is what a
+holding-vs-alternative question asks.
+
+The Nov 2026 Foundation Conservative review is the case it was built from: the
+PM found VBILX and VBTLX are NOT one sleeve because their holdings differ
+(60/52% government, 39/25% corporate, 0/21% securitized) while the risk manager
+found they ARE one position because their realised returns sit 31bp apart. Both
+were right about different things, and **every composition number in that
+argument was fetched from the fund provider** because the app held none.
+
+- **BEHAVIOUR and COMPOSITION are separate tables**, deliberately — a blended
+  one would have hidden that disagreement rather than shown it.
+- **One cohort grades every row.** VBILX is designated `category` and VBTLX
+  `peer` despite sharing both, and the printed totals reversed the order every
+  underlying metric gave. The subject's cohort is forced on the table and a
+  banner says so when the funds disagree.
+- **Weights are PER BOOK, never summed.** An early version added VBILX across
+  four Foundation books and printed "91%", which is not a weight of anything;
+  weighting them properly needs market values the app does not hold. The range
+  is shown instead.
+- **An unheld idea has a null weight**, not 0. A fund in the category that is
+  neither held nor watched is excluded entirely.
+- **WHICH breakdown is meaningful comes from `getBroadAssetClass`** (moved to
+  `lib/securities.ts` for this), never from the numbers. PWB is an all-equity
+  ETF whose bond sleeve YCharts reports as 100% government, so a breakdown that
+  reconciles says nothing about whether there is anything to break down — the
+  same artefact gives VWEAX 100% financial services off a negligible equity
+  sleeve.
+- **The bond sleeve is five sectors — government, corporate, securitized,
+  municipal, other — and they sum to 100%.** Measured, not assumed: 28 of the
+  29 funds reporting a breakdown land within 0.5pp (the 29th is an equity ETF
+  reporting zeros). **Cash and derivative sit OUTSIDE that 100%**; including
+  them holds for only 14 and reaches 120%. `fixedIncomeSum` is null unless every
+  component is present, and `fixedIncomeReconciles` is null for a fund with no
+  bond sleeve rather than false.
+
 ### Benchmark data
 
 There are **four** benchmark tables: `category_benchmarks`, `sector_benchmarks`, `peer_group_benchmarks`, `model_portfolio_benchmarks`. The legacy standalone `benchmarks` table was **dropped** (Jun 2026) — it was unused; do not reference it.

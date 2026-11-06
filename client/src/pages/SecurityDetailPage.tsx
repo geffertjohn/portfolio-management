@@ -2,11 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import {
-  fetchRelatedSecurities,
-  isFundOrEtfSecurity,
-  refreshSecurityFromFMP,
-  setScorecardCohort,
-  setSecurityCategory,
+  fetchRelatedSecurities, getBroadAssetClass, isFundOrEtfSecurity, refreshSecurityFromFMP, setScorecardCohort, setSecurityCategory,
 } from '@/lib/securities'
 import { STOCK_CATEGORY_OPTIONS } from '@/lib/assetClass'
 import type { ScorecardCohort } from '@/lib/fundScorecard'
@@ -14,6 +10,7 @@ import { fetchAtRiskBySecurity } from '@/lib/atRisk'
 import { RemoveFromAtRiskModal } from '@/components/RemoveFromAtRiskModal'
 import { FundHeaderMetricsRow } from '@/components/FundHeaderMetricsRow'
 import { DetailPageState } from '@/components/DetailPageState'
+import { FundPeerPanel } from '@/components/FundPeerPanel'
 import { FundMonitoringPanel } from '@/components/FundMonitoringPanel'
 import { StockScorecardPanels } from '@/components/StockScorecardPanels'
 import { AlternativesPanel } from '@/components/AlternativesPanel'
@@ -39,34 +36,6 @@ import { SecurityResearchPanel } from '@/components/SecurityResearchPanel'
 import { TipRanksPanel } from '@/components/TipRanksPanel'
 import { SECURITY_DOCS_BUCKET } from '@/lib/documents'
 import { SecurityThesisPanel } from '@/components/SecurityThesisPanel'
-
-/**
- * Maps the variety of YCharts/Morningstar asset class values to a canonical
- * 'equity' | 'fixed income' | null for panel routing.
- *
- * YCharts `broad_asset_class` returns 'Equity' for equity funds but returns
- * the Morningstar sub-category for bond funds (e.g. 'Taxable Bond',
- * 'Municipal Bond'). `broad_category_group` consistently returns 'Fixed Income'
- * / 'Equity'. We check both fields so every data vintage is handled correctly.
- */
-function getBroadAssetClass(security: {
-  broad_asset_class?: string | null
-  broad_category_group?: string | null
-}): 'equity' | 'fixed income' | null {
-  const ac = security.broad_asset_class?.trim().toLowerCase() ?? ''
-  const cg = security.broad_category_group?.trim().toLowerCase() ?? ''
-
-  if (ac === 'equity' || ac.includes('equity')) return 'equity'
-  if (cg === 'equity' || cg.includes('equity')) return 'equity'
-
-  if (ac === 'fixed income' || cg === 'fixed income') return 'fixed income'
-  // Morningstar sub-categories returned by YCharts broad_asset_class for bond funds
-  const BOND_KEYS = ['bond', 'income', 'credit', 'inflation', 'ultrashort', 'duration', 'maturity']
-  if (BOND_KEYS.some((k) => ac.includes(k))) return 'fixed income'
-  if (BOND_KEYS.some((k) => cg.includes(k))) return 'fixed income'
-
-  return null
-}
 
 export function SecurityDetailPage() {
   const { securityId } = useParams<{ securityId: string }>()
@@ -545,6 +514,11 @@ export function SecurityDetailPage() {
               getBroadAssetClass(security) === 'fixed income') && (
               <FundMonitoringPanel security={security} />
             )}
+            {/* Below the scorecards, not beside them: the scorecard asks how
+                this fund has done, and this asks whether the alternatives are
+                a different bet. Reading the second first invites picking on
+                composition before checking the fund is doing its job. */}
+            <FundPeerPanel security={security} />
           </div>
         </div>
       )}
