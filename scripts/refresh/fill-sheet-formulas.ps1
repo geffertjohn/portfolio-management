@@ -25,7 +25,7 @@ param(
     [string]$SheetName = 'Securities',
     [int]$HeaderRow    = 2,   # row 1 is a group banner; row 2 holds DB column names
     [int]$FirstDataRow = 3,
-    [int]$LastDataRow  = 101  # the pre-wired band
+    [int]$LastDataRow  = 0    # 0 = derive from the used range; see below
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,6 +67,17 @@ try {
     foreach ($v in $vals) { if ($v -is [int] -and $v -eq $NAME_ERR) { $before++ } }
     Say "probe: $before #NAME? cells before"
     if ($before -gt $MAX_NAME_ERRORS) { throw "ABORT: $before #NAME? cells - cached values already gone." }
+
+    # Derive the band rather than assume 101.
+    #
+    # The macro GROWS this sheet when the watchlist needs a row it does not
+    # have, so a hard-coded last row goes stale the first time that happens and
+    # this would then silently stop filling at the old boundary - re-creating
+    # the exact defect it exists to repair, one row lower each time.
+    if ($LastDataRow -le 0) {
+        $LastDataRow = $ws.UsedRange.Row + $ws.UsedRange.Rows.Count - 1
+        Say "band derived from used range: rows $FirstDataRow-$LastDataRow"
+    }
 
     $lastCol = $ws.UsedRange.Column + $ws.UsedRange.Columns.Count - 1
     $filled = 0

@@ -208,11 +208,23 @@ refresh.sh
                  └─ import-workbook.cjs → securities2   (unchanged)
 ```
 
-**The sheet already had the machinery.** Rows 49–101 are 53 spare rows carrying
-the full set of `=YCI($B<row>, <col>$2)` formulas with an empty ticker, so a
-symbol written into column B populates all 83 columns and `fundBulkUpload`
-picks it up with no change at all — it skips all-empty rows and keys on
-`security_id`. Nothing authors a formula; one string is written.
+**The sheet already had the machinery, and it GROWS when it runs out.** A row
+carrying the full set of `=YCP($B<row>, <col>$2)` formulas with an empty ticker
+populates all 82 columns the moment a symbol is written into column B, and
+`fundBulkUpload` picks it up with no change at all — it skips all-empty rows
+and keys on `security_id`. Nothing authors a formula; one string is written.
+
+The sheet shipped with 53 such spare rows, which was simply where someone
+stopped filling formulas down — **not a decision about how many funds may be
+watched**, and treating it as one would have put an arbitrary ceiling on an
+idea list. `EnsureFundRow` therefore copies the last data row down when every
+wired row is taken, so there is **no cap on the watchlist**. `MAX_FUND_ROW`
+(1,000) is a guard against a defect growing the sheet without end, not a
+product limit; hitting it is reported, never silent.
+
+A grown row costs nothing until it is used: a wired row with no ticker returns
+empty rather than an error, so it neither feeds the error-ratio guard nor asks
+YCharts for anything. Only a row carrying a ticker costs a fetch.
 
 **The macro writes the ticker, not the Mac.** `prlctl exec` runs as SYSTEM,
 which has no YCharts add-in, so a save from that side turns every `YCI()` into
@@ -270,7 +282,11 @@ scripts/refresh/fill-sheet-formulas.ps1            # dry run (via prlctl exec)
 scripts/refresh/fill-sheet-formulas.ps1 -Apply     # back up, fill, save
 ```
 
-It fills by **copy/paste of a populated cell**, not by writing a formula string:
+It derives the row band from the used range rather than assuming 101 — the
+macro grows this sheet, so a hard-coded last row would silently stop filling at
+the old boundary and re-create the very defect it repairs, one row lower each
+time. It fills by **copy/paste of a populated cell**, not by writing a formula
+string:
 Excel adjusts the relative reference (`$B45` → `$B46`) on paste, so each cell
 gets exactly what a fill-down would have produced and the script never parses
 `YCP()` syntax. It looks for **any** cell in the band with no formula rather than
