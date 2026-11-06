@@ -256,6 +256,45 @@ the start of a run would read as an abort and kill a refresh that was working.
 Running out of pre-wired rows is the case that writes one; extend the `YCI()`
 formulas below row 101 to add slots.
 
+### Adding a metric column
+
+```bash
+scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-composition-codes.txt            # dry run
+scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-composition-codes.txt -Apply
+```
+
+**`ALTER TABLE securities2` FIRST, every time.** The importer has no whitelist —
+it maps row 2 straight to DB columns — so a header with no matching column
+fails the **entire** upsert batch, not just that column. Then regenerate
+`client/src/types/database.types.ts` and `supabase/schema.sql`.
+
+**Row 2 does two jobs at once.** The cell is the argument `YCP()` reads *and*
+the column name `fundBulkUpload` maps to `securities2`, so it must be the exact
+YCharts code. Where that is not a legal Postgres identifier the DB column
+differs and `COLUMN_REMAP` bridges them — `1_year_fund_level_flows_to_aum` →
+`one_year_fund_level_flows_to_aum`, the same mechanism as
+`inception_date_generic` → `inception_date`.
+
+**The script never writes a formula string.** It runs as SYSTEM, which has no
+YCharts add-in, so assigning `"=YCP(...)"` would be assigning an unknown
+function. It copies an existing `YCP()` cell instead: the stored form is
+`=_xll.YCP($B3,C$2)`, where `$B` is column-absolute and the metric argument is
+column-**relative**, so a sideways copy repoints it at the new column's own
+header with nothing to parse. It picks a model column by looking for `YCP(` —
+an Info-tab metric would need `YCI()` and a different model.
+
+**Check the code exists for BOTH fund types.** One sheet serves mutual funds and
+ETFs, so a code present for only one errors on every row of the other.
+`emerging_market_exposure` is the live example: ETF-only, and the shared code is
+`emerging_market_exposure_generic`. The catalogue is the YCharts add-in
+reference workbook (`Mutual Fund | Metrics` and `ETF & CEF | Metrics` tabs).
+
+**`ERR: NO DATA` will rise, and that is correct.** A bond fund returns nothing
+for sector columns and an equity fund nothing for duration, so the error ratio
+climbs as the sheet widens. The macro aborts above 50%; adding the 33
+composition columns took it from roughly 8.5% toward 16%, which is the number to
+watch before the next widening.
+
 ### A missing FORMULA reads exactly like a missing FIGURE
 
 **Seven columns on the `Securities` sheet stopped at row 45** while the rest ran
