@@ -1,6 +1,7 @@
 export const QUERY_KEYS = {
   securities: ['securities2'] as const,
   security: (id: number) => ['security', id] as const,
+  fundPeers: (securityId: string) => ['fund_peers', securityId] as const,
   portfolio: (name: string) => ['portfolio', name] as const,
   portfolios: ['portfolios'] as const,
   positions: (portfolioName: string) => ['positions', portfolioName] as const,

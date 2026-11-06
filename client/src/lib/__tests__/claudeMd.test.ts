@@ -109,6 +109,31 @@ const IDENTIFIERS = (() => {
     }
   }
   walk(join(REPO, 'client/src'))
+
+  /*
+    CLAUDE.md also documents code that is not TypeScript and does not live in
+    the app — the YCharts refresh pipeline, whose macro and scripts it now
+    names (`SyncWatchlistTickers`, `watchlist-tickers.cjs`). Those references go
+    stale exactly the same way, so they are indexed rather than allowlisted:
+    an allowlist entry would be a permanent exemption, while this keeps the
+    guard live, so renaming the VBA sub still fails this test.
+
+    Scoped to `scripts/` and to the handful of extensions that hold real source
+    there, so it stays a narrow addition rather than a hole big enough for a
+    stale client reference to slip through.
+  */
+  const walkScripts = (dir: string) => {
+    for (const e of readdirSync(dir)) {
+      if (e === 'node_modules' || e === 'archive') continue
+      const full = join(dir, e)
+      if (statSync(full).isDirectory()) walkScripts(full)
+      else if (/\.(bas|sh|ps1|cjs|mjs|ts)$/.test(e)) {
+        for (const w of readFileSync(full, 'utf8').match(/[A-Za-z0-9_]+/g) ?? []) words.add(w)
+      }
+    }
+  }
+  walkScripts(join(REPO, 'scripts'))
+
   return words
 })()
 

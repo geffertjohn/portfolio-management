@@ -1,0 +1,132 @@
+#!/usr/bin/env node
+/**
+ * watchlist-tickers.cjs — tell the workbook which funds to track.
+ *
+ * Writes `inbox/WATCHLIST.txt`, one YCharts symbol per line, which the macro
+ * reads on open (see `SyncWatchlistTickers` in Ycharts.bas) and reconciles
+ * against column B of the `Securities` sheet.
+ *
+ * WHY THIS EXISTS. Adding a fund to the Watchlist used to populate nothing:
+ * the fund columns come from the YCharts workbook, so the ticker had to be
+ * typed into the sheet by hand and the refresh waited for. Nothing reminded
+ * anyone, so an idea could sit for weeks with no category, no cohort and no
+ * scorecard — ungradeable by the one measure that matters for a fund.
+ *
+ * THE SET IS HELD UNION WATCHED, NOT WATCHED ALONE, and that is the whole of
+ * the removal logic. The macro only ever clears a row it added itself, so the
+ * 46 hand-entered holdings are never at risk. But a fund that is watched, then
+ * bought, then dropped from the watchlist IS a row the macro added — and
+ * clearing it would stop a HELD fund refreshing, silently. Including holdings
+ * here keeps it in the desired set for as long as it is owned, so a row is
+ * only released once the fund is neither held nor watched.
+ *
+ * STOCKS ARE EXCLUDED. The `Securities` sheet is funds-only — its 83 columns
+ * are fund fields — and `fundBulkUpload` writes them to `securities2`. A stock
+ * ticker here would produce a row of errors, not a security.
+ *
+ * SYMBOLOGY: YCharts prefixes mutual funds `M:` and leaves ETFs bare (the sheet
+ * carries `M:APDFX` beside `AVDE`), and `fundBulkUpload.stripYChartsPrefix`
+ * removes it on the way back in. Asset type comes from FMP `/profile`
+ * (`isEtf` / `isFund`). FMP serves every ETF the book holds but only 16 of its
+ * 27 mutual funds, so NO PROFILE MEANS MUTUAL FUND rather than unknown: FMP
+ * covers US stocks comprehensively, and the eleven it misses here — VMSAX,
+ * BIMIX, EICOX and the rest — are all institutional share classes.
+ *
+ * Read-only against Supabase. Writes exactly one file, and prints what it did.
+ */
+
+const fs = require('fs')
+const path = require('path')
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
+const FMP_KEY = process.env.VITE_FMP_API_KEY
+const OUT = process.argv[2]
+  || path.join(process.env.HOME, 'portfolio-refresh', 'inbox', 'WATCHLIST.txt')
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('watchlist: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY not set')
+  process.exit(1)
+}
+
+async function sb(pathAndQuery) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+  })
+  if (!res.ok) throw new Error(`supabase ${pathAndQuery} -> ${res.status} ${await res.text()}`)
+  return res.json()
+}
+
+/**
+ * ETF, mutual fund, or stock.
+ *
+ * `securities2` is asked first and FMP only for what it cannot answer: a ticker
+ * already carrying `detailed_security_type` has been classified by the vendor
+ * that owns fund data, and spending an FMP call to second-guess it would let a
+ * price feed overrule YCharts on exactly the question YCharts is authoritative
+ * for.
+ */
+async function assetType(ticker, known) {
+  const stored = (known.get(ticker) || '').toLowerCase()
+  if (stored.includes('etf')) return 'etf'
+  if (stored.includes('fund')) return 'fund'
+  if (stored) return 'stock'
+
+  if (!FMP_KEY) return 'unknown'
+  const sym = ticker.replace(/\./g, '-')
+  try {
+    const res = await fetch(
+      `https://financialmodelingprep.com/stable/profile?symbol=${encodeURIComponent(sym)}&apikey=${FMP_KEY}`)
+    if (!res.ok) return 'fund'
+    const rows = await res.json()
+    if (!Array.isArray(rows) || rows.length === 0) return 'fund'  // see SYMBOLOGY above
+    if (rows[0].isEtf) return 'etf'
+    if (rows[0].isFund) return 'fund'
+    return 'stock'
+  } catch {
+    // A network blip must not silently shrink the roster: dropping a ticker
+    // here would make the macro RELEASE its row and lose the fund's history.
+    return 'unknown'
+  }
+}
+
+async function main() {
+  const [prospects, positions, securities] = await Promise.all([
+    sb('prospects?removed_at=is.null&select=security_id'),
+    sb('positions?deleted_at=is.null&select=security_id'),
+    sb('securities2?select=security_id,detailed_security_type'),
+  ])
+
+  const known = new Map(securities.map((s) => [s.security_id, s.detailed_security_type || '']))
+  const watched = [...new Set(prospects.map((p) => p.security_id).filter(Boolean))]
+  const held = [...new Set(positions.map((p) => p.security_id).filter(Boolean))]
+
+  const wanted = [...new Set([...held, ...watched])]
+    .filter((t) => t && t !== '$Cash')
+    .sort()
+
+  const lines = []
+  const skipped = []
+  for (const ticker of wanted) {
+    const type = await assetType(ticker, known)
+    if (type === 'etf') lines.push(ticker)
+    else if (type === 'fund') lines.push(`M:${ticker}`)
+    else skipped.push(`${ticker} (${type})`)
+  }
+
+  // Write via a temp file and rename, so the guest — which polls this directory
+  // — can never read a half-written roster and release every row it names.
+  const tmp = `${OUT}.tmp`
+  fs.mkdirSync(path.dirname(OUT), { recursive: true })
+  fs.writeFileSync(tmp, lines.join('\r\n') + '\r\n', 'utf8')
+  fs.renameSync(tmp, OUT)
+
+  console.log(`watchlist roster: ${lines.length} fund/ETF symbols `
+    + `(${held.length} held, ${watched.length} watched) -> ${OUT}`)
+  if (skipped.length) console.log(`  not funds, excluded: ${skipped.join(', ')}`)
+}
+
+main().catch((err) => {
+  console.error(`watchlist: ${err.message}`)
+  process.exit(1)
+})

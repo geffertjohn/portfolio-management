@@ -43,6 +43,8 @@ OUTPUT="$INBOX/Ycharts-refreshed.xlsx"
 VM_ERROR="$INBOX/refresh-error.txt"          # written by the macro's abort path
 TRIGGER="$INBOX/REFRESH-NOW"                 # watch-trigger.cmd polls for this
 UNATTENDED="$INBOX/UNATTENDED"               # guest-side gate; see ClaimUnattendedRun
+WATCHLIST="$INBOX/WATCHLIST.txt"             # funds the app wants tracked; read by SyncWatchlistTickers
+WATCHLIST_NOTE="$INBOX/watchlist-note.txt"   # macro warnings that are NOT a reason to fail the run
 
 # The guest reaches $INBOX as \\Mac\Home\portfolio-refresh\inbox — a UNC path,
 # because Parallels' drive letters differ per machine (the Studio maps Y: to Home,
@@ -100,7 +102,23 @@ if [ "$STATE" != "running" ]; then
 fi
 
 # ── Clear last run's artefacts so a stale file can never be mistaken for new ──
-rm -f "$OUTPUT" "$VM_ERROR" "$TRIGGER" "$UNATTENDED"
+rm -f "$OUTPUT" "$VM_ERROR" "$TRIGGER" "$UNATTENDED" "$WATCHLIST" "$WATCHLIST_NOTE"
+
+# ── Tell the workbook which funds to track ──────────────────────────────────
+# Must be written BEFORE the trigger: the trigger is what opens Excel, and the
+# macro reads this file as its first action so a new ticker is in column B for
+# the same fetch everything else is about to make.
+#
+# A failure here is logged and ignored. The macro treats a missing roster as
+# "refresh what the sheet already names", so the worst case is that a watchlist
+# fund waits a day — which is strictly better than failing a refresh that would
+# otherwise have updated all 46 holdings.
+if node "$REPO/scripts/refresh/watchlist-tickers.cjs" "$WATCHLIST" >>"$LOG" 2>&1; then
+  log "watchlist roster written ($(grep -c . "$WATCHLIST" 2>/dev/null || echo 0) symbols)"
+else
+  log "WARN: watchlist roster not written — the sheet keeps the funds it already names"
+  rm -f "$WATCHLIST"
+fi
 
 # ── Ask the guest to open the workbook ──────────────────────────────────────
 log "dropping trigger for the guest watcher"
@@ -294,6 +312,12 @@ else
   mv "$OUTPUT" "$FAILED/Ycharts-$STAMPED.xlsx" 2>/dev/null
   log "=== refresh FAILED (see above; workbook kept in failed/) ==="
   RC=1
+fi
+
+# A watchlist fund that found no free row would otherwise be silent — it simply
+# never appears. Reported, not fatal: the refresh itself worked.
+if [ -f "$WATCHLIST_NOTE" ]; then
+  while IFS= read -r line; do log "WARN: $line"; done < "$WATCHLIST_NOTE"
 fi
 
 find "$PROCESSED" -name '*.xlsx' -mtime +$KEEP_DAYS -delete 2>/dev/null

@@ -141,17 +141,84 @@ export interface SecurityDetail extends Security {
   // ── Geographic exposure ───────────────────────────────────────────────────
   north_america_total_exposure_generic: number | null
 
+  // ── Composition (Nov 2026) ────────────────────────────────────────────────
+  //
+  // What the fund HOLDS, as opposed to how it has behaved. The scorecard ranks
+  // a fund within its cohort; none of it says whether two funds in the same
+  // category are the same thing — which is the question a holding-vs-alternative
+  // comparison asks. The Foundation Conservative memo had to source every one of
+  // these from the fund provider.
+  //
+  // The fixed-income sector set is the `*_fixed_income_exposure` family and
+  // sums to the bond sleeve. Do NOT reach for `*_bond_exposure` instead: that
+  // family is mostly credit ratings and countries, and taking `government` from
+  // it returned 0 on every bond fund while VBILX is majority treasuries.
+  effective_duration: number | null
+  sec_yield_generic: number | null
+  average_credit_quality_score: number | null
+  investment_grade_bond_allocation_generic: number | null
+  aaa_bond_exposure_generic: number | null
+  bbb_bond_exposure_generic: number | null
+  government_fixed_income_exposure_generic: number | null
+  corporate_fixed_income_exposure_generic: number | null
+  securitized_fixed_income_exposure_generic: number | null
+  municipal_fixed_income_exposure_generic: number | null
+  cash_fixed_income_exposure: number | null
+  other_fixed_income_exposure_generic: number | null
+  /** Frequently NEGATIVE: the offset for a fund short futures against cash. */
+  derivative_fixed_income_exposure: number | null
+
+  // The eleven Morningstar sectors. Meaningless on a bond fund — YCharts
+  // returns a share of whatever equity sleeve exists, so VWEAX reads 100%
+  // financial services off a negligible one. Read them for equity cohorts.
+  basic_materials_exposure_generic: number | null
+  communication_services_exposure_generic: number | null
+  consumer_cyclical_exposure_generic: number | null
+  consumer_defensive_exposure_generic: number | null
+  energy_exposure: number | null
+  financial_services_exposure: number | null
+  healthcare_exposure_generic: number | null
+  industrials_exposure: number | null
+  real_estate_exposure: number | null
+  technology_exposure_generic: number | null
+  utilities_exposure_generic: number | null
+
+  large_market_cap_exposure_generic: number | null
+  medium_cap_exposure: number | null
+  small_cap_exposure: number | null
+  united_states_region_total_exposure_generic: number | null
+  developed_market_exposure: number | null
+  emerging_market_exposure_generic: number | null
+
+  // Risk the scorecard does not grade: the shape of the losses, not the ratio.
+  max_drawdown_3y: number | null
+  max_drawdown_5y: number | null
+  monthly_standard_deviation_annualized_3y: number | null
+
+  // Fund health.
+  turnover_ratio_generic: number | null
+  total_assets_under_management: number | null
+  number_of_holdings_generic: number | null
+  /** YCharts code is `1_year_fund_level_flows_to_aum`; see COLUMN_REMAP. */
+  one_year_fund_level_flows_to_aum: number | null
+
   // ── Asset allocation (net) ────────────────────────────────────────────────
   cash_net: number | null
   stock_net: number | null
   bond_net: number | null
 
   // ── Bond analytics ────────────────────────────────────────────────────────
-  average_credit_quality_score: string | null
-  yield_to_maturity: number | null
-  average_coupon: number | null
-
-  as_of_date: string | null
+  //
+  // REMOVED Nov 2026: `average_credit_quality_score: string`, plus
+  // `yield_to_maturity`, `average_coupon` and `as_of_date`. None of the four
+  // existed as a column on `securities2` and none was read anywhere — this is a
+  // hand-written domain type, so unlike a `.select()` nothing checks it against
+  // the schema, and a field declared here that the table lacks simply reads
+  // `undefined` at runtime and looks like a null.
+  //
+  // Credit quality is REAL now and lives in the composition block above as
+  // `number | null`, which is what the column actually is. Duration and yield
+  // arrived there too, as `effective_duration` and `sec_yield_generic`.
 
   // ── Stock — classification ────────────────────────────────────────────────
   morningstar_sector: string | null
@@ -246,6 +313,92 @@ function classifySecurity(security: SecurityClassInput): 'stock' | 'etf' | 'fund
 export function getSecurityDisplayType(security: SecurityClassInput): SecurityDisplayType {
   const kind = classifySecurity(security)
   return kind === 'etf' ? 'ETF' : kind === 'fund' ? 'Mutual fund' : 'Stock'
+}
+
+/**
+ * Maps the variety of YCharts/Morningstar asset class values to a canonical
+ * 'equity' | 'fixed income' | null for panel routing.
+ *
+ * YCharts `broad_asset_class` returns 'Equity' for equity funds but returns
+ * the Morningstar sub-category for bond funds (e.g. 'Taxable Bond',
+ * 'Municipal Bond'). `broad_category_group` consistently returns 'Fixed Income'
+ * / 'Equity'. We check both fields so every data vintage is handled correctly.
+ *
+ * Lives here rather than in a page because two surfaces route on it now — the
+ * detail page's monitoring block and the peer comparison, which uses it to
+ * decide whether a bond breakdown or a sector breakdown is the meaningful one.
+ * Inferring that from the data instead does not work: PWB is an all-equity ETF
+ * and YCharts still reports its bond sleeve as 100% government, so a breakdown
+ * that reconciles says nothing about whether there is anything to break down.
+ */
+export function getBroadAssetClass(security: {
+  broad_asset_class?: string | null
+  broad_category_group?: string | null
+}): 'equity' | 'fixed income' | null {
+  const ac = security.broad_asset_class?.trim().toLowerCase() ?? ''
+  const cg = security.broad_category_group?.trim().toLowerCase() ?? ''
+
+  if (ac === 'equity' || ac.includes('equity')) return 'equity'
+  if (cg === 'equity' || cg.includes('equity')) return 'equity'
+
+  if (ac === 'fixed income' || cg === 'fixed income') return 'fixed income'
+  // Morningstar sub-categories returned by YCharts broad_asset_class for bond funds
+  const BOND_KEYS = ['bond', 'income', 'credit', 'inflation', 'ultrashort', 'duration', 'maturity']
+  if (BOND_KEYS.some((k) => ac.includes(k))) return 'fixed income'
+  if (BOND_KEYS.some((k) => cg.includes(k))) return 'fixed income'
+
+  return null
+}
+
+/**
+ * The asset-type flags FMP's `/profile` carries.
+ *
+ * Declared structurally rather than importing `Profile` from `lib/fmpMarket`,
+ * so the classifier stays free of the FMP client — this module is imported by
+ * almost everything and should not drag a fetch layer along with it.
+ */
+export interface ProfileAssetFlags {
+  isEtf?: boolean | null
+  isFund?: boolean | null
+}
+
+/**
+ * The display type of a WATCHLIST idea, which usually is not in `securities2`.
+ *
+ * That is the whole difficulty: `classifySecurity` reads columns, an unheld
+ * idea has none, and the classifier's honest answer with nothing to read is
+ * `stock` — so every fund idea would be filed as a stock. FMP's own profile
+ * flags are the only signal available before a ticker is ever added.
+ *
+ * `securities2` WINS when there is a row, because its `detailed_security_type`
+ * comes from YCharts, which owns fund classification here; FMP is the fallback,
+ * not the authority.
+ *
+ * Lives beside `classifySecurity` rather than in the page, because the Watchlist
+ * page and the Add-to-watchlist modal both need it and must not disagree about
+ * whether an idea is a fund — one decides how a card is labelled and the other
+ * decides whether a portfolio is even asked for.
+ */
+export function getProspectDisplayType(
+  security: SecurityClassInput | null,
+  profile: ProfileAssetFlags | null,
+): SecurityDisplayType {
+  if (security) return getSecurityDisplayType(security)
+  if (profile?.isEtf) return 'ETF'
+  if (profile?.isFund) return 'Mutual fund'
+  return 'Stock'
+}
+
+/**
+ * True for a watchlist idea that is a fund or ETF.
+ *
+ * Funds are not identified by portfolio: a fund idea is categorised by its
+ * `securities2.category_name` instead, so neither the card nor the Add modal
+ * shows a portfolio for one. A stock idea still names the books it is being
+ * considered for.
+ */
+export function isFundIdea(type: SecurityDisplayType): boolean {
+  return type !== 'Stock'
 }
 
 /** ETF / mutual fund — fund-specific UI (returns table, scorecards, etc.). */
