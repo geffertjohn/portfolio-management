@@ -18,12 +18,13 @@ import { fmtNum, fmtDecimalPct, EMPTY } from '@/lib/formatters'
  */
 
 const ROLE_LABEL: Record<FundPeerRow['role'], string> = {
-  subject: 'This fund', held: 'Held', watchlist: 'Watchlist',
+  subject: 'This fund', held: 'Held', watchlist: 'Watchlist', benchmark: 'Benchmark',
 }
 const ROLE_CLASS: Record<FundPeerRow['role'], string> = {
   subject: 'bg-gray-900 text-white',
   held: 'bg-indigo-50 text-indigo-700',
   watchlist: 'bg-teal-50 text-teal-700',
+  benchmark: 'bg-amber-50 text-amber-800',
 }
 
 /**
@@ -139,7 +140,9 @@ export function FundPeerPanel({ security }: { security: SecurityDetail }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.securityId} className="border-b border-gray-100 align-top">
+              <tr key={r.securityId}
+                  className={`border-b border-gray-100 align-top ${
+                    r.role === 'benchmark' ? 'border-t-2 border-t-gray-300 bg-gray-50/60' : ''}`}>
                 <td className="py-2 pr-3">
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-semibold text-gray-900">{r.securityId}</span>
@@ -151,6 +154,15 @@ export function FundPeerPanel({ security }: { security: SecurityDetail }) {
                   {r.books.length > 0 && (
                     <div className="text-[11px] text-gray-400">
                       {r.books.map((b) => `${b.portfolio} ${fmtNum(b.pct)}%`).join(' · ')}
+                    </div>
+                  )}
+                  {/* Two sources on one line, so the row says which is which:
+                      drawdown and volatility are the index's own, composition
+                      is the tracking ETF's because YCharts computes none for an
+                      index. */}
+                  {r.compositionFrom && (
+                    <div className="text-[11px] text-amber-700">
+                      composition via {r.compositionFrom}
                     </div>
                   )}
                 </td>
@@ -207,7 +219,9 @@ export function FundPeerPanel({ security }: { security: SecurityDetail }) {
                   const c = r.composition
                   const by = (l: string) => c.fixedIncome.find((f) => f.label === l)?.value ?? null
                   return (
-                    <tr key={r.securityId} className="border-b border-gray-100">
+                    <tr key={r.securityId}
+                        className={`border-b border-gray-100 ${
+                          r.role === 'benchmark' ? 'border-t-2 border-t-gray-300 bg-gray-50/60' : ''}`}>
                       <td className="py-2 pr-3 font-mono font-semibold text-gray-900">{r.securityId}</td>
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {c.effectiveDuration == null ? EMPTY : `${fmtNum(c.effectiveDuration)}y`}
@@ -257,7 +271,9 @@ export function FundPeerPanel({ security }: { security: SecurityDetail }) {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.securityId} className="border-b border-gray-100">
+                  <tr key={r.securityId}
+                      className={`border-b border-gray-100 ${
+                        r.role === 'benchmark' ? 'border-t-2 border-t-gray-300 bg-gray-50/60' : ''}`}>
                     <td className="py-2 pr-3 font-mono font-semibold text-gray-900">{r.securityId}</td>
                     {r.composition.sectors.map((s) => (
                       <td key={s.label} className="py-2 pr-3 text-right tabular-nums">{pct(s.value)}</td>

@@ -14,6 +14,8 @@ import { FMP_STABLE, apiKey, asArray, fmpFetch, fmpSymbol, num, str } from './fm
 // ── Company profile (identity) ──────────────────────────────────────────────
 
 export interface Profile {
+  /** False when FMP returned no record for the symbol at all. */
+  found: boolean
   companyName: string | null
   description: string | null
   sector: string | null
@@ -42,6 +44,16 @@ export async function fetchProfile(symbol: string): Promise<Profile> {
   const rows = asArray(await fmpFetch(`${FMP_STABLE}/profile?symbol=${fmpSymbol(symbol)}&apikey=${apiKey()}`))
   const p = rows[0] ?? {}
   return {
+    // WHETHER FMP HAS THIS TICKER AT ALL.
+    //
+    // Without it, an empty response and a genuine stock are indistinguishable:
+    // both arrive as isEtf=false, isFund=false. That erased the one signal that
+    // says a ticker is a fund FMP does not cover — it misses 11 of this book's
+    // 27 mutual funds, all institutional share classes — and filed RSIYX
+    // (Victory RS Investors Fund Y) on the watchlist as a stock, with a
+    // portfolio picker and an "Awaiting committee" badge for research that was
+    // never coming.
+    found: rows.length > 0,
     companyName: str(p.companyName),
     description: str(p.description),
     sector: str(p.sector),

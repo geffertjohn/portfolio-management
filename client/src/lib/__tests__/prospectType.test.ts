@@ -25,10 +25,44 @@ describe('classifying a watchlist idea', () => {
     expect(getProspectDisplayType(null, { isEtf: false, isFund: true })).toBe('Mutual fund')
   })
 
-  it('calls an idea with NOTHING to read a stock', () => {
-    // The honest answer, and the reason the research job may not rely on this
-    // alone: it must ask FMP before running two company analysts on a ticker.
-    expect(getProspectDisplayType(null, null)).toBe('Stock')
+  it('distinguishes "FMP has no record" from "FMP says stock"', () => {
+    // fetchProfile builds a zero-valued Profile from an EMPTY response, so both
+    // arrive as isEtf=false, isFund=false. Without `found` they are identical
+    // and the unknown ticker is filed as a stock — which is exactly what
+    // happened to RSIYX.
+    expect(getProspectDisplayType(null, { isEtf: false, isFund: false, found: false }))
+      .toBe('Mutual fund')
+    expect(getProspectDisplayType(null, { isEtf: false, isFund: false, found: true }))
+      .toBe('Stock')
+  })
+
+  it('calls a ticker FMP HAS NEVER HEARD OF a mutual fund, not a stock', () => {
+    // This test asserted the opposite and was wrong. FMP covers US stocks
+    // comprehensively but misses 11 of this book's 27 mutual funds, all
+    // institutional share classes — so an empty profile is evidence, not
+    // ignorance. RSIYX (Victory RS Investors Fund Y) is the live case: filed as
+    // a stock, offered a portfolio picker and an "Awaiting committee" badge for
+    // research that was never coming.
+    //
+    // `watchlist-tickers.cjs` had always defaulted this way, so the two
+    // classifiers disagreed about the same ticker on the same day.
+    expect(getProspectDisplayType(null, { found: false })).toBe('Mutual fund')
+  })
+
+  it('does not guess from a profile it has not fetched yet', () => {
+    // `undefined` is "not asked", `null` is "asked, nothing came back". The
+    // page must not collapse them: reading the second as the first is the bug
+    // above. Pending stays provisional and settles within a request.
+    expect(getProspectDisplayType(null, undefined)).toBe('Stock')
+  })
+
+  it('lets YCharts overrule FMP whenever it has an answer', () => {
+    // The securities2 row comes from the workbook, which is the authority for
+    // fund classification; FMP is only the stopgap before the next refresh.
+    expect(getProspectDisplayType(
+      { detailed_security_type: 'mutual_fund', peer_group_name: 'Core Bond Funds' },
+      null,
+    )).toBe('Mutual fund')
   })
 
   it('treats both fund shapes as funds and only a stock as a stock', () => {

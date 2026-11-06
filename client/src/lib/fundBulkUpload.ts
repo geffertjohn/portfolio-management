@@ -279,5 +279,55 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
     }
   }
 
+  await markBenchmarkProxies()
+
   return { total: records.length, succeeded, failed, errors, unmappedCategories: unmapped }
+}
+
+/**
+ * Recompute `securities2.is_benchmark_proxy`.
+ *
+ * The 33 ETF proxies have to live in `securities2` because that is where the
+ * composition columns are — a benchmark is an index, and YCharts computes no
+ * composition for one. But they are not securities the firm tracks, and
+ * `securities2` membership is read as exactly that by five pickers and by the
+ * Watchlist card's routing.
+ *
+ * RECOMPUTED, never set once, so it cannot drift from the three facts that
+ * define it. A ticker that is both a proxy and a holding is FALSE here and
+ * behaves as the holding it is — which is why the held and watched sets are
+ * subtracted rather than the proxy list simply being flagged.
+ *
+ * It never throws. The securities are already written by the time this runs,
+ * and a failure to re-flag must not report a good import as failed — the same
+ * reasoning as `recordImportRuns` and `ensureReviewSchedules`.
+ */
+async function markBenchmarkProxies(): Promise<void> {
+  try {
+    const [cat, sec, held, watched] = await Promise.all([
+      supabase.from('category_benchmarks').select('etf_proxy'),
+      supabase.from('sector_benchmarks').select('etf_proxy'),
+      supabase.from('positions').select('security_id').is('deleted_at', null),
+      supabase.from('prospects').select('security_id').is('removed_at', null),
+    ])
+    if (cat.error || sec.error || held.error || watched.error) return
+
+    const exempt = new Set([
+      ...(held.data ?? []).map((r) => r.security_id),
+      ...(watched.data ?? []).map((r) => r.security_id),
+    ])
+    const proxies = [...new Set([...(cat.data ?? []), ...(sec.data ?? [])]
+      .map((r) => r.etf_proxy)
+      .filter((t): t is string => !!t && !exempt.has(t)))]
+
+    // Clear first, so a ticker that has since been bought stops being hidden.
+    await supabase.from('securities2').update({ is_benchmark_proxy: false })
+      .eq('is_benchmark_proxy', true)
+    if (proxies.length > 0) {
+      await supabase.from('securities2').update({ is_benchmark_proxy: true })
+        .in('security_id', proxies)
+    }
+  } catch {
+    // Deliberately silent: see the docstring.
+  }
 }

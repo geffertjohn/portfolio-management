@@ -31,6 +31,24 @@ param(
     # the same cells at a different metric - no column is added or removed and
     # the formulas are untouched. Pair it with ALTER TABLE ... RENAME COLUMN.
     [string[]]$Rename = @(),
+    # Metric codes to DELETE from the sheet. For a column that can never return
+    # data - not merely one nobody reads - since every cell of it still costs a
+    # YCharts call every morning and still counts toward the macro's error
+    # ratio. Drop the DB column separately; this only touches the workbook.
+    [string[]]$Remove = @(),
+    # Column letter to fetch the ADDED columns against, in place of the sheet's
+    # own ticker column. `-RepointTo E` turns =YCP($B4,W$3) into =YCP($E4,W$3).
+    #
+    # For a benchmark sheet, where column B is a total-return INDEX like ^SPXTR
+    # and column E is its ETF proxy. YCharts holds a price series for an index,
+    # not a portfolio, so every composition metric returns ERR: INVALID CALC on
+    # one - proven on all 42 category rows. The proxy is an ETF and carries the
+    # full set.
+    #
+    # It SUBSTITUTES rather than authors. Writing "=YCP(...)" outright fails for
+    # this account, which has no YCharts add-in; Range.Replace edits a formula
+    # that already exists, which works.
+    [string]$RepointTo = '',
     [switch]$Apply,
     [string]$Workbook  = 'C:\portfolio\Ycharts.xlsm',
     [string]$SheetName = 'Securities',
@@ -98,6 +116,7 @@ try {
     }
     if ($model -eq 0) { throw "no YCP() column found to copy from" }
     Say "model column $model : $($ws.Cells.Item($FirstDataRow,$model).Formula)"
+    if ($RepointTo -ne '') { Say "added columns will fetch against column $RepointTo" }
 
     # Renames first: a code renamed INTO the sheet must not then be added as a
     # duplicate column by the loop below.
@@ -122,6 +141,43 @@ try {
         $renamed++
     }
 
+    $removed = 0
+    $toRemove = @($Remove | ForEach-Object { $_.Split(',') } |
+                  ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+
+    # REFUSE a code that is in both lists. Removals run first, so the add loop
+    # no longer sees it on the sheet and puts it straight back - the net effect
+    # is a no-op that reports "22 removals, 22 additions" and looks like work.
+    # Done exactly that way once, by passing the same file as -CodesFile and
+    # -Remove.
+    $both = @($toRemove | Where-Object { $codes -contains $_ })
+    if ($both.Count -gt 0) {
+        throw ("these codes are in BOTH the codes file and -Remove, which would " +
+               "delete and re-add them: " + ($both -join ', '))
+    }
+    # Delete right-to-left: removing a column shifts every column after it left,
+    # so ascending order would invalidate the indices still to be processed.
+    $cols = @($toRemove | ForEach-Object { if ($have.ContainsKey($_)) { $have[$_] } } |
+              Sort-Object -Descending)
+    foreach ($c in $cols) {
+        $name = [string]$ws.Cells.Item($HeaderRow, $c).Value2
+        Say ("  - " + $name + " (column " + $c + ")")
+        if ($Apply) { $ws.Columns.Item($c).Delete() | Out-Null }
+        $removed++
+    }
+    foreach ($code in $toRemove) {
+        if (-not $have.ContainsKey($code)) { Say "remove: '$code' not on the sheet, skipped" }
+    }
+    if ($removed -gt 0 -and $Apply) {
+        # The map and the right-hand edge both moved.
+        $have = @{}
+        $lastCol = $ws.UsedRange.Column + $ws.UsedRange.Columns.Count - 1
+        for ($c = 2; $c -le $lastCol; $c++) {
+            $h = [string]$ws.Cells.Item($HeaderRow, $c).Value2
+            if (-not [string]::IsNullOrWhiteSpace($h)) { $have[$h.Trim()] = $c }
+        }
+    }
+
     $added = 0; $skipped = @()
     foreach ($code in $codes) {
         if ($have.ContainsKey($code)) { $skipped += $code; continue }
@@ -134,15 +190,21 @@ try {
             $ws.Range($ws.Cells.Item($FirstDataRow, $target),
                       $ws.Cells.Item($lastRow, $target)).PasteSpecial(-4123) | Out-Null
         }
+        if ($Apply -and $RepointTo -ne '') {
+            $rng = $ws.Range($ws.Cells.Item($FirstDataRow, $target),
+                             $ws.Cells.Item($lastRow, $target))
+            # xlPart, matchCase: a bare "$B" must not match "$BB".
+            [void]$rng.Replace('$B', ('$' + $RepointTo), 2, 1, $true)
+        }
         $lastCol = $target
         $added++
     }
     if ($skipped.Count -gt 0) { Say "already present, skipped: $($skipped -join ', ')" }
 
     if (-not $Apply) {
-        Say "DRY RUN - $renamed rename(s), $added column(s) would be added. Re-run with -Apply."
+        Say "DRY RUN - $removed removal(s), $renamed rename(s), $added column(s) would be added. Re-run with -Apply."
         $wb.Close($false); $wb = $null
-    } elseif ($added -eq 0 -and $renamed -eq 0) {
+    } elseif ($added -eq 0 -and $renamed -eq 0 -and $removed -eq 0) {
         Say "nothing to do"
         $wb.Close($false); $wb = $null
     } else {
@@ -152,7 +214,7 @@ try {
         if ($after -gt $MAX_NAME_ERRORS) { throw "ABORT: paste produced $after #NAME? cells. Not saved." }
         $wb.Save()
         $wb.Close($false); $wb = $null
-        Say "SAVED - $renamed rename(s), $added column(s) added, sheet reaches column $lastCol"
+        Say "SAVED - $removed removal(s), $renamed rename(s), $added column(s) added, sheet reaches column $lastCol"
     }
 }
 finally {

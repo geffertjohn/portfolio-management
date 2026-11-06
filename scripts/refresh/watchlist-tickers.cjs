@@ -20,6 +20,12 @@
  * here keeps it in the desired set for as long as it is owned, so a row is
  * only released once the fund is neither held nor watched.
  *
+ * BENCHMARK PROXIES ARE INCLUDED, which is why the set is held ∪ watched ∪
+ * proxied. A benchmark is an index and YCharts computes no composition for one;
+ * the ETF that tracks it is the only way to show an index line beside a fund on
+ * the same axes. They are not held and not watched, so `fetchSecurities` hides
+ * them from the Securities list and the Add-to-watchlist picker.
+ *
  * STOCKS ARE EXCLUDED. The `Securities` sheet is funds-only — its 83 columns
  * are fund fields — and `fundBulkUpload` writes them to `securities2`. A stock
  * ticker here would produce a row of errors, not a security.
@@ -91,17 +97,33 @@ async function assetType(ticker, known) {
 }
 
 async function main() {
-  const [prospects, positions, securities] = await Promise.all([
+  const [prospects, positions, securities, catProxies, secProxies] = await Promise.all([
     sb('prospects?removed_at=is.null&select=security_id'),
     sb('positions?deleted_at=is.null&select=security_id'),
     sb('securities2?select=security_id,detailed_security_type'),
+    sb('category_benchmarks?select=etf_proxy'),
+    sb('sector_benchmarks?select=etf_proxy'),
   ])
 
   const known = new Map(securities.map((s) => [s.security_id, s.detailed_security_type || '']))
   const watched = [...new Set(prospects.map((p) => p.security_id).filter(Boolean))]
   const held = [...new Set(positions.map((p) => p.security_id).filter(Boolean))]
 
-  const wanted = [...new Set([...held, ...watched])]
+  /*
+    BENCHMARK PROXIES TOO, and they are the reason this set is a union of three
+    things rather than two.
+    
+    A category benchmark is a total-return INDEX — ^SPXTR, ^RLGTR — and YCharts
+    holds a price series for one, not a portfolio: every composition metric
+    returns `ERR: INVALID CALC`, measured on all 42 rows. So a benchmark cannot
+    carry duration, sector weights or credit quality itself, and the only way to
+    put an index line beside a fund is through the ETF that tracks it, which
+    every benchmark row already names.
+  */
+  const proxies = [...(catProxies ?? []), ...(secProxies ?? [])]
+    .map((r) => r.etf_proxy).filter(Boolean)
+
+  const wanted = [...new Set([...held, ...watched, ...proxies])]
     .filter((t) => t && t !== '$Cash')
     .sort()
 
@@ -122,7 +144,8 @@ async function main() {
   fs.renameSync(tmp, OUT)
 
   console.log(`watchlist roster: ${lines.length} fund/ETF symbols `
-    + `(${held.length} held, ${watched.length} watched) -> ${OUT}`)
+    + `(${held.length} held, ${watched.length} watched, `
+    + `${new Set(proxies).size} benchmark proxies) -> ${OUT}`)
   if (skipped.length) console.log(`  not funds, excluded: ${skipped.join(', ')}`)
 }
 

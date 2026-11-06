@@ -1,0 +1,43 @@
+# Composition metrics for the category_benchmarks sheet.
+#
+# Fed to add-sheet-columns.ps1 with -SheetName category_benchmarks -HeaderRow 3
+# -FirstDataRow 4 — that sheet's header is row 3, not row 2 like Securities.
+#
+# THE CODES MATCH securities2 EXACTLY, which is the point: a benchmark measured
+# on a different metric than the fund is not a comparison.
+#
+# NOT the spellings this sheet carried before. Eleven sector columns were
+# dropped here in Sep 2026 under names like `technology_exposure`, and the
+# YCharts add-in catalogue has no such code — it publishes exactly one form per
+# sector and which one varies (`technology_exposure_generic` but
+# `energy_exposure`). Re-adding the old spellings would rebuild a set of
+# columns that can only ever return nothing.
+#
+# Fund-only fields are deliberately absent: an index has no expense ratio,
+# turnover, holdings count, flows or scorecard.
+
+effective_duration
+sec_yield_generic
+average_credit_quality_score
+investment_grade_bond_allocation_generic
+government_fixed_income_exposure_generic
+corporate_fixed_income_exposure_generic
+securitized_fixed_income_exposure_generic
+municipal_fixed_income_exposure_generic
+other_fixed_income_exposure_generic
+cash_fixed_income_exposure
+derivative_fixed_income_exposure
+basic_materials_exposure_generic
+communication_services_exposure_generic
+consumer_cyclical_exposure_generic
+consumer_defensive_exposure_generic
+energy_exposure
+financial_services_exposure
+healthcare_exposure_generic
+industrials_exposure
+real_estate_exposure
+technology_exposure_generic
+utilities_exposure_generic
+max_drawdown_3y
+max_drawdown_5y
+monthly_standard_deviation_annualized_3y

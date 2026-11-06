@@ -188,6 +188,31 @@ These are different features and **must not be conflated**:
 - **Watchlist** (`prospects` + `prospect_portfolios`, `lib/prospects.ts`, `/watchlist`, nav "Watchlist") — an **idea list**: tickers being **considered for purchase** (not held). No metrics, no sell timer, no substitutions. Added from the security detail header ("+ Watchlist", `AddProspectModal`) or the page.
   - **One row per ticker, portfolios attached through `prospect_portfolios`** (Oct 2026). `prospects.target_portfolio` used to put the portfolio *in the idea's identity*, so one ticker under three portfolios was three rows and three cards, and an idea you had not placed yet could not be recorded at all. A partial unique index `(security_id) WHERE removed_at IS NULL` keeps one live idea per ticker; removed rows are exempt so a ticker can be watched, dropped and watched again. **Re-adding a watched ticker merges** — `addProspect` attaches the new portfolios to the open idea rather than failing on the index. **Zero portfolios is valid.**
   - **`security_id` has no FK** — watching a ticker you do not own is the normal case, so `securities2` is resolved through a separate lookup and is often null. Identity and asset type for those come from **FMP `/profile` (`companyName`, `isEtf`, `isFund`)**, because the `securities2` classifier has no columns to read and would call every unheld idea a stock.
+  - **`fetchProfile` NEVER RETURNS NULL, and that hid a real defect.** On an
+    empty FMP response it builds a zero-valued `Profile`, so "FMP has no record"
+    and "FMP says this is a stock" both arrive as `isEtf: false, isFund: false`.
+    `Profile.found` now separates them. Without it, RSIYX (Victory RS Investors
+    Fund Y) was filed on the watchlist as a STOCK — given a portfolio picker, an
+    "Awaiting committee" badge for research that was never coming, and a place
+    in the Stocks column. **FMP covers US stocks comprehensively but misses 11
+    of this book's 27 mutual funds**, all institutional share classes, so a
+    ticker it has never heard of is far more likely a fund than an unindexed
+    company. `getProspectDisplayType` reads `found === false` as a fund.
+    - **YCharts owns the answer; FMP is the stopgap.** Once the ticker reaches
+      `securities2` the classifier reads that and never consults FMP again. The
+      window only matters before the next refresh — except for a STOCK, where
+      it is permanent, because the workbook's Securities sheet is funds-only and
+      a stock idea never gets a `securities2` row at all.
+    - **`undefined` and `null` are different and callers must not collapse
+      them**: not-asked-yet versus asked-and-empty. `WatchlistPage` was doing
+      `?? null` and the Add modal `profile ?? null`; both now pass the tri-state
+      through, and the modal shows "Checking whether this is a stock or a
+      fund…" rather than guessing in a form being filled in.
+    - **Two classifiers with opposite defaults is how this happened.**
+      `watchlist-tickers.cjs` had always treated an empty profile as a fund
+      while `getProspectDisplayType` treated it as a stock, each documented as
+      deliberate, written hours apart on the same day. `prospectType.test.ts`
+      asserted the wrong one and defended the bug.
   - **A WATCHED FUND NOW REACHES THE WORKBOOK BY ITSELF** (Nov 2026). A fund's
     columns come from the YCharts workbook, so adding one to the watchlist used
     to populate nothing until someone remembered to type the ticker into the
@@ -582,6 +607,61 @@ argument was fetched from the fund provider** because the app held none.
   them holds for only 14 and reaches 120%. `fixedIncomeSum` is null unless every
   component is present, and `fixedIncomeReconciles` is null for a fund with no
   bond sleeve rather than false.
+
+### A benchmark has no composition of its own
+
+**YCharts computes no holdings for an INDEX.** A category or sector benchmark is
+a total-return index (`^SPXTR`, `^RLGTR`, `^SP15HCSTR`), and YCharts holds a
+price series for one, not a portfolio — every composition metric returns
+`ERR: INVALID CALC`. Measured on all 42 category rows (Nov 2026), not assumed.
+
+- **Risk metrics DO work**, because they derive from the price series:
+  `max_drawdown_3y`, `max_drawdown_5y` and
+  `monthly_standard_deviation_annualized_3y` populated 42/42 and are kept on
+  `category_benchmarks`. They give a fund's drawdown and volatility an index to
+  be read against, which nothing offered before.
+- **50 exposure and maturity columns were dropped** from
+  `peer_group_benchmarks` and `sector_benchmarks` (Nov 2026), verified at **0
+  non-null values in 56 rows**. This document previously described the Sep 2026
+  slimming of `category_benchmarks` as leaving a deliberate asymmetry, with
+  those two tables keeping their exposure columns on purpose. **That was wrong**
+  — they were as unfillable there as here, and the drop was simply never
+  extended. The sheets had already lost the headers, so the DB columns were
+  orphans with no source.
+- **Composition comes from the `etf_proxy`**, which every benchmark row already
+  names (IWF for `^RLGTR`, SPY for `^SPXTR`). An ETF is a portfolio and carries
+  the full set. The 33 distinct proxies live in `securities2`, because that is
+  where the composition columns are, and are added by the same roster the
+  watchlist uses — `watchlist-tickers.cjs` writes **held ∪ watched ∪ proxied**.
+- **`securities2.is_benchmark_proxy` hides them**, and is **recomputed on every
+  import** by `fundBulkUpload` rather than set once, so it cannot drift from the
+  three facts that define it: named as a proxy, not held, not watched. A ticker
+  that is both a proxy and a holding comes out **false** and behaves as the
+  holding. `fetchSecurities` filters on it, which covers all five "choose a
+  security" pickers in one place.
+- **The benchmark row in `FundPeerPanel` has TWO sources and says so.**
+  Behaviour (drawdown, volatility) is the index's own; composition is the
+  proxy's. `FundPeerRow.compositionFrom` names the ETF and the card prints
+  "composition via IWF" — a reader must not assume one line came from one place.
+- **The resolution chain is `ycharts_benchmark_category`, not `category_name`.**
+  The two tables use different vocabularies: a fund's `category_name` reads
+  "Large Growth" where the benchmark's `category` reads "US Large Cap Growth".
+  Joining on `category_name` matches nothing. `hyphenVariants` handles the
+  second spelling, as it does for the existing benchmark lookups.
+
+**Two traps when widening a benchmark sheet**, both hit on 6 Nov 2026:
+
+- **A formula cannot be REPOINTED over COM.** Pasting a column works as SYSTEM
+  because the paste preserves the formula's link to the XLL name table. A
+  `Range.Replace` that rewrites `$B` to `$E` makes Excel RE-PARSE it, and
+  `_xll.YCP` is not registered for an account with no add-in, so every cell
+  becomes `#NAME?` on sight — 1,210 of them, caught by the probe in
+  `add-sheet-columns.ps1` and not saved. Calculation mode is irrelevant; it is a
+  parse, not a calculation. Verifying that the formula TEXT changed is not a
+  test of this.
+- **Dropping a DB column the sheet still carries fails the whole upsert batch.**
+  Check the sheet headers before dropping, or add the column to that table's
+  `skipCols`.
 
 ### Benchmark data
 

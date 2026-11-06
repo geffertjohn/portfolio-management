@@ -70,7 +70,7 @@ export function resolveEtfProxy(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Returns both the original value and a hyphen-normalized variant (hyphens → spaces). */
-function hyphenVariants(s: string): string[] {
+export function hyphenVariants(s: string): string[] {
   const normalized = s.replace(/-/g, ' ')
   return normalized === s ? [s] : [s, normalized]
 }
