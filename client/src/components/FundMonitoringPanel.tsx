@@ -7,7 +7,17 @@ import { DataAsOf } from '@/components/DataAsOf'
 import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { ReturnRanksTable } from './ReturnRanksTable'
 import { CategoryScorecardTable, PeerGroupScorecardTable } from './FundScorecard'
-import { categoryScorecardScore, peerGroupScorecardScore, type ScorecardCohort } from '@/lib/fundScorecard'
+import {
+  categoryScorecardScore, peerGroupScorecardScore, scoreBand,
+  type ScorecardCohort, type ScoreBand,
+} from '@/lib/fundScorecard'
+
+/** Display only — the BAND itself is the firm's rule and lives in the lib. */
+const COHORT_DOT_CLASS: Record<ScoreBand, string> = {
+  green: 'bg-green-500',
+  yellow: 'bg-yellow-400',
+  red: 'bg-red-500',
+}
 
 /**
  * Monitoring panel for funds/ETFs (both equity and fixed income). The equity and
@@ -61,11 +71,11 @@ export function FundMonitoringPanel({
   const catScore = categoryScorecardScore(security)
   const pgScore  = peerGroupScorecardScore(security)
 
+  // Null in, null out: an unscored cohort shows NO dot rather than a red one —
+  // a workbook gap is not a judgement about the fund.
   function dotClass(score: number | null) {
-    if (score == null) return null
-    if (score >= 70) return 'bg-green-500'
-    if (score >= 60) return 'bg-yellow-400'
-    return 'bg-red-500'
+    const band = scoreBand(score)
+    return band == null ? null : COHORT_DOT_CLASS[band]
   }
 
   return (
