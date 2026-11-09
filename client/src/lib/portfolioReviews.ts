@@ -10,7 +10,27 @@
  */
 import type { AttributionWindow } from './portfolioPerformance'
 import { supabase } from './supabase'
+import { isCashTicker } from './positionBands'
+import type { PortfolioPosition } from '@/types/position'
 import type { Json } from '@/types/database.types'
+
+/**
+ * The holdings a review section asks questions about: everything but cash.
+ *
+ * Cash is a residual, not a position anyone reviews — it has no scorecard, no
+ * thesis and no conviction tier — so every per-holding section drops it. The
+ * predicate is here rather than inlined because the SCORECARD step now writes:
+ * the set the advisor is shown and the set the automatic flag considers have
+ * to be the same set, and two copies of a filter is how they stop being.
+ *
+ * Six other review sections still inline the same three-clause test
+ * (`ConvictionRankingSection`, `WatchlistStatusSection`, `DeepReviewSection`,
+ * `PortfolioConstructionSection`, `HoldingMonitorGrid` and `ConsiderationsSection`).
+ * They are display-only, so they were left alone rather than swept up here.
+ */
+export function reviewableHoldings(positions: PortfolioPosition[]): PortfolioPosition[] {
+  return positions.filter((p) => p.ticker && !isCashTicker(p.ticker) && !isCashTicker(p.securityId))
+}
 // Date helpers shared with the per-security review schedule.
 export { isOverdue, isDueSoon } from './reviewSchedules'
 

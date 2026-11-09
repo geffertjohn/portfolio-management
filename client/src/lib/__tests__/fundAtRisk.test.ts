@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { atRiskMetricsFromScorecard, failingScorecardRows, metricKeyFor } from '../fundAtRisk'
-import { buildFundScorecard, type ScorecardRow } from '../fundScorecard'
+import {
+  assessFundFlag, atRiskMetricsFromScorecard, autoFlagNote, autoFlagPlan,
+  designatedCohort, failingScorecardRows, metricKeyFor, AUTO_FLAG_MIN_FAILING,
+} from '../fundAtRisk'
+import { buildFundScorecard, type FundScorecard, type ScorecardRow } from '../fundScorecard'
 import { gradeAtRiskMetric, isMetricFailing } from '../atRisk'
 import type { SecurityDetail } from '../securities'
 
@@ -183,5 +186,130 @@ describe('FPX against its designated peer-group cohort', () => {
     const labels = metrics.map((m) => m.label).join(' ')
     expect(labels).not.toContain('Information Ratio')
     expect(labels).not.toContain('Manager Tenure')
+  })
+})
+
+/**
+ * The automatic flag.
+ *
+ * It writes to a governed table and opens a sell timer, so the cases that
+ * matter most are the ones where it must REFUSE: an unscored fund, and a fund
+ * whose low total is missing columns rather than bad readings. Both would flag
+ * under a naive reading of the rule, and both are measured against the same
+ * live book that made a one-dial rule untenable — "any bottom-tier metric"
+ * would flag eight of 45 held funds, six of them healthy.
+ */
+function card(over: Partial<FundScorecard> = {}): FundScorecard {
+  return { rows: [], total: 0, hasData: true, ...over }
+}
+
+describe('assessFundFlag', () => {
+  it('flags a red total score', () => {
+    const a = assessFundFlag(card({ total: 47.8, rows: [row({ tier: 4 })] }))
+    expect(a.qualifies).toBe(true)
+    expect(a.reason).toBe('red_score')
+    expect(a.band).toBe('red')
+  })
+
+  it(`flags ${AUTO_FLAG_MIN_FAILING} bottom-tier readings even on a green total`, () => {
+    // The second dial: a strong expense ratio can hold a total above 70 while
+    // the readings that describe performance are all in the bottom tier.
+    const rows = [row({ tier: 4 }), row({ tier: 4, label: 'Alpha 3Y' }), row({ tier: 4, label: 'Information Ratio 3Y' })]
+    const a = assessFundFlag(card({ total: 82, rows }))
+    expect(a.qualifies).toBe(true)
+    expect(a.reason).toBe('broad_failure')
+    expect(a.band).toBe('green')
+  })
+
+  it('reports BOTH when the score is red and the failure is broad', () => {
+    const rows = Array.from({ length: 4 }, (_, i) => row({ tier: 4, label: `M${i}` }))
+    expect(assessFundFlag(card({ total: 47.8, rows })).reason).toBe('both')
+  })
+
+  it('does NOT flag one or two bottom-tier readings on a healthy total', () => {
+    // VVIAX and VIGAX fail only Manager Tenure at a total of 94.3; AVERX and
+    // FPX only Upside/Downside and R-Square. Those describe a fund rather than
+    // judge it, and flagging them would teach the reader to ignore the list.
+    expect(assessFundFlag(card({ total: 94.3, rows: [row({ tier: 4 })] })).qualifies).toBe(false)
+    expect(assessFundFlag(card({ total: 72.5, rows: [row({ tier: 4 }), row({ tier: 4, label: 'R' })] })).qualifies).toBe(false)
+  })
+
+  it('never flags an UNSCORED fund, though its total of 0 bands red', () => {
+    // buildFundScorecard returns total 0 with hasData false, and scoreBand(0)
+    // is red — so without the guard a workbook gap puts a fund on a sell timer.
+    const a = assessFundFlag(card({ total: 0, hasData: false }))
+    expect(a.qualifies).toBe(false)
+    expect(a.band).toBeNull()
+    expect(a.blockedNoReadings).toBe(false)
+    expect(assessFundFlag(null).qualifies).toBe(false)
+  })
+
+  it('refuses a red score with NO bottom-tier reading, and says why', () => {
+    // A flag must carry its readings: addToAtRisk sizes the sell timer on the
+    // failing count, so an empty array takes the longest rung and leaves
+    // nothing to re-measure — the defect that left IAGG with a timer into
+    // Sept 2027. A red total with nothing in tier 4 means missing columns.
+    const a = assessFundFlag(card({ total: 31, rows: [row({ tier: 3 }), row({ tier: null, displayVal: null })] }))
+    expect(a.qualifies).toBe(false)
+    expect(a.blockedNoReadings).toBe(true)
+    expect(a.band).toBe('red')
+  })
+})
+
+describe('designatedCohort', () => {
+  it('reads peer only when it is set explicitly', () => {
+    expect(designatedCohort({ scorecard_cohort: 'peer' } as never)).toBe('peer')
+    expect(designatedCohort({ scorecard_cohort: 'category' } as never)).toBe('category')
+    // An unset cohort is GRADED against the category rather than skipped; the
+    // surfaces say on screen that nothing was designated.
+    expect(designatedCohort({ scorecard_cohort: null } as never)).toBe('category')
+  })
+})
+
+describe('autoFlagPlan', () => {
+  /** A fund ranked dead last on every rank metric — red by any reading. */
+  const failingFund = (securityId: string) => ({
+    security_id: securityId,
+    scorecard_cohort: 'category',
+    one_year_total_return_rank_nav: 600, one_year_total_return_rank_category_size_nav: 600,
+    three_year_total_return_rank_nav: 500, three_year_total_return_rank_category_size_nav: 500,
+    five_year_total_return_rank_nav: 400, five_year_total_return_rank_category_size_nav: 400,
+    sharpe_rank: 490, information_ratio_rank: 480, alpha_rank: 470,
+    expense_ratio_rank: 590,
+  }) as unknown as SecurityDetail
+
+  it('excludes a security already on the list, so re-ticking adds nothing twice', () => {
+    expect(autoFlagPlan([failingFund('IAGG')], new Set())).toHaveLength(1)
+    expect(autoFlagPlan([failingFund('IAGG')], new Set(['IAGG']))).toHaveLength(0)
+  })
+
+  it('judges against the DESIGNATED cohort, not whatever is on screen', () => {
+    // The card's toggle is for looking. A fund designated peer carries no
+    // category ranks here, so a plan built on the category would see no data.
+    const peerOnly = { ...failingFund('X'), scorecard_cohort: 'peer' } as unknown as SecurityDetail
+    expect(autoFlagPlan([peerOnly], new Set())).toHaveLength(0)
+    expect(autoFlagPlan([failingFund('X')], new Set())[0].cohort).toBe('category')
+  })
+})
+
+describe('autoFlagNote', () => {
+  it('stands on its own — names the measure, the threshold and the review', () => {
+    // Read a year later beside a sell timer, by someone without the review open.
+    const [entry] = autoFlagPlan(
+      [{
+        security_id: 'IAGG', scorecard_cohort: 'category',
+        one_year_total_return_rank_nav: 600, one_year_total_return_rank_category_size_nav: 600,
+        three_year_total_return_rank_nav: 500, three_year_total_return_rank_category_size_nav: 500,
+        five_year_total_return_rank_nav: 400, five_year_total_return_rank_category_size_nav: 400,
+        sharpe_rank: 490, information_ratio_rank: 480, alpha_rank: 470, expense_ratio_rank: 590,
+      } as unknown as SecurityDetail],
+      new Set(),
+    )
+    const note = autoFlagNote(entry, 'Hybrid Balanced', 'quarterly', new Date('2026-11-09T00:00:00Z'))
+    expect(note).toContain('Hybrid Balanced')
+    expect(note).toContain('quarterly')
+    expect(note).toContain('November 9, 2026')
+    expect(note).toContain('60')          // the threshold, not just the verdict
+    expect(note).toContain('bottom tier')
   })
 })
