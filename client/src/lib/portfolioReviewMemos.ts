@@ -102,10 +102,17 @@ export async function fetchReviewMemo(reviewLogId: number): Promise<PortfolioRev
 /**
  * Hand the review to the committee.
  *
- * Stamps the queue and stores the advisor's standing thoughts. The per-holding
- * proposals are already on `holding_reviews` by this point — they are saved by
- * the draft autosave like every other per-holding field, so the handoff does
- * not have to carry them and cannot disagree with them.
+ * Stamps the queue and stores the advisor's standing note, which is all the
+ * handoff carries. The step used to also write per-holding proposals to
+ * `holding_reviews`; it does not any more — the committee is briefed on the
+ * book, each holding's category and the watchlist ideas competing in it, none
+ * of which the advisor types, so none of which the handoff has to move.
+ *
+ * **The note is optional, and an empty one does not mean an empty handoff.**
+ * The committee job's skip gate tested `proposed_decision` rows AND
+ * `considerations` — a test that became true of every handoff when the
+ * proposal columns went — so it now gates on the portfolio having holdings at
+ * all. Keep the two in step if this ever carries more again.
  */
 export async function requestCommitteeReview(
   reviewLogId: number,
