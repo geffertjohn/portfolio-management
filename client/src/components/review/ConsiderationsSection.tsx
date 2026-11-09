@@ -3,9 +3,10 @@ import {
   ANNUAL_DECISION_OPTIONS, ANNUAL_DECISION_LABELS,
   type HoldingAssessment, type AnnualDecision,
 } from '@/lib/holdingReviews'
-import { isCashTicker } from '@/lib/positionBands'
+import { reviewableHoldings } from '@/lib/portfolioReviews'
 import { AutoGrowTextarea } from '@/components/AutoGrowTextarea'
-import { fmtUtcLongDate } from '@/lib/formatters'
+import { fmtUtcLongDate, EMPTY } from '@/lib/formatters'
+import type { SecurityDetail } from '@/lib/securities'
 import type { PortfolioPosition } from '@/types/position'
 
 /**
@@ -23,6 +24,7 @@ import type { PortfolioPosition } from '@/types/position'
  */
 export function ConsiderationsSection({
   positions,
+  details,
   assessments,
   considerations,
   requestedAt,
@@ -33,6 +35,8 @@ export function ConsiderationsSection({
   onCancelRequest,
 }: {
   positions: PortfolioPosition[]
+  /** `securities2` rows by ticker, for the category each holding is judged in. */
+  details: Record<string, SecurityDetail>
   assessments: Record<string, HoldingAssessment>
   considerations: string
   requestedAt: string | null
@@ -42,10 +46,7 @@ export function ConsiderationsSection({
   onRequest: () => void
   onCancelRequest: () => void
 }) {
-  const holdings = useMemo(
-    () => positions.filter((p) => p.ticker && !isCashTicker(p.ticker) && !isCashTicker(p.securityId)),
-    [positions],
-  )
+  const holdings = useMemo(() => reviewableHoldings(positions), [positions])
   const locked = requestedAt !== null
   const proposed = holdings.filter((h) => assessments[h.securityId]?.proposedDecision).length
 
@@ -78,6 +79,15 @@ export function ConsiderationsSection({
           <thead>
             <tr className="text-left text-gray-500">
               <th className="py-1 pr-2 font-medium">Holding</th>
+              {/*
+                The category the holding is JUDGED in, from `securities2`.
+                A proposal is a statement about a fund relative to the others
+                doing the same job, and the category is what says which those
+                are — it is the key the scorecard cohort, the peer comparison
+                and the watchlist's fund ideas all hang off. Without it on the
+                row the advisor is proposing against a ticker.
+              */}
+              <th className="py-1 pr-2 font-medium">Category</th>
               <th className="py-1 pr-2 font-medium w-20 text-right">Weight</th>
               <th className="py-1 pr-2 font-medium w-36">Proposal</th>
               <th className="py-1 pr-2 font-medium w-20">Target %</th>
@@ -95,6 +105,9 @@ export function ConsiderationsSection({
                 <tr key={h.securityId} className="border-t border-gray-100">
                   <td className="whitespace-nowrap py-1.5 pr-2 align-top font-medium text-gray-800" title={h.name ?? undefined}>
                     {h.ticker}
+                  </td>
+                  <td className="py-1.5 pr-2 align-top text-gray-600">
+                    <CategoryCell security={details[h.securityId] ?? null} />
                   </td>
                   <td className="py-1.5 pr-2 align-top text-right tabular-nums text-gray-500">
                     {h.weight.toFixed(2)}%
@@ -185,4 +198,37 @@ export function ConsiderationsSection({
       )}
     </div>
   )
+}
+
+/**
+ * The holding's vendor category, or why there isn't one.
+ *
+ * A missing category is NOT cosmetic and is called out rather than dashed
+ * away: `resolveAssetClass` reads this column, so a fund without one drops out
+ * of the allocation rollup as unclassified weight — the gotcha-23 failure,
+ * which took weeks to spot on VMSAX because an unclassified holding looks
+ * exactly like an unfunded model sleeve. The wording matches the Watchlist's
+ * "Category pending", since the cause is the same: a workbook row the next
+ * YCharts refresh will fill.
+ */
+function CategoryCell({ security }: { security: SecurityDetail | null }) {
+  if (!security) {
+    return (
+      <span className="text-xs text-gray-400" title="No securities2 row for this ticker">
+        {EMPTY}
+      </span>
+    )
+  }
+  const category = security.category_name?.trim()
+  if (!category) {
+    return (
+      <span
+        className="text-xs text-amber-700"
+        title="No category_name on securities2 — this holding is also dropped from the allocation rollup until the next YCharts refresh fills it."
+      >
+        Category pending
+      </span>
+    )
+  }
+  return <span className="text-xs">{category}</span>
 }
