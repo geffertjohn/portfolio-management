@@ -4,8 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   startOrResumeDraft, saveReviewDraft, completeReview, nextReviewDateFor,
   CADENCE_LABELS, PORTFOLIO_CADENCES, cadencesForStrategy, attributionWindowsFor,
+  reviewableHoldings,
   type PortfolioCadence, type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
+import { fetchSecurityDetailsByIds } from '@/lib/securities'
 import {
   saveHoldingReviews, fetchHoldingReviewsForLog, fetchHoldingReviewsByPortfolio, emptyAssessment, resolveTierInfo,
   type HoldingAssessment, type MonitorConviction,
@@ -23,7 +25,7 @@ import { ConvictionRankingSection } from '@/components/ConvictionRankingSection'
 import { FundScorecardReviewSection } from '@/components/review/FundScorecardReviewSection'
 import { ReviewAtRiskSection } from '@/components/review/ReviewAtRiskSection'
 import { fetchActiveAtRisk, addToAtRisk, removeFromAtRisk } from '@/lib/atRisk'
-import { atRiskMetricsFromScorecard } from '@/lib/fundAtRisk'
+import { atRiskMetricsFromScorecard, autoFlagPlan, autoFlagNote } from '@/lib/fundAtRisk'
 import { ConsiderationsSection } from '@/components/review/ConsiderationsSection'
 import { CommitteeReviewSection } from '@/components/review/CommitteeReviewSection'
 import { FinalDecisionSection } from '@/components/review/FinalDecisionSection'
@@ -113,6 +115,24 @@ export function PortfolioReviewWorkspace() {
   /** Foundation / Hybrid / ETF / Fixed Income — everything that is not Equity. */
   const isFundBook = !!portfolio && portfolio.portfolio_strategy !== 'Equity'
 
+  /**
+   * The holdings' `securities2` rows, for the automatic At-Risk flag.
+   *
+   * Same query key the scorecard section uses, so TanStack serves both from one
+   * request — the page needs the rows to WRITE the flags and the section needs
+   * them to SHOW which holdings will be flagged, and the two must be looking at
+   * the same securities.
+   */
+  const scorecardIds = useMemo(
+    () => reviewableHoldings(positions).map((h) => h.securityId),
+    [positions],
+  )
+  const { data: scorecardDetails = {} } = useQuery({
+    queryKey: QUERY_KEYS.securityDetails(scorecardIds),
+    queryFn: () => fetchSecurityDetailsByIds(scorecardIds),
+    enabled: isFundBook && scorecardIds.length > 0,
+  })
+
   const [considerations, setConsiderations] = useState('')
   const [requestedAt, setRequestedAt] = useState<string | null>(null)
   const [handoffBusy, setHandoffBusy] = useState(false)
@@ -125,6 +145,7 @@ export function PortfolioReviewWorkspace() {
   })
 
   const [flagging, setFlagging] = useState<string | null>(null)
+  const [autoFlagging, setAutoFlagging] = useState(false)
   const [clearing, setClearing] = useState<string | null>(null)
   const [atRiskError, setAtRiskError] = useState<string | null>(null)
 
@@ -162,6 +183,61 @@ export function PortfolioReviewWorkspace() {
       setAtRiskError(e instanceof Error ? e.message : String(e))
     } finally {
       setFlagging(null)
+    }
+  }
+
+  /**
+   * Raise the At-Risk flags this review's evidence calls for.
+   *
+   * **The rule is the firm's, applied by the app rather than remembered.** A
+   * holding scoring in the red band, or carrying enough bottom-tier readings
+   * that the failure is broad, goes on the list — see `assessFundFlag`, which
+   * is where both dials and the guards against flagging a data gap live.
+   *
+   * Three properties worth keeping:
+   *
+   * - **Idempotent.** `autoFlagPlan` excludes anything already on the list, so
+   *   re-ticking the box, or running the review again next quarter, adds
+   *   nothing twice.
+   * - **The DESIGNATED cohort decides**, never the one on screen. The toggle in
+   *   each card is for looking; a write that followed it would make the book
+   *   depend on a view.
+   * - **Failures are shown, never swallowed.** This writes a governed row that
+   *   opens a sell timer; a flag the advisor believes was raised and was not is
+   *   worse than a visible error, the same reasoning as the benchmark picker.
+   *   One failure does not abandon the rest, so a single bad row cannot cost
+   *   the others their flag.
+   */
+  const runAutoFlags = async () => {
+    if (!isFundBook || !cadence) return
+    const plan = autoFlagPlan(
+      Object.values(scorecardDetails),
+      new Set(atRiskAll.filter((a) => !a.removed_at).map((a) => a.security_id)),
+    )
+    if (plan.length === 0) return
+
+    setAtRiskError(null)
+    setAutoFlagging(true)
+    const failures: string[] = []
+    for (const entry of plan) {
+      try {
+        const metrics = atRiskMetricsFromScorecard(entry.rows, entry.cohort)
+        await addToAtRisk(
+          entry.securityId,
+          metrics,
+          autoFlagNote(entry, id, CADENCE_LABELS[cadence].toLowerCase()),
+          'manual',
+        )
+        refreshAtRisk(entry.securityId)
+      } catch (e) {
+        failures.push(`${entry.securityId}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    setAutoFlagging(false)
+    if (failures.length > 0) {
+      setAtRiskError(
+        `${failures.length} of ${plan.length} automatic At-Risk ${failures.length === 1 ? 'flag was' : 'flags were'} not recorded — ${failures.join('; ')}`,
+      )
     }
   }
 
@@ -286,8 +362,15 @@ export function PortfolioReviewWorkspace() {
   // ── Editing helpers ──────────────────────────────────────────────────────
   const markDirty = () => setDirty(true)
   const toggleDone = (key: string) => {
+    const turningOn = !items.find((it) => it.key === key)?.done
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, done: !it.done } : it)))
     markDirty()
+    // Marking the scorecard step reviewed is what RAISES the automatic flags.
+    // Deliberately not on render: a page that writes to a governed table just
+    // by being opened means reading a review changes the book. Un-ticking
+    // writes nothing and un-flags nothing — a flag is removed on the At-Risk
+    // list with a reason, which is CHECK-enforced.
+    if (turningOn && key === 'scorecard_review') void runAutoFlags()
   }
   const setSectionNotes = (key: string, value: string) => {
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, notes: value || null } : it)))
@@ -507,6 +590,7 @@ export function PortfolioReviewWorkspace() {
                   positions={positions}
                   atRisk={atRiskAll}
                   flagging={flagging}
+                  autoFlagging={autoFlagging}
                   onFlag={flagAtRisk}
                 />
               )}
