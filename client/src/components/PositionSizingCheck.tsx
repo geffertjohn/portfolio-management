@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { parseActualAllocations, compareSizing, type SizingComparison } from '@/lib/positionSizingCompare'
+import { parseActualAllocations, compareSizing, type SizingComparison, type SizingRow } from '@/lib/positionSizingCompare'
 import type { BandModel } from '@/lib/positionBands'
 import type { PortfolioPosition } from '@/types/position'
 import { fmtDecimalPct, fmtNum } from '@/lib/formatters'
@@ -16,6 +16,32 @@ interface PositionSizingCheckProps {
 
 /** percent points (e.g. 7.36) → display "7.36%" */
 const pct = (v: number | null) => (v == null ? '—' : `${fmtNum(v)}%`)
+
+/** Signed drift from target, in percent points: 0.42 → "+0.42". */
+const signed = (v: number | null) => (v == null ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmtNum(Math.abs(v))}`)
+
+/**
+ * A file that does not reconcile to 100% is a broken export, not a rounding
+ * quirk — the same claim ImportAllocationsModal makes about its per-date
+ * totals. A whole percentage point of slack allows for a holding the export
+ * rounds, and nothing more.
+ */
+const TOTAL_EPS = 1
+
+function statusCell(r: SizingRow) {
+  switch (r.status) {
+    case 'over':
+      return <span className="font-medium text-red-600">Over {fmtDecimalPct((r.breachBy ?? 0) / 100)}</span>
+    case 'under':
+      return <span className="font-medium text-amber-600">Under {fmtDecimalPct((r.breachBy ?? 0) / 100)}</span>
+    case 'missing':
+      return <span className="text-amber-600">Not in file</span>
+    case 'off_model':
+      return <span className="text-amber-600">Off-model</span>
+    default:
+      return <span className="text-gray-400">Within</span>
+  }
+}
 
 export function PositionSizingCheck({ positions, modelPortfolio, portfolioName }: PositionSizingCheckProps) {
   const queryClient = useQueryClient()
@@ -97,39 +123,73 @@ export function PositionSizingCheck({ positions, modelPortfolio, portfolioName }
 
       {result && (
         <div className="mt-2">
+          {/* The verdict, then the numbers it was reached from — never the
+              verdict alone. This block showed only breaches until Nov 2026, so
+              a book inside its limits rendered one green sentence and a count,
+              and the advisor could not see the allocations they had just
+              uploaded in the step whose whole purpose is to look at them. */}
           {result.breaches.length === 0 ? (
             <p className="text-xs text-green-700">
               All matched holdings are within their allocation limits.
             </p>
           ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-gray-500">
-                  <th className="py-1 font-medium">Ticker</th>
-                  <th className="py-1 text-right font-medium">Actual</th>
-                  <th className="py-1 text-right font-medium">Limits</th>
-                  <th className="py-1 text-right font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.breaches.map((b) => (
-                  <tr key={b.symbol} className="border-t border-gray-200">
-                    <td className="py-1 font-medium text-gray-800" title={b.name ?? undefined}>{b.symbol}</td>
-                    <td className="py-1 text-right text-gray-700">{pct(b.actual)}</td>
-                    <td className="py-1 text-right text-gray-500">{pct(b.lower)}–{pct(b.upper)}</td>
-                    <td className={`py-1 text-right font-medium ${b.direction === 'over' ? 'text-red-600' : 'text-amber-600'}`}>
-                      {b.direction === 'over' ? 'Over' : 'Under'} {fmtDecimalPct(b.breachBy / 100)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <p className="text-xs text-red-600">
+              {result.breaches.length} holding{result.breaches.length === 1 ? '' : 's'} outside{' '}
+              {result.breaches.length === 1 ? 'its' : 'their'} allocation limits.
+            </p>
           )}
+
+          <table className="mt-2 w-full text-xs">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="py-1 font-medium">Ticker</th>
+                <th className="py-1 text-right font-medium">Target</th>
+                <th className="py-1 text-right font-medium">Actual</th>
+                <th className="py-1 text-right font-medium">Drift</th>
+                <th className="py-1 text-right font-medium">Limits</th>
+                <th className="py-1 text-right font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.rows.map((r) => (
+                <tr
+                  key={r.symbol}
+                  className={`border-t border-gray-200 ${r.status === 'within' ? '' : 'bg-white'}`}
+                >
+                  <td className="py-1 font-medium text-gray-800" title={r.name ?? undefined}>{r.symbol}</td>
+                  <td className="py-1 text-right text-gray-500">{pct(r.target)}</td>
+                  <td className="py-1 text-right text-gray-700">{pct(r.actual)}</td>
+                  <td className="py-1 text-right text-gray-500">{signed(r.drift)}</td>
+                  <td className="py-1 text-right text-gray-500">
+                    {r.lower == null && r.upper == null ? '—' : `${pct(r.lower)}–${pct(r.upper)}`}
+                  </td>
+                  <td className="py-1 text-right">{statusCell(r)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-300 font-medium text-gray-600">
+                <td className="py-1">Total</td>
+                <td className="py-1 text-right">{pct(result.targetTotal)}</td>
+                <td
+                  className={`py-1 text-right ${Math.abs(result.actualTotal - 100) > TOTAL_EPS ? 'text-amber-600' : ''}`}
+                  title={
+                    Math.abs(result.actualTotal - 100) > TOTAL_EPS
+                      ? 'The uploaded weights do not sum to 100% — check the export before reading the comparison.'
+                      : undefined
+                  }
+                >
+                  {pct(result.actualTotal)}
+                </td>
+                <td colSpan={3} />
+              </tr>
+            </tfoot>
+          </table>
 
           <p className="mt-2 text-[11px] text-gray-400">
             {result.withinCount} within limits
-            {result.unmatchedPositions.length > 0 && ` · ${result.unmatchedPositions.length} target${result.unmatchedPositions.length === 1 ? '' : 's'} not in file (${result.unmatchedPositions.join(', ')})`}
-            {result.unmatchedFile.length > 0 && ` · held off-model: ${result.unmatchedFile.join(', ')}`}
+            {result.unmatchedPositions.length > 0 && ` · ${result.unmatchedPositions.length} target${result.unmatchedPositions.length === 1 ? '' : 's'} not in file`}
+            {result.unmatchedFile.length > 0 && ` · ${result.unmatchedFile.length} held off-model`}
           </p>
         </div>
       )}
