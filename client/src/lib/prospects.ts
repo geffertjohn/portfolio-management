@@ -57,6 +57,17 @@ export interface ProspectIdea extends ProspectEntry {
      * temporary state, not a missing value to paper over.
      */
     category_name: string | null
+    /**
+     * WHICH cohort this fund is graded against — the governed choice, set by
+     * hand on the security page and written by nothing else.
+     *
+     * Unlike `category_name` it does NOT arrive with the YCharts refresh and
+     * never resolves on its own: a fund left null is silently graded against
+     * its category by every surface that reads it, including the automatic
+     * At-Risk flag in the fund review. Carried here so the Watchlist can say
+     * so while the idea is still an idea.
+     */
+    scorecard_cohort: string | null
   } | null
 }
 
@@ -84,7 +95,7 @@ export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
       .in('prospect_id', rows.map((r) => r.id)),
     supabase
       .from('securities2')
-      .select('id, security_id, security_name, broad_asset_class, detailed_security_type, peer_group_name, category_name')
+      .select('id, security_id, security_name, broad_asset_class, detailed_security_type, peer_group_name, category_name, scorecard_cohort')
       .in('security_id', [...new Set(rows.map((r) => r.security_id))]),
   ])
   if (links.error) throw links.error
