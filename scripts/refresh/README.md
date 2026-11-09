@@ -256,6 +256,72 @@ the start of a run would read as an abort and kill a refresh that was working.
 Running out of pre-wired rows is the case that writes one; extend the `YCI()`
 formulas below row 101 to add slots.
 
+### …and a new one no longer waits until morning
+
+The 05:30 run closes the gap within a day, which is right for a fund added at
+17:00 and wrong for one added at 09:00 that the advisor wants to read about
+this morning. **`poll-watchlist.sh` runs every 15 minutes** (LaunchAgent
+`com.john.ycharts-poller.plist`) and starts an ordinary refresh when a watched
+fund is waiting for one.
+
+```
+launchd (every 900s)
+  └─ poll-watchlist.sh          hours + floor guards, logs
+       └─ pending-funds.cjs     the decision; starts nothing
+            └─ refresh.sh       the ordinary pipeline, own lock
+```
+
+**Why a poller and not a push.** Adding a fund is a browser write to Supabase,
+and there is no path from the browser to this machine's shell — the same reason
+the committee runs in Claude Code rather than from a button. So the Mac asks,
+on a cycle. Almost every cycle is one Supabase read and an exit.
+
+**THE RUNAWAY THIS IS SHAPED AROUND.** The obvious rule — "a watched fund has
+no category, so refresh" — never stops being true for a ticker YCharts does not
+recognise, so the poller would wake the VM for a six-minute Excel session every
+cycle for ever, with nothing on screen saying why. The condition is therefore
+**`prospects.date_added` newer than the newest `import_runs` row**: a fund
+nobody has tried yet. A refresh that runs and fails to resolve the ticker
+advances that stamp past `date_added`, and the fund stops asking *by
+construction* — one extra refresh per batch of additions, no attempt counter
+and no state file to corrupt. The daily run keeps trying in case YCharts adds
+coverage later, and `pending-funds.cjs` names those tickers when it declines.
+
+**Stocks are excluded, and that is the same hazard wearing a different hat.**
+The `Securities` sheet is funds-only, so a watched stock never gets a
+`securities2` row and would read as pending on every poll for ever. The
+classifier is imported from `watchlist-tickers.cjs` rather than restated —
+including its rule that an empty FMP profile means mutual fund — because two
+classifiers with opposite defaults is exactly how RSIYX was once filed on the
+watchlist as a stock.
+
+**Three guards, each for a different failure:**
+
+| Guard | Where | Stops |
+|---|---|---|
+| 07:00–19:00, any day | `poll-watchlist.sh` | waking the VM overnight for an idea nobody is reading |
+| 45 minutes between runs | `.poll-trigger` stamp | a FAILED refresh, which writes no `import_runs` row, retrying every cycle |
+| `date_added > last import` | `pending-funds.cjs` | the runaway above |
+
+Weekends are included deliberately: a fund added on Saturday is one the advisor
+wants on Saturday, and YCharts serves Friday's close happily.
+
+The floor stamp is written **before** the run, not after — if `refresh.sh`
+hangs, a stamp on the way out would never be reached and the next cycle would
+start a second one. (`refresh.sh` would refuse it anyway, with its own lock;
+this means the poller does not have to rely on that.)
+
+**Install it alongside the refresh agent:**
+
+```
+cp scripts/refresh/com.john.ycharts-poller.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.john.ycharts-poller.plist
+```
+
+Its log is `~/portfolio-refresh/logs/poller.log`, and it is **silent on the
+quiet path** — a line every 15 minutes saying nothing happened is a log nobody
+reads.
+
 ### Adding a metric column
 
 ```bash
@@ -443,16 +509,27 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
    `C:\portfolio\watch-trigger.cmd`; principal `InteractiveToken` and **"Run
    only when user is logged on"** so Excel gets a desktop to open into.
 
-   > **The watcher only polls 05:25–06:25.** That bound is deliberate — an
-   > indefinite 2-minute repetition fired 720 times a day — but it means
-   > **`refresh.sh` run by hand at any other time always ends in
-   > `FATAL: no output after 1500s`.** The Mac drops the trigger and nothing is
-   > awake to read it. To run off-schedule, start `refresh.sh`, wait for it to
-   > log "dropping trigger", then kick the watcher yourself:
+   > **The watcher only polls 05:25–06:25**, and that bound is deliberate — an
+   > indefinite 2-minute repetition fired 720 times a day. **`refresh.sh` kicks
+   > the task itself** (9 Nov 2026), so a run at any other hour no longer
+   > depends on the window: it drops the trigger and then sends
    >
    > ```
    > prlctl exec "Windows 11" schtasks.exe /run /tn "\YCharts Refresh Watcher"
    > ```
+   >
+   > Until then an off-schedule run always died on `FATAL: no output after
+   > 1500s` — the Mac dropped the trigger and nothing was awake to read it —
+   > and the fix was to tell a human to send that line from a second terminal.
+   >
+   > **The kick does not launch Excel, and that is why it is allowed to work.**
+   > `prlctl exec` runs as SYSTEM in session 0, which has no YCharts add-in;
+   > `schtasks /run` merely asks the scheduler, and the task's own principal is
+   > `InteractiveToken`, so the work still happens in the console session.
+   > It is safe to send during the polling window: the task's
+   > `MultipleInstancesPolicy` is `IgnoreNew`, so a kick that arrives while an
+   > instance is running is dropped rather than racing it. A failed kick is a
+   > WARNING — the window is still a real path for the 05:30 run.
 10. Power and recovery: never sleep, `powercfg /h off`, auto-login via
     `netplwiz`, and Windows Update active hours outside 05:00–07:00.
 11. **Same timezone as the Studio.** The macro stamps local time and the importer
@@ -470,8 +547,10 @@ bash scripts/refresh/refresh.sh                      # the whole pipeline
 node scripts/refresh/import-workbook.cjs <file>      # just the import half
 ```
 
-**A by-hand run needs the guest watcher kicked, in another terminal.** This
-section used to imply `refresh.sh` was self-contained and it is not.
+**`refresh.sh` is self-contained** (9 Nov 2026). It kicks the guest watcher
+itself after dropping the trigger, so a run at any hour works unattended and
+nothing here needs a second terminal. This section used to say the opposite,
+and it was true when written.
 
 `watch-trigger.cmd` **does not poll** — despite what its own comment and the
 diagram above suggest. It tests for the trigger once (`if not exist "%TRIGGER%"
@@ -479,13 +558,14 @@ goto :eof`) and exits. The two minutes belong to the **task**, whose trigger
 reads `PT2M` every `PT1H` with `StopAtDurationEnd`, starting 05:25, weekdays
 (read from `schtasks /query /tn "YCharts Refresh Watcher" /xml`, 6 Nov 2026).
 
-**So a trigger is only ever noticed between 05:25 and 06:25 on a weekday.** Drop
-one at any other time and `refresh.sh` waits its full 25 minutes and reports
-`no output after 1500s` — which reads exactly like a hung Excel and is not.
-Start the watcher yourself:
+**So a trigger dropped outside 05:25–06:25 on a weekday is never noticed by the
+POLLING.** That is why `refresh.sh` now kicks the task itself; before it did,
+an off-schedule run waited its full 25 minutes and reported `no output after
+1500s`, which reads exactly like a hung Excel and is not. If you ever need to
+send the kick by hand:
 
 ```
-prlctl exec "Windows 11" schtasks.exe /run /tn "YCharts Refresh Watcher"
+prlctl exec "Windows 11" schtasks.exe /run /tn "\YCharts Refresh Watcher"
 ```
 
 Excel should appear in **Session 1 (Console)** within ~20s — `tasklist /FI

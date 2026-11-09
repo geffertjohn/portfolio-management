@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the watchlist poller — a refresh when a newly watched fund
+  is waiting for one, instead of the next morning.
+
+  An AGENT, not a Daemon, for the same reason as the 05:30 refresh: Parallels
+  needs the logged-in GUI session to run a VM. Install to
+  ~/Library/LaunchAgents/ on the Mac Studio.
+
+  StartInterval rather than StartCalendarInterval. The job is "check often and
+  usually do nothing", not "run at a time", and 48 calendar entries would say
+  the same thing far less clearly. poll-watchlist.sh applies the daylight-hours
+  guard itself, where it sits beside the reason for it.
+
+  EVERY 15 MINUTES, AND ALMOST ALL OF THEM EXIT SILENTLY. A cycle is one
+  Supabase read; it only reaches the VM when a fund has been added that no
+  import has tried yet. The run it starts is the ordinary refresh.sh, which
+  holds its own lock, so a cycle landing on the 05:30 run finds it busy and
+  skips rather than racing it.
+
+  RunAtLoad is false: installing this should not immediately wake the VM.
+
+  launchd does not wake a sleeping Mac. That is fine here and deliberate —
+  nobody is adding funds while the Studio is asleep, and the 05:30 refresh
+  covers anything added overnight.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.john.ycharts-poller</string>
+
+  <!-- Must live outside ~/Desktop, ~/Documents and ~/Downloads: those are
+       TCC-protected and a LaunchAgent holds no grant for them. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/johngeffert/Developer/Portfolio Management/scripts/refresh/poll-watchlist.sh</string>
+  </array>
+
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- launchd's own capture, for failures before the script can log. -->
+  <key>StandardOutPath</key>
+  <string>/Users/johngeffert/portfolio-refresh/logs/poller-launchd.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/johngeffert/portfolio-refresh/logs/poller-launchd.err</string>
+
+  <!-- prlctl lives in /usr/local/bin; launchd's default PATH does not include
+       it, and refresh.sh needs it. node comes from the same places. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>
