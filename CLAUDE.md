@@ -1413,14 +1413,21 @@ forty percent each, which `hasConvictionTiers` already says in the model editor.
   review carrying **zero `holding_reviews.proposed_decision` rows AND no
   `considerations`**. The redesign made that test true of EVERY handoff —
   nothing writes `proposed_decision` any more and the note is optional — so it
-  would have skipped review 36 (Hybrid Balanced, 16 holdings, no note) as
-  empty. **It now gates on the portfolio having holdings at all**, the one
+  would have skipped review 36 (Hybrid Balanced — 16 holdings and no note on
+  9 Nov 2026) as empty. **It now gates on the portfolio having holdings at all**, the one
   thing that can still genuinely be missing: the rest of the briefing (each
   holding, its category, the ideas competing in it) is derived, so the advisor
   cannot leave it blank. An **uncategorised** holding is reported in the memo
   rather than skipped — the same null drops it out of the allocation rollup,
   so the risk manager is the person who needs to hear about it. Withdrawing a
   handoff stays the advisor's call, never the job's.
+- **The prompt's examples are DATED, not current, and deliberately so.** The
+  watchlist and `securities2.scorecard_cohort` are being filled in as this is
+  written, so how many holdings have an alternative, and which cohort any pair
+  is graded in, both change week to week. Every count in the prompt carries
+  its observation date and every rule stands without it — the §23 lesson
+  applied to a prompt: do not duplicate a fact that lives somewhere
+  authoritative, and the query is the authority here.
 - **The committee prompt's model lookup joined on the wrong key** and was
   fixed in the same change. `portfolio_model_map` keys on the portfolio's own
   `security_id` — a YCharts id like `P:2371412` — **not on its name**, so

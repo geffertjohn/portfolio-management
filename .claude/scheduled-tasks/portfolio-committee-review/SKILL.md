@@ -105,8 +105,8 @@ the book: construction, risk, and the regime it is being run into.
    `proposed_decision` any more — and the free-text note beside the table is
    explicitly optional. The old gate would therefore skip every review an
    advisor hands over without typing a note, which is the normal case: review
-   36 (Hybrid Balanced) sits in exactly that shape today, 16 holdings and no
-   note.
+   36 (Hybrid Balanced) was in exactly that shape on 9 Nov 2026 — 16 holdings
+   and no note.
 
    **What a handoff carries now is the book**, and none of it is typed: the
    holdings, the `category_name` each is judged in, and the watchlist ideas
@@ -263,8 +263,11 @@ the book: construction, risk, and the regime it is being run into.
    - **A weight is a property of a BOOK.** A fund at 33% in one portfolio and
      25% in another is not 58% of anything; report the range and name the books.
 
-   **How to read the alternatives table** — six rules, each of which changes
-   the answer:
+   **How to read the alternatives table** — seven rules, each of which changes
+   the answer. **The examples are dated observations (9 Nov 2026), not the
+   state of the book:** the watchlist is still being filled in and cohorts are
+   still being set, so re-read what the query returns and never assert a count
+   from this file. Each rule stands without its example.
 
    - **Match on the normalised `category_name` and nothing more** — trim,
      lowercase, collapse runs of whitespace. Both sides are the same vendor
@@ -277,40 +280,57 @@ the book: construction, risk, and the regime it is being run into.
      query is load-bearing, not tidying.
    - **`(held here)` is a CONSOLIDATION question and nothing else.** The
      alternative is already in the book under review, so there is no purchase
-     to recommend — only whether the sleeve needs both funds. Foundation
-     Conservative is the live case and it is the same argument this job has
-     already had: VBILX at 33% is offered VBTLX, which sits beside it at 25%.
-     That is the Nov 2026 question — 60% against 52% government, 0% against
-     21% securitized, realised returns 31bp apart — now surfaced on the row
-     instead of being noticed.
+     to recommend — only whether the sleeve needs both funds. On 9 Nov 2026
+     Foundation Conservative showed the case, and it is the same argument this
+     job has already had: VBILX at 33% offered VBTLX, which sat beside it at
+     25%. That is the Nov 2026 question — 60% against 52% government, 0%
+     against 21% securitized, realised returns 31bp apart — surfaced on the
+     row instead of waiting to be noticed.
    - **`(held elsewhere)` is a purchase, but of a fund the firm already
-     knows.** On Hybrid Balanced four Intermediate Core Bond funds — BIMIX 11%,
-     DHRIX 7%, PYTRX 7%, DFCF 4%, together 29% of the book — all point at
-     VBTLX, which the firm owns in three Foundation books (25/18/12%). Moving
-     into a fund already held under another model is a different
+     knows.** On 9 Nov 2026 four of Hybrid Balanced's Intermediate Core Bond
+     funds — BIMIX 11%, DHRIX 7%, PYTRX 7%, DFCF 4%, together 29% of the book
+     — all pointed at VBTLX, held in three Foundation books at 25/18/12%.
+     Moving into a fund already held under another model is a different
      recommendation from buying a stranger, and the memo should say which.
    - **The same idea against several holdings in one sleeve IS the finding.**
      Those four core-bond funds are one question — how many funds that sleeve
      needs — not four swap questions. Answer it once, at the sleeve, rather
      than four times at the holding.
-   - **An empty cell is a real answer, not a gap.** Seven of Hybrid Balanced's
-     sixteen holdings have nothing recorded against them. Judge those on their
+   - **An empty cell is a real answer, not a gap.** Judge that holding on its
      own scorecard and composition and say that is what you did. **Do not go
      and find candidates.** The watchlist is the firm's written-down idea list;
      a name you introduce in a memo has had no research run on it, no bear
-     case, and no record of when the firm started considering it.
-   - **NEVER compare two scorecard totals graded in different cohorts, and
-     this is live today.** `securities2.scorecard_cohort` decides whether a
-     fund is ranked against its category or against its peer group, and the
-     two are different populations, so the totals are not on one scale. Every
-     Intermediate Core Bond HOLDING in these books is graded `category` —
-     BIMIX, DHRIX, PYTRX, DFCF, VBILX — while **VBTLX, the alternative offered
-     against all five, is graded `peer`.** Reading one against the other is
-     the failure `lib/fundPeers.ts` was written for: on this exact pair the
-     printed totals once reversed the order every underlying metric gave.
-     Force ONE cohort across the comparison — the subject holding's, as the
-     fund page does — and say in the memo that you did, naming which. Where
-     you cannot, compare the underlying metrics instead of the totals.
+     case, and no record of when the firm started considering it. Empty cells
+     are common and getting less so — seven of Hybrid Balanced's sixteen on
+     9 Nov 2026, while the list was still being built — so an empty column is
+     not evidence the step was skipped.
+   - **NEVER compare two scorecard totals graded in different cohorts.**
+     `securities2.scorecard_cohort` decides whether a fund is ranked against
+     its category or against its peer group, and the two are different
+     populations, so the totals are not on one scale. **Check the cohort of
+     each pair you compare** — do not assume a category's funds agree, and do
+     not assume they disagree either, because the cohorts are being set as
+     this is written. On 9 Nov 2026 every Intermediate Core Bond holding in
+     these books was graded `category` while VBTLX, the alternative offered
+     against all of them, was graded `peer`; that may be corrected by the time
+     you run. Reading one against the other is the failure
+     `lib/fundPeers.ts` was written for — on that exact pair the printed totals
+     once reversed the order every underlying metric gave. Force ONE cohort
+     across the comparison, the subject holding's, as the fund page does, and
+     say in the memo which you used. Where you cannot, compare the underlying
+     metrics instead of the totals.
+   - **A NULL `scorecard_cohort` on an alternative does not block the
+     comparison.** `buildFundScorecard(security, cohort)` takes the cohort as
+     an argument, so a fund can be scored in either one; the column records
+     which cohort the FIRM judges it in, not which it can be measured in.
+     Since the rule above already forces the subject holding's cohort, a null
+     on the alternative changes nothing about how you score it — score it and
+     move on. **Name it in the memo all the same**, in one clause: it means
+     the idea is not yet fully set up, which is the advisor's to finish and
+     not a reason to withhold the comparison. On 9 Nov 2026 three watched
+     funds were in that state while the list was being extended. A null on the
+     SUBJECT HOLDING is different and is a real gap — the review's scorecard
+     step says so on that holding's own card.
 
    **The advisor sees this same comparison** on each fund's page, built by
    `lib/fundPeers.ts` — one cohort forced across the table so the scores are
