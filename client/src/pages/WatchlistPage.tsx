@@ -132,9 +132,39 @@ function ProspectCard({
           */}
           {isFund ? (
             entry.securities2?.category_name ? (
-              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
-                {entry.securities2.category_name}
-              </span>
+              <>
+                <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+                  {entry.securities2.category_name}
+                </span>
+                {/*
+                  NO COHORT IS A DIFFERENT KIND OF GAP FROM NO CATEGORY, and
+                  the two sit side by side here so they must not read alike.
+                  A category arrives on its own with the next YCharts refresh.
+                  A cohort NEVER does: it is the governed choice of whether the
+                  fund is judged against its Morningstar category or its peer
+                  group, written only by hand on the security page.
+
+                  Left null it is not inert — every surface that reads it falls
+                  back to the category, silently: the scorecard the review
+                  step shows, the peer comparison, and the automatic At-Risk
+                  flag, which now opens a sell timer off that default. Four of
+                  the eight funds watched today are in that state. Saying so
+                  on the card is the earliest point it can be fixed, while the
+                  idea is still an idea rather than a holding under review.
+                */}
+                {!entry.securities2.scorecard_cohort && (
+                  <span
+                    title="No scorecard cohort set. Until one is chosen this fund is graded against its Morningstar category by default — on the review scorecard, in the peer comparison, and by the automatic At-Risk flag. Unlike the category, it does not arrive with a YCharts refresh: open the security and set it."
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+                  >
+                    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="currentColor" aria-hidden="true">
+                      <path d="M6 0L12 11H0z" />
+                      <path d="M5.4 4h1.2v3.2H5.4zM5.4 8.2h1.2v1.2H5.4z" fill="#fffbeb" />
+                    </svg>
+                    No cohort
+                  </span>
+                )}
+              </>
             ) : (
               /*
                 Not a missing value to hide: a newly watched fund has no
