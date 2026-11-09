@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  ANNUAL_DECISION_OPTIONS, ANNUAL_DECISION_LABELS,
-  type HoldingAssessment, type AnnualDecision,
-} from '@/lib/holdingReviews'
+  alternativesFor, watchlistAlternativesByCategory,
+  type ProspectIdea, type WatchlistAlternative,
+} from '@/lib/prospects'
 import { reviewableHoldings } from '@/lib/portfolioReviews'
 import { AutoGrowTextarea } from '@/components/AutoGrowTextarea'
 import { fmtUtcLongDate, EMPTY } from '@/lib/formatters'
@@ -12,24 +13,27 @@ import type { PortfolioPosition } from '@/types/position'
 /**
  * The advisor's handoff to the investment committee.
  *
- * **Written BEFORE the committee looks, and that is the point.** A proposal
- * recorded after reading the committee's view is not an independent one, and
- * the record could not show that it was. So this section closes with a handoff
- * that stamps a queue, and the committee step waits on it.
+ * **It asks what each holding should be weighed AGAINST, not what to do with
+ * it.** The step used to carry a per-holding Proposal, Target % and Rationale,
+ * which asked the advisor to decide the review before the committee had looked
+ * at it; the question an annual review actually turns on is whether a holding
+ * is still the right fund for its sleeve, and that cannot be answered without
+ * naming the alternatives. Those alternatives are the watchlist ideas already
+ * recorded in the same `category_name` — the candidates the firm has written
+ * down, rather than a universe assembled on the spot.
  *
- * Once handed off the fields go read-only. Not to be officious — if the
- * proposal can still be edited while the committee is forming a view on it,
- * then what the committee answered and what the file says the advisor proposed
- * can differ, and nothing would record which came first.
+ * **Still written BEFORE the committee looks**, and the handoff still freezes
+ * the section: what the advisor set out for the committee and what the
+ * committee answered must not be able to drift, or nothing records which came
+ * first.
  */
 export function ConsiderationsSection({
   positions,
   details,
-  assessments,
+  ideas,
   considerations,
   requestedAt,
   busy,
-  onChange,
   onConsiderationsChange,
   onRequest,
   onCancelRequest,
@@ -37,24 +41,31 @@ export function ConsiderationsSection({
   positions: PortfolioPosition[]
   /** `securities2` rows by ticker, for the category each holding is judged in. */
   details: Record<string, SecurityDetail>
-  assessments: Record<string, HoldingAssessment>
+  /** Live watchlist ideas — the source of the alternatives column. */
+  ideas: ProspectIdea[]
   considerations: string
   requestedAt: string | null
   busy: boolean
-  onChange: (securityId: string, field: keyof HoldingAssessment, value: string | number | boolean | null) => void
   onConsiderationsChange: (value: string) => void
   onRequest: () => void
   onCancelRequest: () => void
 }) {
   const holdings = useMemo(() => reviewableHoldings(positions), [positions])
   const locked = requestedAt !== null
-  const proposed = holdings.filter((h) => assessments[h.securityId]?.proposedDecision).length
+
+  // Grouped once for the whole table rather than filtered per row: a Foundation
+  // book is seven holdings against eleven ideas, and the shape of the question
+  // is "which ideas sit in this sleeve", which is a grouping.
+  const byCategory = useMemo(() => watchlistAlternativesByCategory(ideas), [ideas])
+  const withAlternatives = holdings.filter(
+    (h) => alternativesFor(byCategory, h.securityId, details[h.securityId]?.category_name).length > 0,
+  ).length
 
   return (
     <div>
       <p className="text-sm text-gray-600">
-        What you are inclined to do, and anything you want the committee to weigh, recorded
-        before they look. Leave a holding blank to say nothing about it.
+        Every holding against the watchlist ideas that sit in the same category — what the
+        committee should weigh it against. Add anything the numbers do not show below.
       </p>
 
       {locked && (
@@ -89,18 +100,15 @@ export function ConsiderationsSection({
               */}
               <th className="py-1 pr-2 font-medium">Category</th>
               <th className="py-1 pr-2 font-medium w-20 text-right">Weight</th>
-              <th className="py-1 pr-2 font-medium w-36">Proposal</th>
-              <th className="py-1 pr-2 font-medium w-20">Target %</th>
-              <th className="py-1 font-medium">Rationale <span className="font-normal text-gray-400">(optional)</span></th>
+              <th className="py-1 font-medium">
+                Alternatives <span className="font-normal text-gray-400">on the watchlist</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {holdings.map((h) => {
-              const a = assessments[h.securityId]
-              const decision = a?.proposedDecision ?? ''
-              // A target weight only means something for a size change; for keep
-              // or exit it would be noise, or a contradiction.
-              const wantsWeight = decision === 'increase' || decision === 'reduce' || decision === 'replace'
+              const category = details[h.securityId]?.category_name ?? null
+              const alts = alternativesFor(byCategory, h.securityId, category)
               return (
                 <tr key={h.securityId} className="border-t border-gray-100">
                   <td className="whitespace-nowrap py-1.5 pr-2 align-top font-medium text-gray-800" title={h.name ?? undefined}>
@@ -112,50 +120,8 @@ export function ConsiderationsSection({
                   <td className="py-1.5 pr-2 align-top text-right tabular-nums text-gray-500">
                     {h.weight.toFixed(2)}%
                   </td>
-                  <td className="py-1.5 pr-2 align-top">
-                    <select
-                      value={decision}
-                      disabled={locked}
-                      onChange={(e) => onChange(h.securityId, 'proposedDecision', e.target.value || null)}
-                      className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 focus:border-gray-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
-                    >
-                      <option value="">—</option>
-                      {ANNUAL_DECISION_OPTIONS.map((o: AnnualDecision) => (
-                        <option key={o} value={o}>{ANNUAL_DECISION_LABELS[o]}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="py-1.5 pr-2 align-top">
-                    {wantsWeight ? (
-                      <input
-                        type="number" min={0} max={100} step={0.25}
-                        value={a?.proposedWeight ?? ''}
-                        disabled={locked}
-                        onChange={(e) => onChange(h.securityId, 'proposedWeight', e.target.value === '' ? null : Number(e.target.value))}
-                        className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs tabular-nums text-gray-900 focus:border-gray-500 focus:outline-none disabled:bg-gray-50"
-                      />
-                    ) : (
-                      <span className="text-xs text-gray-300">—</span>
-                    )}
-                  </td>
                   <td className="py-1.5 align-top">
-                    {/*
-                      A rationale worth recording runs to paragraphs, so this is a
-                      growing textarea rather than the single-line input it was. A
-                      real one here reached 1,043 characters and a 265px input
-                      showed about thirty of them — the advisor was handed a view
-                      recorded in their name that they could not read, which is the
-                      MarkReviewedModal lesson over again. Capped so seven of these
-                      do not push the handoff button off the page.
-                    */}
-                    <AutoGrowTextarea
-                      value={a?.proposedRationale ?? ''}
-                      disabled={locked}
-                      placeholder={decision ? 'Why…' : ''}
-                      maxHeightPx={200}
-                      onChange={(v) => onChange(h.securityId, 'proposedRationale', v || null)}
-                      className="w-full min-h-[2rem] rounded border border-gray-300 px-1.5 py-1 text-xs leading-relaxed text-gray-900 focus:border-gray-500 focus:outline-none disabled:bg-gray-50"
-                    />
+                    <AlternativesCell alternatives={alts} hasCategory={!!category?.trim()} />
                   </td>
                 </tr>
               )
@@ -181,9 +147,9 @@ export function ConsiderationsSection({
       {!locked && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
           <p className="text-xs text-gray-600">
-            {proposed === 0
-              ? 'No proposals yet — you can hand off without any, and ask the committee to look cold.'
-              : `${proposed} ${proposed === 1 ? 'proposal' : 'proposals'} recorded.`}
+            {withAlternatives === 0
+              ? 'No holding has an alternative on the watchlist — the committee will be asked to judge each one on its own.'
+              : `${withAlternatives} of ${holdings.length} holdings have an alternative on the watchlist.`}
             {' '}The committee runs in Claude Code, so this queues the review rather than starting it.
           </p>
           <button
@@ -231,4 +197,46 @@ function CategoryCell({ security }: { security: SecurityDetail | null }) {
     )
   }
   return <span className="text-xs">{category}</span>
+}
+
+/**
+ * The watchlist ideas competing with one holding.
+ *
+ * **An empty cell is three different statements**, and collapsing them would
+ * make the most actionable one invisible. No category at all means the holding
+ * cannot be matched to anything (the workbook has not filled it); a category
+ * with no ideas means the firm has recorded no candidate in that sleeve, which
+ * is a finding about the watchlist rather than about the holding; and ideas
+ * present is the comparison the committee is being asked to make.
+ */
+function AlternativesCell({
+  alternatives, hasCategory,
+}: {
+  alternatives: WatchlistAlternative[]
+  hasCategory: boolean
+}) {
+  if (!hasCategory) {
+    return (
+      <span className="text-xs text-gray-400" title="Without a category this holding cannot be matched to a watchlist idea.">
+        no category to match on
+      </span>
+    )
+  }
+  if (alternatives.length === 0) {
+    return <span className="text-xs text-gray-400">none on the watchlist</span>
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {alternatives.map((a) => (
+        <Link
+          key={a.securityId}
+          to={`/security/${a.numericId}`}
+          title={a.name ?? undefined}
+          className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 hover:bg-teal-100"
+        >
+          {a.securityId}
+        </Link>
+      ))}
+    </div>
+  )
 }

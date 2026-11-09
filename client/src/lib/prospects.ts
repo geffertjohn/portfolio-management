@@ -176,3 +176,72 @@ export async function removeProspect(entryId: number): Promise<void> {
     .eq('id', entryId)
   if (error) throw error
 }
+
+// ── Watchlist funds as alternatives to a holding ─────────────────────────────
+
+/** One watchlist fund offered as an alternative to a holding in its category. */
+export interface WatchlistAlternative {
+  securityId: string
+  name: string | null
+  /** `securities2.id`, for the detail-page link. Always set — matching needs the row. */
+  numericId: number
+}
+
+/**
+ * Normalised category key.
+ *
+ * Both sides of this comparison are the SAME column — `securities2.category_name`
+ * on a holding and on a watched fund — so case and whitespace are the only
+ * variation to allow for. No hyphen or spelling variants: those exist where two
+ * vendor vocabularies meet (a fund's "Large Growth" against a benchmark's "US
+ * Large Cap Growth"), and inventing them here would silently match sleeves the
+ * vendor considers distinct.
+ */
+export function categoryKey(category: string | null | undefined): string | null {
+  const k = (category ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+  return k || null
+}
+
+/**
+ * Watchlist funds grouped by the category they would compete in.
+ *
+ * The annual review asks whether each holding is still the right fund for its
+ * sleeve, and the only honest form of that question is "against what?" — the
+ * ideas already recorded in the same category are the answer the firm has
+ * actually written down. An idea with no `securities2` row is skipped: it is a
+ * stock, or a fund the workbook has not reached yet, and neither can be
+ * compared on a category it does not carry.
+ */
+export function watchlistAlternativesByCategory(
+  ideas: ProspectIdea[],
+): Map<string, WatchlistAlternative[]> {
+  const out = new Map<string, WatchlistAlternative[]>()
+  for (const idea of ideas) {
+    const sec = idea.securities2
+    if (!sec) continue
+    const key = categoryKey(sec.category_name)
+    if (!key) continue
+    const list = out.get(key) ?? []
+    list.push({ securityId: sec.security_id, name: sec.security_name, numericId: sec.id })
+    out.set(key, list)
+  }
+  for (const list of out.values()) list.sort((a, b) => a.securityId.localeCompare(b.securityId))
+  return out
+}
+
+/**
+ * The alternatives to one holding: same category, and never the holding itself.
+ *
+ * A fund can be held in one book and watched for another — VBTLX is both — so
+ * without the self-exclusion a holding would be offered as its own replacement.
+ */
+export function alternativesFor(
+  byCategory: Map<string, WatchlistAlternative[]>,
+  holdingSecurityId: string,
+  category: string | null | undefined,
+): WatchlistAlternative[] {
+  const key = categoryKey(category)
+  if (!key) return []
+  return (byCategory.get(key) ?? []).filter((a) => a.securityId !== holdingSecurityId)
+}
+
