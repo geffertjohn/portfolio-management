@@ -1395,24 +1395,39 @@ steps, then **considerations → committee review → final decision**. The stoc
 gone from it: the tier bands never fitted a book of five funds at twenty to
 forty percent each, which `hasConvictionTiers` already says in the model editor.
 
-- **The ORDER is the control.** The advisor records what they are inclined to
-  do BEFORE the committee looks. A proposal written after reading the
-  committee's view is not an independent one, and the record could not show
-  that it was — so handing off freezes the Considerations fields, and the final
-  step shows proposal and recommendation side by side with **neither
-  pre-selected**. Defaulting to the committee would make the decision an
-  acceptance; defaulting to the advisor would make the handoff ceremonial.
-- **The handoff has NO GATE, and an empty one reached the queue** (Nov 2026).
-  Review 30 (Foundation Conservative) was handed off with all four
-  pre-committee sections ticked `done` but **no `holding_reviews` rows, null
-  `considerations` and no section notes** — `requestCommitteeReview` stamps the
-  queue and assumes "the per-holding proposals are already on
-  `holding_reviews` by this point", which nothing enforces. The committee's
-  entire input was missing. **`portfolio-committee-review` now skips such a
-  review** rather than briefing three roles on nothing, leaves
-  `committee_requested_at` standing (withdrawing is the advisor's call) and
-  names it in the summary. The app-side gate is NOT built; the job is the only
-  thing stopping an empty handoff today.
+- **The ORDER is the control**, and what it governs CHANGED in Nov 2026. The
+  Considerations step used to ask the advisor for a per-holding Proposal,
+  Target % and Rationale; it now asks what each holding should be **weighed
+  against** — the watchlist ideas recorded in the same `category_name`. The
+  advisor names the comparison and does not make the call, so there is no
+  advisor proposal for the committee's view to contaminate. The freeze still
+  matters for the free-text note, which is written before the committee looks;
+  and the final step still pre-selects **neither** the committee's
+  recommendation nor a decision, because defaulting to the committee would
+  make the decision an acceptance and defaulting to the advisor would make the
+  handoff ceremonial.
+- **The handoff has NO APP-SIDE GATE, and the job's gate had to be rebuilt
+  when the proposals went** (Nov 2026). Review 30 (Foundation Conservative)
+  reached the queue with all four pre-committee sections ticked `done` and
+  nothing behind them, so `portfolio-committee-review` learned to skip a
+  review carrying **zero `holding_reviews.proposed_decision` rows AND no
+  `considerations`**. The redesign made that test true of EVERY handoff —
+  nothing writes `proposed_decision` any more and the note is optional — so it
+  would have skipped review 36 (Hybrid Balanced — 16 holdings and no note on
+  9 Nov 2026) as empty. **It now gates on the portfolio having holdings at all**, the one
+  thing that can still genuinely be missing: the rest of the briefing (each
+  holding, its category, the ideas competing in it) is derived, so the advisor
+  cannot leave it blank. An **uncategorised** holding is reported in the memo
+  rather than skipped — the same null drops it out of the allocation rollup,
+  so the risk manager is the person who needs to hear about it. Withdrawing a
+  handoff stays the advisor's call, never the job's.
+- **The prompt's examples are DATED, not current, and deliberately so.** The
+  watchlist and `securities2.scorecard_cohort` are being filled in as this is
+  written, so how many holdings have an alternative, and which cohort any pair
+  is graded in, both change week to week. Every count in the prompt carries
+  its observation date and every rule stands without it — the §23 lesson
+  applied to a prompt: do not duplicate a fact that lives somewhere
+  authoritative, and the query is the authority here.
 - **The committee prompt's model lookup joined on the wrong key** and was
   fixed in the same change. `portfolio_model_map` keys on the portfolio's own
   `security_id` — a YCharts id like `P:2371412` — **not on its name**, so
@@ -1437,11 +1452,19 @@ forty percent each, which `hasConvictionTiers` already says in the model editor.
   already supports portfolio scope — and the memo REFERENCES it rather than
   copying it, so the two cannot disagree about what risk said. A partial unique
   index allows one live memo per review.
-- **`holding_reviews` carries both sides**: `proposed_decision` /
-  `proposed_weight` / `proposed_rationale` are the advisor's suggestion;
-  `annual_decision` / `annual_notes` stay the decision of record. Where they
-  differ the final step marks the row **split**, which is the most interesting
-  line in the review.
+- **`holding_reviews.proposed_decision` / `proposed_weight` /
+  `proposed_rationale` NO LONGER HAVE A WRITER** (Nov 2026) — they went with
+  the Considerations columns. `lib/holdingReviews.ts` still reads and writes
+  them and the columns keep their stored rows, so review 30's seven are the
+  record as written; nothing sets them on a new review. **Do not refill them,
+  and in particular the committee must not**: no screen renders them now, so a
+  committee view filed there would be both a false record of who held it and
+  an invisible one. That is not hypothetical — those seven rows are
+  AI-drafted, which is what the redesign came out of. `annual_decision` /
+  `annual_notes` are the decision of record, and the final step marks the row
+  **override** (renamed from `split`) where it differs from the MEMO's
+  recommendation — the committee against the advisor, which is the comparison
+  that means something now.
 - **Recorded only.** Nothing writes `positions` or stages a trade, matching the
   candidate workflow's CIO decision.
 - **`saveReviewMemo` exists so the write contract is type-checked**, even
