@@ -50,12 +50,22 @@ const FMP_KEY = process.env.VITE_FMP_API_KEY
 const OUT = process.argv[2]
   || path.join(process.env.HOME, 'portfolio-refresh', 'inbox', 'WATCHLIST.txt')
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('watchlist: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY not set')
-  process.exit(1)
+/*
+  Checked when a request is actually made, not at module load.
+
+  It used to `process.exit(1)` at the top level, which is right for a script
+  and fatal for a module: `pending-funds.cjs` requires this file for its
+  classifier, and a bare require would have killed the poller before it could
+  log why.
+*/
+function requireEnv() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY not set')
+  }
 }
 
 async function sb(pathAndQuery) {
+  requireEnv()
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${pathAndQuery}`, {
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
   })
@@ -149,7 +159,24 @@ async function main() {
   if (skipped.length) console.log(`  not funds, excluded: ${skipped.join(', ')}`)
 }
 
-main().catch((err) => {
-  console.error(`watchlist: ${err.message}`)
-  process.exit(1)
-})
+/*
+  Exported so the POLLER classifies a ticker exactly the way the roster does.
+
+  `pending-funds.cjs` has to answer "is this watchlist entry a fund that should
+  have a securities2 row?", which is the same question `assetType` answers here
+  — including the rule that an empty FMP profile means MUTUAL FUND, not stock.
+  A second copy of that would be the two-classifiers-with-opposite-defaults
+  failure that filed RSIYX on the watchlist as a stock: both were documented as
+  deliberate, written hours apart on the same day, and one of them was wrong.
+
+  Guarded by `require.main`, so running this file still writes the roster and
+  requiring it does not.
+*/
+module.exports = { assetType, sb }
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(`watchlist: ${err.message}`)
+    process.exit(1)
+  })
+}

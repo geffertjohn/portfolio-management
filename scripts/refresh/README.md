@@ -256,6 +256,72 @@ the start of a run would read as an abort and kill a refresh that was working.
 Running out of pre-wired rows is the case that writes one; extend the `YCI()`
 formulas below row 101 to add slots.
 
+### …and a new one no longer waits until morning
+
+The 05:30 run closes the gap within a day, which is right for a fund added at
+17:00 and wrong for one added at 09:00 that the advisor wants to read about
+this morning. **`poll-watchlist.sh` runs every 15 minutes** (LaunchAgent
+`com.john.ycharts-poller.plist`) and starts an ordinary refresh when a watched
+fund is waiting for one.
+
+```
+launchd (every 900s)
+  └─ poll-watchlist.sh          hours + floor guards, logs
+       └─ pending-funds.cjs     the decision; starts nothing
+            └─ refresh.sh       the ordinary pipeline, own lock
+```
+
+**Why a poller and not a push.** Adding a fund is a browser write to Supabase,
+and there is no path from the browser to this machine's shell — the same reason
+the committee runs in Claude Code rather than from a button. So the Mac asks,
+on a cycle. Almost every cycle is one Supabase read and an exit.
+
+**THE RUNAWAY THIS IS SHAPED AROUND.** The obvious rule — "a watched fund has
+no category, so refresh" — never stops being true for a ticker YCharts does not
+recognise, so the poller would wake the VM for a six-minute Excel session every
+cycle for ever, with nothing on screen saying why. The condition is therefore
+**`prospects.date_added` newer than the newest `import_runs` row**: a fund
+nobody has tried yet. A refresh that runs and fails to resolve the ticker
+advances that stamp past `date_added`, and the fund stops asking *by
+construction* — one extra refresh per batch of additions, no attempt counter
+and no state file to corrupt. The daily run keeps trying in case YCharts adds
+coverage later, and `pending-funds.cjs` names those tickers when it declines.
+
+**Stocks are excluded, and that is the same hazard wearing a different hat.**
+The `Securities` sheet is funds-only, so a watched stock never gets a
+`securities2` row and would read as pending on every poll for ever. The
+classifier is imported from `watchlist-tickers.cjs` rather than restated —
+including its rule that an empty FMP profile means mutual fund — because two
+classifiers with opposite defaults is exactly how RSIYX was once filed on the
+watchlist as a stock.
+
+**Three guards, each for a different failure:**
+
+| Guard | Where | Stops |
+|---|---|---|
+| 07:00–19:00, any day | `poll-watchlist.sh` | waking the VM overnight for an idea nobody is reading |
+| 45 minutes between runs | `.poll-trigger` stamp | a FAILED refresh, which writes no `import_runs` row, retrying every cycle |
+| `date_added > last import` | `pending-funds.cjs` | the runaway above |
+
+Weekends are included deliberately: a fund added on Saturday is one the advisor
+wants on Saturday, and YCharts serves Friday's close happily.
+
+The floor stamp is written **before** the run, not after — if `refresh.sh`
+hangs, a stamp on the way out would never be reached and the next cycle would
+start a second one. (`refresh.sh` would refuse it anyway, with its own lock;
+this means the poller does not have to rely on that.)
+
+**Install it alongside the refresh agent:**
+
+```
+cp scripts/refresh/com.john.ycharts-poller.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.john.ycharts-poller.plist
+```
+
+Its log is `~/portfolio-refresh/logs/poller.log`, and it is **silent on the
+quiet path** — a line every 15 minutes saying nothing happened is a log nobody
+reads.
+
 ### Adding a metric column
 
 ```bash
