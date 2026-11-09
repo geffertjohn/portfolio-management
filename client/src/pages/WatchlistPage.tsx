@@ -16,6 +16,10 @@ import { ResearchCard } from '@/components/icReviewCards'
 import {
   getProspectDisplayType, isFundIdea, type SecurityDisplayType,
 } from '@/lib/securities'
+import {
+  groupWatchlistFunds, toFundRow, toPendingFundRow, type WatchlistFundRow,
+} from '@/lib/watchlistGroups'
+import { WatchlistFundTable } from '@/components/WatchlistFundTable'
 import { useLiveQuote } from '@/hooks/useLiveQuote'
 import { fmtUsd, fmtDecimalPct } from '@/lib/formatters'
 import { PRICE_CASE_LABEL, gapToBuy } from '@/lib/priceTargets'
@@ -27,11 +31,20 @@ const RATING_LABEL: Record<string, string> = {
   buy: 'Buy', add: 'Add', hold: 'Hold', trim: 'Trim', sell: 'Sell',
 }
 
-const COLUMNS: { type: SecurityDisplayType; label: string; badge: string }[] = [
-  { type: 'Stock',       label: 'Stocks',       badge: 'bg-blue-100 text-blue-700' },
-  { type: 'ETF',         label: 'ETFs',         badge: 'bg-purple-100 text-purple-700' },
-  { type: 'Mutual fund', label: 'Mutual Funds', badge: 'bg-green-100 text-green-700' },
-]
+/*
+  THE ETF / MUTUAL FUND COLUMNS ARE GONE (Nov 2026).
+
+  Splitting funds by VEHICLE answered a question nobody asks of an idea list.
+  FELC is an ETF and ICAFX is a mutual fund; both are Large Blend, both compete
+  for the same sleeve, and they sat in separate columns where no comparison
+  between them was possible. Funds are now one table grouped by the sleeve they
+  would fill — `lib/watchlistGroups.ts` — and the vehicle survives as a column.
+
+  Stocks keep their cards: a card carries bear/base/bull targets, a buy-below
+  with its gap to today's price, and the AI Research drawer, none of which fits
+  a table row. The two kinds of idea are genuinely different shapes, and
+  forcing one layout on both would have cost the stock side most of its page.
+*/
 
 function ProspectCard({
   entry,
@@ -393,6 +406,27 @@ export function WatchlistPage() {
     }
   })
 
+  const stocks = resolved.filter((r) => !isFundIdea(r.type))
+
+  // Funds, grouped by the sleeve each would fill. A fund with a securities2 row
+  // carries its real figures; one without is a pending row, which the grouping
+  // files separately from an unmapped category — different causes, different
+  // remedies, and only one of them clears by itself overnight.
+  // Deliberately NOT memoised. `resolved` is rebuilt every render anyway, so a
+  // useMemo here would need a fabricated dependency key to be correct — and the
+  // work it would save is ten metric lookups across ~20 funds. The cheap honest
+  // version beats the clever one that can go stale.
+  const fundRows: WatchlistFundRow[] = resolved
+    .filter((r) => isFundIdea(r.type))
+    .map(({ entry, type }) =>
+      entry.securities2
+        ? toFundRow(entry, entry.securities2)
+        : toPendingFundRow(entry, type),
+    )
+  const fundGroups = groupWatchlistFunds(fundRows)
+
+  const fundCount = fundGroups.reduce((n, g) => n + g.count, 0)
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -400,7 +434,7 @@ export function WatchlistPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Watchlist</h1>
           <p className="mt-1 text-sm text-gray-500">
             Investment ideas you're considering. Stocks are considered for one or more
-            portfolios; funds are identified by their category.
+            portfolios; funds are grouped by the sleeve they would fill.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -439,54 +473,56 @@ export function WatchlistPage() {
         )}
 
         {entries.length > 0 && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {COLUMNS.map(({ type, label, badge }) => {
-              const items = resolved.filter((r) => r.type === type)
-              return (
-                <div key={type}>
-                  <div className="mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge}`}>
-                      {label}
-                    </span>
-                    <span className="text-xs text-gray-400">{items.length}</span>
-                  </div>
-                  <div className="space-y-3">
-                    {items.length === 0 ? (
-                      <p className="text-xs italic text-gray-400">None</p>
-                    ) : (
-                      items.map(({ entry, profile }) => {
-                        // Stocks open the on-demand research page, which runs on a
-                        // bare ticker — so an idea you don't own is no longer a
-                        // dead card. The research page is stock-only, so a fund or
-                        // ETF still opens its securities2 detail page when it has one.
-                        const secId = entry.securities2?.id ?? null
-                        const onOpen =
-                          type === 'Stock'
-                            ? () => navigate(`/research/${entry.security_id}`)
-                            : secId != null
-                              ? () => navigate(`/security/${secId}`)
-                              : null
-                        return (
-                          <ProspectCard
-                            key={entry.id}
-                            entry={entry}
-                            profile={profile}
-                            displayType={type}
-                            streamable={type !== 'Mutual fund'}
-                            onOpen={onOpen}
-                            onRemove={() => removeMutation.mutate(entry.id)}
-                            onDetach={(portfolio) =>
-                              detachMutation.mutate({ id: entry.id, portfolio })
-                            }
-                            removePending={removeMutation.isPending}
-                          />
-                        )
-                      })
-                    )}
-                  </div>
+          <div className="space-y-8">
+            {/* ── Stocks: cards, because a row cannot hold what they carry ── */}
+            {stocks.length > 0 && (
+              <section>
+                <div className="mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
+                  <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                    Stocks
+                  </span>
+                  <span className="text-xs text-gray-400">{stocks.length}</span>
                 </div>
-              )
-            })}
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {stocks.map(({ entry, profile, type }) => (
+                    <ProspectCard
+                      key={entry.id}
+                      entry={entry}
+                      profile={profile}
+                      displayType={type}
+                      streamable
+                      onOpen={() => navigate(`/research/${entry.security_id}`)}
+                      onRemove={() => removeMutation.mutate(entry.id)}
+                      onDetach={(portfolio) =>
+                        detachMutation.mutate({ id: entry.id, portfolio })
+                      }
+                      removePending={removeMutation.isPending}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ── Funds: one table, grouped by the sleeve each would fill ── */}
+            <section>
+              <div className="mb-3 flex items-center gap-2 border-b border-gray-200 pb-2">
+                <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-700">
+                  Funds &amp; ETFs
+                </span>
+                <span className="text-xs text-gray-400">{fundCount}</span>
+                <span className="ml-auto text-xs text-gray-400">
+                  Grouped by asset class · score graded against each fund&rsquo;s cohort
+                </span>
+              </div>
+              <WatchlistFundTable
+                groups={fundGroups}
+                onOpen={(row) => {
+                  if (row.numericId != null) navigate(`/security/${row.numericId}`)
+                }}
+                onRemove={(row) => removeMutation.mutate(row.prospectId)}
+                removePending={removeMutation.isPending}
+              />
+            </section>
           </div>
         )}
       </div>

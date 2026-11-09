@@ -113,18 +113,44 @@ describe('spotting a vocabulary the map has never seen', () => {
   })
 
   it('covers every category the live book actually uses', () => {
-    // The 23 distinct `category_name` values in securities2 on 5 Nov 2026,
-    // held or not. This is the assertion that would have failed while
-    // "Diversified Emerging Markets" and "Multisector Bond" were missing.
+    // The 23 distinct `category_name` values carried by a held or WATCHED,
+    // non-proxy security on 9 Nov 2026. This is the assertion that would have
+    // failed while "Diversified Emerging Markets" and "Multisector Bond" were
+    // missing, and again while "Mid-Cap Value" and "Small Value" were.
+    //
+    // **WATCHED is part of the scope, and that is the correction.** The list
+    // used to read "held or not", but it was built from held securities, and
+    // `scripts/audit/asset-class-coverage.ts` walks held ones too — so the
+    // value spellings sat unmapped on four watchlist funds with nothing able
+    // to report it. An idea becomes a holding; placing it a day before the
+    // purchase rather than a day after is the whole margin this assertion has.
+    //
+    // Benchmark PROXIES are excluded deliberately. They carry sector and
+    // maturity categories ("Technology", "Short Government", "Ultrashort
+    // Bond") that the firm's fourteen-class taxonomy has no sleeve for, and
+    // inventing one so a proxy resolves would put an index stand-in into an
+    // allocation rollup it is not part of.
     const inUse = [
-      'Diversified Emerging Markets', 'Diversified Emerging Mkts', 'Foreign Large Blend',
+      'Diversified Emerging Markets', 'Foreign Large Blend',
       'Global Bond-USD Hedged', 'High Yield Bond', 'Intermediate Core Bond',
       'Intermediate Core-Plus Bond', 'Large Blend', 'Large Cap Core', 'Large Cap Growth',
       'Large Cap Value', 'Large Growth', 'Large Value', 'Mid Cap Core', 'Mid Cap Growth',
-      'Mid-Cap Blend', 'Mid-Cap Growth', 'Multisector Bond', 'Small Blend',
-      'Small Cap Core', 'Small Cap Growth', 'Small Growth',
+      'Mid-Cap Blend', 'Mid-Cap Growth', 'Mid-Cap Value', 'Multisector Bond', 'Small Blend',
+      'Small Cap Core', 'Small Cap Growth', 'Small Growth', 'Small Value',
     ]
+    expect(inUse).toHaveLength(23)
     expect(unmappedCategories(inUse)).toEqual([])
+  })
+
+  it('keeps the abbreviated emerging-market spelling although nothing carries it now', () => {
+    // `Diversified Emerging Mkts` was VEMAX's category when gotcha 23 was
+    // found; VEMAX now carries the spelled-out form and the abbreviation is
+    // present on NO row in securities2. The key stays anyway — the vendor
+    // vocabulary moved once and can move back, and the cost of an unused key
+    // is nothing against the cost of a sleeve silently emptying. This is the
+    // "never delete a key to tidy up a duplicate" rule, asserted rather than
+    // only written down.
+    expect(unmappedCategories(['Diversified Emerging Mkts'])).toEqual([])
   })
 })
 
