@@ -564,6 +564,7 @@ export function PortfolioReviewWorkspace() {
               {active === 'considerations' && (
                 <ConsiderationsSection
                   positions={positions}
+                  details={scorecardDetails}
                   assessments={assessments}
                   considerations={considerations}
                   requestedAt={requestedAt}
