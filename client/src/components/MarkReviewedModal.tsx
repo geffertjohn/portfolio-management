@@ -177,22 +177,25 @@ export function MarkReviewedModal({
   // vanish in AlternativesPanel. The ref is keyed on the modal opening, not on
   // the query data, so it cannot re-fire.
   const prefillApplied = useRef(false)
-  useEffect(() => { if (open) prefillApplied.current = false }, [open])
+  // Tracks the open TRANSITION, so the clear below runs once per opening
+  // rather than on every render the effect is re-run for.
+  const wasOpen = useRef(false)
 
+  // THE CLEAR AND THE PRE-FILL ARE ONE EFFECT, IN THIS ORDER, DELIBERATELY.
+  // They were two, the pre-fill declared first, and two effects keyed on
+  // `open` run in declaration order — so on a REOPEN, where `brief` is already
+  // in the TanStack cache and therefore present on the very first render,
+  // the pre-fill ran and the clear then wiped it in the same commit. The
+  // advisor saw an empty rationale, no recommendation selected, and the amber
+  // "the books disagree" line still showing, because that line is derived from
+  // the brief rather than from state. On a FIRST open the brief had not
+  // arrived yet, so the pre-fill no-opped and landed later, and the bug was
+  // invisible — it needed the modal to be opened twice in one session.
   useEffect(() => {
-    if (!open || isFund || prefillApplied.current || recs.length === 0 || !brief) return
-    prefillApplied.current = true
-    // Only pre-select where every portfolio agrees. Where they differ the
-    // disagreement is the point, and picking one for the advisor would hide it.
-    if (unanimous) setRecommendation(recs[0].recommendation)
-    if (unanimousConviction) setConviction(unanimousConviction)
-    // Never clobber something already typed.
-    setNotes((prev) => (prev.trim() === '' ? composeReviewRationale(recs, brief.created_at) : prev))
-  }, [open, isFund, brief, recs, unanimous, unanimousConviction])
-
-  // Reset fields when modal opens
-  useEffect(() => {
-    if (open) {
+    if (!open) { wasOpen.current = false; return }
+    if (!wasOpen.current) {
+      wasOpen.current = true
+      prefillApplied.current = false
       setReviewDate(toDateInputValue(new Date()))
       setNotes('')
       setRecommendation('')
@@ -200,7 +203,17 @@ export function MarkReviewedModal({
       setFundMainOutcome(null)
       setFundAtRisk(false)
     }
-  }, [open, currentCadence])
+    if (isFund || prefillApplied.current || recs.length === 0 || !brief) return
+    prefillApplied.current = true
+    // Only pre-select where every portfolio agrees. Where they differ the
+    // disagreement is the point, and picking one for the advisor would hide it.
+    if (unanimous) setRecommendation(recs[0].recommendation)
+    if (unanimousConviction) setConviction(unanimousConviction)
+    // Never clobber something already typed. A functional update, because on a
+    // reopen the `setNotes('')` above is still queued and `notes` here is the
+    // PREVIOUS opening's text.
+    setNotes((prev) => (prev.trim() === '' ? composeReviewRationale(recs, brief.created_at) : prev))
+  }, [open, isFund, brief, recs, unanimous, unanimousConviction])
 
   useEffect(() => {
     const d = dialogRef.current
