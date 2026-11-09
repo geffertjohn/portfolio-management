@@ -1370,6 +1370,59 @@ under that list and none was ever completed.**
   default the per-security review modal uses, so the two surfaces cannot show a
   holding a different scorecard. A fund with no cohort set is said so rather
   than quietly defaulted.
+- **A TRACKED FUND IS SEEDED TO `category` AUTOMATICALLY** (Nov 2026).
+  `needsDefaultCohort` + `seedScorecardCohorts` in `lib/securities.ts` are the
+  one place that decides it; it runs from `fundBulkUpload` after every workbook
+  import and from `addProspect` on every watchlist add. The manual
+  Category/Peer toggle on the fund page is unchanged and still the only way to
+  set `peer`.
+  - **`peer` is a deliberate override, not the other side of a coin flip**, so
+    it stays manual. All six funds carrying it are ones whose Morningstar
+    category mis-describes the mandate and whose peer group reads it better —
+    AVERX ("Value Focused") filed Mid-Cap Blend against a Multi-Cap Growth peer
+    group, FTZIX ("Unconstrained") the same, IDHIX (a dividend-harvest fund)
+    filed Large Value against Equity Income Funds, VFMO (a momentum factor ETF)
+    filed Mid-Cap Blend. **Nothing in the data derives that**: measured 9 Nov
+    2026, all 59 graded funds score 9 of 9 scoreable metrics on BOTH cohorts,
+    so availability cannot choose between them. The default is the 53-of-59
+    answer.
+  - **FILL-THE-NULL, never recomputed** — the opposite of its neighbour
+    `is_benchmark_proxy`, which is re-derived on every import precisely so it
+    cannot drift. A cohort is a human's call, so re-deriving would silently
+    revert those six. Same shape as `ensureReviewSchedules` filtering to the
+    unscheduled first.
+  - **A STOCK NEVER GETS ONE, and this is the guard that would do damage if
+    dropped.** 54 held stocks carry a hand-set `category_name` (see
+    `setSecurityCategory`), so "has a category and no cohort" describes every
+    stock in the book — a column test alone would have written a fund-only
+    setting onto all 54. Gated on `isFundOrEtfSecurity`, and the 55 stock rows
+    are cleanly separable because every one has `detailed_security_type =
+    'stock'` and none carries a peer group, fund company, family or expense
+    ratio.
+  - **A benchmark proxy never gets one either**, and all 33 of today's
+    remaining nulls are exactly those. Proxies are re-flagged BEFORE the
+    seeding runs, because `is_benchmark_proxy` already subtracts held ∪
+    watched — a former proxy that has since been bought or watched only
+    becomes eligible once that flag is cleared.
+  - **No `category_name`, no cohort yet.** There is nothing to grade it
+    against, and it keeps the Watchlist card honest: "Category pending" and
+    "No cohort" now resolve in one step instead of one badge clearing and the
+    other remaining.
+  - **The watchlist add is a no-op for a genuinely new fund**, because
+    `prospects.security_id` has no FK and the `securities2` row does not exist
+    yet. The workbook import seeds it on the next refresh — minutes, via the
+    poller. Only an already-known ticker (a past holding, a proxy, a fund the
+    workbook has already fetched) is seeded on the spot.
+  - **It never throws**, like `markBenchmarkProxies` and `recordImportRuns`:
+    the caller's own write has already landed, and the cost of missing a
+    default is one manual click rather than a wrong number —
+    `designatedCohort` already reads a null as `category` for grading.
+  - **`scripts/audit/scorecard-cohort-coverage.ts`** answers "is anything
+    waiting" on demand (`npx vite-node
+    scripts/audit/scorecard-cohort-coverage.ts`), calling the same
+    `needsDefaultCohort` so the script and the app cannot disagree. It excludes
+    `$Cash` via `isCashTicker` — a held row with no type and no category, which
+    otherwise appears as a finding on every single run.
 - **The flag decision sits with the evidence**, on that step rather than in the
   summary: deciding in the summary means deciding away from the numbers.
 - **Flagging records the FAILING READINGS**, via `atRiskMetricsFromScorecard`

@@ -21,6 +21,7 @@
  */
 
 import { unmappedCategories as unmappedCategoriesIn } from './assetClass'
+import { seedScorecardCohorts } from './securities'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import {
@@ -279,7 +280,13 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
     }
   }
 
+  // ORDER MATTERS: proxies are re-flagged FIRST. `markBenchmarkProxies`
+  // subtracts held ∪ watched, so a former proxy that has since been bought or
+  // watched only stops being flagged here — and `needsDefaultCohort` skips a
+  // flagged row. Seeding first would leave that fund without its cohort for
+  // another day.
   await markBenchmarkProxies()
+  await seedScorecardCohorts()
 
   return { total: records.length, succeeded, failed, errors, unmappedCategories: unmapped }
 }
