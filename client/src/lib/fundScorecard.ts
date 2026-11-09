@@ -218,6 +218,57 @@ export function peerGroupScorecardScore(security: SecurityDetail): number | null
   return scorecardScore(security, 'peer')
 }
 
+// ── Banding a total score ────────────────────────────────────────────────────
+//
+// THE TWO NUMBERS LIVE HERE AND NOWHERE ELSE. They were written out in four
+// places across `FundMonitoringPanel` and `FundScorecard` — the dot beside each
+// cohort toggle, the dot on the card, the headline figure and the table's total
+// row — so a change to the firm's definition of an acceptable fund had to be
+// made in four files, and a miss would have shown one fund green in the header
+// and amber in the table it heads. That is the `consensusColor` failure, where
+// two copies of a colour rule drifted until "Moderate Buy" rendered as "Strong
+// Buy"; `sharedHelpers.test.ts` names the helper to import rather than only
+// saying not to re-implement it, and the same applies here.
+//
+// It matters more from here on: the planned fund-review automation grades
+// Maintain against At-Risk on this same line, and a job restating the threshold
+// would be a fifth copy — one the advisor cannot see on screen.
+//
+// **The band is the firm's rule, not a display choice**, which is why it is in
+// the lib with the scoring rather than in the component with the Tailwind. The
+// class maps stay at the call sites: those ARE display choices, and the two
+// surfaces legitimately differ (a solid dot against a text colour).
+
+/** Green at or above this; the firm's line for an acceptable fund. */
+export const SCORE_GREEN_MIN = 70
+/** Yellow at or above this, red below it. */
+export const SCORE_YELLOW_MIN = 60
+
+export type ScoreBand = 'green' | 'yellow' | 'red'
+
+/**
+ * Band a fund's total scorecard score.
+ *
+ * Null in, null out — "not scored" is not "scored badly". A fund whose cohort
+ * columns the workbook has not filled has no reading at all, and painting it
+ * red would report a data gap as a judgement about the fund.
+ *
+ * **A FULLY SCORED fund cannot land near zero, but a partly scored one can,
+ * and the band cannot tell the two apart.** Tier 4 still pays 25% of each
+ * metric's weight, so a fund in the bottom half of everything scores about 26 —
+ * 20 from the rank metrics' floor, 1.25 each from tenure and R-square, 4 from
+ * Upside/Downside. A missing metric, though, contributes 0 while the total is
+ * still read against 100, and `hasData` asks only whether ANY metric scored. So
+ * a 12 means "most of this fund's cohort columns are empty", not "worst in
+ * class". Read the per-row tiers before acting on a low red.
+ */
+export function scoreBand(score: number | null | undefined): ScoreBand | null {
+  if (score == null || !Number.isFinite(score)) return null
+  if (score >= SCORE_GREEN_MIN) return 'green'
+  if (score >= SCORE_YELLOW_MIN) return 'yellow'
+  return 'red'
+}
+
 /** Format a scorecard row's "Rank / Value" cell. */
 export function fmtScorecardValue(val: number | null, valueType?: MetricDef['valueType']): string {
   if (val == null) return '—'

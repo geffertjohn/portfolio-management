@@ -12,8 +12,8 @@
 import { useState } from 'react'
 import type { SecurityDetail } from '@/lib/securities'
 import {
-  buildFundScorecard, fmtScorecardValue,
-  type Tier, type ScorecardCohort,
+  buildFundScorecard, fmtScorecardValue, scoreBand,
+  type Tier, type ScorecardCohort, type ScoreBand,
 } from '@/lib/fundScorecard'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -25,10 +25,25 @@ const TIER_STYLES: Record<Tier, string> = {
   4: 'bg-red-100 text-red-700',
 }
 
+/** Display only — the BAND itself is the firm's rule and lives in the lib. */
+const SCORE_DOT_CLASS: Record<ScoreBand, string> = {
+  green: 'bg-green-500',
+  yellow: 'bg-yellow-400',
+  red: 'bg-red-500',
+}
+
+const SCORE_TEXT_CLASS: Record<ScoreBand, string> = {
+  green: 'text-green-700',
+  yellow: 'text-amber-600',
+  red: 'text-red-700',
+}
+
 function scoreDotClass(score: number): string {
-  if (score >= 70) return 'bg-green-500'
-  if (score >= 60) return 'bg-yellow-400'
-  return 'bg-red-500'
+  return SCORE_DOT_CLASS[scoreBand(score) ?? 'red']
+}
+
+function scoreTextClass(score: number): string {
+  return SCORE_TEXT_CLASS[scoreBand(score) ?? 'red']
 }
 
 function TierBadge({ tier }: { tier: Tier }) {
@@ -87,11 +102,7 @@ function ScorecardTable({
           {hasAnyData && (
             <div className="text-right">
               <span className="text-xs text-gray-500">Total Score</span>
-              <p className={`text-lg font-bold tabular-nums ${
-                totalScore >= 70 ? 'text-green-700' :
-                totalScore >= 60 ? 'text-amber-600' :
-                'text-red-700'
-              }`}>
+              <p className={`text-lg font-bold tabular-nums ${scoreTextClass(totalScore)}`}>
                 {totalScore.toFixed(1)}
                 <span className="ml-0.5 text-xs font-normal text-gray-400">/ 100</span>
               </p>
@@ -165,11 +176,7 @@ function ScorecardTable({
                   <th scope="row" colSpan={5} className="py-2 pl-3 pr-4 text-left text-xs font-semibold text-gray-700">
                     Total Score
                   </th>
-                  <td className={`whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs font-bold ${
-                    totalScore >= 70 ? 'text-green-700' :
-                    totalScore >= 60 ? 'text-amber-600' :
-                    'text-red-700'
-                  }`}>
+                  <td className={`whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs font-bold ${scoreTextClass(totalScore)}`}>
                     {hasAnyData ? totalScore.toFixed(1) : '—'}
                   </td>
                 </tr>

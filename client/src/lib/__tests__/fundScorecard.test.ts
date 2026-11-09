@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CATEGORY_METRICS, PEER_GROUP_METRICS, buildFundScorecard, categoryScorecardScore,
-  fmtScorecardValue, peerGroupScorecardScore,
+  CATEGORY_METRICS, PEER_GROUP_METRICS, SCORE_GREEN_MIN, SCORE_YELLOW_MIN,
+  buildFundScorecard, categoryScorecardScore, fmtScorecardValue,
+  peerGroupScorecardScore, scoreBand,
 } from '../fundScorecard'
 import type { SecurityDetail } from '../securities'
 
@@ -155,5 +156,39 @@ describe('fmtScorecardValue', () => {
     expect(fmtScorecardValue(0.951, 'rsquared')).toBe('0.95')
     expect(fmtScorecardValue(1.179, 'updown')).toBe('1.18')
     expect(fmtScorecardValue(null)).toBe('—')
+  })
+})
+
+/**
+ * The green/yellow/red line was written out in FOUR places across
+ * `FundMonitoringPanel` and `FundScorecard` — two dots, a headline figure and
+ * the table's total row — so the firm's definition of an acceptable fund could
+ * be changed in one file and missed in three, showing a fund green in a header
+ * and amber in the table it heads. That is the `consensusColor` failure, and
+ * these pin the one definition that replaced them.
+ */
+describe('scoreBand', () => {
+  it('bands at both thresholds, inclusive at each floor', () => {
+    expect(scoreBand(SCORE_GREEN_MIN)).toBe('green')
+    expect(scoreBand(SCORE_GREEN_MIN - 0.1)).toBe('yellow')
+    expect(scoreBand(SCORE_YELLOW_MIN)).toBe('yellow')
+    expect(scoreBand(SCORE_YELLOW_MIN - 0.1)).toBe('red')
+  })
+
+  it('returns null for an unscored fund rather than red', () => {
+    // "Not scored" is not "scored badly": a fund whose cohort columns the
+    // workbook has not filled has no reading, and painting it red would report
+    // a data gap as a judgement about the fund. Both dots gate on this.
+    expect(scoreBand(null)).toBeNull()
+    expect(scoreBand(undefined)).toBeNull()
+    expect(scoreBand(Number.NaN)).toBeNull()
+    expect(categoryScorecardScore(sec({}))).toBeNull()
+    expect(scoreBand(categoryScorecardScore(sec({})))).toBeNull()
+  })
+
+  it('bands the perfect fixture green, so the thresholds face the real scale', () => {
+    // Guards against the band and the scoring drifting onto different scales —
+    // a /100 total read against a 0–1 threshold would make everything red.
+    expect(scoreBand(categoryScorecardScore(perfect))).toBe('green')
   })
 })
