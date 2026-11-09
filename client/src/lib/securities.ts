@@ -14,9 +14,16 @@ export interface Security {
   peer_group_name: string | null
   /**
    * Which cohort this fund/ETF is judged against at review — 'category' | 'peer'.
-   * NULL until chosen; the review automation must skip and report those rather
-   * than default to one. Set in the app only: the YCharts import issues a partial
-   * update carrying just the Securities sheet's columns, so it never writes this.
+   *
+   * **A tracked fund is seeded to `category` automatically** — see
+   * `seedScorecardCohorts`, which runs after every workbook import and when a
+   * fund is added to the watchlist. The Securities SHEET still never writes
+   * this column (the import issues a partial update carrying only the sheet's
+   * own columns); the seeding is a separate pass that fills nulls.
+   *
+   * NULL therefore means "not a fund the firm grades" — a stock, a benchmark
+   * proxy, or a fund the workbook has not reached yet. The review automation
+   * must still skip and report those rather than invent a cohort for them.
    */
   scorecard_cohort: ScorecardCohort | null
   fund_company_name: string | null
@@ -275,7 +282,7 @@ function isStockSecurityType(raw: string): boolean {
 }
 
 /** Fields any classifier reads. All optional — callers pass whatever they have. */
-type SecurityClassInput = {
+export type SecurityClassInput = {
   detailed_security_type?: string | null
   peer_group_name?: string | null
   fund_company_name?: string | null
@@ -613,6 +620,104 @@ export async function setScorecardCohort(
     .update({ scorecard_cohort: cohort })
     .eq('id', id)
   if (error) throw error
+}
+
+/**
+ * The cohort a newly tracked fund is graded against until someone says otherwise.
+ *
+ * **`peer` is a deliberate override, not the other side of a coin flip.** All
+ * six funds carrying it are ones where the Morningstar category mis-describes
+ * the mandate and the peer group reads it better: AVERX ("Value Focused")
+ * filed Mid-Cap Blend against a Multi-Cap Growth peer group, FTZIX
+ * ("Unconstrained") the same, IDHIX (a dividend-harvest fund) filed Large
+ * Value against Equity Income Funds, VFMO (a momentum factor ETF) filed
+ * Mid-Cap Blend. Reading that needs someone who knows what the fund actually
+ * does.
+ *
+ * **Nothing in the data derives it**, which is why this is a default and not a
+ * rule: measured 9 Nov 2026, every one of the 59 graded funds scores 9 of 9
+ * scoreable metrics on BOTH cohorts, so availability cannot choose between
+ * them. The default is the 53-of-59 answer and the override stays manual.
+ */
+export const DEFAULT_SCORECARD_COHORT: ScorecardCohort = 'category'
+
+/** What `needsDefaultCohort` reads: the classifier's fields plus three of its own. */
+export type CohortSeedInput = SecurityClassInput & {
+  scorecard_cohort?: string | null
+  category_name?: string | null
+  is_benchmark_proxy?: boolean | null
+}
+
+/**
+ * Should this row be given the default cohort? Pure. All four tests earn their
+ * place, and the second is the one that would do damage if dropped.
+ *
+ * - **An existing value is never touched.** The six `peer` funds are hand-set
+ *   judgments; re-deriving on every import would revert them silently, which
+ *   is the trap `ensureReviewSchedules` avoids by filtering to the unscheduled
+ *   first. Contrast `is_benchmark_proxy`, which IS recomputed every time —
+ *   that one is derived from three facts, this one is a human's call.
+ * - **A STOCK never gets one.** Fifty-four held stocks carry a hand-set
+ *   `category_name` (`setSecurityCategory`), so "has a category and no cohort"
+ *   describes every stock in the book. A cohort on one would be meaningless —
+ *   the fund scorecard's rank columns are all null for a stock — and would put
+ *   a fund-only setting on a security the fund review never sees. Gated on the
+ *   canonical `isFundOrEtfSecurity`, never on a column test of its own.
+ * - **A benchmark proxy never gets one.** It stands in for an index so the
+ *   composition columns have somewhere to live; it is not reviewed, and all 33
+ *   of today's null cohorts are exactly these. `is_benchmark_proxy` already
+ *   subtracts held ∪ watched, so a proxy that gets bought or watched stops
+ *   being one and becomes eligible here.
+ * - **No `category_name`, no cohort yet.** The workbook has not reached the
+ *   fund, so there is nothing to grade it against. It also keeps the Watchlist
+ *   card honest: "Category pending" and "No cohort" resolve together, in one
+ *   step, instead of the card clearing one badge and keeping the other.
+ */
+export function needsDefaultCohort(s: CohortSeedInput): boolean {
+  if (s.scorecard_cohort?.trim()) return false
+  if (!isFundOrEtfSecurity(s)) return false
+  if (s.is_benchmark_proxy) return false
+  return !!s.category_name?.trim()
+}
+
+// One literal, deliberately not wrapped: the schema-typed client only checks
+// `.select()` columns when the argument is a single string literal. Built by
+// concatenation it infers GenericStringError instead, which is both a type
+// error here and the loss of the check that catches a dropped column.
+const COHORT_SEED_COLS = 'security_id, scorecard_cohort, category_name, is_benchmark_proxy, detailed_security_type, peer_group_name, fund_company_name, fund_family, expense_ratio_generic'
+
+/**
+ * Give every tracked fund that has no cohort the default one, and return the
+ * tickers written.
+ *
+ * Pass `securityIds` to scope it to one ticker — what the watchlist add does;
+ * omit it for the whole table, which is what the workbook import does.
+ *
+ * **It never throws**, for the same reason `markBenchmarkProxies` and
+ * `recordImportRuns` do not: by the time it runs the caller's own write has
+ * landed, and a failure to seed a default must not report a completed import
+ * or a saved watchlist idea as failed. The cohort is a default, so the cost of
+ * missing it is one manual click, not a wrong number — `designatedCohort`
+ * already reads a null as `category` for grading purposes.
+ */
+export async function seedScorecardCohorts(securityIds?: string[]): Promise<string[]> {
+  try {
+    let q = supabase.from('securities2').select(COHORT_SEED_COLS).is('scorecard_cohort', null)
+    if (securityIds && securityIds.length > 0) q = q.in('security_id', securityIds)
+    const { data, error } = await q
+    if (error) return []
+
+    const ids = (data ?? []).filter(needsDefaultCohort).map((r) => r.security_id)
+    if (ids.length === 0) return []
+
+    const { error: updError } = await supabase
+      .from('securities2')
+      .update({ scorecard_cohort: DEFAULT_SCORECARD_COHORT })
+      .in('security_id', ids)
+    return updError ? [] : ids
+  } catch {
+    return []
+  }
 }
 
 export async function saveAlternatives(

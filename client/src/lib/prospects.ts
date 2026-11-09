@@ -18,6 +18,7 @@
  */
 
 import { supabase } from './supabase'
+import { seedScorecardCohorts } from './securities'
 import type { Conviction } from './reviewLog'
 
 export interface ProspectEntry {
@@ -122,6 +123,15 @@ export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
  * Re-adding a watched ticker is how portfolios get added to an existing idea —
  * the unique index would otherwise reject it, and failing there would be a worse
  * answer than merging.
+ *
+ * **It also seeds the scorecard cohort**, which only lands when the ticker is
+ * ALREADY in `securities2` — a fund the firm once held, a benchmark proxy, or
+ * one whose row the workbook has already fetched. For a genuinely new fund the
+ * row does not exist yet (`prospects.security_id` has no FK, which is the
+ * point), so this is a no-op and the workbook import seeds it the next
+ * morning instead, within about fifteen minutes of the refresh. Both paths go
+ * through `seedScorecardCohorts`, so neither can decide the default on its
+ * own.
  */
 export async function addProspect(p: NewProspect): Promise<void> {
   const sym = p.securityId.trim().toUpperCase()
@@ -145,6 +155,10 @@ export async function addProspect(p: NewProspect): Promise<void> {
     if (error) throw error
     prospectId = data.id
   }
+
+  // Before the early return below: zero portfolios is a valid idea, and it
+  // should still get its cohort.
+  await seedScorecardCohorts([sym])
 
   const names = [...new Set((p.portfolios ?? []).map((n) => n.trim()).filter(Boolean))]
   if (names.length === 0) return
