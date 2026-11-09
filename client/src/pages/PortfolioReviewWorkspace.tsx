@@ -8,6 +8,7 @@ import {
   type PortfolioCadence, type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
 import { fetchSecurityDetailsByIds } from '@/lib/securities'
+import { fetchActiveProspects } from '@/lib/prospects'
 import {
   saveHoldingReviews, fetchHoldingReviewsForLog, fetchHoldingReviewsByPortfolio, emptyAssessment, resolveTierInfo,
   type HoldingAssessment, type MonitorConviction,
@@ -131,6 +132,19 @@ export function PortfolioReviewWorkspace() {
     queryKey: QUERY_KEYS.securityDetails(scorecardIds),
     queryFn: () => fetchSecurityDetailsByIds(scorecardIds),
     enabled: isFundBook && scorecardIds.length > 0,
+  })
+
+  /**
+   * The watchlist, for the considerations step's Alternatives column.
+   *
+   * Shared key with the Watchlist page, so the ideas offered as alternatives
+   * here and the cards over there are one list: an idea removed in one place
+   * cannot keep being proposed in the other.
+   */
+  const { data: watchlistIdeas = [] } = useQuery({
+    queryKey: QUERY_KEYS.prospects,
+    queryFn: fetchActiveProspects,
+    enabled: isFundBook && cadence === 'annual',
   })
 
   const [considerations, setConsiderations] = useState('')
@@ -565,11 +579,10 @@ export function PortfolioReviewWorkspace() {
                 <ConsiderationsSection
                   positions={positions}
                   details={scorecardDetails}
-                  assessments={assessments}
+                  ideas={watchlistIdeas}
                   considerations={considerations}
                   requestedAt={requestedAt}
                   busy={handoffBusy}
-                  onChange={setHoldingField}
                   onConsiderationsChange={(v) => { setConsiderations(v); markDirty() }}
                   onRequest={handOffToCommittee}
                   onCancelRequest={withdrawHandoff}
