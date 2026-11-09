@@ -124,6 +124,63 @@ fi
 log "dropping trigger for the guest watcher"
 date '+%Y-%m-%d %H:%M:%S' > "$TRIGGER"
 
+# ── And tell the watcher to look NOW ────────────────────────────────────────
+#
+# The task that reads the trigger repeats every 2 minutes for ONE HOUR from
+# 05:25 on weekdays, so a trigger dropped at any other time sat unnoticed and
+# the run died 25 minutes later on `no output` — which reads exactly like a
+# hung Excel and is not. The README's answer was to tell a human to run
+# `schtasks /run` in a second terminal. A pipeline that needs a person at a
+# keyboard is not a scheduled pipeline, and it cannot be driven by anything
+# else either.
+#
+# **This does NOT launch Excel, and that distinction is the whole reason it
+# works.** `prlctl exec` runs as NT AUTHORITY\SYSTEM in session 0, a profile
+# with no YCharts add-in — Excel started there resolves no YCP() at all and the
+# macro aborts on its error-ratio guard. But `schtasks /run` only ASKS the
+# Task Scheduler to start the task, and the task's own principal is
+# `InteractiveToken` under the logged-on user, so the work still happens in the
+# console session with the add-in. SYSTEM asks; the desktop session acts.
+#
+# Safe to send unconditionally, including during the 05:25-06:25 window when
+# the task is already polling: its `MultipleInstancesPolicy` is `IgnoreNew`
+# (read from the live task XML, 9 Nov 2026), so a kick arriving while an
+# instance runs is dropped by the scheduler rather than racing it.
+#
+# IT RETRIES FOR TWO MINUTES, because the VM was started a few lines above and
+# `prlctl exec` answers 255 until the guest is ready: "Unable to open new
+# session in this virtual machine. Make sure your virtual machine has finished
+# booting". Measured on this box (9 Nov 2026) a RESUME is ready in about five
+# seconds — attempt one fails, attempt two succeeds — but `prlctl start` also
+# cold-BOOTS a stopped VM, which is far slower, and a budget sized on the
+# resume would lose exactly the run that had to boot. Two minutes costs
+# nothing on the common path and is a twelfth of the wait it protects.
+#
+# A FAILURE HERE IS A WARNING, NEVER FATAL. The polling window is still a real
+# path for the 05:30 run, so a failed kick costs nothing on the one run that
+# matters most. The one cause that cannot be retried away is nobody being
+# logged into Windows, since the task's principal requires an interactive
+# token. That already broke every run; what changes is that it now says so
+# while there is still time to act, instead of timing out at twenty-five
+# minutes with a message about Excel.
+kick_watcher() {
+  _k=1
+  _t0=$(date +%s)
+  while [ "$_k" -le 12 ]; do
+    _out=$(prlctl exec "$VM" schtasks.exe /run /tn '\YCharts Refresh Watcher' 2>&1); _rc=$?
+    if [ "$_rc" -eq 0 ]; then
+      log "watcher kicked after $(( $(date +%s) - _t0 ))s"
+      return 0
+    fi
+    _k=$((_k + 1))
+    sleep 10
+  done
+  log "WARN: could not kick the guest watcher after $(( $(date +%s) - _t0 ))s (prlctl rc=$_rc): $(printf '%s' "$_out" | head -1)"
+  log "WARN: the run now depends on the 05:25-06:25 polling window noticing the trigger"
+  return 1
+}
+kick_watcher
+
 # ── Shutting the worker down ────────────────────────────────────────────────
 # Excel must be gone BEFORE the VM is suspended, on EVERY path out of the wait
 # below — not just the one where the output file turned up.
