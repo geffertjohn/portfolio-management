@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  alternativesFor, watchlistAlternativesByCategory,
+  alternativesFor, watchlistAlternativesByKey,
   type ProspectIdeaLite, type WatchlistAlternative,
 } from '@/lib/prospects'
 import { reviewableHoldings } from '@/lib/portfolioReviews'
@@ -62,9 +62,9 @@ export function ConsiderationsSection({
   // Grouped once for the whole table rather than filtered per row: a Foundation
   // book is seven holdings against eleven ideas, and the shape of the question
   // is "which ideas sit in this sleeve", which is a grouping.
-  const byCategory = useMemo(() => watchlistAlternativesByCategory(ideas), [ideas])
+  const byKey = useMemo(() => watchlistAlternativesByKey(ideas), [ideas])
   const withAlternatives = holdings.filter(
-    (h) => alternativesFor(byCategory, h.securityId, details[h.securityId]?.category_name).length > 0,
+    (h) => alternativesFor(byKey, h.securityId, details[h.securityId]?.category_name).length > 0,
   ).length
 
   return (
@@ -114,7 +114,7 @@ export function ConsiderationsSection({
           <tbody>
             {holdings.map((h) => {
               const category = details[h.securityId]?.category_name ?? null
-              const alts = alternativesFor(byCategory, h.securityId, category)
+              const alts = alternativesFor(byKey, h.securityId, category)
               return (
                 <tr key={h.securityId} className="border-t border-gray-100">
                   <td className="whitespace-nowrap py-1.5 pr-2 align-top font-medium text-gray-800" title={h.name ?? undefined}>

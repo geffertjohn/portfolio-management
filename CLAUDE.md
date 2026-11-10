@@ -1620,9 +1620,30 @@ forty percent each, which `hasConvictionTiers` already says in the model editor.
 - **The ORDER is the control**, and what it governs CHANGED in Nov 2026. The
   Considerations step used to ask the advisor for a per-holding Proposal,
   Target % and Rationale; it now asks what each holding should be **weighed
-  against** — the watchlist ideas recorded in the same `category_name`. The
+  against** — the watchlist ideas that would compete for the same sleeve. The
   advisor names the comparison and does not make the call, so there is no
-  advisor proposal for the committee's view to contaminate. The freeze still
+  advisor proposal for the committee's view to contaminate.
+  - **`alternativeKey` decides what "the same sleeve" means**, and it is NOT
+    always `category_name` (Nov 2026). **Mid- and small-cap pool across
+    styles**, because `ASSET_CLASS_ROWS` gives large cap three rows — blend,
+    growth, value — and mid and small ONE each: where the firm's own taxonomy
+    says style is not a distinguishing feature, the alternatives must not
+    pretend it is. FTZIX and AVERX (Mid-Cap Blend) were being offered only
+    RSIYX while QVAL, NAMAX and FSMVX sat on the list competing for the same
+    sleeve, and OBSIX (Small Growth) was offered nothing at all. The footer
+    went 15 of 16 holdings to 16 of 16.
+  - **`POOLED_SLEEVES` is a LIST, not "every sleeve the taxonomy does not
+    split".** Non-US developed is also one row, and pooling it would offer
+    TIBIX — a global allocation fund placed there by a per-ticker override —
+    against two foreign large-blend index funds. One sleeve holding things
+    that are not substitutes for each other is a judgement about the book, not
+    something to derive. Large cap, foreign, emerging and every bond sleeve
+    still match on the exact category.
+  - The builder is **`watchlistAlternativesByKey`**, renamed from
+    `…ByCategory`: calling it a category grouping when two sleeves group by
+    something else is how a name starts lying. `alternativesFor` takes the
+    holding's `security_id` as well as its category, because the sleeve
+    resolves through `ASSET_CLASS_OVERRIDES`, which is keyed by ticker. The freeze still
   matters for the free-text note, which is written before the committee looks;
   and the final step still pre-selects **neither** the committee's
   recommendation nor a decision, because defaulting to the committee would
