@@ -386,6 +386,24 @@ These are different features and **must not be conflated**:
       is carried on a PENDING row too: a purchase and a YCharts refresh are
       different events, so a fund can be bought before the workbook reaches it.
   - `prospects.thesis`, `prospects.conviction` and `prospects.target_price` are **dead columns** — the manual thesis/conviction went when AI research took over, and the target price went from the Add form and the card in Oct 2026 (a price you mean to pay is a sizing decision, which belongs to the candidate stage). The columns and their stored values are kept; nothing writes them. The displayed thesis/rating/conviction come from `research_reports`, filtered to the portfolios the idea names plus any unscoped report — and since `watchlist-research` now always writes unscoped, new research shows on every card regardless of the books an idea names.
+  - **Removing an idea DETACHES its portfolios** (Nov 2026). A
+    `prospect_portfolios` row answers "which books is this being considered
+    for", so once the idea is dropped the answer is none — and every reader
+    already filters to active ideas, so a link under a removed row could not be
+    read even deliberately. Left behind they accumulate: two of nine were
+    stranded under ideas dropped in July and October.
+    - **It loses no unique record, which is the test that mattered before
+      writing it.** The "considered for X" fact survives in the committee's own
+      deliverables — `ic_memos`, `research_reports` and `security_additions` all
+      carry `portfolio_name` for both stranded tickers — and the removal is in
+      `audit_log` via `audit_prospects`. `prospect_portfolios` carries no audit
+      trigger of its own, so it was never serving as the record.
+    - **The idea is retired FIRST, then the links.** A failure after the first
+      step leaves exactly the state this cleans up, which is harmless; the other
+      order would, on a failure, strip the portfolios off an idea that is still
+      live — silently losing something the advisor chose.
+    - Re-watching a dropped ticker still starts with no portfolios: it is a new
+      idea and a new row, and the Add modal asks again.
   - **The Add-to-watchlist portfolio picker hides derived blends** (`DERIVED_BLEND_PORTFOLIOS` in `AddProspectModal`). Equity Income & Core Growth is a computed 50/50 of the two books it names, so a stock enters it only by being bought in one of them; offering it would invite an idea no book can act on.
 
 `substitutions.at_risk_id` is a `BIGINT → at_risk.id` FK (not a `security_id`).
