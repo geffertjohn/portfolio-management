@@ -193,6 +193,28 @@ export function unmappedCategories(
   return [...out].sort()
 }
 
+/**
+ * The one sentence every surface uses to report an unmapped vendor category.
+ *
+ * Phrased once, here, because there are now three places that report it — the
+ * Import / Export card's banner, the unattended refresh's log, and the row it
+ * writes to `import_runs.warnings` that the Actions hub reads. A message
+ * written separately at each end is how `consensusColor` and `fmtUsdCompact`
+ * drifted into two behaviours apiece.
+ *
+ * Returns null for an empty set so a caller can push the result without first
+ * testing the length.
+ */
+export function unmappedCategoryWarning(categories: string[]): string | null {
+  if (categories.length === 0) return null
+  const quoted = categories.map((c) => `"${c}"`).join(', ')
+  return (
+    `${categories.length} unmapped categor${categories.length === 1 ? 'y' : 'ies'} — `
+    + `holdings in ${quoted} show as unclassified weight in every allocation `
+    + 'rollup until added to ASSET_CLASS_BY_CATEGORY'
+  )
+}
+
 export function resolveAssetClass(
   security: { security_id: string; category_name: string | null },
 ): AssetClassKey | null {

@@ -32,6 +32,8 @@ export interface ImportRun {
   imported_at: string
   rows_written: number
   errors: string[]
+  /** Non-fatal findings — see `ImportRunInput.warnings`. */
+  warnings: string[]
   status: ImportStatus
 }
 
@@ -40,6 +42,19 @@ export interface ImportRunInput {
   source: ImportSource
   rows: number
   errors?: string[]
+  /**
+   * Findings that did NOT stop the rows from landing, and that nothing else in
+   * the app would report: an unmapped `category_name` (its holdings drop out of
+   * every allocation rollup as unclassified weight — gotcha 23) or an abandoned
+   * benchmark row (it silently stops refreshing).
+   *
+   * **Deliberately not `errors`, because warnings must not touch `status`.** A
+   * row carrying one wrote perfectly well, so marking the run `partial` would
+   * push a false failure into the freshness stamp and raise the "refresh needs
+   * attention" action over a clean import. They are reported as their own
+   * action instead.
+   */
+  warnings?: string[]
   /** Defaults to `partial` when errors are present, otherwise `success`. */
   status?: ImportStatus
 }
@@ -63,6 +78,9 @@ export async function recordImportRuns(
       file_name: file.name,
       rows_written: r.rows,
       errors: r.errors ?? [],
+      warnings: r.warnings ?? [],
+      // Note `warnings` is absent from this expression on purpose — see the
+      // field's own doc comment.
       status: r.status ?? ((r.errors?.length ?? 0) > 0 ? 'partial' : 'success'),
     })),
   )
@@ -73,7 +91,7 @@ export async function recordImportRuns(
 export async function fetchLatestImportRuns(): Promise<Map<ImportSource, ImportRun>> {
   const { data, error } = await supabase
     .from('import_runs')
-    .select('id, source, file_name, imported_at, rows_written, errors, status')
+    .select('id, source, file_name, imported_at, rows_written, errors, warnings, status')
     .order('imported_at', { ascending: false })
   if (error) throw error
 
@@ -108,6 +126,43 @@ export function ychartsAsOf(
     .filter((r): r is ImportRun => r != null && r.status !== 'failed')
   if (present.length === 0) return null
   return present.reduce((oldest, r) => (r.imported_at < oldest.imported_at ? r : oldest))
+}
+
+/** One source's non-fatal findings from its most recent run. */
+export interface ImportWarning {
+  source: ImportSource
+  message: string
+}
+
+/**
+ * The warnings on the NEWEST run of each source — what is wrong with the data
+ * sitting in the database right now.
+ *
+ * **Derived per run, never accumulated.** A warning is a property of the data
+ * as last imported, so the next clean run clears it by simply not repeating it
+ * — no stored state to go stale, and no "resolved" flag anyone has to remember
+ * to set. The corollary is that a warning persists for exactly as long as the
+ * cause does, which is what makes it safe to raise an action from.
+ *
+ * Reading only the newest run also means a finding that has since been fixed
+ * does not keep being reported, and one that recurs every morning is reported
+ * once rather than once per run.
+ *
+ * Shared by the Actions hub and the Import / Export card so the two cannot
+ * describe the same finding differently.
+ */
+export function latestImportWarnings(
+  runs: Map<ImportSource, ImportRun>,
+  sources: ImportSource[] = YCHARTS_DATA_SOURCES,
+): ImportWarning[] {
+  const out: ImportWarning[] = []
+  for (const source of sources) {
+    const run = runs.get(source)
+    // A failed run's warnings are not findings about the data — nothing landed.
+    if (!run || run.status === 'failed') continue
+    for (const message of run.warnings ?? []) out.push({ source, message })
+  }
+  return out
 }
 
 // ── Did the scheduled refresh actually run? ─────────────────────────────────

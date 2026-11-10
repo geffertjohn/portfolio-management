@@ -36,8 +36,8 @@ import {
 } from './modelPortfolios'
 import { fetchActiveAtRisk, isBreached, failingMetrics } from './atRisk'
 import {
-  daysSince, fetchLatestImportRuns, fmtImportDate, missedScheduledRefresh,
-  refreshDueLabel, YCHARTS_DATA_SOURCES, ychartsAsOf,
+  daysSince, fetchLatestImportRuns, fmtImportDate, latestImportWarnings,
+  missedScheduledRefresh, refreshDueLabel, YCHARTS_DATA_SOURCES, ychartsAsOf,
 } from './importRuns'
 import {
   fetchLatestJobRuns, fmtRunTime, gradeAllJobs, JOB_HEALTH_LABELS, needsAttention,
@@ -401,13 +401,18 @@ const REFRESH_STALE_AFTER_DAYS = 3
 
 async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
   const runs = await fetchLatestImportRuns()
+  // A DID-IT-RUN finding and a WHAT-DID-IT-FIND one are independent, so they
+  // accumulate rather than returning early past each other. The health of the
+  // job and the soundness of the data it delivered are different questions:
+  // the warnings below come from runs that succeeded.
+  const out: UnifiedAction[] = [...importWarningActions(runs)]
 
   const broken = YCHARTS_DATA_SOURCES
     .map((src) => runs.get(src))
     .filter((r) => r != null && r.status !== 'success')
   if (broken.length > 0) {
     const failed = broken.filter((r) => r!.status === 'failed').length
-    return [{
+    out.push({
       key: 'refresh:failed',
       category: 'operational',
       source: 'data_refresh',
@@ -421,19 +426,20 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
       dueDate: null,
       priority: 'high',
       isManual: false,
-    }]
+    })
+    return out
   }
 
   // Nothing broke — but did the job actually fire? Measured against when a run
   // was DUE, not how old the data is: a weekday schedule that stops leaves no
   // row at all, and pure age stays quiet for days while nothing is delivered.
   const oldest = ychartsAsOf(runs)
-  if (oldest == null) return []
+  if (oldest == null) return out
   const missed = missedScheduledRefresh(runs)
-  if (missed == null) return []
+  if (missed == null) return out
 
   const age = daysSince(oldest)
-  return [{
+  out.push({
     key: 'refresh:missed',
     category: 'operational',
     source: 'data_refresh',
@@ -446,7 +452,50 @@ async function fetchDataRefreshActions(): Promise<UnifiedAction[]> {
     // One missed morning is often just a machine asleep; several is a break.
     priority: age >= REFRESH_STALE_AFTER_DAYS ? 'high' : 'medium',
     isManual: false,
-  }]
+  })
+  return out
+}
+
+/**
+ * An import that SUCCEEDED and still found something wrong with the data.
+ *
+ * This is the half of import health that had no surface at all. `errors` and a
+ * missing run both reach the advisor above, but a warning — an unmapped vendor
+ * category, an abandoned benchmark row — reached only the Import / Export
+ * card's post-upload banner, which the unattended 05:30 refresh never renders.
+ * So the one path that reported was the one that stopped running for a new
+ * fund once the watchlist poller started adding tickers overnight. Three
+ * imports on 9 Nov 2026 introduced `Mid-Cap Value` and `Small Value` and each
+ * recorded a clean `errors: []`.
+ *
+ * **One action per finding, not one per run**, because the finding is what has
+ * to be acted on and two unrelated warnings are two pieces of work. The key is
+ * built from the message, so a warning that recurs every morning is the same
+ * action rather than a new one, and it disappears by itself when the next run
+ * stops reporting it (see `latestImportWarnings`).
+ *
+ * **Priority is high and that is not inflation.** Both producers mean a number
+ * already on screen is wrong with nothing else saying so: unmapped holdings
+ * drop out of an allocation rollup, and an abandoned benchmark row stops
+ * refreshing while still rendering. In an audit-defence tool a figure that is
+ * quietly wrong outranks one that is merely late.
+ */
+function importWarningActions(
+  runs: Awaited<ReturnType<typeof fetchLatestImportRuns>>,
+): UnifiedAction[] {
+  return latestImportWarnings(runs).map((w) => ({
+    key: `refresh:warning:${w.source}:${w.message}`,
+    category: 'operational' as const,
+    source: 'data_refresh' as const,
+    subject: null,
+    title: 'YCharts import reported a data warning',
+    subtitle: w.message,
+    context: null,
+    route: '/settings/import-export',
+    dueDate: null,
+    priority: 'high' as const,
+    isManual: false,
+  }))
 }
 
 /**
