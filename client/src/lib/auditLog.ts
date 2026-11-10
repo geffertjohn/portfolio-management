@@ -40,6 +40,11 @@ export const AUDITED_TABLES = [
   'clients',
   'at_risk',
   'prospects',
+  // The LINKS are audited too (Nov 2026). `prospects` had carried a trigger
+  // since it was created and its portfolio links had none, so attaching or
+  // detaching a book left no trail — and `removeProspect` now detaches on
+  // removal, so without this nothing would record that a link ever existed.
+  'prospect_portfolios',
   'action_items',
   'securities2',
   'portfolio_allocations',

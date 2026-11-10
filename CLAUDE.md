@@ -2324,10 +2324,11 @@ tables they read.
 
 - **`audit_log` + `/audit` (`AuditLogPage`, `lib/auditLog.ts`)** — a **read-only**
   surface over an append-only table, with CSV export. **Nothing in the app writes
-  it:** a Postgres trigger (`log_audit`) does, on **ten** tables —
+  it:** a Postgres trigger (`log_audit`) does, on **eleven** tables —
   `action_items`, `at_risk`, `clients`, `compliance_rules`,
   `firm_compliance_rules`, `investment_policy_statements`,
-  `portfolio_allocations`, `prospects`, `review_schedules`, and **`securities2`
+  `portfolio_allocations`, `prospects`, **`prospect_portfolios` (Nov 2026)**,
+  `review_schedules`, and **`securities2`
   (Nov 2026, conditionally — see below)**. Adding a trigger is how a table joins
   the log; there is no client-side path, and there should not be one.
   - **`securities2` is the only CONDITIONAL one, and that is the design.** It is
@@ -2354,6 +2355,20 @@ tables they read.
     - `schemaContract.test.ts` pins both triggers, the `WHEN`, the governed
       column list and the absence of vendor columns, because the easy future
       mistake is to "make it consistent with the other nine".
+  - **`prospect_portfolios` is audited unconditionally**, unlike its
+    `securities2` neighbour. `prospects` had carried a trigger since it was
+    created and its portfolio links had none, so attaching or detaching a book
+    left no trail — and `removeProspect` now DETACHES on removal, so without
+    this nothing would record that a link ever existed. No WHEN clause is
+    needed: the table holds single figures of rows and only changes when the
+    advisor acts, so there is no volume to defend against and a condition would
+    only add a way to be wrong.
+  - **`schemaContract.test.ts` pins the list against the triggers, BOTH ways.**
+    A table in `AUDITED_TABLES` with no trigger is a filter that silently
+    returns nothing; a trigger whose table is missing from the list is a record
+    nobody can find. It reads the triggers out of `supabase/schema.sql`, so it
+    also fails when the snapshot has not been regenerated — which is how it
+    first fired.
   - **`AUDITED_TABLES` in `lib/auditLog.ts` had drifted BOTH ways** and was
     corrected in the same change. It listed **`positions`**, which is not a
     `log_audit` table at all — its `positions_audit` trigger runs

@@ -3097,6 +3097,10 @@ CREATE OR REPLACE TRIGGER "audit_portfolio_allocations" AFTER INSERT OR DELETE O
 
 
 
+CREATE OR REPLACE TRIGGER "audit_prospect_portfolios" AFTER INSERT OR DELETE OR UPDATE ON "public"."prospect_portfolios" FOR EACH ROW EXECUTE FUNCTION "public"."log_audit"();
+
+
+
 CREATE OR REPLACE TRIGGER "audit_prospects" AFTER INSERT OR DELETE OR UPDATE ON "public"."prospects" FOR EACH ROW EXECUTE FUNCTION "public"."log_audit"();
 
 
