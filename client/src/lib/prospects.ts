@@ -38,9 +38,43 @@ export interface ProspectEntry {
   removed_at: string | null
 }
 
-export interface ProspectIdea extends ProspectEntry {
+/**
+ * The `securities2` fields a lightweight consumer needs — the MINIMUM, so that
+ * both the full and the slim fetch satisfy it structurally and a caller taking
+ * this can be handed either.
+ */
+export interface ProspectSecurityRef {
+  id: number
+  security_id: string
+  security_name: string | null
+  category_name: string | null
+}
+
+/** Everything both fetches return; they differ only in the securities2 shape. */
+export interface ProspectIdeaBase extends ProspectEntry {
   /** Portfolios this idea is being considered for. Empty is valid and expected. */
   portfolios: string[]
+  /**
+   * Books currently HOLDING this ticker. Empty for a genuine idea.
+   *
+   * **A watchlist is a list of things being considered for purchase, and one
+   * of these is already owned** — VBTLX sits here and in three Foundation
+   * books. Without this the fund table renders it identically to a fund
+   * nobody holds, so the single row that contradicts the page's premise is the
+   * one row that looks like all the others. Named books rather than a boolean
+   * because "held in the book I am sizing" and "held somewhere else" are
+   * different answers, which is the same split `ConsiderationsSection`
+   * already draws for alternatives.
+   */
+  heldIn: string[]
+}
+
+/** A lightweight idea — enough to count, name and categorise, nothing more. */
+export interface ProspectIdeaLite extends ProspectIdeaBase {
+  securities2: ProspectSecurityRef | null
+}
+
+export interface ProspectIdea extends ProspectIdeaBase {
   /**
    * The full `securities2` row, or null when the ticker is not in it — an
    * idea you do not hold and the workbook has not reached.
@@ -108,8 +142,26 @@ export async function addProspects(
   return out
 }
 
-/** All active (not removed) ideas, newest first, with portfolios and securities2 info. */
-export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
+/**
+ * The prospect rows, their portfolio links and which books already hold them —
+ * everything both fetches share.
+ *
+ * **It deliberately does NOT fetch `securities2`.** The schema-typed client only
+ * checks `.select()` column names when the argument is a single string literal,
+ * so passing the column set in as a parameter would hand back
+ * `GenericStringError[]` and quietly give up the check that turns a dropped or
+ * mistyped column into a `tsc` failure instead of a runtime 400. Each fetch
+ * therefore writes its own literal select, and only the cheap, identical half
+ * is shared.
+ */
+async function loadProspectCore(): Promise<{
+  rows: ProspectEntry[]
+  symbols: string[]
+  portfoliosOf: (prospectId: number) => string[]
+  heldInOf: (securityId: string) => string[]
+}> {
+  const empty = { rows: [] as ProspectEntry[], symbols: [], portfoliosOf: () => [], heldInOf: () => [] }
+
   const { data, error } = await supabase
     .from('prospects')
     .select('id, security_id, target_price, conviction, thesis, date_added, removed_at')
@@ -117,30 +169,70 @@ export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
     .order('date_added', { ascending: false })
   if (error) throw error
   const rows = (data ?? []) as ProspectEntry[]
-  if (rows.length === 0) return []
+  if (rows.length === 0) return empty
 
-  const [links, secs] = await Promise.all([
+  const symbols = [...new Set(rows.map((r) => r.security_id))]
+  const [links, held] = await Promise.all([
     supabase
       .from('prospect_portfolios')
       .select('prospect_id, portfolio_name')
       .in('prospect_id', rows.map((r) => r.id)),
+    // Which of these the firm ALREADY OWNS. One query over the watched symbols
+    // rather than `fetchPortfoliosHoldingSecurity` per ticker, which would be
+    // one round trip per idea.
     supabase
-      .from('securities2')
-      // `*`: see the note on ProspectIdea.securities2 — the scorecard reads a
-      // metric set defined in fundScorecard.ts, and a column list here would
-      // be a second copy of it that fails as a row of dashes, not an error.
-      .select('*')
-      .in('security_id', [...new Set(rows.map((r) => r.security_id))]),
+      .from('positions')
+      .select('security_id, portfolio_name')
+      .in('security_id', symbols)
+      .is('deleted_at', null),
   ])
   if (links.error) throw links.error
-  if (secs.error) throw secs.error
+  if (held.error) throw held.error
 
   const byProspect = new Map<number, string[]>()
   for (const l of links.data ?? []) {
-    const list = byProspect.get(l.prospect_id) ?? []
-    list.push(l.portfolio_name)
-    byProspect.set(l.prospect_id, list)
+    byProspect.set(l.prospect_id, [...(byProspect.get(l.prospect_id) ?? []), l.portfolio_name])
   }
+  const byHolder = new Map<string, string[]>()
+  for (const h of held.data ?? []) {
+    const list = byHolder.get(h.security_id) ?? []
+    // A ticker appears once per book; de-duplicating keeps the badge honest
+    // even if that ever stops being true.
+    if (!list.includes(h.portfolio_name)) list.push(h.portfolio_name)
+    byHolder.set(h.security_id, list)
+  }
+
+  return {
+    rows,
+    symbols,
+    portfoliosOf: (id) => (byProspect.get(id) ?? []).sort(),
+    heldInOf: (sym) => (byHolder.get(sym) ?? []).sort(),
+  }
+}
+
+/**
+ * All active ideas with the FULL `securities2` row — what the Watchlist's fund
+ * table needs, because its scorecard reads a metric set defined in
+ * `fundScorecard.ts` (see `ProspectIdea.securities2`).
+ *
+ * **It is 43x the payload of the lite fetch** — measured 10 Nov 2026 at
+ * 154,559 bytes against 3,625 for the same 29 rows — so a caller that only
+ * needs to count, name or categorise an idea should use
+ * `fetchActiveProspectsLite`.
+ */
+export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
+  const { rows, symbols, portfoliosOf, heldInOf } = await loadProspectCore()
+  if (rows.length === 0) return []
+
+  const secs = await supabase
+    .from('securities2')
+    // `*`: see the note on ProspectIdea.securities2 — the scorecard reads a
+    // metric set defined in fundScorecard.ts, and a column list here would
+    // be a second copy of it that fails as a row of dashes, not an error.
+    .select('*')
+    .in('security_id', symbols)
+  if (secs.error) throw secs.error
+
   // `as unknown as SecurityDetail`, matching `fetchSecurityById` and
   // `fetchSecuritiesByIds`, which cast the same `select('*')` the same way.
   // The reason is a known drift: `SecurityDetail` declares six columns the
@@ -150,12 +242,47 @@ export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
   // `fundPeers.ts`), so nothing reads undefined today; it is a stale interface
   // rather than a runtime bug, and tidying it belongs in its own change.
   const secById = new Map(
-    (secs.data ?? []).map((s) => [s.security_id, s as unknown as SecurityDetail]),
+    (secs.data ?? []).map((x) => [x.security_id, x as unknown as SecurityDetail]),
   )
 
   return rows.map((r) => ({
     ...r,
-    portfolios: (byProspect.get(r.id) ?? []).sort(),
+    portfolios: portfoliosOf(r.id),
+    heldIn: heldInOf(r.security_id),
+    securities2: secById.get(r.security_id) ?? null,
+  }))
+}
+
+/**
+ * All active ideas with only enough of `securities2` to count, name and
+ * categorise them.
+ *
+ * **For every caller that is not the Watchlist's fund table.** The full fetch
+ * ships the whole 93-column row for each watched ticker; the dashboard was
+ * paying 151 KB of scorecard metrics to render the NUMBER of ideas, and the
+ * annual review's alternatives panel paid it to read four fields.
+ *
+ * Its query key is a CHILD of `QUERY_KEYS.prospects`, so every existing
+ * `invalidateQueries({ queryKey: QUERY_KEYS.prospects })` still clears both by
+ * prefix match. Splitting the key any other way would have left one of the two
+ * stale after an add or a remove — a bug that shows up as a count which will
+ * not move.
+ */
+export async function fetchActiveProspectsLite(): Promise<ProspectIdeaLite[]> {
+  const { rows, symbols, portfoliosOf, heldInOf } = await loadProspectCore()
+  if (rows.length === 0) return []
+
+  const secs = await supabase
+    .from('securities2')
+    .select('id, security_id, security_name, category_name')
+    .in('security_id', symbols)
+  if (secs.error) throw secs.error
+  const secById = new Map((secs.data ?? []).map((x) => [x.security_id, x]))
+
+  return rows.map((r) => ({
+    ...r,
+    portfolios: portfoliosOf(r.id),
+    heldIn: heldInOf(r.security_id),
     securities2: secById.get(r.security_id) ?? null,
   }))
 }
@@ -270,7 +397,10 @@ export function categoryKey(category: string | null | undefined): string | null 
  * compared on a category it does not carry.
  */
 export function watchlistAlternativesByCategory(
-  ideas: ProspectIdea[],
+  // `ProspectIdeaLite` is the MINIMUM shape, so this takes either fetch's
+  // output — and the caller that uses it (the annual review) can take the
+  // cheap one.
+  ideas: ProspectIdeaLite[],
 ): Map<string, WatchlistAlternative[]> {
   const out = new Map<string, WatchlistAlternative[]>()
   for (const idea of ideas) {

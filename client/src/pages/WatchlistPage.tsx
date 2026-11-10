@@ -121,7 +121,23 @@ function ProspectCard({
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900">{entry.security_id}</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+              {entry.security_id}
+              {/* Same reason as the fund table's badge: a watchlist is a list of
+                  things being CONSIDERED FOR PURCHASE, so an idea the firm
+                  already owns is the one row the page's own subtitle does not
+                  describe. No watched stock is held today — VBTLX, a fund, is
+                  the live case — but the stock side is one purchase away from
+                  the same silence. */}
+              {entry.heldIn.length > 0 && (
+                <span
+                  title={`Currently held in ${entry.heldIn.join(', ')}`}
+                  className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                >
+                  Held
+                </span>
+              )}
+            </p>
             <p className="mt-0.5 truncate text-xs text-gray-500">{name ?? '—'}</p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-0.5">

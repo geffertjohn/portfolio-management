@@ -8,6 +8,13 @@ export const QUERY_KEYS = {
   atRisk: ['at_risk'] as const,
   atRiskBySecurity: (securityId: string) => ['at_risk', securityId] as const,
   prospects: ['prospects'] as const,
+  /**
+   * A CHILD of `prospects`, deliberately: TanStack matches by prefix, so every
+   * existing `invalidateQueries({ queryKey: QUERY_KEYS.prospects })` clears
+   * this too. A sibling key would have left the dashboard's count stale after
+   * an add until something else happened to refetch it.
+   */
+  prospectsLite: ['prospects', 'lite'] as const,
   reviewSchedules: ['review_schedules'] as const,
   reviewCoverage: ['review_coverage'] as const,
   committeeDocs: ['committee_docs'] as const,
