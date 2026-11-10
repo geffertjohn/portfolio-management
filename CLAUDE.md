@@ -237,6 +237,41 @@ These are different features and **must not be conflated**:
     `securities2` no longer equals the held fund set, the way it no longer
     equals the held stock set.
   - **A card opens `/research/:ticker`** — the on-demand research page, which runs on a bare ticker. `ResearchPage` is **stock-only** (its scorecard is margins/growth, which FMP does not serve for funds), so an ETF/fund idea opens its `securities2` detail page instead when it has one. Do not point a stock idea at `/security/:id`: that is the held-security surface (positions, review schedule, documents, at-risk).
+  - **STOCKS ARE CARDS; FUNDS ARE ONE TABLE GROUPED BY ASSET CLASS** (Nov 2026).
+    The page used to be three card columns — Stocks, ETFs, Mutual Funds — and
+    **the vehicle split answered a question nobody asks of an idea list.** FELC
+    is an ETF and ICAFX is a mutual fund; both are Large Blend, both compete
+    for the same sleeve, and they sat in different columns where no comparison
+    between them was possible. Funds are now one table whose groups are the
+    firm's fourteen `ASSET_CLASS_ROWS`, and the vehicle survives as a column.
+    - **The grouping IS `resolveAssetClass`**, never a vocabulary of its own —
+      the same single-source rule as everywhere else. `lib/watchlistGroups.ts`
+      is pure and tested; `components/WatchlistFundTable.tsx` only renders.
+    - **Stocks keep their cards deliberately.** A card carries bear/base/bull
+      targets, a buy-below with its gap to today's price, and the AI Research
+      drawer; a row holds none of that, and forcing one layout on both would
+      have cost the stock side most of its page.
+    - **All fourteen classes render, empty ones greyed.** "Nothing good is
+      available" and "nobody has looked" are different states of an idea list,
+      and only one is visible if the row is dropped. Six of fourteen were
+      populated on 9 Nov 2026.
+    - **US Large Cap is the ONLY nested group** (Blend / Growth / Value),
+      because the taxonomy splits large cap three ways and nothing else.
+    - **"Unclassified" and "Awaiting YCharts data" are SEPARATE groups** — the
+      `UnpricedReason` split. A fund with no `securities2` row resolves itself
+      on the next refresh; one whose category the map cannot place stays broken
+      until somebody edits `ASSET_CLASS_BY_CATEGORY`.
+    - **Rows rank by score, then cost, then ticker**, with an UNSCORED fund
+      last rather than as a zero — unscored means the workbook has not filled
+      it, not that it scored nothing. The score is computed in the fund's
+      **designated** cohort via `designatedCohort`, so the watchlist and the
+      review cannot show one fund two numbers; a defaulted cohort is marked
+      with a dagger rather than presented as a decision somebody made.
+    - **`fetchActiveProspects` now selects `securities2.*`.** The scorecard
+      reads ~20 rank/size/value columns decided in `fundScorecard.ts`, and a
+      column list in `prospects.ts` would be a second copy of that metric set
+      — silently wrong the day a metric is added, and failing as a COLUMN OF
+      DASHES rather than an error. That is exactly what the first run showed.
   - `prospects.thesis`, `prospects.conviction` and `prospects.target_price` are **dead columns** — the manual thesis/conviction went when AI research took over, and the target price went from the Add form and the card in Oct 2026 (a price you mean to pay is a sizing decision, which belongs to the candidate stage). The columns and their stored values are kept; nothing writes them. The displayed thesis/rating/conviction come from `research_reports`, filtered to the portfolios the idea names plus any unscoped report — and since `watchlist-research` now always writes unscoped, new research shows on every card regardless of the books an idea names.
   - **The Add-to-watchlist portfolio picker hides derived blends** (`DERIVED_BLEND_PORTFOLIOS` in `AddProspectModal`). Equity Income & Core Growth is a computed 50/50 of the two books it names, so a stock enters it only by being bought in one of them; offering it would invite an idea no book can act on.
 
@@ -2517,7 +2552,7 @@ Identity fields (`security_name`, `long_description`, `morningstar_sector`, `mor
 
 22. **FMP's transcript-date list stamps the wrong calendar YEAR on some Q4/Q1 rows** — the fiscal labels are right and the transcript itself is right, only the `date` is a year early. It dates Alphabet's **FY2024 Q4** call `2024-02-04` and its **FY2025 Q1** call `2024-04-24`, though those transcripts open with "Fourth Quarter 2024" and "First Quarter 2025"; `search-transcripts`/`earning_call_transcript` by `(year, quarter)` return the correct call regardless. **2 of 42 held symbols** carry it (also APP FY2023 Q4) — a fiscal-year-boundary bug, so expect it at Q4/Q1. Anything ordering calls must sort by **`(fiscalYear, quarter)`**, not by `date`: the Commentary timeline sorted by date and GOOGL's table jumped Q2 2025 → Q3 2024, dropping two real quarters off the bottom of its eight-row window. Do not "fix" a bad date by adding a year — that is inventing a figure; flag it (`CommentaryRow.dateSuspect`) and show it unasserted.
 
-23. **A `category_name` missing from `ASSET_CLASS_BY_CATEGORY` becomes silent unclassified weight — and TWO SPELLINGS of one category can be live at once.** The lookup normalizes case and whitespace but is otherwise exact. VEMAX carries Morningstar's abbreviated `Diversified Emerging Mkts`; EICOX / EMMF / EYLD carry the spelled-out `Diversified Emerging Markets`. Only the abbreviation was mapped, so three of the four emerging-market holdings resolved to `null` across **six portfolios** (the three Hybrid and three ETF books). The three Foundation books hold VEMAX and looked correct, which is exactly why it survived — the sleeve appeared to work. On Hybrid Balanced the Equity legend read 66.00% target against 62.00% holdings, with `4.00% unclassified — EICOX` beneath the table. **Before adding a category, read the DB for every spelling in use** (`select distinct category_name from securities2`) rather than trusting the vendor's documented form, and never delete an existing key to "tidy up" a duplicate — both may be carrying real holdings.
+23. **A `category_name` missing from `ASSET_CLASS_BY_CATEGORY` becomes silent unclassified weight — and TWO SPELLINGS of one category can be live at once.** **It happened again in Nov 2026, and the audit could not see it:** `Mid-Cap Value` and `Small Value` were unmapped while their blend and growth siblings were mapped, so FSMVX, NAMAX, QVAL and VSMIX resolved to `null`. All four are WATCHED, not held — and `scripts/audit/asset-class-coverage.ts` walks HELD securities, so nothing would have reported it until the first one was bought and its weight dropped out of a rollup. The `assetClass.test.ts` pinned-category list is now built from held **∪ watched**, non-proxy securities for exactly that reason: an idea becomes a holding, and placing it the day before the purchase rather than the day after is the whole margin that assertion has. (Proxies stay excluded — they carry sector and maturity categories the fourteen-class taxonomy has no sleeve for.) Separately, `Diversified Emerging Mkts` is now carried by **no row at all** — VEMAX moved to the spelled-out form — and the key is kept anyway, with a test asserting it still resolves. The lookup normalizes case and whitespace but is otherwise exact. VEMAX carries Morningstar's abbreviated `Diversified Emerging Mkts`; EICOX / EMMF / EYLD carry the spelled-out `Diversified Emerging Markets`. Only the abbreviation was mapped, so three of the four emerging-market holdings resolved to `null` across **six portfolios** (the three Hybrid and three ETF books). The three Foundation books hold VEMAX and looked correct, which is exactly why it survived — the sleeve appeared to work. On Hybrid Balanced the Equity legend read 66.00% target against 62.00% holdings, with `4.00% unclassified — EICOX` beneath the table. **Before adding a category, read the DB for every spelling in use** (`select distinct category_name from securities2`) rather than trusting the vendor's documented form, and never delete an existing key to "tidy up" a duplicate — both may be carrying real holdings.
 
 24. **A `timestamptz` column holding a calendar DATE renders a day early.** `at_risk.removal_date` and its kin are stored at UTC midnight, so `new Date(v).toLocaleDateString()` in a negative-UTC-offset zone shows the previous day. COIN's At-Risk card read "expires February 10, 2027" against a row holding the 11th — contradicting its own brief on the same screen. Use **`fmtUtcLongDate(value)`** from `lib/formatters` for any column that is a date rather than an instant; reserve local-time formatting for true timestamps (`reviewed_at`, `triggered_at`).
 

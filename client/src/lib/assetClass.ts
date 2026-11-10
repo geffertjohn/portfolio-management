@@ -51,8 +51,17 @@ export const ASSET_CLASS_BY_CATEGORY: Record<string, AssetClassKey> = {
   'Large Value':                  'large_cap_value',
   'Mid-Cap Blend':                'us_mid_cap',
   'Mid-Cap Growth':               'us_mid_cap',
+  // Added Nov 2026. The two VALUE spellings were missing while their blend and
+  // growth siblings were mapped, so four watched funds — FSMVX, NAMAX and QVAL
+  // (Mid-Cap Value) and VSMIX (Small Value) — resolved to null. Gotcha 23
+  // again, and invisible twice over: `scripts/audit/asset-class-coverage.ts`
+  // walks HELD securities only, and none of the four is held yet, so nothing
+  // would have reported it until the first one was bought and its weight
+  // dropped silently out of the allocation rollup.
+  'Mid-Cap Value':                'us_mid_cap',
   'Small Blend':                  'us_small_cap',
   'Small Growth':                 'us_small_cap',
+  'Small Value':                  'us_small_cap',
   // ── US equity — individual stocks (style grid, "Core" = "Blend") ───────────
   'Large Cap Core':               'large_cap_blend',
   'Large Cap Growth':             'large_cap_growth',

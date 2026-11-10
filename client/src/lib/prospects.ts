@@ -18,7 +18,7 @@
  */
 
 import { supabase } from './supabase'
-import { seedScorecardCohorts } from './securities'
+import { seedScorecardCohorts, type SecurityDetail } from './securities'
 import type { Conviction } from './reviewLog'
 
 export interface ProspectEntry {
@@ -41,35 +41,24 @@ export interface ProspectEntry {
 export interface ProspectIdea extends ProspectEntry {
   /** Portfolios this idea is being considered for. Empty is valid and expected. */
   portfolios: string[]
-  /** Null when the ticker is not in securities2 — an idea you do not hold. */
-  securities2: {
-    id: number
-    security_id: string
-    security_name: string | null
-    broad_asset_class: string | null
-    detailed_security_type: string | null
-    peer_group_name: string | null
-    /**
-     * How a FUND idea is identified, in place of a portfolio.
-     *
-     * Null until the ticker reaches `securities2`, which for a newly watched
-     * fund happens on the next YCharts refresh (see
-     * `scripts/refresh/README.md`) — so "not categorised yet" is a real and
-     * temporary state, not a missing value to paper over.
-     */
-    category_name: string | null
-    /**
-     * WHICH cohort this fund is graded against — the governed choice, set by
-     * hand on the security page and written by nothing else.
-     *
-     * Unlike `category_name` it does NOT arrive with the YCharts refresh and
-     * never resolves on its own: a fund left null is silently graded against
-     * its category by every surface that reads it, including the automatic
-     * At-Risk flag in the fund review. Carried here so the Watchlist can say
-     * so while the idea is still an idea.
-     */
-    scorecard_cohort: string | null
-  } | null
+  /**
+   * The full `securities2` row, or null when the ticker is not in it — an
+   * idea you do not hold and the workbook has not reached.
+   *
+   * **The WHOLE row, not a hand-picked subset** (Nov 2026). It used to carry
+   * eight columns, which was enough to name a fund and its category; the
+   * Watchlist's fund table now scores each fund with `buildFundScorecard`,
+   * and that reads about twenty rank, size and value columns decided in
+   * `fundScorecard.ts`. Listing them here would be a second copy of that
+   * metric set, silently wrong the day a metric is added — and the symptom is
+   * not an error but a column of dashes, which reads as "this fund has no
+   * data" rather than "we forgot to ask for it". That is exactly what the
+   * first run of the new table showed.
+   *
+   * Typed as `SecurityDetail` so the classifier, the asset-class resolver and
+   * the scorecard all take it without a cast.
+   */
+  securities2: SecurityDetail | null
 }
 
 export interface NewProspect {
@@ -96,7 +85,10 @@ export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
       .in('prospect_id', rows.map((r) => r.id)),
     supabase
       .from('securities2')
-      .select('id, security_id, security_name, broad_asset_class, detailed_security_type, peer_group_name, category_name, scorecard_cohort')
+      // `*`: see the note on ProspectIdea.securities2 — the scorecard reads a
+      // metric set defined in fundScorecard.ts, and a column list here would
+      // be a second copy of it that fails as a row of dashes, not an error.
+      .select('*')
       .in('security_id', [...new Set(rows.map((r) => r.security_id))]),
   ])
   if (links.error) throw links.error
@@ -108,7 +100,17 @@ export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
     list.push(l.portfolio_name)
     byProspect.set(l.prospect_id, list)
   }
-  const secById = new Map((secs.data ?? []).map((s) => [s.security_id, s]))
+  // `as unknown as SecurityDetail`, matching `fetchSecurityById` and
+  // `fetchSecuritiesByIds`, which cast the same `select('*')` the same way.
+  // The reason is a known drift: `SecurityDetail` declares six columns the
+  // table does not have — `turnover_ratio`, `distribution_yield` and the four
+  // `*_fund_level_flows` — so the generated row type is not assignable to it.
+  // None of the six has a reader (the live one is `turnover_ratio_generic`, in
+  // `fundPeers.ts`), so nothing reads undefined today; it is a stale interface
+  // rather than a runtime bug, and tidying it belongs in its own change.
+  const secById = new Map(
+    (secs.data ?? []).map((s) => [s.security_id, s as unknown as SecurityDetail]),
+  )
 
   return rows.map((r) => ({
     ...r,
