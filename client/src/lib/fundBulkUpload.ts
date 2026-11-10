@@ -20,7 +20,7 @@
  * so values match the plain-ticker format stored in securities2.
  */
 
-import { unmappedCategories as unmappedCategoriesIn } from './assetClass'
+import { unplacedCategories } from './assetClass'
 import { seedScorecardCohorts } from './securities'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
@@ -183,6 +183,13 @@ export type BulkUploadResult = {
    * `bulkUploadFundsFromExcel`. Empty when proxy status could not be
    * determined, so a caller cannot tell "nothing unmapped" from "could not
    * check"; that is deliberate, since the alternative is a false alarm.
+   *
+   * **It reports what could not be PLACED, not what is unrecognised**
+   * (`unplacedCategories`, not `unmappedCategories`). A fund placed by
+   * `ASSET_CLASS_OVERRIDES` leaves no unclassified weight, so warning about
+   * its category would raise a daily action over a book with no gap in it —
+   * TIBIX is the live case. A NEW fund carrying that same category has no
+   * override and is still reported.
    */
   unmappedCategories: string[]
 }
@@ -314,10 +321,13 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
    * missed morning costs nothing — the next run reports it.
    */
   const unmapped = proxies
-    ? unmappedCategoriesIn(
+    ? unplacedCategories(
         records
           .filter((r) => !proxies.has(String(r.security_id).trim().toUpperCase()))
-          .map((r) => r.category_name as string | null),
+          .map((r) => ({
+            security_id: String(r.security_id),
+            category_name: (r.category_name as string | null) ?? null,
+          })),
       )
     : []
 

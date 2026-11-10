@@ -63,9 +63,21 @@ respectively. Don't repurpose them.
 - **The vendor vocabulary is not consistent, and two spellings of one category can
   be live at once.** `ASSET_CLASS_BY_CATEGORY` must carry every form actually
   present in `securities2`, not just the documented one — see gotcha 23.
-- `ASSET_CLASS_OVERRIDES` is a per-ticker escape hatch (currently only `BRK.B`,
-  for which Morningstar publishes no category). **Keep it short** — a growing list
-  means the category map is wrong.
+- `ASSET_CLASS_OVERRIDES` is a per-ticker escape hatch (`BRK.B` and `TIBIX`).
+  **Keep it short** — a growing list means the category map is wrong.
+  - **Use it when the category is UNINFORMATIVE rather than missing or
+    misspelt.** A misspelt or new spelling belongs in the map (gotcha 23); an
+    override is for a fund whose category describes a MANDATE the taxonomy has
+    no sleeve for. `TIBIX` (Nov 2026) carries Morningstar's "Global Moderately
+    Aggressive Allocation", and mapping that CATEGORY would be false in
+    general — a global allocation fund is typically about half US, so the next
+    one to arrive would be silently mis-filed with no warning, because the
+    category would now resolve. TIBIX itself is atypical for it: 90.6%
+    developed-market exposure against a 24.4% US region total, so ~66% non-US
+    developed, and a Lipper peer group of "Global Equity Income Funds".
+  - **An override SILENCES the import warning for its own ticker and for no
+    other** — see `unplacedCategories` below. That property is what makes the
+    list safe to use rather than a way of hiding gaps.
 - **Known gap, and the remedy this bullet used to name DOES NOT EXIST for a
   stock.** It said a ticker-created security resolves to `null` "until a YCharts
   workbook import fills `category_name`". Traced Nov 2026: **nothing has written
@@ -122,10 +134,26 @@ respectively. Don't repurpose them.
   banner names any the map cannot place. It is returned as its own field, **not
   in `errors`** — the row writes fine, so folding it into errors would mark a
   clean import partial and push a false failure into `import_runs`.
-  - **It probes with a synthetic ticker**, because the question is whether the
-    CATEGORY is known, not whether one holding resolves: asking with a real
-    ticker lets `ASSET_CLASS_OVERRIDES` or the cash branch report a vocabulary
-    as mapped and the next security carrying it falls straight through.
+  - **There are TWO probes and they answer different questions.**
+    `unmappedCategories` asks whether a VOCABULARY is known and probes with a
+    **synthetic ticker**, so a per-ticker override cannot speak for a whole
+    category and let the next security carrying it fall through — right for
+    auditing the map, which is what `asset-class-coverage.ts` does.
+    `unplacedCategories` asks whether any SECURITY was left unclassified, by
+    resolving each one on its own id — **right for the import warning**, which
+    is a claim about the book rather than about the map. The importer uses the
+    second.
+    - **Mixing them up is a standing false alarm.** TIBIX is placed by
+      override, so nothing is unclassified, yet the synthetic probe still
+      calls its category unmapped — on the vocabulary probe the import would
+      have raised a high-priority action every morning over a book with no gap
+      in it.
+    - **The per-security question keeps what the synthetic one protected.**
+      A new fund in TIBIX's category has no override of its own, so it is
+      unplaced and still reported — which is right, because somebody has to
+      look at its composition too. The original danger was using ONE real
+      ticker as a sample for a whole category; asking about every security
+      individually is strictly stronger.
   - **A MISSING category is not an unmapped one** and is deliberately not
     reported — that is the FMP-created security above, a different problem, and
     warning on it would cry wolf on every new ticker.

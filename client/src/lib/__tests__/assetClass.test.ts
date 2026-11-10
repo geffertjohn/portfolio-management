@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories, unmappedCategoryWarning, STOCK_CATEGORY_OPTIONS,
+import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories, unplacedCategories, unmappedCategoryWarning, STOCK_CATEGORY_OPTIONS,
 } from '../assetClass'
 
 const sec = (security_id: string, category_name: string | null) => ({ security_id, category_name })
@@ -222,5 +222,90 @@ describe('unmappedCategoryWarning', () => {
   it('is stable for the same input', () => {
     expect(unmappedCategoryWarning(['Small Value']))
       .toBe(unmappedCategoryWarning(['Small Value']))
+  })
+})
+
+describe('TIBIX is placed by ticker, not by its category', () => {
+  /**
+   * Thornburg Income Builder carries "Global Moderately Aggressive
+   * Allocation" — a MANDATE, not a sleeve, and the taxonomy has no
+   * global-allocation class. The fund is atypical for its category:
+   * developed-market exposure 90.6% against a US region total of 24.4%
+   * (measured 10 Nov 2026), so roughly two thirds non-US developed.
+   */
+  it('resolves to non-US developed', () => {
+    expect(resolveAssetClass({ security_id: 'TIBIX', category_name: 'Global Moderately Aggressive Allocation' }))
+      .toBe('non_us_developed')
+  })
+
+  /**
+   * THE REASON IT IS AN OVERRIDE AND NOT A MAP ENTRY. A global allocation
+   * fund is typically about half US, so mapping the category to a sleeve
+   * would file the next one silently and wrongly. Another fund carrying it
+   * must still resolve to null, and therefore still be reported.
+   */
+  it('leaves the category itself unplaced for any other fund', () => {
+    expect(resolveAssetClass({ security_id: 'SOMEOTHER', category_name: 'Global Moderately Aggressive Allocation' }))
+      .toBeNull()
+  })
+})
+
+describe('unplacedCategories vs unmappedCategories', () => {
+  /**
+   * Two questions that look alike and are not. `unmappedCategories` asks
+   * whether a VOCABULARY is known and probes with a synthetic ticker, so an
+   * override cannot speak for a whole category — right for auditing the map.
+   * `unplacedCategories` asks whether any SECURITY was left unclassified —
+   * right for a warning, which is about the book rather than the map.
+   *
+   * Getting this wrong is a standing false alarm: the import would have
+   * raised a high-priority action every morning naming TIBIX's category,
+   * over a book with nothing unclassified in it.
+   */
+  it('reports nothing when an override placed the only holder', () => {
+    expect(unplacedCategories([
+      { security_id: 'TIBIX', category_name: 'Global Moderately Aggressive Allocation' },
+    ])).toEqual([])
+  })
+
+  it('while the vocabulary probe still calls that category unmapped', () => {
+    expect(unmappedCategories(['Global Moderately Aggressive Allocation']))
+      .toEqual(['Global Moderately Aggressive Allocation'])
+  })
+
+  // The property the synthetic probe existed to protect, kept: an override
+  // speaks for its own ticker and for no other.
+  it('still reports a DIFFERENT fund carrying the overridden category', () => {
+    expect(unplacedCategories([
+      { security_id: 'TIBIX', category_name: 'Global Moderately Aggressive Allocation' },
+      { security_id: 'NEWFD', category_name: 'Global Moderately Aggressive Allocation' },
+    ])).toEqual(['Global Moderately Aggressive Allocation'])
+  })
+
+  it('reports a genuinely unknown category', () => {
+    expect(unplacedCategories([{ security_id: 'XYZ', category_name: 'Bank Loan' }]))
+      .toEqual(['Bank Loan'])
+  })
+
+  // A missing category is the FMP-created security, a different problem —
+  // warning on it would fire for every newly added ticker.
+  it('ignores a security with no category at all', () => {
+    expect(unplacedCategories([
+      { security_id: 'NEW', category_name: null },
+      { security_id: 'BLANK', category_name: '   ' },
+    ])).toEqual([])
+  })
+
+  it('returns the set, sorted, not one entry per holding', () => {
+    expect(unplacedCategories([
+      { security_id: 'B', category_name: 'Preferred Stock' },
+      { security_id: 'A', category_name: 'Bank Loan' },
+      { security_id: 'C', category_name: 'Bank Loan' },
+    ])).toEqual(['Bank Loan', 'Preferred Stock'])
+  })
+
+  // Cash resolves through its own branch, so it is placed, not a finding.
+  it('does not report cash', () => {
+    expect(unplacedCategories([{ security_id: '$Cash', category_name: null }])).toEqual([])
   })
 })

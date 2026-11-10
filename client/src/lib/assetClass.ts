@@ -106,6 +106,25 @@ export const ASSET_CLASS_OVERRIDES: Record<string, AssetClassKey> = {
   // of a vendor string; BRK.B is not currently held, so nothing turns on it
   // today. Revisit with the advisor rather than deleting on sight.
   'BRK.B': 'large_cap_value',
+
+  // TIBIX (Thornburg Income Builder Fund I). Morningstar files it as "Global
+  // Moderately Aggressive Allocation", which describes the MANDATE — a global
+  // 50-70% equity allocation fund — and not the sleeve it fills here. The
+  // taxonomy has no global-allocation class, and mapping the CATEGORY to a
+  // sleeve would be false in general: a global allocation fund is typically
+  // about half US, so the next one to arrive would be silently mis-filed.
+  //
+  // This fund is atypical for its category and the composition says so
+  // (measured 10 Nov 2026): developed-market exposure 90.6% against a US
+  // region total of 24.4%, so roughly 66% NON-US DEVELOPED, with emerging at
+  // 2.6%. Its Lipper peer group — "Global Equity Income Funds" — reads the
+  // same income-oriented international tilt. Set by the advisor on that
+  // evidence.
+  //
+  // Per-ticker is the right instrument precisely BECAUSE the category is not
+  // wrong, merely uninformative: a different fund carrying it still resolves
+  // to null and still raises the import warning, which is what should happen.
+  'TIBIX': 'non_us_developed',
 }
 
 function normalize(s: string): string {
@@ -189,6 +208,44 @@ export function unmappedCategories(
     if (resolveAssetClass({ security_id: '__unmapped_probe__', category_name: category }) === null) {
       out.add(category)
     }
+  }
+  return [...out].sort()
+}
+
+/**
+ * The categories of securities this map cannot place — the question an IMPORT
+ * WARNING has to ask.
+ *
+ * **Not the same question as `unmappedCategories`, and the difference is a
+ * standing false alarm.** That one asks whether a VOCABULARY is known, probing
+ * with a synthetic ticker so a per-ticker override cannot report a category as
+ * handled. Correct for an audit of the map. Wrong for a warning: TIBIX carries
+ * `Global Moderately Aggressive Allocation` and is placed by
+ * `ASSET_CLASS_OVERRIDES`, so nothing is unclassified — yet the synthetic probe
+ * still calls the category unmapped, and the import would have raised a
+ * high-priority action every morning about a book with no gap in it. A signal
+ * that cries wolf gets dismissed.
+ *
+ * **It keeps the property the synthetic probe was protecting.** The danger
+ * recorded at that function is that asking with ONE real ticker lets an
+ * override speak for a whole category, so the next security carrying it falls
+ * straight through. Asking about EVERY security individually is strictly
+ * stronger: a new fund in TIBIX's category has no override of its own, so it is
+ * unplaced, so it is reported — which is exactly what should happen, because
+ * somebody has to look at its composition too.
+ *
+ * A security with NO category is skipped, not reported: that is the
+ * FMP-created security in the module header, a different problem, and warning
+ * on it would fire for every newly added ticker.
+ */
+export function unplacedCategories(
+  securities: Iterable<{ security_id: string; category_name: string | null }>,
+): string[] {
+  const out = new Set<string>()
+  for (const security of securities) {
+    const category = security.category_name?.trim()
+    if (!category) continue
+    if (resolveAssetClass(security) === null) out.add(category)
   }
   return [...out].sort()
 }
