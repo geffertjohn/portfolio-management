@@ -86,9 +86,17 @@ console.log(`${rows.length} held position rows across ${books} portfolios\n`)
 console.log(`CATEGORIES IN USE (${inUse.size})`)
 for (const [category, n] of [...inUse].sort((a, b) => a[0].localeCompare(b[0]))) {
   // `unmappedCategories` does the probing, so this script cannot drift from
-  // what the importer warns about.
-  const placed = !category.startsWith('(') && unmappedCategories([category]).length === 0
-  console.log(`  ${(placed ? 'ok' : 'UNMAPPED').padEnd(9)} ${category}  (${n} rows)`)
+  // the map. It asks about the VOCABULARY, which is the right question here.
+  const inMap = !category.startsWith('(') && unmappedCategories([category]).length === 0
+  // A category can be absent from the map and still leave nothing
+  // unclassified, when every holding carrying it is placed by
+  // `ASSET_CLASS_OVERRIDES` — TIBIX's "Global Moderately Aggressive
+  // Allocation" is the live case. Printing that as UNMAPPED invites a fix
+  // that would be wrong: mapping the category would silently mis-file the
+  // next fund in it. So it is named for what it is.
+  const anyUnplaced = unplaced.some((u) => u.category === category)
+  const status = inMap ? 'ok' : anyUnplaced ? 'UNMAPPED' : 'override'
+  console.log(`  ${status.padEnd(9)} ${category}  (${n} rows)`)
 }
 
 if (unplaced.length === 0) {
