@@ -371,13 +371,42 @@ export async function removeProspectPortfolio(prospectId: number, portfolioName:
   if (error) throw error
 }
 
-/** Soft-delete: sets removed_at, preserves the row. Links cascade on hard delete only. */
+/**
+ * Soft-delete an idea: sets `removed_at`, preserves the row, and DETACHES its
+ * portfolios.
+ *
+ * **A link is a live intention, not a historical fact.** `prospect_portfolios`
+ * answers "which books is this being considered for", so once the idea is
+ * dropped the answer is none — and every reader already filters to active
+ * ideas, so a link on a removed row could not be read even deliberately. Left
+ * behind they accumulate: two of the nine rows were stranded this way, under
+ * ideas dropped in July and October.
+ *
+ * **Deleting them loses no unique record**, which is the test that mattered
+ * before writing this. The "considered for X" fact survives in the committee's
+ * own deliverables — `ic_memos`, `research_reports` and `security_additions`
+ * all carry `portfolio_name` for both stranded tickers — and the removal
+ * itself is in `audit_log` through the `audit_prospects` trigger. What is
+ * being cleared is a pointer, not the history it pointed at. (`prospect_portfolios`
+ * carries no audit trigger of its own, so it was never serving as the record.)
+ *
+ * **Order matters: the idea is retired FIRST.** If the link delete then fails,
+ * the result is the state this function exists to clean up, which is harmless.
+ * Doing it the other way round would, on a failure, strip the portfolios off an
+ * idea that is still live — silently losing something the advisor chose.
+ */
 export async function removeProspect(entryId: number): Promise<void> {
   const { error } = await supabase
     .from('prospects')
     .update({ removed_at: new Date().toISOString() })
     .eq('id', entryId)
   if (error) throw error
+
+  const detach = await supabase
+    .from('prospect_portfolios')
+    .delete()
+    .eq('prospect_id', entryId)
+  if (detach.error) throw detach.error
 }
 
 // ── Watchlist funds as alternatives to a holding ─────────────────────────────
