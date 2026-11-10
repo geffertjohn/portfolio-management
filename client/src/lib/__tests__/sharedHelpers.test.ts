@@ -67,13 +67,32 @@ describe('no second implementation of a shared formatter', () => {
    * Actions hub reads. Two of them had written their own sentence. The Actions
    * hub keys its action off the message, so two phrasings of one gap would
    * raise two actions for it.
+   *
+   * **It matches the phrase only inside a STRING LITERAL**, which is the
+   * signature of building the message rather than referring to the concept.
+   * A bare mention caught `WatchlistPage`'s comment explaining why a pending
+   * fund is grouped apart from an unmapped one — a sentence that is entirely
+   * correct and that the author would have had to reword to satisfy a test.
+   * A guard that fires on prose is a guard that gets deleted, which is the
+   * same argument the other two rest on: name the structural signature, not
+   * the subject.
    */
   it('phrases an unmapped category only through unmappedCategoryWarning', () => {
     const offenders = FILES
       .filter((f) => !f.path.endsWith(join('lib', 'assetClass.ts')))
-      .filter((f) => /unmapped categor/i.test(f.text))
+      .filter((f) => /['"`][^'"`\n]*unmapped categor/i.test(f.text))
       .map((f) => f.path)
     expect(offenders, 'import unmappedCategoryWarning from @/lib/assetClass instead').toEqual([])
+  })
+
+  // Guards the guard. Narrowing the pattern to a string literal above could
+  // have made it match nothing at all, and a check that cannot fail is worse
+  // than no check because it reads as cover. The one legitimate
+  // implementation is the positive control: the pattern must still find the
+  // message where it IS built.
+  it('would still catch a real second implementation', () => {
+    const assetClass = readFileSync(join(SRC, 'lib', 'assetClass.ts'), 'utf8')
+    expect(/['"`][^'"`\n]*unmapped categor/i.test(assetClass)).toBe(true)
   })
 })
 
