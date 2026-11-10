@@ -317,6 +317,32 @@ function classifySecurity(security: SecurityClassInput): 'stock' | 'etf' | 'fund
   return 'stock'
 }
 
+/**
+ * Does this row carry ANY signal `classifySecurity` can read?
+ *
+ * **A `securities2` row is no longer proof that YCharts has classified the
+ * security.** Since the watchlist sync (Nov 2026) the workbook's macro adds a
+ * watched ticker to column B and the import writes its row on the next run —
+ * but a row added minutes before the workbook is written comes back with every
+ * YCP formula still empty. ARMIX, DFALX and TDADX arrived exactly that way on
+ * 10 Nov: a real `securities2.id`, and null for the name, the category and all
+ * five classification columns.
+ *
+ * `classifySecurity`'s final `return 'stock'` is a DEFAULT for an ambiguous
+ * row, not a finding about an empty one, and the difference matters because
+ * callers treat its answer as authoritative. Use this to tell "the row says
+ * stock" from "the row says nothing".
+ */
+export function hasClassificationSignal(security: SecurityClassInput): boolean {
+  return !!(
+    security.detailed_security_type?.trim() ||
+    security.peer_group_name?.trim() ||
+    security.fund_company_name?.trim() ||
+    security.fund_family?.trim() ||
+    (security.expense_ratio_generic != null && Number.isFinite(security.expense_ratio_generic))
+  )
+}
+
 export function getSecurityDisplayType(security: SecurityClassInput): SecurityDisplayType {
   const kind = classifySecurity(security)
   return kind === 'etf' ? 'ETF' : kind === 'fund' ? 'Mutual fund' : 'Stock'
@@ -385,9 +411,19 @@ export interface ProfileAssetFlags {
  * `stock` — so every fund idea would be filed as a stock. FMP's own profile
  * flags are the only signal available before a ticker is ever added.
  *
- * `securities2` WINS when there is a row, because its `detailed_security_type`
- * comes from YCharts, which owns fund classification here; FMP is the fallback,
- * not the authority.
+ * `securities2` WINS when there is a row **that says something** — its
+ * `detailed_security_type` comes from YCharts, which owns fund classification
+ * here; FMP is the fallback, not the authority.
+ *
+ * **But an EMPTY row is not an answer, and treating it as one filed three
+ * funds as stocks.** The watchlist sync creates the row when the macro adds
+ * the ticker to column B, before the YCP formulas fill it, so for one refresh
+ * cycle the row exists and every classification column is null — at which
+ * point `classifySecurity` returns its `stock` default and this function used
+ * to hand it straight back. ARMIX, DFALX and TDADX duly appeared as stock
+ * cards with a portfolio picker and an "Awaiting committee" badge. Falling
+ * through to FMP is what the no-row case already does and is right for both:
+ * the row carries no more information than its absence did.
  *
  * Lives beside `classifySecurity` rather than in the page, because the Watchlist
  * page and the Add-to-watchlist modal both need it and must not disagree about
@@ -404,7 +440,7 @@ export function getProspectDisplayType(
    */
   profile: ProfileAssetFlags | null | undefined,
 ): SecurityDisplayType {
-  if (security) return getSecurityDisplayType(security)
+  if (security && hasClassificationSignal(security)) return getSecurityDisplayType(security)
   if (profile?.isEtf) return 'ETF'
   if (profile?.isFund) return 'Mutual fund'
 

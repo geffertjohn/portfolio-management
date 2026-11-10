@@ -157,6 +157,43 @@ describe('awaiting YCharts is NOT the same as unclassified', () => {
     expect(groups.slice(-2).map((g) => g.key)).toEqual([UNCLASSIFIED_GROUP_KEY, PENDING_GROUP_KEY])
   })
 
+  /**
+   * THE LIVE CASE, 10 Nov 2026. The pending test used to be
+   * `numericId == null` — "has no securities2 row" — on the assumption that a
+   * row implies the workbook has filled it. The watchlist sync invalidated
+   * that: it creates the row as soon as the macro adds the ticker to column B,
+   * so ARMIX, DFALX and TDADX arrived with ids 161-163 and nothing else.
+   *
+   * Keying on the CATEGORY asks the question the two groups genuinely differ
+   * on — will this resolve by itself overnight, or is somebody waiting on a
+   * map edit.
+   */
+  it('routes a fund that HAS a row but no category yet to pending', () => {
+    const groups = groupWatchlistFunds([
+      row({ securityId: 'ARMIX', numericId: 161, assetClass: null, categoryName: null }),
+    ])
+    expect(groups.some((g) => g.key === UNCLASSIFIED_GROUP_KEY)).toBe(false)
+    expect(find(groups, PENDING_GROUP_KEY).funds.map((f) => f.securityId)).toEqual(['ARMIX'])
+  })
+
+  // The other side of the same rule: a row carrying a real category string the
+  // map cannot place is a map bug, and no refresh will clear it.
+  it('still routes a row WITH an unmapped category to unclassified', () => {
+    const groups = groupWatchlistFunds([
+      row({ securityId: 'BADCAT', numericId: 99, assetClass: null, categoryName: 'Some New Vendor Category' }),
+    ])
+    expect(groups.some((g) => g.key === PENDING_GROUP_KEY)).toBe(false)
+    expect(find(groups, UNCLASSIFIED_GROUP_KEY).funds.map((f) => f.securityId)).toEqual(['BADCAT'])
+  })
+
+  // Whitespace is not a category.
+  it('treats a blank category as absent', () => {
+    const groups = groupWatchlistFunds([
+      row({ securityId: 'BLANK', numericId: 5, assetClass: null, categoryName: '   ' }),
+    ])
+    expect(find(groups, PENDING_GROUP_KEY).funds.map((f) => f.securityId)).toEqual(['BLANK'])
+  })
+
   // A pending row has no score to rank on, so the only honest order is the
   // ticker — not a score comparison between two sets of nulls.
   it('orders pending rows by ticker', () => {

@@ -32,18 +32,24 @@
  *
  * **"Unclassified" and "awaiting data" are SEPARATE groups**, for the same
  * reason `UnpricedReason` separates a workbook gap from a feed limit: they
- * have different causes and different remedies. A fund with no `securities2`
- * row is the normal state of one added minutes ago — the refresh adds the
- * ticker and it resolves by itself tomorrow. A fund WITH a row whose category
- * the map cannot place is a bug in the map, and nothing fixes it until
- * somebody edits `ASSET_CLASS_BY_CATEGORY`. Collapsing the two would file a
- * standing defect under a heading that clears overnight.
+ * have different causes and different remedies. A fund with NO CATEGORY is
+ * the normal state of one added recently — the refresh fills it and it
+ * resolves by itself tomorrow. A fund carrying a category the map cannot
+ * place is a bug in the map, and nothing fixes it until somebody edits
+ * `ASSET_CLASS_BY_CATEGORY`. Collapsing the two would file a standing defect
+ * under a heading that clears overnight.
+ *
+ * **The test is the CATEGORY, not whether a `securities2` row exists.** It was
+ * the latter until Nov 2026, which assumed a row implies the workbook has
+ * filled it — an assumption the watchlist sync invalidated by creating the row
+ * as soon as the macro adds the ticker to column B. ARMIX, DFALX and TDADX had
+ * ids 161-163 and nothing else.
  */
 import { resolveAssetClass } from './assetClass'
 import { ASSET_CLASS_ROWS, type AssetClassKey } from './modelPortfolios'
 import { scorecardScore, scoreBand, type ScoreBand, type ScorecardCohort } from './fundScorecard'
 import { designatedCohort } from './fundAtRisk'
-import { getSecurityDisplayType, type SecurityDisplayType } from './securities'
+import type { SecurityDisplayType } from './securities'
 import type { ProspectIdea } from './prospects'
 import type { SecurityDetail } from './securities'
 
@@ -114,8 +120,19 @@ export const PENDING_GROUP_KEY = 'pending'
  * peer group would put two different numbers for one fund on two screens. The
  * row carries `cohortSet` so a defaulted score can be labelled as one rather
  * than silently presented as a decision somebody made.
+ *
+ * **`type` is passed in, never re-derived here.** The caller has already
+ * resolved it through `getProspectDisplayType`, which falls back to FMP when
+ * the `securities2` row carries no classification signal yet. Asking
+ * `getSecurityDisplayType` again would re-introduce exactly the bug that
+ * fallback exists for: an empty row answers `Stock`, and this row would then
+ * contradict the one the page used to decide it was a fund at all.
  */
-export function toFundRow(idea: ProspectIdea, security: SecurityDetail): WatchlistFundRow {
+export function toFundRow(
+  idea: ProspectIdea,
+  security: SecurityDetail,
+  type: SecurityDisplayType,
+): WatchlistFundRow {
   const cohort = designatedCohort(security)
   const score = scorecardScore(security, cohort)
   return {
@@ -123,7 +140,7 @@ export function toFundRow(idea: ProspectIdea, security: SecurityDetail): Watchli
     securityId: idea.security_id,
     name: security.security_name ?? null,
     numericId: security.id ?? null,
-    type: getSecurityDisplayType(security),
+    type,
     categoryName: security.category_name ?? null,
     assetClass: resolveAssetClass(security),
     cohort,
@@ -205,13 +222,20 @@ export function groupWatchlistFunds(rows: WatchlistFundRow[]): WatchlistGroup[] 
   const pending: WatchlistFundRow[] = []
 
   for (const row of rows) {
-    // No securities2 row at all — awaiting the refresh, not a mapping gap.
-    if (row.numericId == null) {
-      pending.push(row)
-      continue
-    }
     if (row.assetClass == null) {
-      unclassified.push(row)
+      // A MISSING category is not an unmapped one — the same distinction the
+      // import warning draws, applied to the grouping.
+      //
+      // This used to test `numericId == null`, i.e. "has no securities2 row",
+      // on the assumption that a row implies the workbook has filled it. The
+      // watchlist sync broke that assumption: it creates the row when the
+      // macro adds the ticker to column B, so for one refresh cycle the row
+      // exists and every column is null. Keying on the CATEGORY answers the
+      // question the two groups actually differ on — will this resolve by
+      // itself overnight, or is somebody waiting on a map edit — and it gives
+      // the same answer as before for a fund with no row at all.
+      if (!row.categoryName?.trim()) pending.push(row)
+      else unclassified.push(row)
       continue
     }
     byKey.set(row.assetClass, [...(byKey.get(row.assetClass) ?? []), row])
