@@ -165,7 +165,7 @@ export function PortfolioDetailPage() {
               Investment Objective
             </dt>
             {!isReadOnlyObjective && editingObjective ? (
-              <div className="mt-1 flex items-center gap-2">
+              <div className="mt-1 flex items-center justify-center gap-2">
                 <select
                   value={pendingObjective}
                   onChange={(e) => setPendingObjective(e.target.value)}
@@ -196,7 +196,11 @@ export function PortfolioDetailPage() {
               </div>
             ) : (
               <dd
-                className={`mt-1 flex items-center gap-1 text-gray-900 ${!isReadOnlyObjective ? 'cursor-pointer hover:text-gray-600' : ''}`}
+                // `justify-center`, not just the parent's `text-center`: this is the
+                // only one of the four stats whose value is a FLEX row (it carries an
+                // edit pencil beside the text), and `text-align` does not position
+                // flex children — so it alone sat left under a centred label.
+                className={`mt-1 flex items-center justify-center gap-1 text-gray-900 ${!isReadOnlyObjective ? 'cursor-pointer hover:text-gray-600' : ''}`}
                 onClick={() => {
                   if (isReadOnlyObjective) return
                   const stored = portfolio.investment_objective ?? ''
