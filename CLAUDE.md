@@ -214,6 +214,32 @@ These are different features and **must not be conflated**:
 
 - **At-Risk** (`at_risk` table, `lib/atRisk.ts`, `/at-risk`, nav "At-Risk") — **held** securities flagged for monitoring and possible **replacement**: deteriorated scorecard metrics (`metrics[]`), an auto-expiry sell timer (`removal_date`), and proposed `substitutions` (incumbent→replacement swaps). This is the *renamed* original "watchlist" — the table, the `substitutions.at_risk_id` FK (was `watchlist_id`), the audit trigger, and all code identifiers (`fetchActiveAtRisk`, `addToAtRisk`, `QUERY_KEYS.atRisk`) were renamed. Funds reach it via the review modal's "At-Risk" outcome (stored `review_log.outcome = 'placed_on_watchlist'`, kept as-is; label is "Flagged At-Risk").
 - **Watchlist** (`prospects` + `prospect_portfolios`, `lib/prospects.ts`, `/watchlist`, nav "Watchlist") — an **idea list**: tickers being **considered for purchase** (not held). No metrics, no sell timer, no substitutions. Added from the security detail header ("+ Watchlist", `AddProspectModal`) or the page.
+  - **The Add modal takes SEVERAL tickers at once** (Nov 2026). Ideas arrive as
+    a LIST — a screen, a fund family's line-up, a column out of a research note
+    — and adding them one modal at a time meant re-choosing portfolios for each.
+    Tickers become chips; `lib/tickerList.ts` (pure, tested) owns what counts as
+    one.
+    - **`parseTickerList` splits on commas, semicolons and ANY whitespace**, so
+      a pasted spreadsheet column works. It de-duplicates case-insensitively,
+      keeps first-seen order (the advisor's order may mean something), and
+      **reports rejects rather than dropping them** — a paste that silently
+      loses two of eight rows is invisible until somebody notices the idea was
+      never recorded. It cannot tell a SHORT WORD from a ticker and does not
+      pretend to: `ALL`, `ON` and `BUY` are all real symbols and `ALL` is held
+      here. The chips are shown before anything is written, so a wrong one
+      costs a click.
+    - **`addProspects` is per-ticker, never all-or-nothing**, and SEQUENTIAL.
+      Failing eight because the fifth errored throws away seven good ideas;
+      and two concurrent adds of one symbol would both see no existing row,
+      so the partial unique index would reject one with an error the advisor
+      cannot act on. Failures stay on screen as chips, so pressing the button
+      again retries exactly those — safe, because `addProspect` merges.
+    - **In a mixed batch the portfolio selection belongs to the STOCKS**, and
+      the modal says which ones by name. A fund is identified by its category,
+      so it is passed no portfolios whatever is ticked.
+    - It carries the same **empty-row** gate as the Watchlist page: a
+      `securities2` row with no classification signal falls through to FMP,
+      or three funds get a portfolio picker.
   - **One row per ticker, portfolios attached through `prospect_portfolios`** (Oct 2026). `prospects.target_portfolio` used to put the portfolio *in the idea's identity*, so one ticker under three portfolios was three rows and three cards, and an idea you had not placed yet could not be recorded at all. A partial unique index `(security_id) WHERE removed_at IS NULL` keeps one live idea per ticker; removed rows are exempt so a ticker can be watched, dropped and watched again. **Re-adding a watched ticker merges** — `addProspect` attaches the new portfolios to the open idea rather than failing on the index. **Zero portfolios is valid.**
   - **`security_id` has no FK** — watching a ticker you do not own is the normal case, so `securities2` is resolved through a separate lookup and is often null. Identity and asset type for those come from **FMP `/profile` (`companyName`, `isEtf`, `isFund`)**, because the `securities2` classifier has no columns to read and would call every unheld idea a stock.
   - **`fetchProfile` NEVER RETURNS NULL, and that hid a real defect.** On an

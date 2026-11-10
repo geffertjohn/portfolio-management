@@ -67,6 +67,47 @@ export interface NewProspect {
   portfolios?: string[]
 }
 
+/** What became of one ticker in a batch add. */
+export interface AddProspectResult {
+  securityId: string
+  ok: boolean
+  /** Present only when `ok` is false. */
+  error?: string
+}
+
+/**
+ * Add several ideas at once.
+ *
+ * **Per-ticker, never all-or-nothing.** Each ticker is an independent idea, so
+ * failing eight because the fifth errored would throw away seven good ones and
+ * leave the advisor to work out which. `addProspect` is already idempotent —
+ * it merges into an open idea rather than colliding with the one-live-idea
+ * index — so re-submitting the failures is safe and is the obvious next move.
+ * Same reasoning as the workbook importer running its three datasets in their
+ * own `try` blocks.
+ *
+ * **Sequential, not `Promise.all`.** Each add is a read-then-insert, and two
+ * running at once for the same symbol would both see no existing row; the
+ * partial unique index would then reject one with an error the advisor cannot
+ * act on. A batch is a handful of tickers typed by a person, so the wall-clock
+ * cost of going in order is irrelevant next to that.
+ */
+export async function addProspects(
+  securityIds: string[],
+  portfoliosFor: (securityId: string) => string[],
+): Promise<AddProspectResult[]> {
+  const out: AddProspectResult[] = []
+  for (const securityId of securityIds) {
+    try {
+      await addProspect({ securityId, portfolios: portfoliosFor(securityId) })
+      out.push({ securityId, ok: true })
+    } catch (e) {
+      out.push({ securityId, ok: false, error: e instanceof Error ? e.message : 'Failed to add' })
+    }
+  }
+  return out
+}
+
 /** All active (not removed) ideas, newest first, with portfolios and securities2 info. */
 export async function fetchActiveProspects(): Promise<ProspectIdea[]> {
   const { data, error } = await supabase
