@@ -16,6 +16,17 @@ import { fmtUtcLongDate } from '@/lib/formatters'
  * on a card with nothing behind it is a mistake this codebase has already made
  * once — a watchlist idea sat 23 days describing an absence as if something
  * were coming.
+ *
+ * It now says the scheduled job will pick the review up, which is a stronger
+ * claim and an earned one: `portfolio-committee-review` is a live LaunchAgent
+ * that reads this queue every weekday morning. **The time of day is
+ * deliberately not repeated here** — the schedule's authority is
+ * `scripts/scheduled-jobs/README.md` and the plists, and this document has
+ * already carried a copy of it that drifted wrong in two places.
+ *
+ * The copy no longer mentions PROPOSALS. The Considerations step stopped
+ * asking for them in Nov 2026 — it asks what each holding should be weighed
+ * against — so both states were describing a mechanism that had been removed.
  */
 export function CommitteeReviewSection({
   memo,
@@ -34,8 +45,8 @@ export function CommitteeReviewSection({
         <p className="text-sm font-medium text-gray-700">Not yet handed off</p>
         <p className="mt-1 text-sm text-gray-500">
           Finish <span className="font-medium">Considerations</span> and hand the review off.
-          Your proposals are recorded first so the committee answers the portfolio
-          independently, rather than reacting to a decision already made.
+          What each holding should be weighed against is recorded first, so the committee
+          answers the portfolio rather than reacting to a view you have already formed.
         </p>
       </div>
     )
@@ -46,15 +57,16 @@ export function CommitteeReviewSection({
       <div className="rounded-md border border-blue-200 bg-blue-50 p-4">
         <p className="text-sm font-medium text-blue-900">Awaiting committee</p>
         <p className="mt-1 text-sm text-blue-800">
-          Handed off {fmtUtcLongDate(requestedAt)}. Nothing is running yet — the committee
-          roles run in Claude Code, not in this app, so this review sits in the queue until a
-          run picks it up.
+          Handed off {fmtUtcLongDate(requestedAt)}. Nothing is running right now — the
+          committee roles run in Claude Code, not in this app — but the scheduled{' '}
+          <span className="font-medium">portfolio-committee-review</span> job reads this
+          queue on weekday mornings, so it will be picked up without anyone asking.
         </p>
         <p className="mt-2 text-xs text-blue-700">
-          To run it: ask Claude Code for the annual committee review of{' '}
+          To have it sooner, ask Claude Code for the annual committee review of{' '}
           <span className="font-medium">{portfolioName}</span>. The portfolio manager, risk
-          manager and macro strategist read this review&rsquo;s proposals and write back a
-          single memo.
+          manager and macro strategist read the book, each holding&rsquo;s scorecard and the
+          watchlist ideas competing in its category, and write back a single memo.
         </p>
       </div>
     )
