@@ -322,6 +322,94 @@ Its log is `~/portfolio-refresh/logs/poller.log`, and it is **silent on the
 quiet path** — a line every 15 minutes saying nothing happened is a log nobody
 reads.
 
+### A hand-run import tells the poller it already tried
+
+**`node import-workbook.cjs <file>` advances the poller's stamp without writing
+a roster.** The two halves of a refresh are "put the tickers on the sheet" and
+"read the sheet into Supabase", and running the second alone consumes the
+evidence the first ever needed to happen.
+
+The poller's rule is `prospects.date_added` newer than the newest
+`import_runs` row — a fund nobody has tried. That is sound for `refresh.sh`,
+which writes the roster *before* it imports, so a ticker that reached the sheet
+and failed to resolve correctly stops asking. A hand import skips the roster
+leg entirely and still moves the stamp, so a fund that was never put on the
+sheet is recorded as attempted.
+
+Seen on 2026-11-10. Four funds were watched at 11:32–11:43, after that
+morning's roster had gone out, so the workbook had never seen them. A manual
+import at 12:00:36 moved the stamp past all four, and the poller then declined
+to do anything about it:
+
+```
+$ node scripts/refresh/pending-funds.cjs
+nothing waiting (4 still unresolved after a refresh: XAGG, DFLEX, NWQIX, MGV
+                 — the daily run keeps trying)
+```
+
+Every word of that is wrong about those four: no refresh had tried them.
+
+**It is worse than a missed poll.** That manual import landed 29 seconds into a
+poller run which had already written a roster naming all four and was waiting
+on Excel — so it did not merely skip a future attempt, it undercut one in
+flight.
+
+**After a hand import, run `refresh.sh`** if anything has been watched since the
+last roster went out. Nothing is lost if you do not: the 05:30 run writes a
+fresh roster and picks them up. But the poller will stay quiet in the meantime,
+and its silence will look like a decision.
+
+### A SUSPENDED VM reads exactly like a hung Excel
+
+`refresh.sh` detects completion by the output file appearing, which is the right
+signal — a wedged Excel would otherwise hold the run open for ever. The failure
+it cannot distinguish is the guest going away underneath it.
+
+Suspend the VM mid-run and the script waits the full `WAIT_SECS` (1500s) for a
+file that can never be written, then reports:
+
+```
+no output after 1500s
+```
+
+That is the message for a hung Excel, and the two have different fixes. On
+2026-11-10 the poller started a run at 12:00:07 and kicked the watcher at
+12:00:09; the VM was suspended seconds later while someone closed the workbook.
+The run sat there with nothing wrong on screen.
+
+**Telling them apart takes one command.** A live `refresh.sh` with a suspended
+VM is the suspended case, and `prlctl exec` answers `PRL_ERR_IO_STOPPED` rather
+than returning a task list:
+
+```
+prlctl list -a                      # suspended, while a refresh.sh pid is alive
+ps -p "$(cat ~/portfolio-refresh/.pid)"
+```
+
+**The recovery is to stop the run and start a clean one.** `trap cleanup EXIT`
+removes the pid file on a TERM, so the lock clears properly and nothing has to
+be unpicked by hand; `refresh.sh` resumes a suspended VM itself, so there is no
+need to start it first.
+
+```
+kill -TERM "$(cat ~/portfolio-refresh/.pid)"
+bash scripts/refresh/refresh.sh
+```
+
+Do **not** suspend or shut down the VM while a refresh is in flight — and note
+that **closing the Parallels window is enough to do it**, because this VM is
+configured to suspend on window close:
+
+```
+$ prlctl list -i "Windows 11" | grep -iE 'on window close|autostop'
+  Autostop: suspend
+  On window close: suspend
+```
+
+If you want the workbook open for editing, let the run finish first;
+`refresh.sh` suspends the VM itself on the way out, so there is nothing to tidy
+up afterwards.
+
 ### Adding a metric column
 
 ```bash
@@ -546,6 +634,12 @@ here depends on personalization or on an activated licence.
 bash scripts/refresh/refresh.sh                      # the whole pipeline
 node scripts/refresh/import-workbook.cjs <file>      # just the import half
 ```
+
+> **The import half moves the poller's stamp.** It does not write a ticker
+> roster, so any fund watched since the last roster went out is recorded as
+> tried without ever having reached the sheet — see *A hand-run import tells
+> the poller it already tried*. Run the whole pipeline afterwards if anything
+> is waiting.
 
 **`refresh.sh` is self-contained** (9 Nov 2026). It kicks the guest watcher
 itself after dropping the trigger, so a run at any hour works unattended and
