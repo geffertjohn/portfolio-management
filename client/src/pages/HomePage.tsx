@@ -7,7 +7,7 @@ import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from '@/lib/portfolioRe
 import { fetchActionItems } from '@/lib/actionItems'
 import { fetchUnacknowledgedAlerts, acknowledgeAlert } from '@/lib/alertRules'
 import { fetchActiveAtRisk } from '@/lib/atRisk'
-import { fetchActiveProspects } from '@/lib/prospects'
+import { fetchActiveProspectsLite } from '@/lib/prospects'
 import { fetchAllActions, bucketOf, BUCKET_LABELS, BUCKET_ORDER } from '@/lib/actions'
 import { CATEGORY_LABELS, type ActionCategory } from '@/lib/actionItems'
 import {
@@ -67,9 +67,12 @@ export function HomePage() {
     queryKey: QUERY_KEYS.atRisk,
     queryFn: fetchActiveAtRisk,
   })
+  // The LITE fetch: this renders a count. The full one ships the whole
+  // 93-column securities2 row per watched ticker — 151 KB measured — for a
+  // number, and the dashboard is usually the first page loaded.
   const { data: prospects = [] } = useQuery({
-    queryKey: QUERY_KEYS.prospects,
-    queryFn: fetchActiveProspects,
+    queryKey: QUERY_KEYS.prospectsLite,
+    queryFn: fetchActiveProspectsLite,
   })
   const { data: portfolioSchedules = [] } = useQuery({
     queryKey: QUERY_KEYS.portfolioReviewSchedules,

@@ -8,7 +8,7 @@ import {
   type PortfolioCadence, type ReviewChecklistItem,
 } from '@/lib/portfolioReviews'
 import { fetchSecurityDetailsByIds } from '@/lib/securities'
-import { fetchActiveProspects } from '@/lib/prospects'
+import { fetchActiveProspectsLite } from '@/lib/prospects'
 import {
   saveHoldingReviews, fetchHoldingReviewsForLog, fetchHoldingReviewsByPortfolio, emptyAssessment, resolveTierInfo,
   type HoldingAssessment, type MonitorConviction,
@@ -141,9 +141,10 @@ export function PortfolioReviewWorkspace() {
    * here and the cards over there are one list: an idea removed in one place
    * cannot keep being proposed in the other.
    */
+  // The LITE fetch: `watchlistAlternativesByCategory` reads four fields.
   const { data: watchlistIdeas = [] } = useQuery({
-    queryKey: QUERY_KEYS.prospects,
-    queryFn: fetchActiveProspects,
+    queryKey: QUERY_KEYS.prospectsLite,
+    queryFn: fetchActiveProspectsLite,
     enabled: isFundBook && cadence === 'annual',
   })
 

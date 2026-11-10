@@ -36,6 +36,7 @@ function row(over: Partial<WatchlistFundRow> & { securityId: string }): Watchlis
     expenseRatio: null,
     return3y: null,
     return5y: null,
+    heldIn: [],
     ...over,
   }
 }
@@ -240,5 +241,51 @@ describe('ranking within a sleeve', () => {
       row({ securityId: 'AAA', assetClass: key }),
     ])
     expect(find(groups, key).funds.map((f) => f.securityId)).toEqual(['AAA', 'ZZZ'])
+  })
+})
+
+describe('an idea the firm already holds', () => {
+  /**
+   * The Watchlist is a list of things being CONSIDERED FOR PURCHASE, and one
+   * of them is already owned: VBTLX is watched AND held in three Foundation
+   * books. Carried onto the row so the table can say so — rendered the same as
+   * an unheld idea, it reads as a candidate nobody has bought yet, which is
+   * the opposite of true.
+   */
+  it('carries the holding books onto the row', () => {
+    const groups = groupWatchlistFunds([
+      row({
+        securityId: 'VBTLX',
+        assetClass: 'ig_intermediate_fixed_income',
+        heldIn: ['Foundation Balanced', 'Foundation Conservative'],
+      }),
+    ])
+    const r = find(groups, 'ig_intermediate_fixed_income').funds[0]
+    expect(r.heldIn).toEqual(['Foundation Balanced', 'Foundation Conservative'])
+  })
+
+  it('leaves a genuine idea with an empty list, never null', () => {
+    const groups = groupWatchlistFunds([row({ securityId: 'FELC', assetClass: 'large_cap_blend' })])
+    expect(find(groups, LARGE_CAP_GROUP_KEY).subGroups?.[0].funds[0].heldIn).toEqual([])
+  })
+
+  /**
+   * A fund can be bought before the workbook has reached it — a purchase and a
+   * YCharts refresh are different events — so a PENDING row has to be able to
+   * say it is held too.
+   */
+  it('says so even for a row still awaiting YCharts data', () => {
+    const idea = { id: 7, security_id: 'NEWFD', heldIn: ['Hybrid Growth'] }
+    const groups = groupWatchlistFunds([toPendingFundRow(idea as never, 'Mutual fund')])
+    expect(find(groups, PENDING_GROUP_KEY).funds[0].heldIn).toEqual(['Hybrid Growth'])
+  })
+
+  // The fetch always supplies it, but `toFundRow` is called with rows from two
+  // places and an undefined here would render `heldIn.length` as a crash.
+  it('defaults to an empty list when the idea does not carry one', () => {
+    const groups = groupWatchlistFunds([
+      toPendingFundRow({ id: 1, security_id: 'X' } as never, 'ETF'),
+    ])
+    expect(find(groups, PENDING_GROUP_KEY).funds[0].heldIn).toEqual([])
   })
 })

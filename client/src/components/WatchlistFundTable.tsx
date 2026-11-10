@@ -161,17 +161,20 @@ function FundRow({
   return (
     <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
       <td className={`py-2 pr-2 font-medium text-gray-900 ${indented ? 'pl-8' : 'pl-4'}`}>
-        {openable ? (
-          <button
-            type="button"
-            onClick={() => onOpen(row)}
-            className="text-indigo-700 hover:underline"
-          >
-            {row.securityId}
-          </button>
-        ) : (
-          row.securityId
-        )}
+        <span className="inline-flex items-center gap-1.5">
+          {openable ? (
+            <button
+              type="button"
+              onClick={() => onOpen(row)}
+              className="text-indigo-700 hover:underline"
+            >
+              {row.securityId}
+            </button>
+          ) : (
+            row.securityId
+          )}
+          <HeldBadge heldIn={row.heldIn} />
+        </span>
       </td>
       <td className="max-w-[22rem] truncate py-2 pr-2 text-gray-600" title={row.name ?? undefined}>
         {row.name ?? EMPTY}
@@ -204,6 +207,32 @@ function FundRow({
         </button>
       </td>
     </tr>
+  )
+}
+
+/**
+ * "Held" — this idea is already owned.
+ *
+ * **The Watchlist is a list of things being CONSIDERED FOR PURCHASE**, so a
+ * fund the firm already holds is the one row on the page its own subtitle does
+ * not describe. VBTLX is the live case: watched, and held in three Foundation
+ * books. Rendered identically to an unheld idea, it reads as a candidate
+ * nobody has bought yet, which is the opposite of true.
+ *
+ * It names the books on hover rather than in the row: the fact that matters at
+ * a glance is "we own this", and the list is long enough to push the columns
+ * around. Same distinction `ConsiderationsSection` draws when it marks an
+ * alternative "held here" against "held elsewhere".
+ */
+function HeldBadge({ heldIn }: { heldIn: string[] }) {
+  if (heldIn.length === 0) return null
+  return (
+    <span
+      title={`Currently held in ${heldIn.join(', ')}`}
+      className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+    >
+      Held
+    </span>
   )
 }
 

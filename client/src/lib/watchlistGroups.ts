@@ -78,6 +78,17 @@ export interface WatchlistFundRow {
   expenseRatio: number | null
   return3y: number | null
   return5y: number | null
+  /**
+   * Books that already HOLD this ticker. Empty for a genuine idea.
+   *
+   * A watchlist is a list of things being CONSIDERED FOR PURCHASE, and one of
+   * these is already owned: VBTLX sits here and in three Foundation books.
+   * Without this the table renders it exactly like a fund nobody holds, so the
+   * one row that contradicts the page's premise is the one row that looks like
+   * all the others. The books are named rather than reduced to a flag, because
+   * "we own this" invites "where?" immediately.
+   */
+  heldIn: string[]
 }
 
 export interface WatchlistSubGroup {
@@ -150,6 +161,7 @@ export function toFundRow(
     expenseRatio: num(security.expense_ratio_generic),
     return3y: num(security.annualized_three_year_total_return_nav),
     return5y: num(security.annualized_five_year_total_return_nav),
+    heldIn: idea.heldIn ?? [],
   }
 }
 
@@ -182,6 +194,9 @@ export function toPendingFundRow(idea: ProspectIdea, type: SecurityDisplayType):
     expenseRatio: null,
     return3y: null,
     return5y: null,
+    // A fund can be held before the workbook has reached it — a purchase and a
+    // YCharts refresh are not the same event — so this is read even here.
+    heldIn: idea.heldIn ?? [],
   }
 }
 
