@@ -227,10 +227,23 @@ These are different features and **must not be conflated**:
     ticker it has never heard of is far more likely a fund than an unindexed
     company. `getProspectDisplayType` reads `found === false` as a fund.
     - **YCharts owns the answer; FMP is the stopgap.** Once the ticker reaches
-      `securities2` the classifier reads that and never consults FMP again. The
-      window only matters before the next refresh — except for a STOCK, where
-      it is permanent, because the workbook's Securities sheet is funds-only and
-      a stock idea never gets a `securities2` row at all.
+      `securities2` **with something in it**, the classifier reads that and
+      never consults FMP again. The window only matters before the next refresh
+      — except for a STOCK, where it is permanent, because the workbook's
+      Securities sheet is funds-only and a stock idea never gets a
+      `securities2` row at all.
+    - **AN EMPTY ROW IS NOT AN ANSWER, and a row no longer proves YCharts has
+      classified anything** (Nov 2026). The watchlist sync creates the row as
+      soon as the macro adds the ticker to column B, so for one refresh cycle
+      it exists with every YCP formula unfilled. `classifySecurity`'s final
+      `return 'stock'` is a DEFAULT for an ambiguous row, not a finding about
+      an empty one — so handing it back as authoritative put **ARMIX, DFALX
+      and TDADX (ids 161-163, nothing else) in the Stocks column**, with a
+      portfolio picker and an "Awaiting committee" badge for research that was
+      never coming. The RSIYX defect, re-entered through a different door.
+      `hasClassificationSignal` is the gate: no signal, fall through to FMP,
+      exactly as a missing row already did. `WatchlistPage` must also ASK FMP
+      about those symbols — a fallback with nothing to fall back to is no fix.
     - **`undefined` and `null` are different and callers must not collapse
       them**: not-asked-yet versus asked-and-empty. `WatchlistPage` was doing
       `?? null` and the Add modal `profile ?? null`; both now pass the tri-state
@@ -286,9 +299,20 @@ These are different features and **must not be conflated**:
     - **US Large Cap is the ONLY nested group** (Blend / Growth / Value),
       because the taxonomy splits large cap three ways and nothing else.
     - **"Unclassified" and "Awaiting YCharts data" are SEPARATE groups** — the
-      `UnpricedReason` split. A fund with no `securities2` row resolves itself
-      on the next refresh; one whose category the map cannot place stays broken
-      until somebody edits `ASSET_CLASS_BY_CATEGORY`.
+      `UnpricedReason` split. A fund with **no `category_name`** resolves
+      itself on the next refresh; one whose category the map cannot place stays
+      broken until somebody edits `ASSET_CLASS_BY_CATEGORY`.
+      - **The test is the CATEGORY, not whether a `securities2` row exists.**
+        It was the latter until Nov 2026, which assumed a row implies the
+        workbook has filled it — the same assumption the watchlist sync broke
+        above. Keying on the category asks the question the two groups actually
+        differ on (does this clear by itself overnight, or is somebody waiting
+        on a map edit) and gives the same answer as before for a fund with no
+        row at all. It is the **missing vs unmapped** distinction the import
+        warning already draws, applied to the grouping.
+      - **`toFundRow` takes the resolved display type rather than re-deriving
+        it.** An empty row answers `Stock`, which would contradict the decision
+        that put the row in the fund table in the first place.
     - **Rows rank by score, then cost, then ticker**, with an UNSCORED fund
       last rather than as a zero — unscored means the workbook has not filled
       it, not that it scored nothing. The score is computed in the fund's

@@ -14,7 +14,7 @@ import { QUERY_KEYS } from '@/hooks/queryKeys'
 import { AddProspectModal } from '@/components/AddProspectModal'
 import { ResearchCard } from '@/components/icReviewCards'
 import {
-  getProspectDisplayType, isFundIdea, type SecurityDisplayType,
+  getProspectDisplayType, hasClassificationSignal, isFundIdea, type SecurityDisplayType,
 } from '@/lib/securities'
 import {
   groupWatchlistFunds, toFundRow, toPendingFundRow, type WatchlistFundRow,
@@ -375,10 +375,20 @@ export function WatchlistPage() {
     onSuccess: invalidate,
   })
 
-  // Identity + asset type for ideas that are not in securities2. Shares the
+  // Identity + asset type for ideas `securities2` cannot answer for. Shares the
   // profile cache with the research page, so opening an idea costs no extra call.
+  //
+  // **Not just the ideas with no row.** The watchlist sync creates a row as soon
+  // as the macro adds the ticker to column B, so for one refresh cycle the row
+  // exists with every column null — and a row that carries no classification
+  // signal tells us no more than no row at all. Asking FMP for those too is
+  // what keeps them off the stock side.
   const unknownSymbols = useMemo(
-    () => [...new Set(entries.filter((e) => !e.securities2).map((e) => e.security_id))],
+    () => [...new Set(
+      entries
+        .filter((e) => !e.securities2 || !hasClassificationSignal(e.securities2))
+        .map((e) => e.security_id),
+    )],
     [entries],
   )
   const profileQueries = useQueries({
@@ -398,11 +408,13 @@ export function WatchlistPage() {
   )
 
   const resolved = entries.map((entry) => {
-    const profile = entry.securities2 ? null : profileBySymbol.get(entry.security_id)
+    // The row speaks only when it has something to say; otherwise FMP does.
+    const rowAnswers = !!entry.securities2 && hasClassificationSignal(entry.securities2)
+    const profile = rowAnswers ? null : profileBySymbol.get(entry.security_id)
     return {
       entry,
       profile: profile ?? null,
-      type: getProspectDisplayType(entry.securities2, entry.securities2 ? null : profile),
+      type: getProspectDisplayType(entry.securities2, rowAnswers ? null : profile),
     }
   })
 
@@ -420,7 +432,9 @@ export function WatchlistPage() {
     .filter((r) => isFundIdea(r.type))
     .map(({ entry, type }) =>
       entry.securities2
-        ? toFundRow(entry, entry.securities2)
+        // The resolved type is passed in rather than re-derived: an empty row
+        // would answer `Stock` and contradict the decision that put it here.
+        ? toFundRow(entry, entry.securities2, type)
         : toPendingFundRow(entry, type),
     )
   const fundGroups = groupWatchlistFunds(fundRows)
