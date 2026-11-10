@@ -880,6 +880,7 @@ export type Database = {
           rows_written: number
           source: string
           status: string
+          warnings: string[]
         }
         Insert: {
           errors?: string[]
@@ -889,6 +890,7 @@ export type Database = {
           rows_written?: number
           source: string
           status?: string
+          warnings?: string[]
         }
         Update: {
           errors?: string[]
@@ -898,6 +900,7 @@ export type Database = {
           rows_written?: number
           source?: string
           status?: string
+          warnings?: string[]
         }
         Relationships: []
       }
@@ -3636,6 +3639,17 @@ export type Database = {
         Returns: undefined
       }
       job_run_open: { Args: { p_job_id: string }; Returns: number }
+      list_bucket_objects: {
+        Args: { p_bucket: string }
+        Returns: {
+          created_at: string
+          id: string
+          mimetype: string
+          name: string
+          size: number
+          updated_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

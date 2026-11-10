@@ -2469,7 +2469,7 @@ the workbook cost nothing.
 
 YCharts figures carry **no as-of date of their own**, so a months-old number
 renders identically to a fresh one. Every import logs a row: `source` (one of four,
-CHECK-constrained — it was six before the Sep 2026 consolidation), `file_name`, `imported_at`, `rows_written`, `errors`. The
+CHECK-constrained — it was six before the Sep 2026 consolidation), `file_name`, `imported_at`, `rows_written`, `errors`, `warnings`. The
 newest run per source is that dataset's stamp.
 
 - Data layer `lib/importRuns.ts`. **`recordImportRuns` never throws** — the data is
@@ -2484,6 +2484,45 @@ newest run per source is that dataset's stamp.
   independently** (each in its own `try`), so a benchmark column mismatch cannot
   stop the funds and portfolios in the same file from loading; failures are
   reported in the banner, not thrown.
+- **`warnings` is the import that SUCCEEDED and still found something wrong**
+  (Nov 2026) — an unmapped vendor `category_name`, an abandoned benchmark row.
+  **Separate from `errors`, because it must not touch `status`**: the row wrote
+  perfectly well, so folding it in would mark a clean import `partial` and push
+  a false failure into both the freshness stamp and the Actions hub.
+  - **This was computed and thrown away for three months.** `unmappedCategories`
+    has been returned on every fund import since #105 ("an unmapped vendor
+    category is reported at the import, not months later"), and its only reader
+    was `ImportExportPage`'s post-upload banner. **The unattended 05:30 refresh
+    renders no banner**, and once the watchlist poller started adding fund
+    tickers overnight that became the *only* path by which a new category
+    arrives — so the one surface that reported was the one that had stopped
+    running for new funds. Three runs on 9 Nov 2026 took the fund count
+    88 → 92 → 97, introduced `Mid-Cap Value` and `Small Value`, and each
+    recorded `errors: []` with nothing said anywhere. Gotcha 23 recurring was
+    expected; nothing noticing was the defect.
+  - **The probe is scoped to NON-PROXY rows, and that is the whole signal.**
+    The `Securities` sheet carries the 33 ETF benchmark proxies, whose
+    Morningstar categories are sector and maturity bands ("Technology",
+    "Ultrashort Bond") the fourteen-class taxonomy deliberately has no sleeve
+    for. Measured 10 Nov 2026: of 26 rows the map could not place, **21 were
+    proxies** — unfiltered it reported 20 categories when 3 were real.
+    `markBenchmarkProxies` now returns what it flagged so the probe can
+    subtract it, and **returns `null` when it could not tell**, which
+    suppresses the warning rather than widening it. A signal that cries wolf
+    gets dismissed — what `never_run` and "AI research pending" already cost.
+  - **`latestImportWarnings` reads only the NEWEST run of each source**, so a
+    finding is derived rather than accumulated: there is no "resolved" flag to
+    set, and the morning after someone edits `ASSET_CLASS_BY_CATEGORY` the next
+    import simply stops repeating it and the action clears. The warnings of a
+    `failed` run are ignored — nothing landed, so there is no data to make a
+    claim about, and the failure is already its own action.
+  - **Two surfaces, one helper**: an Actions-hub action per finding (source
+    `data_refresh`, priority **high** — both producers mean a number already on
+    screen is wrong with nothing else saying so) and a standing amber block on
+    the Import / Export card, which survives a reload unlike the banner beside
+    it. **`unmappedCategoryWarning` in `lib/assetClass.ts` is the single
+    phrasing**, enforced by `sharedHelpers.test.ts`: the hub keys its action off
+    the message, so two phrasings of one gap would raise two actions for it.
 - **`components/DataAsOf.tsx`** renders the stamp on the fund detail page
   (`FundMonitoringPanel`) and Settings → Benchmarks, ambering
   past 45 days. It takes a **`sources` prop** and shows the OLDEST of them —

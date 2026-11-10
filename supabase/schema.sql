@@ -939,6 +939,7 @@ CREATE TABLE IF NOT EXISTS "public"."import_runs" (
     "rows_written" integer DEFAULT 0 NOT NULL,
     "errors" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     "status" "text" DEFAULT 'success'::"text" NOT NULL,
+    "warnings" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     CONSTRAINT "import_runs_source_check" CHECK (("source" = ANY (ARRAY['ycharts_benchmarks'::"text", 'ycharts_funds'::"text", 'ycharts_portfolios'::"text", 'ycharts_allocations'::"text"]))),
     CONSTRAINT "import_runs_status_check" CHECK (("status" = ANY (ARRAY['success'::"text", 'partial'::"text", 'failed'::"text"])))
 );
@@ -952,6 +953,10 @@ COMMENT ON TABLE "public"."import_runs" IS 'Audit/provenance log of spreadsheet 
 
 
 COMMENT ON COLUMN "public"."import_runs"."status" IS 'success = clean; partial = wrote rows but reported errors; failed = wrote nothing.';
+
+
+
+COMMENT ON COLUMN "public"."import_runs"."warnings" IS 'Non-fatal findings: the rows landed but something is wrong and nothing else reports it (an unmapped category_name, an abandoned benchmark row). Never affects status — unlike errors.';
 
 
 

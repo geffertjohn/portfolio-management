@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories, STOCK_CATEGORY_OPTIONS,
+import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories, unmappedCategoryWarning, STOCK_CATEGORY_OPTIONS,
 } from '../assetClass'
 
 const sec = (security_id: string, category_name: string | null) => ({ security_id, category_name })
@@ -188,5 +188,39 @@ describe('the stock category picker can only write placeable values', () => {
 
   it('offers no duplicates', () => {
     expect(new Set(STOCK_CATEGORY_OPTIONS).size).toBe(STOCK_CATEGORY_OPTIONS.length)
+  })
+})
+
+describe('unmappedCategoryWarning', () => {
+  /**
+   * One phrasing, shared by the Import / Export banner, the unattended
+   * refresh's log line, and the `import_runs.warnings` row the Actions hub
+   * reads. Three ends writing their own sentence is how `consensusColor` and
+   * `fmtUsdCompact` each drifted into two behaviours.
+   */
+  it('says nothing when every category is mapped', () => {
+    expect(unmappedCategoryWarning([])).toBeNull()
+  })
+
+  // The caller pushes the result without testing a length first, so the null
+  // is load-bearing rather than a convenience.
+  it('names the categories and what the gap costs', () => {
+    const msg = unmappedCategoryWarning(['Mid-Cap Value', 'Small Value'])
+    expect(msg).toContain('"Mid-Cap Value", "Small Value"')
+    expect(msg).toContain('unclassified weight')
+    expect(msg).toContain('ASSET_CLASS_BY_CATEGORY')
+  })
+
+  it('agrees with itself about one', () => {
+    expect(unmappedCategoryWarning(['Bank Loan'])).toContain('1 unmapped category ')
+    expect(unmappedCategoryWarning(['Bank Loan', 'Preferred Stock'])).toContain('2 unmapped categories ')
+  })
+
+  // The message must be stable for a given gap: the Actions hub builds its key
+  // from it, so a message that varied run to run would raise a new action every
+  // morning instead of the same one.
+  it('is stable for the same input', () => {
+    expect(unmappedCategoryWarning(['Small Value']))
+      .toBe(unmappedCategoryWarning(['Small Value']))
   })
 })

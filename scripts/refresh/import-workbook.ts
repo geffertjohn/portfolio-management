@@ -19,6 +19,7 @@ import { uploadYchartBenchmarks } from '@/lib/ychartBenchmarksUpload'
 import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
 import { recordImportRuns, type ImportRunInput } from '@/lib/importRuns'
+import { unmappedCategoryWarning } from '@/lib/assetClass'
 
 /** The macro stamps its finish time here. See scripts/refresh/Ycharts.bas. */
 const STAMP_SHEET = 'Control'
@@ -105,10 +106,14 @@ async function main(): Promise<void> {
     if (r.inserted < MIN_BENCHMARK_ROWS) {
       throw new Error(`only ${r.inserted} benchmark rows (floor ${MIN_BENCHMARK_ROWS})`)
     }
-    runs.push({ source: 'ycharts_benchmarks', rows: r.inserted, errors: r.errors })
+    runs.push({
+      source: 'ycharts_benchmarks', rows: r.inserted, errors: r.errors, warnings: r.warnings,
+    })
     notes.push(`${r.inserted} benchmark rows`)
     // Abandoned rows are not a failed import -- the data landed -- but they stop
-    // refreshing silently, so say so where the daily log will show it.
+    // refreshing silently. The log line is for whoever is reading the morning
+    // output; the `warnings` field above is what reaches the Actions hub, since
+    // nobody reads a log on a job that ran at 05:30 and succeeded.
     for (const w of r.warnings) console.warn(`WARN  ${w}`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -122,8 +127,24 @@ async function main(): Promise<void> {
     if (r.succeeded < MIN_FUNDS) {
       throw new Error(`only ${r.succeeded} funds (floor ${MIN_FUNDS}); ${r.errors[0] ?? ''}`)
     }
-    runs.push({ source: 'ycharts_funds', rows: r.succeeded, errors: r.errors })
+    // THE GAP THIS CLOSES. `unmappedCategories` has been computed on every
+    // import since Nov 2026 and read by the browser card alone -- so on the
+    // unattended path, which is now the ONLY path a new fund's category
+    // arrives by (the watchlist poller adds the ticker overnight), it was
+    // computed and dropped on the floor. On 9 Nov three runs took the fund
+    // count 88 -> 92 -> 97, introducing `Mid-Cap Value` and `Small Value`,
+    // and every one recorded `errors: []` with nothing said anywhere. Four
+    // watched funds sat unclassified and the only trace would have been a
+    // stray "unclassified weight" line the day one of them was bought.
+    const unmapped = unmappedCategoryWarning(r.unmappedCategories)
+    runs.push({
+      source: 'ycharts_funds',
+      rows: r.succeeded,
+      errors: r.errors,
+      warnings: unmapped ? [unmapped] : [],
+    })
     notes.push(`${r.succeeded} funds`)
+    if (unmapped) console.warn(`WARN  ${unmapped}`)
     // A PER-ROW failure above the floor is not a failed import, so it raises no
     // action and prints no count anyone would notice — the run says "47 funds"
     // one day and "46 funds" the next, and the security that dropped out simply

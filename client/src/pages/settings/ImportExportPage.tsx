@@ -11,9 +11,10 @@ import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
 import { applyAllocationImport, parseAllocationFile } from '@/lib/allocationImport'
 import {
-  fetchLatestImportRuns, fmtImportDate, recordImportRuns,
+  fetchLatestImportRuns, fmtImportDate, latestImportWarnings, recordImportRuns,
   type ImportRunInput, type ImportSource,
 } from '@/lib/importRuns'
+import { unmappedCategoryWarning } from '@/lib/assetClass'
 import type { Portfolio } from '@/types/portfolio'
 
 // ── CSV helpers ─────────────────────────────────────────────────────────────
@@ -206,11 +207,14 @@ export function ImportExportPage() {
 
               try {
                 const r = await uploadYchartBenchmarks(file)
-                runs.push({ source: 'ycharts_benchmarks', rows: r.inserted, errors: r.errors })
+                runs.push({
+                  source: 'ycharts_benchmarks', rows: r.inserted, errors: r.errors, warnings: r.warnings,
+                })
                 parts.push(`${r.inserted} benchmark rows`)
                 if (r.errors.length > 0) parts.push(`${r.errors.length} benchmark error(s): ${r.errors[0]}`)
                 // Not an error -- the rows landed -- but an abandoned benchmark
-                // row never refreshes again and nothing else would say so.
+                // row never refreshes again and nothing else would say so. The
+                // banner is transient; `warnings` is what survives the reload.
                 for (const w of r.warnings) parts.push(w)
               } catch (e) {
                 const msg = e instanceof Error ? e.message : 'unknown error'
@@ -220,21 +224,22 @@ export function ImportExportPage() {
 
               try {
                 const r = await bulkUploadFundsFromExcel(file)
-                runs.push({ source: 'ycharts_funds', rows: r.succeeded, errors: r.errors })
-                parts.push(`${r.succeeded} fund${r.succeeded !== 1 ? 's' : ''}`)
-                if (r.failed > 0) parts.push(`${r.failed} fund(s) failed: ${r.errors[0] ?? ''}`)
                 // Said on the import, because the import is when a new vendor
                 // vocabulary arrives. Downstream the only trace is a stray
                 // "unclassified weight" line on one portfolio page, which
                 // reads as a data quirk rather than a mapping gap (gotcha 23).
-                if (r.unmappedCategories.length > 0) {
-                  parts.push(
-                    `${r.unmappedCategories.length} unmapped categor`
-                    + `${r.unmappedCategories.length === 1 ? 'y' : 'ies'} — holdings in `
-                    + `${r.unmappedCategories.map((c) => `"${c}"`).join(', ')} will show as `
-                    + 'unclassified weight until added to ASSET_CLASS_BY_CATEGORY',
-                  )
-                }
+                // Recorded as well as shown: this banner is gone on the next
+                // navigation, and the unattended refresh never renders one at all.
+                const unmapped = unmappedCategoryWarning(r.unmappedCategories)
+                runs.push({
+                  source: 'ycharts_funds',
+                  rows: r.succeeded,
+                  errors: r.errors,
+                  warnings: unmapped ? [unmapped] : [],
+                })
+                parts.push(`${r.succeeded} fund${r.succeeded !== 1 ? 's' : ''}`)
+                if (r.failed > 0) parts.push(`${r.failed} fund(s) failed: ${r.errors[0] ?? ''}`)
+                if (unmapped) parts.push(unmapped)
               } catch (e) {
                 const msg = e instanceof Error ? e.message : 'unknown error'
                 runs.push({ source: 'ycharts_funds', rows: 0, errors: [msg], status: 'failed' })
@@ -391,6 +396,13 @@ function ImportCard({ title, desc, sources, run, accept = EXCEL_ACCEPT, picker, 
           ReturnType<typeof runs.get>)
     : undefined
 
+  /**
+   * What is wrong with the data as last imported — from the stored run, so it
+   * is still here after a reload and still here when the import that found it
+   * was the unattended 05:30 one that renders no banner at all.
+   */
+  const warnings = runs ? latestImportWarnings(runs, sources) : []
+
   async function handle(file: File) {
     setBusy(true); setOk(null); setErr(null)
     try {
@@ -438,6 +450,17 @@ function ImportCard({ title, desc, sources, run, accept = EXCEL_ACCEPT, picker, 
       </div>
       {ok && <p className="mt-3 rounded bg-green-50 px-3 py-2 text-xs text-green-800">{ok}</p>}
       {err && <p className="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
+      {warnings.length > 0 && (
+        <div className="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-medium">
+            The last import landed, but reported {warnings.length} warning
+            {warnings.length === 1 ? '' : 's'}:
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {warnings.map((w) => <li key={`${w.source}:${w.message}`}>{w.message}</li>)}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

@@ -60,6 +60,21 @@ describe('no second implementation of a shared formatter', () => {
       .map((f) => f.path)
     expect(offenders, 'import consensusColor from @/lib/formatters instead').toEqual([])
   })
+
+  /**
+   * The unmapped-category warning now reaches three ends — the Import /
+   * Export banner, the unattended refresh's log, and the `import_runs` row the
+   * Actions hub reads. Two of them had written their own sentence. The Actions
+   * hub keys its action off the message, so two phrasings of one gap would
+   * raise two actions for it.
+   */
+  it('phrases an unmapped category only through unmappedCategoryWarning', () => {
+    const offenders = FILES
+      .filter((f) => !f.path.endsWith(join('lib', 'assetClass.ts')))
+      .filter((f) => /unmapped categor/i.test(f.text))
+      .map((f) => f.path)
+    expect(offenders, 'import unmappedCategoryWarning from @/lib/assetClass instead').toEqual([])
+  })
 })
 
 describe('the helpers it points at are actually exported', () => {
@@ -68,5 +83,8 @@ describe('the helpers it points at are actually exported', () => {
     for (const fn of ['fmtUsdCompact', 'consensusColor']) {
       expect(formatters, fn).toMatch(new RegExp(`export function ${fn}\\b`))
     }
+    const assetClass = readFileSync(join(SRC, 'lib', 'assetClass.ts'), 'utf8')
+    expect(assetClass, 'unmappedCategoryWarning')
+      .toMatch(/export function unmappedCategoryWarning\b/)
   })
 })

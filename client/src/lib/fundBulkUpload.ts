@@ -178,6 +178,11 @@ export type BulkUploadResult = {
    * six portfolios because Morningstar publishes both "Diversified Emerging
    * Mkts" and "Diversified Emerging Markets" and only one was mapped — and the
    * import that introduced the second spelling said nothing.
+   *
+   * **Scoped to NON-PROXY rows** — see the probe at the end of
+   * `bulkUploadFundsFromExcel`. Empty when proxy status could not be
+   * determined, so a caller cannot tell "nothing unmapped" from "could not
+   * check"; that is deliberate, since the alternative is a false alarm.
    */
   unmappedCategories: string[]
 }
@@ -217,8 +222,6 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
   }
 
   if (records.length === 0) throw new Error('No valid fund rows found in the file.')
-
-  const unmapped = unmappedCategoriesIn(records.map((r) => r.category_name as string | null))
 
   let succeeded = 0
   let failed = 0
@@ -285,8 +288,38 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
   // watched only stops being flagged here — and `needsDefaultCohort` skips a
   // flagged row. Seeding first would leave that fund without its cohort for
   // another day.
-  await markBenchmarkProxies()
+  const proxies = await markBenchmarkProxies()
   await seedScorecardCohorts()
+
+  /**
+   * **Probed over the NON-PROXY rows only, and that is not a refinement — it
+   * is the difference between a signal and noise.** The Securities sheet
+   * carries the 33 ETF benchmark proxies alongside the funds, and a proxy's
+   * Morningstar category is a SECTOR or a MATURITY band ("Technology",
+   * "Utilities", "Ultrashort Bond", "Short Government") that the firm's
+   * fourteen-class taxonomy deliberately has no sleeve for. Measured 10 Nov
+   * 2026: of 26 rows carrying a category the map cannot place, **21 were
+   * proxies** — so an unfiltered probe reported 20 categories when 3 were
+   * real, and would have put a wall of false findings in front of the reader
+   * on the first run. `assetClass.test.ts` excludes proxies from its pinned
+   * list for exactly this reason.
+   *
+   * It stayed invisible because the only reader was a banner that disappears
+   * on the next navigation. Giving the finding a durable home is what exposed
+   * it.
+   *
+   * **A set we could not compute suppresses the warning rather than widening
+   * it.** `markBenchmarkProxies` is deliberately silent on failure, so an
+   * unfiltered probe on a bad day would cry wolf with no way to tell why. One
+   * missed morning costs nothing — the next run reports it.
+   */
+  const unmapped = proxies
+    ? unmappedCategoriesIn(
+        records
+          .filter((r) => !proxies.has(String(r.security_id).trim().toUpperCase()))
+          .map((r) => r.category_name as string | null),
+      )
+    : []
 
   return { total: records.length, succeeded, failed, errors, unmappedCategories: unmapped }
 }
@@ -308,8 +341,14 @@ export async function bulkUploadFundsFromExcel(file: File): Promise<BulkUploadRe
  * It never throws. The securities are already written by the time this runs,
  * and a failure to re-flag must not report a good import as failed — the same
  * reasoning as `recordImportRuns` and `ensureReviewSchedules`.
+ *
+ * Returns the tickers it flagged, so the caller's unmapped-category probe can
+ * skip them — a proxy's category is a sector or maturity band the asset-class
+ * taxonomy has no sleeve for, and counting those buries the real findings.
+ * **Null means it could not be determined**, which is different from an empty
+ * set: the caller suppresses the warning rather than reporting every proxy.
  */
-async function markBenchmarkProxies(): Promise<void> {
+async function markBenchmarkProxies(): Promise<Set<string> | null> {
   try {
     const [cat, sec, held, watched] = await Promise.all([
       supabase.from('category_benchmarks').select('etf_proxy'),
@@ -317,7 +356,7 @@ async function markBenchmarkProxies(): Promise<void> {
       supabase.from('positions').select('security_id').is('deleted_at', null),
       supabase.from('prospects').select('security_id').is('removed_at', null),
     ])
-    if (cat.error || sec.error || held.error || watched.error) return
+    if (cat.error || sec.error || held.error || watched.error) return null
 
     const exempt = new Set([
       ...(held.data ?? []).map((r) => r.security_id),
@@ -334,7 +373,9 @@ async function markBenchmarkProxies(): Promise<void> {
       await supabase.from('securities2').update({ is_benchmark_proxy: true })
         .in('security_id', proxies)
     }
+    return new Set(proxies.map((t) => t.trim().toUpperCase()))
   } catch {
     // Deliberately silent: see the docstring.
+    return null
   }
 }
