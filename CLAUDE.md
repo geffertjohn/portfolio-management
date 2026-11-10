@@ -345,11 +345,40 @@ These are different features and **must not be conflated**:
       **designated** cohort via `designatedCohort`, so the watchlist and the
       review cannot show one fund two numbers; a defaulted cohort is marked
       with a dagger rather than presented as a decision somebody made.
-    - **`fetchActiveProspects` now selects `securities2.*`.** The scorecard
+    - **`fetchActiveProspects` selects `securities2.*`.** The scorecard
       reads ~20 rank/size/value columns decided in `fundScorecard.ts`, and a
       column list in `prospects.ts` would be a second copy of that metric set
       — silently wrong the day a metric is added, and failing as a COLUMN OF
       DASHES rather than an error. That is exactly what the first run showed.
+    - **`fetchActiveProspectsLite` is for everyone else** (Nov 2026). That `*`
+      is **43x the payload** — measured at **154,559 bytes against 3,625** for
+      the same 29 rows — and it had three callers: the Watchlist's fund table
+      (which needs it), the dashboard (which renders a COUNT) and the annual
+      review's alternatives panel (which reads four fields). The dashboard is
+      usually the first page loaded, so it paid 151 KB of scorecard metrics to
+      print the number of ideas.
+      - **Its query key is a CHILD of `QUERY_KEYS.prospects`** (`['prospects',
+        'lite']`), because TanStack matches by prefix — so every existing
+        `invalidateQueries({ queryKey: QUERY_KEYS.prospects })` clears both. A
+        sibling key would have left one stale after an add or a remove, which
+        shows up as a count that will not move.
+      - **The column set is NOT a parameter.** The schema-typed client only
+        checks `.select()` names when the argument is a single string literal,
+        so passing it in returns `GenericStringError[]` and silently gives up
+        the check that turns a dropped column into a `tsc` failure instead of a
+        runtime 400. The two fetches share the prospect, link and holdings
+        queries and each writes its own literal select.
+      - `ProspectIdeaLite` is the MINIMUM shape and `ProspectIdea` satisfies it
+        structurally, so a consumer typed on the lite shape takes either.
+    - **An idea the firm ALREADY HOLDS is marked `Held`** (Nov 2026), on the
+      fund table and on the stock cards, naming the books on hover. A watchlist
+      is a list of tickers being considered for PURCHASE, so a holding is the
+      one row the page's own subtitle does not describe — and **VBTLX is live**:
+      watched, and held in three Foundation books, rendered identically to a
+      fund nobody owns. `heldIn` comes from one `positions` query inside
+      `loadProspectCore`, not `fetchPortfoliosHoldingSecurity` per ticker, and
+      is carried on a PENDING row too: a purchase and a YCharts refresh are
+      different events, so a fund can be bought before the workbook reaches it.
   - `prospects.thesis`, `prospects.conviction` and `prospects.target_price` are **dead columns** — the manual thesis/conviction went when AI research took over, and the target price went from the Add form and the card in Oct 2026 (a price you mean to pay is a sizing decision, which belongs to the candidate stage). The columns and their stored values are kept; nothing writes them. The displayed thesis/rating/conviction come from `research_reports`, filtered to the portfolios the idea names plus any unscoped report — and since `watchlist-research` now always writes unscoped, new research shows on every card regardless of the books an idea names.
   - **The Add-to-watchlist portfolio picker hides derived blends** (`DERIVED_BLEND_PORTFOLIOS` in `AddProspectModal`). Equity Income & Core Growth is a computed 50/50 of the two books it names, so a stock enters it only by being bought in one of them; offering it would invite an idea no book can act on.
 

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   alternativesFor, watchlistAlternativesByCategory,
-  type ProspectIdea, type WatchlistAlternative,
+  type ProspectIdeaLite, type WatchlistAlternative,
 } from '@/lib/prospects'
 import { reviewableHoldings } from '@/lib/portfolioReviews'
 import { AutoGrowTextarea } from '@/components/AutoGrowTextarea'
@@ -41,8 +41,14 @@ export function ConsiderationsSection({
   positions: PortfolioPosition[]
   /** `securities2` rows by ticker, for the category each holding is judged in. */
   details: Record<string, SecurityDetail>
-  /** Live watchlist ideas — the source of the alternatives column. */
-  ideas: ProspectIdea[]
+  /**
+   * Live watchlist ideas — the source of the alternatives column.
+   *
+   * `ProspectIdeaLite` because this reads four `securities2` fields; taking the
+   * full shape would force the workspace to fetch the whole 93-column row per
+   * idea to render a ticker and a name.
+   */
+  ideas: ProspectIdeaLite[]
   considerations: string
   requestedAt: string | null
   busy: boolean
