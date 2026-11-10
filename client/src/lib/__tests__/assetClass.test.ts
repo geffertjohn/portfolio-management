@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, resolveAssetClass, unmappedCategories, unplacedCategories, unmappedCategoryWarning, STOCK_CATEGORY_OPTIONS,
+import { ASSET_CLASS_BY_CATEGORY, ASSET_CLASS_OVERRIDES, assetClassLabel, normalizeCategory, resolveAssetClass, unmappedCategories, unplacedCategories, unmappedCategoryWarning, STOCK_CATEGORY_OPTIONS,
 } from '../assetClass'
 
 const sec = (security_id: string, category_name: string | null) => ({ security_id, category_name })
@@ -307,5 +307,54 @@ describe('unplacedCategories vs unmappedCategories', () => {
   // Cash resolves through its own branch, so it is placed, not a finding.
   it('does not report cash', () => {
     expect(unplacedCategories([{ security_id: '$Cash', category_name: null }])).toEqual([])
+  })
+})
+
+describe('normalizeCategory is the ONE way a vendor category becomes a key', () => {
+  /**
+   * There were two, and they disagreed. `prospects.categoryKey` collapsed
+   * internal whitespace; the resolver's own normalizer only trimmed. So a
+   * vendor string arriving as `Large  Blend` would have matched a watchlist
+   * alternative and resolved to `null` in every allocation rollup — two
+   * answers for one string, from the function whose job is to be the single
+   * one. Latent (no live row carries irregular whitespace), and CLAUDE.md
+   * already claimed whitespace was handled.
+   */
+  it('collapses internal whitespace, not just the ends', () => {
+    expect(normalizeCategory('  Large   Blend  ')).toBe('large blend')
+    expect(normalizeCategory('Large\tBlend')).toBe('large blend')
+    expect(normalizeCategory('Large\nBlend')).toBe('large blend')
+  })
+
+  // The fix is only worth anything if the RESOLVER sees it.
+  it('lets resolveAssetClass place a category with a double space', () => {
+    expect(resolveAssetClass({ security_id: 'X', category_name: 'Large  Blend' }))
+      .toBe('large_cap_blend')
+    expect(resolveAssetClass({ security_id: 'X', category_name: ' diversified  emerging   markets ' }))
+      .toBe('emerging_market')
+  })
+
+  // ...and that the import warning agrees, rather than reporting a category
+  // the rollup can place.
+  it('keeps the unmapped probe in step', () => {
+    expect(unmappedCategories(['Large  Blend'])).toEqual([])
+    expect(unplacedCategories([{ security_id: 'X', category_name: 'Large  Blend' }])).toEqual([])
+  })
+
+  /**
+   * What it must NOT do. Hyphen and spelling variants exist where two vendor
+   * vocabularies meet — a fund's "Large Growth" against a benchmark's "US
+   * Large Cap Growth" — and folding them here would silently merge sleeves
+   * Morningstar considers distinct, which is the quieter failure.
+   */
+  it('does not fold punctuation or spelling', () => {
+    expect(normalizeCategory('Mid-Cap Value')).toBe('mid-cap value')
+    expect(normalizeCategory('Mid Cap Value')).toBe('mid cap value')
+    expect(normalizeCategory('Mid-Cap Value')).not.toBe(normalizeCategory('Mid Cap Value'))
+  })
+
+  it('leaves an empty string empty, so a caller can test it', () => {
+    expect(normalizeCategory('')).toBe('')
+    expect(normalizeCategory('   ')).toBe('')
   })
 })

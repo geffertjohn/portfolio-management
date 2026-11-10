@@ -18,6 +18,7 @@
  */
 
 import { supabase } from './supabase'
+import { normalizeCategory } from './assetClass'
 import { seedScorecardCohorts, type SecurityDetail } from './securities'
 import type { Conviction } from './reviewLog'
 
@@ -131,14 +132,21 @@ export async function addProspects(
   portfoliosFor: (securityId: string) => string[],
 ): Promise<AddProspectResult[]> {
   const out: AddProspectResult[] = []
+  const written: string[] = []
   for (const securityId of securityIds) {
     try {
-      await addProspect({ securityId, portfolios: portfoliosFor(securityId) })
+      written.push(await writeProspect({ securityId, portfolios: portfoliosFor(securityId) }))
       out.push({ securityId, ok: true })
     } catch (e) {
       out.push({ securityId, ok: false, error: e instanceof Error ? e.message : 'Failed to add' })
     }
   }
+  // ONE seed for the batch, not one per ticker: `seedScorecardCohorts` takes a
+  // list, and per-ticker made a ten-ticker paste do ten selects and ten updates.
+  // Only what actually landed — seeding a ticker whose write failed would be
+  // touching a row this call did not create. It never throws, so it cannot turn
+  // a successful batch into a reported failure.
+  if (written.length > 0) await seedScorecardCohorts(written)
   return out
 }
 
@@ -304,6 +312,19 @@ export async function fetchActiveProspectsLite(): Promise<ProspectIdeaLite[]> {
  * own.
  */
 export async function addProspect(p: NewProspect): Promise<void> {
+  const sym = await writeProspect(p)
+  await seedScorecardCohorts([sym])
+}
+
+/**
+ * The write half of `addProspect`, WITHOUT the cohort seeding.
+ *
+ * Split out so a batch can seed once at the end instead of once per ticker:
+ * `seedScorecardCohorts` already takes a list, and calling it per ticker made
+ * a ten-ticker paste do ten selects and ten updates where one of each would
+ * do. Returns the normalised symbol, which is what the caller needs to seed.
+ */
+async function writeProspect(p: NewProspect): Promise<string> {
   const sym = p.securityId.trim().toUpperCase()
   if (!sym) throw new Error('Ticker is required')
 
@@ -326,12 +347,9 @@ export async function addProspect(p: NewProspect): Promise<void> {
     prospectId = data.id
   }
 
-  // Before the early return below: zero portfolios is a valid idea, and it
-  // should still get its cohort.
-  await seedScorecardCohorts([sym])
-
   const names = [...new Set((p.portfolios ?? []).map((n) => n.trim()).filter(Boolean))]
-  if (names.length === 0) return
+  // Zero portfolios is a valid idea — and the caller still seeds its cohort.
+  if (names.length === 0) return sym
 
   const { error } = await supabase
     .from('prospect_portfolios')
@@ -340,6 +358,7 @@ export async function addProspect(p: NewProspect): Promise<void> {
       { onConflict: 'prospect_id,portfolio_name', ignoreDuplicates: true },
     )
   if (error) throw error
+  return sym
 }
 
 /** Detach one portfolio from an idea. The idea itself survives with none. */
@@ -382,7 +401,11 @@ export interface WatchlistAlternative {
  * vendor considers distinct.
  */
 export function categoryKey(category: string | null | undefined): string | null {
-  const k = (category ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+  // `normalizeCategory` from `assetClass.ts`, not a second implementation.
+  // This file used to carry its own and the two DISAGREED — that one collapsed
+  // internal whitespace and the resolver's did not, so one vendor string could
+  // match an alternative here and resolve to `null` in every allocation rollup.
+  const k = normalizeCategory(category ?? '')
   return k || null
 }
 

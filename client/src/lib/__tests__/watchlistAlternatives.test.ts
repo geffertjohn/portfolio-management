@@ -3,6 +3,7 @@ import {
   alternativesFor, categoryKey, watchlistAlternativesByCategory,
   type ProspectIdea,
 } from '../prospects'
+import { normalizeCategory } from '../assetClass'
 
 /**
  * The annual review's considerations step asks what each holding should be
@@ -83,5 +84,40 @@ describe('alternativesFor', () => {
   it('matches across case and spacing differences', () => {
     expect(alternativesFor(map, 'VOO', 'large   blend').map((a) => a.securityId))
       .toEqual(['FELC', 'ICAFX'])
+  })
+})
+
+describe('categoryKey agrees with the asset-class resolver', () => {
+  /**
+   * These two normalise the SAME column — `securities2.category_name` — and
+   * they used to disagree: this one collapsed internal whitespace and
+   * `resolveAssetClass`'s did not. A vendor string arriving as `Large  Blend`
+   * would have matched an alternative here and resolved to `null` in every
+   * allocation rollup, which is gotcha 23 with no warning attached.
+   *
+   * Asserted directly rather than guarded by a source scan: `.trim()
+   * .toLowerCase()` appears a dozen times in this tree for unrelated reasons,
+   * so a scan would fire on legitimate code and get deleted.
+   */
+  const SAMPLES = [
+    'Large Blend',
+    '  Large   Blend  ',
+    'Large\tBlend',
+    'Mid-Cap Value',
+    'Diversified Emerging Markets',
+    'MULTISECTOR BOND',
+  ]
+
+  it('produces the same key for every shape', () => {
+    for (const raw of SAMPLES) {
+      expect(categoryKey(raw), raw).toBe(normalizeCategory(raw))
+    }
+  })
+
+  // The one place they legitimately differ: `categoryKey` maps empty to null
+  // so a caller can skip it, which is a contract, not a normalisation rule.
+  it('differs only in reporting an empty category as null', () => {
+    expect(categoryKey('   ')).toBeNull()
+    expect(normalizeCategory('   ')).toBe('')
   })
 })

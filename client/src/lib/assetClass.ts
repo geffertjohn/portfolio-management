@@ -42,7 +42,8 @@ import { isCashTicker } from './positionBands'
  * because the taxonomy has one class for each (`us_mid_cap`, `us_small_cap`) —
  * only large cap is split three ways.
  *
- * Lookup is trimmed and case-insensitive; see `normalize`.
+ * Lookup is trimmed, case-insensitive and whitespace-collapsing; see
+ * `normalizeCategory`.
  */
 export const ASSET_CLASS_BY_CATEGORY: Record<string, AssetClassKey> = {
   // ── US equity — funds & ETFs ───────────────────────────────────────────────
@@ -127,12 +128,31 @@ export const ASSET_CLASS_OVERRIDES: Record<string, AssetClassKey> = {
   'TIBIX': 'non_us_developed',
 }
 
-function normalize(s: string): string {
-  return s.trim().toLowerCase()
+/**
+ * The one way a vendor `category_name` is reduced to a comparison key.
+ *
+ * **Exported because there was a second copy and they disagreed.**
+ * `prospects.categoryKey` collapsed internal whitespace and this did not, so a
+ * vendor string arriving as `Large  Blend` would have matched a watchlist
+ * alternative and resolved to `null` in every allocation rollup — two answers
+ * for one string, from the function whose whole job is to be the single one.
+ * No live row carries irregular whitespace today, so this was latent; gotcha 23
+ * is the record of what a silent `null` here costs, and CLAUDE.md already
+ * claimed whitespace was handled.
+ *
+ * **Trim, lowercase, collapse runs of whitespace — and nothing else.** No
+ * hyphen or spelling variants: those exist where two vendor vocabularies meet
+ * (a fund's "Large Growth" against a benchmark's "US Large Cap Growth") and
+ * inventing them here would silently merge sleeves Morningstar considers
+ * distinct, which is the opposite failure and a much quieter one.
+ */
+export function normalizeCategory(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+
 const BY_NORMALIZED_CATEGORY: Map<string, AssetClassKey> = new Map(
-  Object.entries(ASSET_CLASS_BY_CATEGORY).map(([cat, key]) => [normalize(cat), key]),
+  Object.entries(ASSET_CLASS_BY_CATEGORY).map(([cat, key]) => [normalizeCategory(cat), key]),
 )
 
 const LABEL_BY_KEY: Map<AssetClassKey, string> = new Map(
@@ -280,5 +300,5 @@ export function resolveAssetClass(
   if (isCashTicker(security.security_id)) return 'cash'
   const category = security.category_name?.trim()
   if (!category) return null
-  return BY_NORMALIZED_CATEGORY.get(normalize(category)) ?? null
+  return BY_NORMALIZED_CATEGORY.get(normalizeCategory(category)) ?? null
 }
