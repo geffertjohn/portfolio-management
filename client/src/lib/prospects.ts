@@ -18,7 +18,8 @@
  */
 
 import { supabase } from './supabase'
-import { normalizeCategory } from './assetClass'
+import { normalizeCategory, resolveAssetClass } from './assetClass'
+import type { AssetClassKey } from './modelPortfolios'
 import { seedScorecardCohorts, type SecurityDetail } from './securities'
 
 export interface ProspectEntry {
@@ -428,16 +429,53 @@ export function categoryKey(category: string | null | undefined): string | null 
 }
 
 /**
- * Watchlist funds grouped by the category they would compete in.
+ * The sleeves whose alternatives are pooled across styles.
+ *
+ * **Because the firm's own taxonomy does not split them.** `ASSET_CLASS_ROWS`
+ * gives large cap three rows — blend, growth and value — and mid and small one
+ * row each. A fund is judged against the sleeve it would fill, so where the
+ * taxonomy says style is not a distinguishing feature, the alternatives should
+ * not pretend it is: FTZIX and AVERX are Mid-Cap Blend and compete with every
+ * mid-cap idea on the list, not only the one that shares their style label.
+ *
+ * **It is a list, not "every unsplit sleeve", on purpose.** Non-US developed is
+ * also a single row, and pooling it would offer TIBIX — a global allocation
+ * fund placed there by a per-ticker override — against two foreign large-blend
+ * index funds. One sleeve holding things that are not substitutes for each
+ * other is a judgement about the book, not something to derive.
+ */
+const POOLED_SLEEVES = new Set<AssetClassKey>(['us_mid_cap', 'us_small_cap'])
+
+/**
+ * The key a holding and a watchlist idea must SHARE to be alternatives.
+ *
+ * Exact `category_name` for most sleeves, the sleeve itself for the pooled
+ * ones above. Prefixed so a sleeve key can never collide with a category that
+ * happens to spell the same.
+ */
+export function alternativeKey(
+  security: { security_id: string; category_name: string | null },
+): string | null {
+  const sleeve = resolveAssetClass(security)
+  if (sleeve && POOLED_SLEEVES.has(sleeve)) return `sleeve:${sleeve}`
+  return categoryKey(security.category_name)
+}
+
+/**
+ * Watchlist funds grouped by what they would compete with.
  *
  * The annual review asks whether each holding is still the right fund for its
  * sleeve, and the only honest form of that question is "against what?" — the
- * ideas already recorded in the same category are the answer the firm has
- * actually written down. An idea with no `securities2` row is skipped: it is a
- * stock, or a fund the workbook has not reached yet, and neither can be
- * compared on a category it does not carry.
+ * ideas already recorded are the answer the firm has actually written down. An
+ * idea with no `securities2` row is skipped: it is a stock, or a fund the
+ * workbook has not reached yet, and neither can be compared on a category it
+ * does not carry.
+ *
+ * **Named "ByKey", not "ByCategory", because mid- and small-cap pool across
+ * styles** — see `alternativeKey`. Calling it a category grouping when two of
+ * the sleeves group by something else is how a name starts lying.
  */
-export function watchlistAlternativesByCategory(
+export function watchlistAlternativesByKey(
   // `ProspectIdeaLite` is the MINIMUM shape, so this takes either fetch's
   // output — and the caller that uses it (the annual review) can take the
   // cheap one.
@@ -447,7 +485,7 @@ export function watchlistAlternativesByCategory(
   for (const idea of ideas) {
     const sec = idea.securities2
     if (!sec) continue
-    const key = categoryKey(sec.category_name)
+    const key = alternativeKey(sec)
     if (!key) continue
     const list = out.get(key) ?? []
     list.push({ securityId: sec.security_id, name: sec.security_name, numericId: sec.id })
@@ -458,18 +496,23 @@ export function watchlistAlternativesByCategory(
 }
 
 /**
- * The alternatives to one holding: same category, and never the holding itself.
+ * The alternatives to one holding: same key, and never the holding itself.
  *
  * A fund can be held in one book and watched for another — VBTLX is both — so
  * without the self-exclusion a holding would be offered as its own replacement.
+ *
+ * Takes the holding's `security_id` as well as its category because
+ * `alternativeKey` resolves the sleeve, and `ASSET_CLASS_OVERRIDES` is keyed by
+ * ticker — passing the category alone would route an overridden fund to the
+ * wrong pool.
  */
 export function alternativesFor(
-  byCategory: Map<string, WatchlistAlternative[]>,
+  byKey: Map<string, WatchlistAlternative[]>,
   holdingSecurityId: string,
   category: string | null | undefined,
 ): WatchlistAlternative[] {
-  const key = categoryKey(category)
+  const key = alternativeKey({ security_id: holdingSecurityId, category_name: category ?? null })
   if (!key) return []
-  return (byCategory.get(key) ?? []).filter((a) => a.securityId !== holdingSecurityId)
+  return (byKey.get(key) ?? []).filter((a) => a.securityId !== holdingSecurityId)
 }
 

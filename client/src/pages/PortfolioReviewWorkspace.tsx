@@ -141,7 +141,7 @@ export function PortfolioReviewWorkspace() {
    * here and the cards over there are one list: an idea removed in one place
    * cannot keep being proposed in the other.
    */
-  // The LITE fetch: `watchlistAlternativesByCategory` reads four fields.
+  // The LITE fetch: `watchlistAlternativesByKey` reads four fields.
   const { data: watchlistIdeas = [] } = useQuery({
     queryKey: QUERY_KEYS.prospectsLite,
     queryFn: fetchActiveProspectsLite,

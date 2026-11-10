@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  alternativesFor, categoryKey, watchlistAlternativesByCategory,
+  alternativeKey, alternativesFor, categoryKey, watchlistAlternativesByKey,
   type ProspectIdea,
 } from '../prospects'
 import { normalizeCategory } from '../assetClass'
@@ -49,9 +49,9 @@ describe('categoryKey', () => {
   })
 })
 
-describe('watchlistAlternativesByCategory', () => {
+describe('watchlistAlternativesByKey', () => {
   it('groups the live ideas by the sleeve they would compete in', () => {
-    const map = watchlistAlternativesByCategory([
+    const map = watchlistAlternativesByKey([
       idea('FELC', 'Large Blend', 1), idea('MUSEX', 'Large Blend', 2),
       idea('VUG', 'Large Growth', 3),
     ])
@@ -62,16 +62,16 @@ describe('watchlistAlternativesByCategory', () => {
   it('skips an idea with no securities2 row', () => {
     // A watched STOCK never gets one — the workbook sheet is funds-only — and a
     // fund the refresh has not reached yet carries no category to match on.
-    expect(watchlistAlternativesByCategory([idea('NOSEC', null)]).size).toBe(0)
+    expect(watchlistAlternativesByKey([idea('NOSEC', null)]).size).toBe(0)
   })
 
   it('skips an idea whose row carries no category', () => {
-    expect(watchlistAlternativesByCategory([idea('PENDING', null, 9)]).size).toBe(0)
+    expect(watchlistAlternativesByKey([idea('PENDING', null, 9)]).size).toBe(0)
   })
 })
 
 describe('alternativesFor', () => {
-  const map = watchlistAlternativesByCategory([
+  const map = watchlistAlternativesByKey([
     idea('FELC', 'Large Blend', 1), idea('ICAFX', 'Large Blend', 2),
     idea('VBTLX', 'Intermediate Core Bond', 3),
   ])
@@ -130,5 +130,108 @@ describe('categoryKey agrees with the asset-class resolver', () => {
   it('differs only in reporting an empty category as null', () => {
     expect(categoryKey('   ')).toBeNull()
     expect(normalizeCategory('   ')).toBe('')
+  })
+})
+
+describe('mid- and small-cap pool across styles', () => {
+  /**
+   * THE RULE, and where it comes from: `ASSET_CLASS_ROWS` gives large cap
+   * three rows — blend, growth, value — and mid and small ONE row each. A fund
+   * is judged against the sleeve it would fill, so where the firm's own
+   * taxonomy says style is not a distinguishing feature, the alternatives must
+   * not pretend it is.
+   *
+   * Live case (10 Nov 2026): FTZIX and AVERX are Mid-Cap Blend and were
+   * offered only RSIYX, the one watchlist idea sharing that exact label, while
+   * QVAL, NAMAX and FSMVX — all Mid-Cap Value — sat on the list competing for
+   * the same sleeve. OBSIX (Small Growth) was offered nothing at all.
+   */
+  const mids = [
+    idea('RSIYX', 'Mid-Cap Blend', 1),
+    idea('QVAL', 'Mid-Cap Value', 2),
+    idea('NAMAX', 'Mid-Cap Value', 3),
+    idea('FSMVX', 'Mid-Cap Value', 4),
+  ]
+
+  it('offers every mid-cap idea to a mid-cap holding, whatever the style', () => {
+    const byKey = watchlistAlternativesByKey(mids)
+    const alts = alternativesFor(byKey, 'FTZIX', 'Mid-Cap Blend').map((a) => a.securityId)
+    expect(alts.sort()).toEqual(['FSMVX', 'NAMAX', 'QVAL', 'RSIYX'])
+  })
+
+  it('pools small cap the same way, including a style with no idea of its own', () => {
+    const byKey = watchlistAlternativesByKey([
+      idea('FESM', 'Small Blend', 1),
+      idea('TQSMX', 'Small Blend', 2),
+      idea('VSMIX', 'Small Value', 3),
+    ])
+    // OBSIX is Small Growth — no watchlist idea shares that label, and before
+    // pooling it was offered nothing.
+    expect(alternativesFor(byKey, 'OBSIX', 'Small Growth').map((a) => a.securityId).sort())
+      .toEqual(['FESM', 'TQSMX', 'VSMIX'])
+  })
+
+  // Self-exclusion still applies across the pool, not just within a style.
+  it('never offers a holding itself, even from another style in the pool', () => {
+    const byKey = watchlistAlternativesByKey(mids)
+    expect(alternativesFor(byKey, 'QVAL', 'Mid-Cap Blend').map((a) => a.securityId))
+      .not.toContain('QVAL')
+  })
+})
+
+describe('everything else still matches on the exact category', () => {
+  /**
+   * The pool is a LIST, not "every sleeve the taxonomy does not split". Non-US
+   * developed is also a single row, and pooling it would offer TIBIX — a
+   * global allocation fund placed there by a per-ticker override — against two
+   * foreign large-blend index funds. One sleeve holding things that are not
+   * substitutes is a judgement about the book, not something to derive.
+   */
+  it('keeps the three large-cap styles apart', () => {
+    const byKey = watchlistAlternativesByKey([
+      idea('FELC', 'Large Blend', 1),
+      idea('VUG', 'Large Growth', 2),
+      idea('MGV', 'Large Value', 3),
+    ])
+    expect(alternativesFor(byKey, 'VOO', 'Large Blend').map((a) => a.securityId)).toEqual(['FELC'])
+    expect(alternativesFor(byKey, 'PWB', 'Large Growth').map((a) => a.securityId)).toEqual(['VUG'])
+    expect(alternativesFor(byKey, 'IDHIX', 'Large Value').map((a) => a.securityId)).toEqual(['MGV'])
+  })
+
+  it('does not pool non-US developed', () => {
+    const byKey = watchlistAlternativesByKey([
+      idea('DFALX', 'Foreign Large Blend', 1),
+      idea('TIBIX', 'Global Moderately Aggressive Allocation', 2),
+    ])
+    expect(alternativesFor(byKey, 'IDEQ', 'Foreign Large Blend').map((a) => a.securityId))
+      .toEqual(['DFALX'])
+  })
+
+  it('does not pool the bond sleeves', () => {
+    const byKey = watchlistAlternativesByKey([
+      idea('VBTLX', 'Intermediate Core Bond', 1),
+      idea('EIHIX', 'High Yield Bond', 2),
+    ])
+    expect(alternativesFor(byKey, 'BIMIX', 'Intermediate Core Bond').map((a) => a.securityId))
+      .toEqual(['VBTLX'])
+  })
+})
+
+describe('alternativeKey', () => {
+  it('returns the sleeve for a pooled one and the category for the rest', () => {
+    expect(alternativeKey({ security_id: 'QVAL', category_name: 'Mid-Cap Value' }))
+      .toBe(alternativeKey({ security_id: 'RSIYX', category_name: 'Mid-Cap Blend' }))
+    expect(alternativeKey({ security_id: 'FELC', category_name: 'Large Blend' }))
+      .toBe(categoryKey('Large Blend'))
+  })
+
+  // The prefix exists so a sleeve key cannot collide with a vendor category
+  // that happens to spell the same.
+  it('namespaces the sleeve key', () => {
+    expect(alternativeKey({ security_id: 'X', category_name: 'Small Value' })).toBe('sleeve:us_small_cap')
+  })
+
+  it('is null when there is no category to match on', () => {
+    expect(alternativeKey({ security_id: 'X', category_name: null })).toBeNull()
   })
 })
