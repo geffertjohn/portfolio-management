@@ -4,6 +4,7 @@ import {
   type ProspectIdea,
 } from '../prospects'
 import { normalizeCategory } from '../assetClass'
+import type { SecurityDetail } from '../securities'
 
 /**
  * The annual review's considerations step asks what each holding should be
@@ -11,16 +12,26 @@ import { normalizeCategory } from '../assetClass'
  * is not visibly wrong — a missing alternative reads exactly like a category
  * nobody has an idea for, which is a finding the advisor would act on.
  */
+/**
+ * The cast is NARROWED to the `securities2` sub-object, which genuinely cannot
+ * be written out (93 columns). The whole literal used to be
+ * `as unknown as ProspectIdea`, and that silence cost twice: it hid `heldIn`
+ * when the field was added, and it hid `target_price` / `conviction` /
+ * `thesis` when they were dropped — the fixture kept naming three columns the
+ * table no longer has. A cast that covers more than it must is a type check
+ * turned off.
+ */
 const idea = (securityId: string, category: string | null, id = 1): ProspectIdea => ({
-  id, security_id: securityId, target_price: null, conviction: null, thesis: null,
+  id, security_id: securityId,
   date_added: '2026-11-01T00:00:00Z', removed_at: null,
   portfolios: [],
-  securities2: category === null && securityId === 'NOSEC' ? null : {
+  heldIn: [],
+  securities2: category === null && securityId === 'NOSEC' ? null : ({
     id, security_id: securityId, security_name: `${securityId} Fund`,
     broad_asset_class: null, detailed_security_type: 'mutual_fund',
     peer_group_name: null, category_name: category, scorecard_cohort: 'category',
-  },
-} as unknown as ProspectIdea)
+  } as unknown as SecurityDetail),
+})
 
 describe('categoryKey', () => {
   it('normalises case and whitespace, and nothing else', () => {

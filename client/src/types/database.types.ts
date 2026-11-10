@@ -2465,36 +2465,27 @@ export type Database = {
       }
       prospects: {
         Row: {
-          conviction: string | null
           created_at: string
           date_added: string
           id: number
           removed_at: string | null
           security_id: string
-          target_price: number | null
-          thesis: string | null
           updated_at: string
         }
         Insert: {
-          conviction?: string | null
           created_at?: string
           date_added?: string
           id?: number
           removed_at?: string | null
           security_id: string
-          target_price?: number | null
-          thesis?: string | null
           updated_at?: string
         }
         Update: {
-          conviction?: string | null
           created_at?: string
           date_added?: string
           id?: number
           removed_at?: string | null
           security_id?: string
-          target_price?: number | null
-          thesis?: string | null
           updated_at?: string
         }
         Relationships: []
