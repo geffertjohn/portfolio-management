@@ -20,21 +20,10 @@
 import { supabase } from './supabase'
 import { normalizeCategory } from './assetClass'
 import { seedScorecardCohorts, type SecurityDetail } from './securities'
-import type { Conviction } from './reviewLog'
 
 export interface ProspectEntry {
   id: number
   security_id: string
-  /**
-   * Retained READ-ONLY. The field was dropped from the Add-to-watchlist form and
-   * the card in Oct 2026 — a watchlist idea is a view on the company, and a price
-   * you meant to pay is a sizing decision that belongs to the candidate stage.
-   * The column and its stored values are kept rather than migrated away, so the
-   * handful of rows carrying one are not destroyed; nothing writes it any more.
-   */
-  target_price: number | null
-  conviction: Conviction | null
-  thesis: string | null
   date_added: string
   removed_at: string | null
 }
@@ -172,7 +161,7 @@ async function loadProspectCore(): Promise<{
 
   const { data, error } = await supabase
     .from('prospects')
-    .select('id, security_id, target_price, conviction, thesis, date_added, removed_at')
+    .select('id, security_id, date_added, removed_at')
     .is('removed_at', null)
     .order('date_added', { ascending: false })
   if (error) throw error
