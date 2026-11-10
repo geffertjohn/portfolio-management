@@ -33,7 +33,11 @@ The **single source of compliance rules** is the Compliance Rules hub, stored in
 
 **Verify against the ACTUAL book, not the model targets.** The actual current allocation is the most recent file in the `Portfolio Documents` storage bucket (folder = portfolio name); weights are percent points, and cash-like tickers (e.g. `FDXCASH`) collapse into the one cash position. If no actual-allocation file exists, say so in `notes` and fall back to the model target weights (and flag that the check basis is targets).
 
-Your `mandate_checks` array **must include one entry per active hub rule** (firm-wide + this portfolio's own), each measured against the actual book, in addition to the model-band checks (equity/cash/asset-class bands from `model_portfolio_data`). Cross-portfolio rules (e.g. Cross-Portfolio Consistency Deviation) are inherently multi-portfolio and are verified on the hub — you may note them but need not compute them per-portfolio.
+Your `mandate_checks` array **must include one entry per active hub rule** (firm-wide + this portfolio's own), each measured against the actual book, in addition to the model-band checks (equity/cash/asset-class bands from `model_portfolio_data`).
+
+**Every entry must be a MEASUREMENT.** If you cannot measure a rule against this book, leave it out — do not emit a row saying so. A check whose `pass` is null and whose `actual` reads "not computed" occupies a line in the report, invites the reader to look, and tells them nothing; a report of nine checks where one is furniture is a worse report than one of eight.
+
+**Cross-portfolio rules are NOT yours and are not to be listed.** A rule that compares portfolios to each other — Cross-Portfolio Consistency Deviation is the standing example — cannot be evaluated from inside one book. It belongs to the Compliance Rules hub, which sees all of them at once. Omit it entirely: not as a check, not as a note, not as a caveat. Every portfolio risk report written between Jul and Nov 2026 ended with exactly such a line, on a rule that had in any case been retired from the hub.
 
 ## Data sources
 
