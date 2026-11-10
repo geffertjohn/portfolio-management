@@ -13,6 +13,7 @@ import {
   WATCHLIST_TRIGGER_LABELS, WATCHLIST_TRIGGER_OPTIONS,
 } from '../holdingReviews'
 import { DECISION_LABELS, DECISION_OPTIONS } from '../securityAdditions'
+import { AUDITED_TABLES } from '../auditLog'
 import type { Rating, ReportType, ThesisStatus } from '../researchReports'
 import type { ImportSource } from '../importRuns'
 import { CATEGORY_LABELS, RECURRENCE_LABELS, STATUS_LABELS } from '../actionItems'
@@ -269,6 +270,53 @@ describe('the committee write API still exists', () => {
  * wrong. They are pinned here because the mistake is cheap to repeat: in each
  * case the evidence for "dead" was a count, and the count was real.
  */
+/**
+ * `AUDITED_TABLES` must name exactly the tables a `log_audit` trigger fires on.
+ *
+ * **It had drifted BOTH ways** and nothing noticed. It listed `positions`,
+ * which is not a `log_audit` table at all — its `positions_audit` trigger runs
+ * `log_position_change()` into `holdings_change_log` — so filtering the audit
+ * page by it could only ever return nothing. And it omitted
+ * `firm_compliance_rules`, which carries a real trigger and eleven rows that
+ * were reachable only under "All". A filter that silently returns nothing is
+ * the worst shape for this list: the page looks like it worked.
+ *
+ * Both directions, because they fail differently. A table in the list with no
+ * trigger is an empty filter; a trigger whose table is missing from the list is
+ * a record nobody can find.
+ */
+describe('the audit-log table list matches the triggers', () => {
+  /** Every table `log_audit` is wired to, read out of the schema snapshot. */
+  const TRIGGERED = [...SCHEMA.matchAll(
+    /CREATE (?:OR REPLACE )?TRIGGER "[^"]+"[^\n]*? ON "public"\."([^"]+)"[^\n]*?EXECUTE FUNCTION "public"\."log_audit"\(\)/gi,
+  )].map((m) => m[1])
+
+  it('found the triggers at all', () => {
+    // Guards the guard: a regex that matches nothing would make both
+    // assertions below vacuously true.
+    expect(new Set(TRIGGERED).size).toBeGreaterThanOrEqual(10)
+  })
+
+  it('every audited table named in code has a trigger', () => {
+    const missing = AUDITED_TABLES.filter((t) => !TRIGGERED.includes(t))
+    expect(missing, 'listed in AUDITED_TABLES but nothing logs it').toEqual([])
+  })
+
+  it('every table with a trigger is named in code', () => {
+    const unlisted = [...new Set(TRIGGERED)].filter(
+      (t) => !(AUDITED_TABLES as readonly string[]).includes(t),
+    )
+    expect(unlisted, 'logged by log_audit but missing from AUDITED_TABLES').toEqual([])
+  })
+
+  // The asymmetry worth stating: securities2 carries TWO triggers (a
+  // conditional update and an unconditional insert/delete) and one entry.
+  it('counts a table once however many triggers it carries', () => {
+    expect(TRIGGERED.filter((t) => t === 'securities2').length).toBe(2)
+    expect(AUDITED_TABLES.filter((t) => t === 'securities2').length).toBe(1)
+  })
+})
+
 describe('securities2 joins the audit log for DECISIONS only', () => {
   /**
    * Added Nov 2026 so a hand-set classification leaves a trail. It is the one

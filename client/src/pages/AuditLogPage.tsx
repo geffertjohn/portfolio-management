@@ -22,6 +22,10 @@ const TABLE_LABELS: Record<AuditedTable, string> = {
   clients: 'Clients',
   at_risk: 'At-Risk',
   prospects: 'Watchlist',
+  // Named for what it records rather than for the table: the row says which
+  // book an idea was attached to or detached from, which is a different event
+  // from the idea itself being added or dropped.
+  prospect_portfolios: 'Watchlist Portfolios',
   action_items: 'Action Items',
   firm_compliance_rules: 'Firm Compliance Rules',
   // Decisions only — a governed classification or comparator changing. The
