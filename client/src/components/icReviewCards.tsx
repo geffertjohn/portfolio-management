@@ -550,7 +550,21 @@ export function RiskCard({ r }: { r: RiskReport }) {
             <ul className="mt-1 space-y-1 text-sm">
               {r.mandate_checks.map((c, i) => (
                 <li key={i} className="flex items-center gap-2">
-                  <span className={c.pass ? 'text-green-600' : 'text-red-600'}>{c.pass ? '✓' : '✗'}</span>
+                  {/*
+                    THREE states, not two. `pass` is nullable and means NOT
+                    MEASURED — a rule nobody has authored a limit for, a basis
+                    that could not be verified. Rendering it with the failure
+                    glyph said the book had breached something it had not: 13
+                    such checks across 12 live reports were drawn in red beside
+                    64 genuine failures, indistinguishable from them. An
+                    unmeasured check is grey and says so on hover.
+                  */}
+                  <span
+                    className={c.pass == null ? 'text-gray-400' : c.pass ? 'text-green-600' : 'text-red-600'}
+                    title={c.pass == null ? 'Not measured' : c.pass ? 'Passed' : 'Failed'}
+                  >
+                    {c.pass == null ? '–' : c.pass ? '✓' : '✗'}
+                  </span>
                   <span className="text-gray-700">{c.limit}</span>
                   {c.actual != null && c.actual !== '' && <span className="text-xs text-gray-400">({String(c.actual)})</span>}
                 </li>
