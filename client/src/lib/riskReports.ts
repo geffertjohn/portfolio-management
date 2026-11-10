@@ -15,7 +15,20 @@ export type RiskVerdict = 'pass' | 'warn' | 'veto'
 export type RiskScope = 'candidate' | 'portfolio'
 
 /** One mandate/limit check, e.g. { limit: 'Single position ≤ 6%', actual: 7.2, pass: false }. */
-export interface MandateCheck { limit: string; actual?: string | number | null; pass: boolean }
+export interface MandateCheck {
+  limit: string
+  actual?: string | number | null
+  /**
+   * `null` means NOT MEASURED — a rule nobody has authored a limit for, or a
+   * basis that could not be verified. It is a third state, not a failure.
+   *
+   * It was typed `boolean` and the data has never agreed: 13 stored checks
+   * across 12 live reports carry null. The type being wrong is why the
+   * renderer could use `pass ? ✓ : ✗` without the compiler objecting, drawing
+   * every unmeasured check in red beside 64 genuine failures.
+   */
+  pass: boolean | null
+}
 
 export interface RiskReport {
   id: number
