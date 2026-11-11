@@ -111,21 +111,23 @@ Private Const STAMP_CELL   As String = "A1"
 
 Private Const POLL_SECS    As Long = 10      ' between checks
 Private Const STABLE_POLLS As Long = 3       ' unchanged this many times = settled
-' Give up after 40 minutes.
+' Give up after 15 minutes.
 '
-' WAS 900s, and that budget was sized for a narrower workbook. The sheet grew
-' 11 columns on 11 Nov 2026 - roughly 1,200 fetches the add-in had never
-' cached - and three runs in a row died without even writing an error file.
-' That last detail is the tell: Application.CalculateFullRebuild is
-' SYNCHRONOUS and startTime is not set until it returns, so a rebuild longer
-' than the shell's own patience means the macro never reaches its timeout,
-' never calls LogAndQuit, and looks identical to a hang.
+' RAISED TO 2400 ON A WRONG DIAGNOSIS AND PUT BACK. Three runs on 11 Nov died
+' without writing an error file, and the explanation offered for that -
+' CalculateFullRebuild being synchronous and running past the shell's
+' patience, so the macro never reached this timeout - was simply false. The
+' run that finally completed measured it: rebuild_secs=0. The add-in fetches
+' in the BACKGROUND, so the rebuild returns at once and this budget starts
+' immediately.
 '
-' PROVISIONAL. The right value is the measured settle time plus headroom, and
-' nothing measured it until now - see the Control sheet stamps below. Tune it
-' down once a few clean runs have said what the real cost is; a budget this
-' loose also means a genuinely wedged Excel is tolerated for 40 minutes.
-Private Const LOAD_TIMEOUT As Long = 2400
+' The real cause was the VM being suspended mid-run, which reads exactly like
+' a hung Excel - a failure mode written up in README.md the day before and
+' not applied. See `settle_secs` below for what a healthy run actually costs.
+'
+' A LONGER BUDGET IS NOT FREE: every minute of it is a minute a genuinely
+' wedged Excel is tolerated, and a suspended VM takes that long to report.
+Private Const LOAD_TIMEOUT As Long = 900
 
 ' Do not even consider the values settled before this long.
 '
@@ -350,6 +352,11 @@ Private Sub StampRefreshTime()
 End Sub
 
 ' How long the run actually took, written where it can be READ BACK.
+'
+' FIRST MEASUREMENT, 11 Nov 2026: rebuild_secs=0, settle_secs=253 on a
+' workbook of 107 funds, 106 benchmark rows, 19 portfolios and 2 holdings
+' blocks. The settle is bounded by MIN_WAIT_SECS (240) rather than by
+' fetching, so the book settles about as fast as it is allowed to.
 '
 ' The macro had no working diagnostic channel, and that is why three failures
 ' in a row produced nothing to reason from: WriteNote appends to the Mac share

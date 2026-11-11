@@ -256,12 +256,13 @@ the start of a run would read as an abort and kill a refresh that was working.
 Running out of pre-wired rows is the case that writes one; extend the `YCI()`
 formulas below row 101 to add slots.
 
-**SUSPECTED BROKEN — `WriteNote` may never have written anything** (found
-11 Nov 2026, not yet proven either way). It opens the Mac share under
-`On Error Resume Next`, so a failure to reach `\\Mac\Home\…` is silent by
-construction, and no `watchlist-note.txt` has been observed in the inbox.
-Three runs that morning carried unconditional notes early in `Workbook_Open`
-— before a step independently measured at 2.3s — and produced no file.
+**CONFIRMED BROKEN — `WriteNote` writes nothing** (11 Nov 2026). It opens the
+Mac share under `On Error Resume Next`, so a failure to reach
+`\\Mac\Home\…` is silent by construction. Settled by an A/B test on the
+successful run of 12:07: `StampTimings` wrote `Control!A2`/`A3` from the same
+procedure moments later and both survived into the output file, while no
+`watchlist-note.txt` appeared. Same process, same instant, one channel works
+and the other does not.
 
 **That is worse than losing a debug line.** `SyncWatchlistTickers` reports a
 fund it could NOT add this way, so a watchlist fund dropped for want of a row
@@ -269,12 +270,11 @@ would be announced nowhere at all: the run still succeeds, the roster looks
 healthy, and the fund silently never arrives. The same shape as the gotcha-23
 import warning that was computed and discarded for three months.
 
-**The A/B test is already in place and needs no extra work.** `Control!A2`
-and `A3` now carry `rebuild_secs` / `settle_secs`, written to a sheet that is
-saved with the workbook rather than to the share. The next successful run
-settles it: timings present and no note file means `WriteNote` is the broken
-half, and its callers need a channel that survives — the Control sheet being
-the obvious one, since it demonstrably reaches the Mac.
+**The fix is to stop using the share.** The Control sheet demonstrably
+reaches the Mac — the importer already reads `A1` off it — so a note written
+there survives by the same route the data does, and could be surfaced as an
+`import_runs` warning rather than as a file nobody opens. NOT YET DONE; the
+callers still write into the dead channel.
 
 **A second, independent reason notes are unreliable as a diagnostic:** the
 workbook is not saved until the END of a run, so a run that dies leaves no

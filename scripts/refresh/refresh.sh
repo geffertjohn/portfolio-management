@@ -53,10 +53,12 @@ WATCHLIST_NOTE="$INBOX/watchlist-note.txt"   # macro warnings that are NOT a rea
 
 # The guest polls every 2 min, and a first open takes a few minutes while the
 # add-in fetches every data point, so allow generously.
-# MUST outlast the macro's own LOAD_TIMEOUT, or the shell kills a run that was
-# about to report its own failure cleanly - which is how three runs on 11 Nov
-# 2026 died with no error file to explain them. Macro 2400s + headroom.
-WAIT_SECS="${WAIT_SECS:-3000}"               # 50 min
+# Must outlast the macro's own LOAD_TIMEOUT (900) so a run can report its own
+# failure instead of being killed mid-sentence. Briefly 3000 on a wrong
+# diagnosis; the measured cost is ~320s end to end (settle_secs=253), so this
+# carries roughly 4x headroom. Do not raise it to cover a suspended VM - that
+# only delays the report; see "A SUSPENDED VM reads exactly like a hung Excel".
+WAIT_SECS="${WAIT_SECS:-1500}"               # 25 min
 POLL_SECS=10
 KEEP_DAYS=30
 
