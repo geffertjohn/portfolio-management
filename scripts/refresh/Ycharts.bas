@@ -92,6 +92,17 @@ Private Const FIRST_FUND_ROW As Long = 3 ' 1 = group banner, 2 = DB column names
 '   row 2          the metric code - the importer accepts a group ONLY if this
 '                  reads "holdings", which is what keeps the probe below out
 '   rows 3-27      the 25 x 3 array: weighting, symbol and name
+' OPT-IN WHILE IT IS UNPROVEN, and the default is the behaviour that works.
+'
+' The first attempt cost a whole run: the refresh timed out at 1500s with no
+' output and no error file, so the funds, benchmarks and portfolios that had
+' nothing to do with holdings did not land either. A new capability must not
+' be able to do that to the data the firm actually depends on, so the sheet is
+' built only when this flag is present and tomorrow's 05:30 run is unaffected
+' by anything still being debugged here. Flip the default once a run has
+' proven it.
+Private Const HOLDINGS_FLAG As String = "\\Mac\Home\portfolio-refresh\inbox\HOLDINGS-ON"
+
 Private Const HOLDINGS_SHEET As String = "Holdings"
 Private Const HOLDINGS_CODE  As String = "holdings"
 Private Const HOLDINGS_ROWS  As Long = 25   ' the vendor returns the top 25
@@ -167,7 +178,9 @@ Private Sub Workbook_Open()
     ' fetch everything else is about to make.
     EnsureHoldingsSheet
 
+    WriteNote "RUN: rebuild starting"
     Application.CalculateFullRebuild
+    WriteNote "RUN: rebuild returned, waiting for values to settle"
 
     startTime = Timer
     lastPrint = "<none>"
@@ -622,8 +635,16 @@ Private Sub EnsureHoldingsSheet()
     Dim src As Worksheet, ws As Worksheet
     Dim lastRow As Long, r As Long, groups As Long, c As Long
     Dim sym As String, letter As String
+    Dim t0 As Double
 
     On Error GoTo Failed
+
+    ' See HOLDINGS_FLAG. Absent means do nothing at all - not even look at the
+    ' sheet - so this routine cannot affect a run that did not ask for it.
+    If Len(Dir$(HOLDINGS_FLAG)) = 0 Then Exit Sub
+
+    t0 = Timer
+    WriteNote "HOLDINGS: build starting"
 
     Set src = FindSheetByTrimmedName(FUND_SHEET)
     If src Is Nothing Then
@@ -672,6 +693,12 @@ Private Sub EnsureHoldingsSheet()
     Next r
 
     ws.Visible = xlSheetVisible
+
+    ' Instrumentation, not decoration. When this hung there was NOTHING to say
+    ' how far it got - the macro writes no diagnostics and the workbook is not
+    ' saved until the end, so a hung run leaves no trace of its own progress.
+    ' These two notes turn the next failure into a measurement.
+    WriteNote "HOLDINGS: built " & groups & " groups in " & Format(Timer - t0, "0.0") & "s"
     Exit Sub
 
 Failed:
