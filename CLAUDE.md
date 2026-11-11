@@ -785,36 +785,43 @@ fund's sector and credit PERCENTAGES and never a single position — so two fund
 holding the same twenty names read as diversification, and nothing anywhere
 could say otherwise.
 
-- **A TABLE, not columns on `securities2`.** 25 holdings x 3 fields is a
-  repeating group, and the fund importer maps sheet header straight to DB
-  column, so columns would also mean 75 headers on the `Securities` sheet. The
-  vendor returns a list; store a list.
+- **A TABLE, not columns on `securities2`.** 25 holdings is a repeating group,
+  and the fund importer maps sheet header straight to DB column, so columns
+  would also mean 50 headers on the `Securities` sheet. The vendor returns a
+  list; store a list.
 - **A SEPARATE SHEET, because the SHAPE is different, and this is the lesson.**
-  `YCI(ticker,"holdings")` returns 25 rows for ONE fund while the `Securities`
-  sheet is one row PER fund. Entering it there put the row-3 fund's holdings
-  into the next 24 funds' rows and, being a legacy CSE array, locked those rows
-  out of carrying a formula of their own. Full layout and the macro that builds
-  it in `scripts/refresh/README.md`.
+  `YCI(ticker,"holdings_weight")` returns 25 rows for ONE fund while the
+  `Securities` sheet is one row PER fund. Entering it there put the row-3
+  fund's holdings into the next 24 funds' rows and, being a legacy CSE array,
+  locked those rows out of carrying a formula of their own.
+- **THE SHEET IS STATIC — pre-wired in blocks of 26 rows, and NO MACRO BUILDS
+  IT.** The first version had the refresh macro derive it from `Securities!B`
+  every run, and that cost two refreshes: unproven code on the critical path
+  took the funds, benchmarks and portfolios down with it. The deciding
+  argument for the static sheet is **visibility** — a sheet built only during
+  an unattended run does not exist until one succeeds, so a person opening the
+  workbook cannot tell broken from not-yet-run. It is also the convention the
+  `Securities` sheet already follows. `scripts/refresh/extend-holdings.ps1`
+  adds blocks for new funds by COPYING an existing one (the copy-never-author
+  rule — SYSTEM has no add-in). Layout in `scripts/refresh/README.md`.
 - **Rewritten per fund on every import (delete-then-insert), never upserted.**
   A fund whose list shortens — 25 names last month, 20 this month — would
   otherwise keep ranks 21-25 from the previous holdings date, mixing two as-of
   dates in one list with nothing on the row to show it.
-- **`holding_symbol` is NOT an FK to `securities2` and must not become one.** A
-  bond holding returns a CUSIP (`039956AA5`) and an equity holding a ticker the
-  firm need not track. **A symbol longer than 12 characters is filed as the
-  NAME** — a bank-loan fund returns `Polymer Group Inc 28-JUN-2028 Term Loan B`
-  in the symbol column, and keeping that as a symbol would make the cross-fund
-  overlap join match on prose.
+- **ONE COLUMN CARRIES BOTH THE SYMBOL AND THE NAME**, and `splitSymbolAndName`
+  separates them on length. The vendor fills it with whatever identifies the
+  holding: `ASML` or `RHHVF:DL` for an equity, a CUSIP like `039956AA5` for a
+  bond that has one, and a description — `Intertape Polymer Group Inc
+  28-JUN-2028 Term Loan B` — for one that does not. Anything over 12
+  characters is filed as the NAME; keeping it as a symbol would make the
+  cross-fund overlap join match on prose.
+- **`holding_symbol` is NOT an FK to `securities2` and must not become one.**
+  A CUSIP is not a security the firm tracks, and neither is most of what a
+  broad fund holds.
 - **`as_of` is copied onto every row** from `securities2.latest_holdings_date`,
   so a holdings row is self-describing. Funds disclose holdings monthly or
   quarterly, so it is routinely **weeks behind the price columns on the same
   `securities2` row** — which nothing said until this landed.
-- **The column ORDER is DETECTED, not assumed** (`detectLayout` in
-  `lib/fundHoldingsUpload.ts`). The reference workbook documents `holdings` as
-  "including weighting and symbol and name" — it names the three fields and not
-  their order. Exactly one column is numeric, and of the two text columns a
-  ticker is short where a security name is not. The detection is printed on
-  every unattended run and is covered by `fundHoldingsUpload.test.ts`.
 - **`ycharts_holdings` is its own `import_runs` source.** A holdings failure
   must not mark the fund import failed, and its stamp says when we last ASKED
   YCharts — not the holdings' as-of date, which is `fund_holdings.as_of` and is
@@ -846,6 +853,14 @@ set, `expense_ratio_generic` is not what the fund will charge next year), and
 `prospectus_objective` + `prospectus_benchmark_index` (a prospectus benchmark
 disagreeing with the category we grade against is the clearest evidence a fund
 is filed in the wrong sleeve).
+
+**A newly added column shows the SOURCE cell's value until something
+recalculates.** `add-sheet-columns.ps1` pastes a copied formula with
+calculation on manual and `CalculateBeforeSave` off, so every cell in a new
+column displays the model cell's cached value — nine new columns all reading
+one fund's `security_name` is the expected state, not a broken formula. It
+clears on the first `CalculateFullRebuild`, which is the unattended run.
+Check the FORMULA, not the value, when auditing a freshly added column.
 
 ### A benchmark has no composition of its own
 

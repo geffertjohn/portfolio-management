@@ -412,73 +412,83 @@ up afterwards.
 
 ## The Holdings sheet: when the vendor returns a LIST
 
-`YCI(ticker,"holdings")` returns the fund's **top 25 holdings** — 25 rows of
-symbol, name and weight. The `Securities` sheet is one row **per fund**. Those
-two shapes do not reconcile on one grid, and the attempt is instructive: a
-`{=YCI($B3,DS$2)}` entered in column DS of `Securities` filled DS3:DS27 with
+`YCI(ticker,"holdings_weight")` returns the fund's **top 25 holdings** — 25
+rows of holding and weight. The `Securities` sheet is one row **per fund**.
+Those two shapes do not reconcile on one grid, and the attempt is instructive:
+a `{=YCI($B3,DS$2)}` entered in column DS of `Securities` filled DS3:DS27 with
 the row-3 fund's holdings, which are the rows belonging to the next 24 funds —
 and because a legacy CSE array is a locked block, those funds could not carry
 a formula of their own either. One fund's data occupying another's rows is not
 a formatting problem to work around; it is the sheet saying the metric does
 not belong on it.
 
-So holdings get their own sheet, **one fund per three-column group**:
+So holdings get their own sheet, in **blocks of 26 rows**:
 
 ```
-        A            B              C        D            E   ...
-  1   M:FTZIX                              M:AVERX             <- ticker
-  2   holdings                             holdings            <- metric code
-  3   <------ 25 x 3 array ------>         <-- next fund -->
- 27
+ row 1    A ='Securities '!B3   B holdings_weight   C1:D25   {=YCI(A1,B1)}
+ row 26   (blank separator)
+ row 27   A ='Securities '!B4   B holdings_weight   C27:D51  {=YCI(A27,B27)}
 ```
 
-- **Group, not block.** The other option was 25 rows per fund stacked down the
-  sheet. That makes adding a fund an insert of 25 rows and makes every fund's
-  position depend on every fund before it; a column group is addressed by
-  itself.
-- **Row 2 is the marker.** A group is imported only when it reads exactly
-  `holdings`, so another List metric can be parked on the sheet without a
-  second convention to exclude it.
-- **`EnsureHoldingsSheet` in `Ycharts.bas` rebuilds it every run** from
-  `Securities!B`, rather than reconciling it. `SyncWatchlistTickers` has to
-  reconcile because column B carries 46 hand-entered holdings it must never
-  release; nothing on this sheet is hand-entered, so deriving all of it every
-  run is both cheaper and incapable of drifting. A dropped ticker's group
-  disappears on its own.
-- **It never aborts the run.** A failure costs the holdings list; it must not
-  cost the 120 columns of fund data the rest of the run is for. Errors go to
-  `watchlist-note.txt`.
+- **Column A is a LIVE reference to `Securities!B`**, not a copied value, so
+  the sheet follows that column by itself and a ticker swapped there needs
+  nothing done here.
+- **Column B is the marker.** A block is imported only when it reads
+  `holdings_weight`, so another List metric can be parked on the sheet without
+  a second convention to exclude it.
+- **Column C carries the symbol OR the name**, whichever identifies the
+  holding: `ASML` and `RHHVF:DL` for equities, a CUSIP like `039956AA5` for a
+  bond that has one, and a description — `Intertape Polymer Group Inc
+  28-JUN-2028 Term Loan B` — for one that does not. The importer splits them
+  on length; see `splitSymbolAndName`.
 
-**THE MACRO CAN AUTHOR A `YCI()` FORMULA AND THE POWERSHELL HELPERS CANNOT.**
-This is the whole reason the sheet is built in VBA rather than by a script
-beside the others. `add-sheet-columns.ps1` and `fill-sheet-formulas.ps1` run as
-SYSTEM under `prlctl exec` — an account with **no YCharts add-in** — so
-assigning a string naming `_xll.YCI` stores an unknown function and the cell
-reads `#NAME?`. They copy an existing cell for exactly that reason, and there
-was no 25x3 array anywhere to copy. The macro runs in the interactive logon
-where the add-in is loaded, so there the formula can simply be written.
+**THE SHEET IS STATIC AND NO MACRO TOUCHES IT.** The first version had
+`EnsureHoldingsSheet` in `Ycharts.bas` derive the whole sheet from
+`Securities!B` on every run, and it **cost two refreshes**: unproven code sat
+on the critical path of the daily job, and when it stalled the funds,
+benchmarks and portfolios went down with it even though none of them had
+anything to do with holdings. Three reasons the static sheet is right, in the
+order they matter:
 
-**`holdings` was chosen over `holdings_weight` by running both.** The reference
-workbook documents neither shape — `holdings_weight` carries no Type and no
-Description at all. Run by hand: `holdings_weight` returns 25x2, symbol and
-decimal weight (SPY: `AAPL 0.078573` … summing to 0.5169, so SPY's top 25 is
-51.7% of it). `holdings` returns those plus the **name**, for the same one
-fetch. The name is the half that matters: a bond holding's symbol is a CUSIP,
-so `039956AA5` is unreadable where `RealTruck Group Inc FRN` is not.
+1. **A person opening the workbook can SEE it.** A sheet built only during an
+   unattended run does not exist until one succeeds, so there is no way to
+   tell broken from not-yet-run.
+2. **It is the convention `Securities` already follows** — pre-wired, extended
+   when it runs out — rather than a second way of doing the same thing.
+3. **No new code on the refresh path.** The macro is back to not knowing this
+   sheet exists.
 
-**The column ORDER is detected at import, not assumed.** The catalogue names
-the three fields and not their order, so `fundHoldingsUpload.ts` works it out —
-exactly one column is numeric, and of the two text columns a ticker is short
-where a security name is not. The detected order is printed on every run
-(`holdings column order: …`). If YCharts ever reorders them, nothing breaks
-silently.
+**`extend-holdings.ps1` adds blocks for funds that do not have one.**
 
-**Cost is negligible and the error ratio barely moves.** 107 List fetches
-against the ~12,800 scalar fetches the sheet already makes. The macro's
-`ErrorRatio`, `AnyStillLoading` and `ValuesFingerprint` all iterate every
-worksheet, so the new sheet joins the settle-detection and the 50% error guard
-with no change to any of them — and `SaveCopyAs` exports the whole workbook, so
-it reaches the Mac without touching `refresh.sh`.
+```bash
+scripts/refresh/extend-holdings.ps1            # dry run
+scripts/refresh/extend-holdings.ps1 -Apply
+```
+
+It **copies the last block's array, it never writes one** — the same
+copy-never-author rule as `add-sheet-columns.ps1`, for the same reason: this
+runs as SYSTEM with no YCharts add-in, so a formula naming `_xll.YCI` would
+store an unknown function and read `#NAME?`. Copying down by a whole number of
+blocks adjusts `=YCI(A27,B27)` to `=YCI(A53,B53)` with no text to parse.
+Columns A and B are written outright, since a sheet reference and a text label
+need no add-in. The Securities row each block points at is read off that
+block's own formula rather than inferred from its position — position is what
+drifts. **Run it after adding funds**, and seed the very first block by hand
+in the VM's interactive session, where the add-in exists.
+
+**A Securities row with no ticker gets NO block.** A wired-but-empty row on
+the `Securities` sheet returns empty rather than an error, which is what makes
+the spare rows there free; `YCI` on an empty symbol is not known to behave the
+same way, and an errored or perpetually-`Loading` cell feeds both the macro's
+error-ratio guard and its settle detection.
+
+**`holdings_weight` over `holdings`.** The reference workbook documents neither
+shape — `holdings_weight` carries no Type and no Description at all — so both
+were run by hand. `holdings_weight` returns 25x2, the holding and its decimal
+weight (SPY: `AAPL 0.078573` … summing to 0.5169, so SPY's top 25 is 51.7% of
+it). `holdings` returns a third column with the name, but the name is not lost
+under `holdings_weight`: the vendor already puts a description in the symbol
+column for anything without a ticker, which is exactly where it is needed.
 
 ### Adding a metric column
 
