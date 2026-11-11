@@ -407,6 +407,19 @@ the book: construction, risk, and the regime it is being run into.
      every fund and the sheet carries no row for one it cannot fetch. Report
      the absence only where the memo turns on a question the holdings would
      have answered.
+   - **A CASH SWEEP VEHICLE IS NOT AN EXPOSURE.** Funds park cash in their
+     own money-market vehicle and it surfaces in the top 25 like any other
+     holding — "Fidelity Cash Central Fund" came back as 1.18% of Hybrid
+     Balanced across two funds on 11 Nov 2026, and reporting that as a
+     concentrated position would be a false finding of exactly the kind this
+     report exists to avoid. The same goes for a fund-of-funds' underlying
+     funds; `fund_of_funds_generic` names those.
+   - **A STALE AS-OF IS ITSELF REPORTABLE where the memo leans on it.**
+     Measured 11 Nov 2026, `latest_holdings_date` on this book spans **31 Mar
+     to 9 Nov** — RSIYX at 225 days, and the HELD funds OBSIX and PGNPX at
+     134, PGNPX with 91% of its assets in that top 25. DHRIX was 72 days
+     stale when the committee analysed its credit on 9 Nov and nothing said
+     so. Name the date whenever a holdings figure carries an argument.
 
    **THE FOUR NEW FUND FLAGS, and what each one changes.** All on
    `securities2`, all from the same import:
@@ -417,10 +430,20 @@ the book: construction, risk, and the regime it is being run into.
      recommending a replacement for failing to generate it, is a category
      error the committee has had no way to avoid making.
    - **`open_to_new_investors_generic`** — **check it before recommending any
-     alternative.** An idea that cannot be bought is not an alternative, and
-     this book is built on institutional share classes, which are exactly the
-     ones that close. A memo proposing a switch into a closed fund wastes the
-     advisor's time and is visibly unchecked.
+     alternative, and check it FIRST.** An idea that cannot be bought is not
+     an alternative, and this book is built on institutional share classes,
+     which are exactly the ones that close.
+     - **THIS ALREADY HAPPENED.** Memo 2 (Hybrid Balanced, 10 Nov 2026)
+       recommended replacing BOTH small-cap holdings with **VSMIX at 4.00%**
+       and called it "the committee highest-confidence call" — two
+       `replace` recommendations resting on one fund. `VSMIX` is
+       `open_to_new_investors_generic = false` and is not held, so there is
+       no existing position to add to and the whole call is unexecutable.
+       The column did not exist when that memo was written; it does now, and
+       there is no excuse for repeating it.
+     - A flag is a reason to CHECK, not a fact to assert at the advisor. Say
+       the vendor reports it closed and that the share class needs
+       confirming, rather than declaring it shut.
    - **`waiver_expense_ratio_generic` / `waiver_expiration_date`** — where a
      waiver is set, `expense_ratio_generic` is NOT what the fund will charge
      after that date. A cost comparison between two funds where one is

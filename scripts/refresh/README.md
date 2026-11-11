@@ -384,6 +384,25 @@ last roster went out. Nothing is lost if you do not: the 05:30 run writes a
 fresh roster and picks them up. But the poller will stay quiet in the meantime,
 and its silence will look like a decision.
 
+### The VM must be set to KEEP RUNNING when its window closes
+
+```bash
+prlctl set "Windows 11" --on-window-close keep-running   # requires the VM STOPPED
+prlctl list -i "Windows 11" | grep -i "on window close"
+```
+
+**This is a precondition of the pipeline, not a preference.** Parallels shipped
+set to `suspend`, so closing the VM window stops the guest dead — and a run in
+flight dies with it. It never bit before 11 Nov 2026 because nobody had worked
+in that VM while a refresh was running; that day it killed **four runs in a
+row**, each reported as "no output after 1500s", which is the message for a
+hung Excel. Hours went into the wrong diagnosis.
+
+The setting can only be changed while the VM is **stopped** — not suspended,
+which is the state `refresh.sh` leaves it in, so resume and stop it first.
+`Autostop: suspend` is left alone: that is the idle behaviour and is what the
+scheduled job relies on to put the VM away afterwards.
+
 ### A SUSPENDED VM reads exactly like a hung Excel
 
 `refresh.sh` detects completion by the output file appearing, which is the right
