@@ -73,10 +73,31 @@ Private Const FUND_SHEET As String = "Securities"
 ' Column B of the stamp sheet - A1 holds the refresh timestamp, and the
 ' importers select sheets by name, so Control is invisible to all three.
 Private Const ROSTER_COL   As Long = 2
+
+' Where WriteNote puts its warnings: Control!D, read back by the importer.
+'
+' NOT COLUMN B - that is the roster above, and overwriting it would make the
+' macro forget which rows it added and start releasing the hand-entered
+' holdings. C is left as a deliberate gap between two unrelated things
+' sharing one sheet.
+Private Const NOTE_COL  As Long = 4
+Private Const MAX_NOTES As Long = 50
 Private Const TICKER_COL   As Long = 2   ' Securities!B - the only literal on the row
 Private Const FIRST_FUND_ROW As Long = 3 ' 1 = group banner, 2 = DB column names
 
-' The Holdings sheet is STATIC and this macro does not touch it.
+' The Holdings sheet, and the ONE thing this macro does to it.
+'
+' Blocks of 26 rows stacked down the sheet, hand-seeded and extended by
+' scripts/refresh/extend-holdings.ps1:
+'   row r      A ='Securities '!B<n>   B holdings_weight
+'   r..r+24    C and D - the 25 x 2 array {=YCI(A<r>,B<r>)}
+Private Const HOLDINGS_SHEET  As String = "Holdings"
+Private Const HOLDINGS_CODE   As String = "holdings_weight"
+Private Const HOLDINGS_STRIDE As Long = 26   ' 25 holdings + a blank separator
+Private Const HOLDINGS_ROWS   As Long = 25
+Private Const MAX_HOLDINGS_BLOCKS As Long = 400
+
+' The Holdings sheet is otherwise STATIC and this macro does not rebuild it.
 '
 ' It was built here once, deriving itself from Securities!B on every run, and
 ' that cost two refreshes: an unproven addition sat on the critical path of
@@ -162,7 +183,14 @@ Private Sub Workbook_Open()
     ' makes that row's 83 YCI() formulas resolve, so the new fund has to be in
     ' place for the SAME fetch everything else is about to make. Added after,
     ' it would sit empty until tomorrow.
+    ' Before anything can write one.
+    ClearNotes
+
     SyncWatchlistTickers
+
+    ' AFTER the watchlist sync, so a fund added to Securities!B moments ago
+    ' gets its holdings in the SAME fetch rather than tomorrow's.
+    EnsureHoldingsBlocks
 
     ' After the watchlist sync and before the rebuild, for the same reason:
     ' the sheet is built from Securities!B, so a fund added moments ago has to
@@ -632,18 +660,146 @@ Private Function FirstFreeFundRow(ByVal ws As Worksheet, ByVal lastRow As Long) 
     Next r
 End Function
 
-' Append a line to the Mac-side WARNING file.
+' Give every fund on the Securities sheet a block on the Holdings sheet.
 '
-' DELIBERATELY NOT refresh-error.txt. That file is the macro's abort signal,
-' and refresh.sh fails the whole run the moment it appears - it polls for it
-' while waiting for the output, so a note written here at the start of the run
-' would be read as an abort and kill a refresh that was working perfectly.
-' This file is reported after a successful run and changes nothing.
+' APPENDS THE MISSING, NEVER REBUILDS - and that distinction is the whole
+' reason this is safe to have here. An earlier version derived the entire
+' sheet from Securities!B on every run; it made the sheet invisible between
+' runs and put a wholesale rewrite on the critical path of the daily job.
+' This is the shape of EnsureFundRow instead: find what has no block, add
+' only that, leave everything else alone.
+'
+' WHY IT CANNOT LIVE ON THE HOST. SyncWatchlistTickers writes the new ticker
+' into Securities!B during THIS procedure, so extend-holdings.ps1 run from
+' the Mac is always one run behind - the fund would arrive with a full
+' scorecard and no holdings until the following morning. Here it is one step
+' later in the same Workbook_Open, before the rebuild, so the block is
+' fetched by the same pass as everything else.
+'
+' It can author a YCI() formula because it runs in the interactive logon
+' where the add-in is loaded. The PowerShell helpers copy an existing cell
+' instead, and must: they run as SYSTEM with no add-in, where a written
+' _xll.YCI stores an unknown function and reads #NAME?.
+'
+' NEVER ABORTS THE RUN. A failure here costs new funds their holdings; it
+' must not cost the 120 columns of fund data the rest of the run is for.
+Private Sub EnsureHoldingsBlocks()
+    Dim src As Worksheet, ws As Worksheet
+    Dim lastRow As Long, hLast As Long, r As Long, top As Long, maxTop As Long
+    Dim aPrefix As String, f As String, sym As String
+    Dim have As Object, added As Long, pos As Long
+
+    On Error GoTo Failed
+
+    Set src = FindSheetByTrimmedName(FUND_SHEET)
+    Set ws = FindSheetByTrimmedName(HOLDINGS_SHEET)
+    ' The sheet is hand-seeded, so its ABSENCE is a real finding rather than
+    ' something to paper over by creating an empty one.
+    If src Is Nothing Or ws Is Nothing Then
+        WriteNote "HOLDINGS: no " & HOLDINGS_SHEET & " sheet - new funds will have no holdings"
+        Exit Sub
+    End If
+
+    Set have = CreateObject("Scripting.Dictionary")
+    hLast = ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1
+    For r = 1 To hLast
+        f = CStr(ws.Cells(r, 1).Formula)
+        If Len(f) > 0 Then
+            If LCase$(Trim$(CStr(ws.Cells(r, 2).Value))) = HOLDINGS_CODE Then
+                ' Read the Securities row off the block's OWN formula rather
+                ' than inferring it from position; position is what drifts.
+                pos = InStrRev(f, "B")
+                If pos > 0 Then
+                    If IsNumeric(Mid$(f, pos + 1)) Then have(CLng(Mid$(f, pos + 1))) = r
+                End If
+                If aPrefix = "" Or r > maxTop Then aPrefix = Left$(f, pos)
+                If r > maxTop Then maxTop = r
+            End If
+        End If
+    Next r
+
+    If maxTop = 0 Then
+        WriteNote "HOLDINGS: no seeded block to copy - new funds will have no holdings"
+        Exit Sub
+    End If
+
+    lastRow = src.UsedRange.Row + src.UsedRange.Rows.Count - 1
+    If lastRow > MAX_FUND_ROW Then lastRow = MAX_FUND_ROW
+    top = maxTop
+
+    For r = FIRST_FUND_ROW To lastRow
+        sym = Trim$(CStr(src.Cells(r, TICKER_COL).Value))
+        ' A Securities row with no ticker gets NO block. An empty row there
+        ' returns empty, but YCI on an empty symbol is not known to, and an
+        ' errored or perpetually-Loading cell feeds both the error-ratio
+        ' guard and the settle detection.
+        If Len(sym) > 0 And Not have.Exists(r) Then
+            If have.Count + added >= MAX_HOLDINGS_BLOCKS Then
+                WriteNote "HOLDINGS: hit the " & MAX_HOLDINGS_BLOCKS & " block guard - " & sym & " and any after it have no holdings"
+                Exit For
+            End If
+            top = top + HOLDINGS_STRIDE
+            ws.Cells(top, 1).Formula = aPrefix & r
+            ws.Cells(top, 2).NumberFormat = "@"
+            ws.Cells(top, 2).Value = HOLDINGS_CODE
+            ws.Range(ws.Cells(top, 3), ws.Cells(top + HOLDINGS_ROWS - 1, 4)).FormulaArray = _
+                "=YCI(A" & top & ",B" & top & ")"
+            added = added + 1
+        End If
+    Next r
+
+    If added > 0 Then WriteNote "HOLDINGS: added " & added & " block(s) for new fund(s)"
+    Exit Sub
+
+Failed:
+    WriteNote "HOLDINGS: skipped after error " & Err.Number & " - " & Err.Description
+End Sub
+
+' Record a warning the run should report but must not fail on.
+'
+' WRITES TO THE CONTROL SHEET, NOT TO THE MAC SHARE, and the old way was
+' silently dead. It opened `\\Mac\Home\…\watchlist-note.txt` under
+' `On Error Resume Next`, so a failure to reach the share left no trace at
+' all - and no note file was ever observed. Proven on 11 Nov 2026 by an A/B
+' test: StampTimings wrote Control!A2/A3 from the same procedure moments
+' later and both reached the Mac inside the output workbook, while the note
+' file did not appear. Same process, same instant, one channel works.
+'
+' THE COST OF THAT WAS NOT A DEBUG LINE. SyncWatchlistTickers reports a fund
+' it could NOT add this way, so a watchlist fund dropped for want of a row
+' was announced nowhere: the run succeeded, the roster looked healthy, and
+' the fund silently never arrived.
+'
+' The Control sheet travels inside the workbook, which is the one thing that
+' demonstrably reaches the Mac, and `import-workbook.ts` folds these into
+' `import_runs.warnings` - so a note now becomes an action in the app rather
+' than a line in a log nobody reads on a job that ran at 05:30.
+'
+' Bounded, because a warning written from inside a loop should not be able to
+' fill a column.
 Private Sub WriteNote(ByVal msg As String)
-    Dim f As Integer
+    Dim ws As Worksheet, r As Long
     On Error Resume Next
-    f = FreeFile
-    Open OUTPUT_DIR & "watchlist-note.txt" For Append As #f
-    Print #f, Format(Now, "yyyy-mm-dd hh:nn:ss") & "  " & msg
-    Close #f
+    Set ws = ThisWorkbook.Worksheets(STAMP_SHEET)
+    If ws Is Nothing Then Exit Sub
+
+    For r = 1 To MAX_NOTES
+        If Len(Trim$(CStr(ws.Cells(r, NOTE_COL).Value))) = 0 Then
+            ws.Cells(r, NOTE_COL).NumberFormat = "@"
+            ws.Cells(r, NOTE_COL).Value = msg
+            Exit Sub
+        End If
+    Next r
+End Sub
+
+' Notes are per-RUN, not cumulative, so yesterday's warning cannot be read as
+' today's. Same reasoning as latestImportWarnings reading only the newest run
+' of each source: a finding is derived from the current state, and there is
+' no "resolved" flag to forget to clear.
+Private Sub ClearNotes()
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(STAMP_SHEET)
+    If ws Is Nothing Then Exit Sub
+    ws.Range(ws.Cells(1, NOTE_COL), ws.Cells(MAX_NOTES, NOTE_COL)).ClearContents
 End Sub

@@ -26,6 +26,24 @@ import { unmappedCategoryWarning } from '@/lib/assetClass'
 const STAMP_SHEET = 'Control'
 const STAMP_CELL = 'A1'
 
+/**
+ * Column D of the Control sheet, where the macro's `WriteNote` leaves
+ * warnings — a fund it could not add to the Securities sheet, a run that hit
+ * a guard.
+ *
+ * **It writes there because the Mac share does not work from inside the
+ * guest.** The old `WriteNote` appended to `watchlist-note.txt` under
+ * `On Error Resume Next` and was silently dead: no note file was ever
+ * observed, proven on 11 Nov 2026 against `StampTimings`, which wrote
+ * `Control!A2`/`A3` from the same procedure at the same instant and reached
+ * the Mac inside this very workbook. So the warnings now travel the way the
+ * data does.
+ *
+ * Column B is the macro's roster and must not be confused with this.
+ */
+const NOTE_COL = 'D'
+const MAX_NOTES = 50
+
 /** Refuse a workbook whose data is older than this. The job runs daily. */
 const MAX_AGE_HOURS = 18
 
@@ -49,6 +67,28 @@ const MIN_PORTFOLIOS = 15
 function fail(msg: string): never {
   console.error(`✖ ${msg}`)
   process.exit(1)
+}
+
+/**
+ * Warnings the macro recorded during the run.
+ *
+ * These are NOT errors: the run succeeded and the data landed. They go to
+ * `import_runs.warnings`, which raises an Actions-hub item without touching
+ * `status` — the same treatment an unmapped category gets, and for the same
+ * reason. A warning that marked the import `partial` would push a false
+ * failure into the freshness stamp.
+ */
+function readMacroNotes(buf: Buffer): string[] {
+  const wb = XLSX.read(buf, { type: 'buffer' })
+  const sheet = wb.Sheets[wb.SheetNames.find((n) => n.trim() === STAMP_SHEET) ?? '']
+  if (!sheet) return []
+  const out: string[] = []
+  for (let r = 1; r <= MAX_NOTES; r++) {
+    const v = sheet[`${NOTE_COL}${r}`]?.v
+    const s = v == null ? '' : String(v).trim()
+    if (s !== '') out.push(s)
+  }
+  return out
 }
 
 /**
@@ -138,14 +178,18 @@ async function main(): Promise<void> {
     // watched funds sat unclassified and the only trace would have been a
     // stray "unclassified weight" line the day one of them was bought.
     const unmapped = unmappedCategoryWarning(r.unmappedCategories)
+    // The macro's own warnings ride with the fund run: everything it reports
+    // concerns the Securities sheet, which is what this import reads.
+    const macroNotes = readMacroNotes(buf)
     runs.push({
       source: 'ycharts_funds',
       rows: r.succeeded,
       errors: r.errors,
-      warnings: unmapped ? [unmapped] : [],
+      warnings: [...(unmapped ? [unmapped] : []), ...macroNotes],
     })
     notes.push(`${r.succeeded} funds`)
     if (unmapped) console.warn(`WARN  ${unmapped}`)
+    for (const n of macroNotes) console.warn(`WARN  macro: ${n}`)
     // A PER-ROW failure above the floor is not a failed import, so it raises no
     // action and prints no count anyone would notice — the run says "47 funds"
     // one day and "46 funds" the next, and the security that dropped out simply

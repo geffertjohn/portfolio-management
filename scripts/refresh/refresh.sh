@@ -44,7 +44,13 @@ VM_ERROR="$INBOX/refresh-error.txt"          # written by the macro's abort path
 TRIGGER="$INBOX/REFRESH-NOW"                 # watch-trigger.cmd polls for this
 UNATTENDED="$INBOX/UNATTENDED"               # guest-side gate; see ClaimUnattendedRun
 WATCHLIST="$INBOX/WATCHLIST.txt"             # funds the app wants tracked; read by SyncWatchlistTickers
-WATCHLIST_NOTE="$INBOX/watchlist-note.txt"   # macro warnings that are NOT a reason to fail the run
+# The macro's warnings no longer come through a file. WriteNote wrote to this
+# path under On Error Resume Next and was silently dead - no note file was
+# ever observed - so they now travel on Control!D inside the workbook and the
+# importer folds them into import_runs.warnings, which raises an action in the
+# app instead of a line in a log nobody reads. Still cleared below in case an
+# old file is lying around from before the change.
+WATCHLIST_NOTE="$INBOX/watchlist-note.txt"   # legacy; no longer written
 
 # The guest reaches $INBOX as \\Mac\Home\portfolio-refresh\inbox — a UNC path,
 # because Parallels' drive letters differ per machine (the Studio maps Y: to Home,
@@ -378,6 +384,9 @@ fi
 
 # A watchlist fund that found no free row would otherwise be silent — it simply
 # never appears. Reported, not fatal: the refresh itself worked.
+# Legacy path, kept only to surface a stale file from before the macro moved
+# its warnings onto Control!D. The live route is the importer, whose stdout
+# is captured into this same log.
 if [ -f "$WATCHLIST_NOTE" ]; then
   while IFS= read -r line; do log "WARN: $line"; done < "$WATCHLIST_NOTE"
 fi

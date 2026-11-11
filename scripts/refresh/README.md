@@ -270,11 +270,24 @@ would be announced nowhere at all: the run still succeeds, the roster looks
 healthy, and the fund silently never arrives. The same shape as the gotcha-23
 import warning that was computed and discarded for three months.
 
-**The fix is to stop using the share.** The Control sheet demonstrably
-reaches the Mac — the importer already reads `A1` off it — so a note written
-there survives by the same route the data does, and could be surfaced as an
-`import_runs` warning rather than as a file nobody opens. NOT YET DONE; the
-callers still write into the dead channel.
+**FIXED the same day: `WriteNote` writes to `Control!D`.** The Control sheet
+travels inside the workbook, which is the one thing that demonstrably reaches
+the Mac, and `import-workbook.ts` folds those cells into
+`import_runs.warnings` — so a macro warning now raises an **action in the
+app** instead of a line in a log nobody reads on a job that ran at 05:30.
+
+- **Column D, not B.** B is the roster of symbols the macro added, and
+  overwriting it would make the macro forget which rows are its own and start
+  releasing the hand-entered holdings. C is a deliberate gap.
+- **Cleared at the start of every run** (`ClearNotes`, before
+  `SyncWatchlistTickers` can write one), so yesterday's warning cannot be read
+  as today's — the same reasoning as `latestImportWarnings` reading only the
+  newest run of each source. There is no "resolved" flag to forget to clear.
+- **Bounded at 50**, so a warning written from inside a loop cannot fill a
+  column.
+- **A warning is not an error.** They go to `warnings`, never `errors`, so
+  they cannot mark a clean import `partial` and push a false failure into the
+  freshness stamp.
 
 **A second, independent reason notes are unreliable as a diagnostic:** the
 workbook is not saved until the END of a run, so a run that dies leaves no
