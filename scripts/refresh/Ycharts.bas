@@ -111,7 +111,21 @@ Private Const STAMP_CELL   As String = "A1"
 
 Private Const POLL_SECS    As Long = 10      ' between checks
 Private Const STABLE_POLLS As Long = 3       ' unchanged this many times = settled
-Private Const LOAD_TIMEOUT As Long = 900     ' give up after 15 minutes
+' Give up after 40 minutes.
+'
+' WAS 900s, and that budget was sized for a narrower workbook. The sheet grew
+' 11 columns on 11 Nov 2026 - roughly 1,200 fetches the add-in had never
+' cached - and three runs in a row died without even writing an error file.
+' That last detail is the tell: Application.CalculateFullRebuild is
+' SYNCHRONOUS and startTime is not set until it returns, so a rebuild longer
+' than the shell's own patience means the macro never reaches its timeout,
+' never calls LogAndQuit, and looks identical to a hang.
+'
+' PROVISIONAL. The right value is the measured settle time plus headroom, and
+' nothing measured it until now - see the Control sheet stamps below. Tune it
+' down once a few clean runs have said what the real cost is; a budget this
+' loose also means a genuinely wedged Excel is tolerated for 40 minutes.
+Private Const LOAD_TIMEOUT As Long = 2400
 
 ' Do not even consider the values settled before this long.
 '
@@ -133,6 +147,7 @@ Private Sub Workbook_Open()
     Dim lastPrint As String, thisPrint As String
     Dim stableCount As Long
     Dim ratio As Double
+    Dim rebuildStart As Double, rebuildSecs As Double
 
     ' Everything below this line is the scheduled run. A person who opens the
     ' workbook gets a workbook.
@@ -151,7 +166,9 @@ Private Sub Workbook_Open()
     ' the sheet is built from Securities!B, so a fund added moments ago has to
     ' be in column B already, and its formulas have to exist before the one
     ' fetch everything else is about to make.
+    rebuildStart = Timer
     Application.CalculateFullRebuild
+    rebuildSecs = Timer - rebuildStart
 
     startTime = Timer
     lastPrint = "<none>"
@@ -189,6 +206,7 @@ Private Sub Workbook_Open()
     End If
 
     StampRefreshTime
+    StampTimings rebuildSecs, Timer - startTime
     SaveOutputAtomically
 
     ' Save, then quit — and do NOT call ThisWorkbook.Close first.
@@ -329,6 +347,30 @@ Private Sub StampRefreshTime()
         .NumberFormat = "@"
         .Value = Format(Now, "yyyy-mm-dd hh:nn:ss")
     End With
+End Sub
+
+' How long the run actually took, written where it can be READ BACK.
+'
+' The macro had no working diagnostic channel, and that is why three failures
+' in a row produced nothing to reason from: WriteNote appends to the Mac share
+' under On Error Resume Next, so when it fails it fails silently, and the
+' workbook is not saved until the end, so a run that dies leaves no trace of
+' its own progress at all. The Control sheet is saved with everything else and
+' the importer already reads A1 from it, so these two cells survive by the
+' same route the data does.
+'
+' The REBUILD time is the one that matters. It is synchronous, it happens
+' before the settle loop's clock starts, and it is therefore the only part of
+' a run that LOAD_TIMEOUT cannot bound.
+Private Sub StampTimings(ByVal rebuildSecs As Double, ByVal settleSecs As Double)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(STAMP_SHEET)
+    If ws Is Nothing Then Exit Sub
+    ws.Range("A2").NumberFormat = "@"
+    ws.Range("A2").Value = "rebuild_secs=" & Format(rebuildSecs, "0")
+    ws.Range("A3").NumberFormat = "@"
+    ws.Range("A3").Value = "settle_secs=" & Format(settleSecs, "0")
 End Sub
 
 ' Write to a temp name and rename, so the Mac side never sees a partial file.

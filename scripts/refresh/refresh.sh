@@ -53,7 +53,10 @@ WATCHLIST_NOTE="$INBOX/watchlist-note.txt"   # macro warnings that are NOT a rea
 
 # The guest polls every 2 min, and a first open takes a few minutes while the
 # add-in fetches every data point, so allow generously.
-WAIT_SECS="${WAIT_SECS:-1500}"               # 25 min
+# MUST outlast the macro's own LOAD_TIMEOUT, or the shell kills a run that was
+# about to report its own failure cleanly - which is how three runs on 11 Nov
+# 2026 died with no error file to explain them. Macro 2400s + headroom.
+WAIT_SECS="${WAIT_SECS:-3000}"               # 50 min
 POLL_SECS=10
 KEEP_DAYS=30
 
