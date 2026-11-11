@@ -794,16 +794,22 @@ could say otherwise.
   `Securities` sheet is one row PER fund. Entering it there put the row-3
   fund's holdings into the next 24 funds' rows and, being a legacy CSE array,
   locked those rows out of carrying a formula of their own.
-- **THE SHEET IS STATIC — pre-wired in blocks of 26 rows, and NO MACRO BUILDS
-  IT.** The first version had the refresh macro derive it from `Securities!B`
-  every run, and that cost two refreshes: unproven code on the critical path
-  took the funds, benchmarks and portfolios down with it. The deciding
-  argument for the static sheet is **visibility** — a sheet built only during
-  an unattended run does not exist until one succeeds, so a person opening the
-  workbook cannot tell broken from not-yet-run. It is also the convention the
-  `Securities` sheet already follows. `scripts/refresh/extend-holdings.ps1`
-  adds blocks for new funds by COPYING an existing one (the copy-never-author
-  rule — SYSTEM has no add-in). Layout in `scripts/refresh/README.md`.
+- **THE SHEET IS PRE-WIRED in blocks of 26 rows, and the macro only ever
+  APPENDS to it.** The first version rebuilt the whole sheet from
+  `Securities!B` on every run and cost two refreshes — unproven code on the
+  critical path took the funds, benchmarks and portfolios with it, and the
+  sheet did not exist until a run succeeded, so a person opening the workbook
+  could not tell broken from not-yet-run. `EnsureHoldingsBlocks` replaces it
+  and adds ONLY a block that is missing: the shape of `EnsureFundRow`, not a
+  wholesale rewrite.
+  - **It must be in the macro.** `SyncWatchlistTickers` writes a new ticker
+    into `Securities!B` during `Workbook_Open`, so anything host-side is
+    always one run behind and a new fund would carry a full scorecard with no
+    holdings until the next morning.
+  - **`scripts/refresh/extend-holdings.ps1` is for SEEDING AND BULK
+    BACKFILL**, not routine growth. It COPIES an existing block rather than
+    writing one — SYSTEM has no add-in, so a written `_xll.YCI` reads
+    `#NAME?`. Layout in `scripts/refresh/README.md`.
 - **Rewritten per fund on every import (delete-then-insert), never upserted.**
   A fund whose list shortens — 25 names last month, 20 this month — would
   otherwise keep ranks 21-25 from the previous holdings date, mixing two as-of

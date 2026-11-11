@@ -499,21 +499,32 @@ So holdings get their own sheet, in **blocks of 26 rows**:
   28-JUN-2028 Term Loan B` — for one that does not. The importer splits them
   on length; see `splitSymbolAndName`.
 
-**THE SHEET IS STATIC AND NO MACRO TOUCHES IT.** The first version had
-`EnsureHoldingsSheet` in `Ycharts.bas` derive the whole sheet from
-`Securities!B` on every run, and it **cost two refreshes**: unproven code sat
-on the critical path of the daily job, and when it stalled the funds,
-benchmarks and portfolios went down with it even though none of them had
-anything to do with holdings. Three reasons the static sheet is right, in the
-order they matter:
+**THE SHEET IS PRE-WIRED, AND THE MACRO ONLY EVER APPENDS TO IT.** The first
+version had `EnsureHoldingsSheet` derive the whole sheet from `Securities!B`
+on every run, and that cost two refreshes: unproven code sat on the critical
+path of the daily job, and the sheet did not exist until a run succeeded, so
+there was no way to tell broken from not-yet-run. Both of those are gone. What
+remains is `EnsureHoldingsBlocks`, and the difference is the whole point:
 
-1. **A person opening the workbook can SEE it.** A sheet built only during an
-   unattended run does not exist until one succeeds, so there is no way to
-   tell broken from not-yet-run.
-2. **It is the convention `Securities` already follows** — pre-wired, extended
-   when it runs out — rather than a second way of doing the same thing.
-3. **No new code on the refresh path.** The macro is back to not knowing this
-   sheet exists.
+| | deleted `EnsureHoldingsSheet` | live `EnsureHoldingsBlocks` |
+|---|---|---|
+| scope | rebuilt every block, every run | appends only a block that is missing |
+| sheet between runs | did not exist | always there |
+| shape it mirrors | nothing | `EnsureFundRow` |
+
+**It has to be in the macro, and host-side cannot work.**
+`SyncWatchlistTickers` writes a new ticker into `Securities!B` *during*
+`Workbook_Open`, so anything run from the Mac is always one run behind — the
+fund would arrive with a full scorecard and no holdings until the next
+morning. `EnsureHoldingsBlocks` runs one step later in the same procedure,
+before the rebuild, so the new block is fetched by the same pass as
+everything else. It never aborts the run, and it reports what it added
+through `WriteNote`.
+
+**Verified 11 Nov 2026** by clearing the last block (XAGG) and running: the
+macro re-added it, `fund_holdings` came back to 107 funds and 2,654 rows, and
+`HOLDINGS: added 1 block(s) for new fund(s)` reached
+`import_runs.warnings`.
 
 **`extend-holdings.ps1` adds blocks for funds that do not have one.**
 
@@ -530,8 +541,13 @@ blocks adjusts `=YCI(A27,B27)` to `=YCI(A53,B53)` with no text to parse.
 Columns A and B are written outright, since a sheet reference and a text label
 need no add-in. The Securities row each block points at is read off that
 block's own formula rather than inferred from its position — position is what
-drifts. **Run it after adding funds**, and seed the very first block by hand
-in the VM's interactive session, where the add-in exists.
+drifts.
+
+**It is for SEEDING AND BULK BACKFILL, not for routine growth** — the macro
+handles a new fund on its own now. Use it to wire a book that has never had
+holdings, or to repair the sheet. The very first block still has to be made
+by hand in the VM's interactive session, where the add-in exists; everything
+after that is a copy.
 
 **A Securities row with no ticker gets NO block.** A wired-but-empty row on
 the `Securities` sheet returns empty rather than an error, which is what makes
