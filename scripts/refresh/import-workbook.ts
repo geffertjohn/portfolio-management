@@ -18,6 +18,7 @@ import * as XLSX from 'xlsx'
 import { uploadYchartBenchmarks } from '@/lib/ychartBenchmarksUpload'
 import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
 import { bulkUploadFundHoldings } from '@/lib/fundHoldingsUpload'
+import { refreshHoldingProfiles } from '@/lib/holdingProfiles'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
 import { recordImportRuns, type ImportRunInput } from '@/lib/importRuns'
 import { unmappedCategoryWarning } from '@/lib/assetClass'
@@ -137,6 +138,7 @@ async function main(): Promise<void> {
   const file = new File([buf], basename(path))
 
   const runs: ImportRunInput[] = []
+  let holdingsRunIndex = -1
   const notes: string[] = []
   let hardFailure = false
 
@@ -218,13 +220,14 @@ async function main(): Promise<void> {
     runs.push({
       source: 'ycharts_holdings', rows: r.rows, errors: r.errors, warnings: r.warnings,
     })
+    holdingsRunIndex = runs.length - 1
     notes.push(`${r.rows} holdings across ${r.funds} funds`)
     // Printed every run, not only when it changes. The column order of the
     // `holdings` array is detected rather than documented — the reference
     // workbook names the three fields and not their order — so the detection
     // has to stay visible, or the day YCharts reorders them every weight
     // lands in a text column and reads as null.
-    if (r.layout) console.log(`      holdings column order: ${r.layout}`)
+
     for (const w of r.warnings) console.warn(`WARN  ${w}`)
     for (const e of r.errors) console.warn(`WARN  holdings row failed: ${e}`)
   } catch (e) {
@@ -236,6 +239,33 @@ async function main(): Promise<void> {
     // without them. Failing the whole run would send a workbook whose funds,
     // benchmarks and portfolios all landed to failed/ and raise a refresh
     // action over data that is sitting correctly in the database.
+  }
+
+  // AFTER the holdings, because it reads the symbols they just wrote.
+  //
+  // It answers "what IS this holding" — sector, industry, country, market cap
+  // — which the committee otherwise supplies from memory. On 11 Nov 2026 a
+  // role agent reported a "semiconductor cluster of 6.11%" assembled by
+  // recognising six tickers, and nothing in the system could check it.
+  //
+  // NOT a dataset, so no `import_runs` row: it writes no figure the app
+  // renders and has no freshness stamp anyone reads. Its failures are
+  // reported as warnings on the holdings run, whose data it describes.
+  let profileNote: string | null = null
+  try {
+    const p = await refreshHoldingProfiles()
+    profileNote = `${p.resolved} profiled, ${p.unresolved} not in FMP, ${p.failed} failed, ${p.skipped} skipped (CUSIPs and cash)`
+    console.log(`      holding profiles: ${profileNote}`)
+    // A handful of unresolvable symbols is the steady state, not a defect —
+    // one OTC European bank line on this book. A spike means a normalisation
+    // has broken, which is why the count is reported rather than swallowed.
+    if (p.failed > 0) console.warn(`WARN  ${p.failed} holding profile fetch(es) failed and will retry next run`)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    profileNote = `FAILED: ${msg}`
+    console.warn(`WARN  holding profiles: ${msg}`)
+    // Never fatal. The holdings themselves have landed; what is missing is
+    // the description of what they are.
   }
 
   try {
@@ -251,6 +281,13 @@ async function main(): Promise<void> {
     runs.push({ source: 'ycharts_portfolios', rows: 0, errors: [msg], status: 'failed' })
     notes.push(`portfolios FAILED: ${msg}`)
     hardFailure = true
+  }
+
+  // The profile step describes the holdings, so its finding rides on their
+  // run rather than inventing a source of its own.
+  if (holdingsRunIndex >= 0 && profileNote?.startsWith('FAILED')) {
+    const run = runs[holdingsRunIndex]
+    run.warnings = [...(run.warnings ?? []), `holding profiles ${profileNote}`]
   }
 
   // Always logged, success or not — a failed run is what raises the in-app

@@ -14,9 +14,21 @@
 export const FMP_STABLE = 'https://financialmodelingprep.com/stable'
 export const FMP_V3 = 'https://financialmodelingprep.com/api/v3'
 
-/** Read the FMP API key from the Vite env, throwing if it is absent. */
+/**
+ * Read the FMP API key — from Vite in the browser, from `process.env` outside
+ * it. Throws if absent.
+ *
+ * The fallback mirrors `lib/supabase.ts` and exists for the same reason: the
+ * headless YCharts import bundles these libs and runs them under Node, where
+ * `import.meta.env` does not exist. Without it `apiKey()` threw on every call
+ * — and because the callers catch per-symbol, that surfaced as 402 individual
+ * "fetch failed" results in 1.2 seconds rather than as one missing-config
+ * error. A credential problem that reads as a data problem.
+ */
 export function apiKey(): string {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
+  const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+  const key = viteEnv?.VITE_FMP_API_KEY
+    ?? (typeof process !== 'undefined' ? process.env?.VITE_FMP_API_KEY : undefined)
   if (!key) throw new Error('Missing VITE_FMP_API_KEY')
   return key
 }

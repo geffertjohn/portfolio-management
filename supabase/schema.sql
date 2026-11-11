@@ -829,6 +829,30 @@ COMMENT ON COLUMN "public"."fund_holdings"."as_of" IS 'The fund''s latest_holdin
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."holding_profiles" (
+    "symbol" "text" NOT NULL,
+    "company_name" "text",
+    "sector" "text",
+    "industry" "text",
+    "country" "text",
+    "market_cap" numeric,
+    "unresolved" boolean DEFAULT false NOT NULL,
+    "queried_as" "text",
+    "refreshed_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."holding_profiles" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."holding_profiles" IS 'Sector/industry/country/market-cap for the securities inside funds, from FMP, keyed on the symbol as fund_holdings spells it. Populated during the YCharts import for symbols not already known. CUSIPs are deliberately excluded - a bond holding has no profile, and the bond sleeve is read on securities2 composition percentages rather than on its holdings list.';
+
+
+
+COMMENT ON COLUMN "public"."holding_profiles"."market_cap" IS 'Moves daily and is refreshed only when the row is. Use it for the size-bucket question (is a fund filed Small Blend actually holding small caps) and never as a current valuation input.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."holding_reviews" (
     "id" bigint NOT NULL,
     "review_log_id" bigint NOT NULL,
@@ -2618,6 +2642,11 @@ ALTER TABLE ONLY "public"."fund_holdings"
 
 
 
+ALTER TABLE ONLY "public"."holding_profiles"
+    ADD CONSTRAINT "holding_profiles_pkey" PRIMARY KEY ("symbol");
+
+
+
 ALTER TABLE ONLY "public"."holding_reviews"
     ADD CONSTRAINT "holding_reviews_pkey" PRIMARY KEY ("id");
 
@@ -2925,6 +2954,14 @@ CREATE UNIQUE INDEX "firm_compliance_rules_one_per_type" ON "public"."firm_compl
 
 
 CREATE INDEX "fund_holdings_symbol_idx" ON "public"."fund_holdings" USING "btree" ("upper"("holding_symbol")) WHERE ("holding_symbol" IS NOT NULL);
+
+
+
+CREATE INDEX "holding_profiles_industry_idx" ON "public"."holding_profiles" USING "btree" ("industry") WHERE ("industry" IS NOT NULL);
+
+
+
+CREATE INDEX "holding_profiles_sector_idx" ON "public"."holding_profiles" USING "btree" ("sector") WHERE ("sector" IS NOT NULL);
 
 
 
@@ -4091,6 +4128,25 @@ CREATE POLICY "fund_holdings_update" ON "public"."fund_holdings" FOR UPDATE TO "
 
 
 
+ALTER TABLE "public"."holding_profiles" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "holding_profiles_delete" ON "public"."holding_profiles" FOR DELETE TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "holding_profiles_insert" ON "public"."holding_profiles" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
+
+
+
+CREATE POLICY "holding_profiles_select" ON "public"."holding_profiles" FOR SELECT TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "holding_profiles_update" ON "public"."holding_profiles" FOR UPDATE TO "authenticated", "anon" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."holding_reviews" ENABLE ROW LEVEL SECURITY;
 
 
@@ -4624,6 +4680,12 @@ GRANT ALL ON SEQUENCE "public"."firm_compliance_rules_id_seq" TO "service_role";
 GRANT ALL ON TABLE "public"."fund_holdings" TO "anon";
 GRANT ALL ON TABLE "public"."fund_holdings" TO "authenticated";
 GRANT ALL ON TABLE "public"."fund_holdings" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."holding_profiles" TO "anon";
+GRANT ALL ON TABLE "public"."holding_profiles" TO "authenticated";
+GRANT ALL ON TABLE "public"."holding_profiles" TO "service_role";
 
 
 

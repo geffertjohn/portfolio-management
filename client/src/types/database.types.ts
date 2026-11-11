@@ -664,6 +664,42 @@ export type Database = {
           },
         ]
       }
+      holding_profiles: {
+        Row: {
+          company_name: string | null
+          country: string | null
+          industry: string | null
+          market_cap: number | null
+          queried_as: string | null
+          refreshed_at: string
+          sector: string | null
+          symbol: string
+          unresolved: boolean
+        }
+        Insert: {
+          company_name?: string | null
+          country?: string | null
+          industry?: string | null
+          market_cap?: number | null
+          queried_as?: string | null
+          refreshed_at?: string
+          sector?: string | null
+          symbol: string
+          unresolved?: boolean
+        }
+        Update: {
+          company_name?: string | null
+          country?: string | null
+          industry?: string | null
+          market_cap?: number | null
+          queried_as?: string | null
+          refreshed_at?: string
+          sector?: string | null
+          symbol?: string
+          unresolved?: boolean
+        }
+        Relationships: []
+      }
       holding_reviews: {
         Row: {
           action: string | null
