@@ -123,7 +123,10 @@ try {
         }
         $added++
     }
-    if ($Apply) { $excel.CutCopyMode = $false }
+    # Setting CutCopyMode over COM throws on some Excel builds, and it is only
+    # housekeeping - the marching ants, not the paste. Never let it abort a
+    # run that has already done the work.
+    if ($Apply) { try { $excel.CutCopyMode = 0 } catch {} }
 
     if (-not $Apply) {
         Say "DRY RUN - $added block(s) would be added. Re-run with -Apply."
