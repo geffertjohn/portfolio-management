@@ -806,6 +806,29 @@ ALTER SEQUENCE "public"."firm_compliance_rules_id_seq" OWNED BY "public"."firm_c
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."fund_holdings" (
+    "security_id" "text" NOT NULL,
+    "rank" integer NOT NULL,
+    "holding_symbol" "text",
+    "holding_name" "text",
+    "weight" numeric,
+    "as_of" "date",
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "fund_holdings_rank_check" CHECK ((("rank" >= 1) AND ("rank" <= 100)))
+);
+
+
+ALTER TABLE "public"."fund_holdings" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."fund_holdings" IS 'Top 25 holdings per fund from the YCharts workbook''s Holdings sheet. Rewritten per fund on each import (delete-then-insert), never accumulated: a fund that drops to 20 names must not keep stale ranks 21-25. holding_symbol is the vendor''s own symbol and is NOT an FK to securities2 - a bond holding returns a CUSIP and an equity holding a ticker that need not be a security the firm tracks.';
+
+
+
+COMMENT ON COLUMN "public"."fund_holdings"."as_of" IS 'The fund''s latest_holdings_date at import. Funds report holdings monthly or quarterly, so this is routinely weeks behind the price columns on the same row.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."holding_reviews" (
     "id" bigint NOT NULL,
     "review_log_id" bigint NOT NULL,
@@ -940,7 +963,7 @@ CREATE TABLE IF NOT EXISTS "public"."import_runs" (
     "errors" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     "status" "text" DEFAULT 'success'::"text" NOT NULL,
     "warnings" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
-    CONSTRAINT "import_runs_source_check" CHECK (("source" = ANY (ARRAY['ycharts_benchmarks'::"text", 'ycharts_funds'::"text", 'ycharts_portfolios'::"text", 'ycharts_allocations'::"text"]))),
+    CONSTRAINT "import_runs_source_check" CHECK (("source" = ANY (ARRAY['ycharts_benchmarks'::"text", 'ycharts_funds'::"text", 'ycharts_portfolios'::"text", 'ycharts_allocations'::"text", 'ycharts_holdings'::"text"]))),
     CONSTRAINT "import_runs_status_check" CHECK (("status" = ANY (ARRAY['success'::"text", 'partial'::"text", 'failed'::"text"])))
 );
 
@@ -2086,6 +2109,17 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "other_fixed_income_exposure_generic" numeric,
     "derivative_fixed_income_exposure" numeric,
     "is_benchmark_proxy" boolean DEFAULT false NOT NULL,
+    "latest_holdings_date" "date",
+    "index_fund_generic" boolean,
+    "open_to_new_investors_generic" boolean,
+    "waiver_expense_ratio_generic" numeric,
+    "waiver_expiration_date" "date",
+    "prospectus_objective" "text",
+    "prospectus_benchmark_index" "text",
+    "primary_share_class_symbol" "text",
+    "fund_of_funds_generic" boolean,
+    "percent_of_assets_in_top_10_holdings" numeric,
+    "percent_of_assets_in_top_25_holdings" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2106,6 +2140,26 @@ COMMENT ON COLUMN "public"."securities2"."one_year_fund_level_flows_to_aum" IS '
 
 
 COMMENT ON COLUMN "public"."securities2"."is_benchmark_proxy" IS 'True when this row exists only to carry a benchmark''s composition: named as an etf_proxy by category_benchmarks or sector_benchmarks, and neither held nor watched. Recomputed by fundBulkUpload on every import. Hidden from fetchSecurities.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."latest_holdings_date" IS 'As-of date for fund_holdings and for the composition exposure columns. Weeks behind the price columns by construction.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."index_fund_generic" IS 'Separates "the fund underperformed its index" (a finding) from "the fund tracked its index" (working as designed). Every scorecard row is read differently depending on it.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."open_to_new_investors_generic" IS 'An alternative that cannot be bought is not an alternative. Read by the annual review''s Considerations step before a watchlist idea is offered against a holding.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."waiver_expense_ratio_generic" IS 'A temporary fee waiver. Where this is set, expense_ratio_generic is not the cost the fund will charge after waiver_expiration_date.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."percent_of_assets_in_top_25_holdings" IS 'Share of the fund held in its top 25 names - the denominator for fund_holdings. Where this is small the holdings list describes a sliver of the fund and must not be read as its character.';
 
 
 
@@ -2559,6 +2613,11 @@ ALTER TABLE ONLY "public"."firm_compliance_rules"
 
 
 
+ALTER TABLE ONLY "public"."fund_holdings"
+    ADD CONSTRAINT "fund_holdings_pkey" PRIMARY KEY ("security_id", "rank");
+
+
+
 ALTER TABLE ONLY "public"."holding_reviews"
     ADD CONSTRAINT "holding_reviews_pkey" PRIMARY KEY ("id");
 
@@ -2862,6 +2921,10 @@ CREATE INDEX "earnings_call_summaries_security_idx" ON "public"."earnings_call_s
 
 
 CREATE UNIQUE INDEX "firm_compliance_rules_one_per_type" ON "public"."firm_compliance_rules" USING "btree" ("rule_type") WHERE ("deleted_at" IS NULL);
+
+
+
+CREATE INDEX "fund_holdings_symbol_idx" ON "public"."fund_holdings" USING "btree" ("upper"("holding_symbol")) WHERE ("holding_symbol" IS NOT NULL);
 
 
 
@@ -3246,6 +3309,11 @@ ALTER TABLE ONLY "public"."communication_log"
 
 ALTER TABLE ONLY "public"."compliance_rules"
     ADD CONSTRAINT "compliance_rules_portfolio_name_fkey" FOREIGN KEY ("portfolio_name") REFERENCES "public"."portfolio"("name") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."fund_holdings"
+    ADD CONSTRAINT "fund_holdings_security_id_fkey" FOREIGN KEY ("security_id") REFERENCES "public"."securities2"("security_id") ON DELETE CASCADE;
 
 
 
@@ -4004,6 +4072,25 @@ ALTER TABLE "public"."earnings_call_summaries" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."firm_compliance_rules" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."fund_holdings" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "fund_holdings_delete" ON "public"."fund_holdings" FOR DELETE TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "fund_holdings_insert" ON "public"."fund_holdings" FOR INSERT TO "authenticated", "anon" WITH CHECK (true);
+
+
+
+CREATE POLICY "fund_holdings_select" ON "public"."fund_holdings" FOR SELECT TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "fund_holdings_update" ON "public"."fund_holdings" FOR UPDATE TO "authenticated", "anon" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."holding_reviews" ENABLE ROW LEVEL SECURITY;
 
 
@@ -4531,6 +4618,12 @@ GRANT ALL ON TABLE "public"."firm_compliance_rules" TO "service_role";
 GRANT ALL ON SEQUENCE "public"."firm_compliance_rules_id_seq" TO "anon";
 GRANT ALL ON SEQUENCE "public"."firm_compliance_rules_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."firm_compliance_rules_id_seq" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."fund_holdings" TO "anon";
+GRANT ALL ON TABLE "public"."fund_holdings" TO "authenticated";
+GRANT ALL ON TABLE "public"."fund_holdings" TO "service_role";
 
 
 

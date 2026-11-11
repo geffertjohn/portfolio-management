@@ -410,12 +410,100 @@ If you want the workbook open for editing, let the run finish first;
 `refresh.sh` suspends the VM itself on the way out, so there is nothing to tidy
 up afterwards.
 
+## The Holdings sheet: when the vendor returns a LIST
+
+`YCI(ticker,"holdings")` returns the fund's **top 25 holdings** — 25 rows of
+symbol, name and weight. The `Securities` sheet is one row **per fund**. Those
+two shapes do not reconcile on one grid, and the attempt is instructive: a
+`{=YCI($B3,DS$2)}` entered in column DS of `Securities` filled DS3:DS27 with
+the row-3 fund's holdings, which are the rows belonging to the next 24 funds —
+and because a legacy CSE array is a locked block, those funds could not carry
+a formula of their own either. One fund's data occupying another's rows is not
+a formatting problem to work around; it is the sheet saying the metric does
+not belong on it.
+
+So holdings get their own sheet, **one fund per three-column group**:
+
+```
+        A            B              C        D            E   ...
+  1   M:FTZIX                              M:AVERX             <- ticker
+  2   holdings                             holdings            <- metric code
+  3   <------ 25 x 3 array ------>         <-- next fund -->
+ 27
+```
+
+- **Group, not block.** The other option was 25 rows per fund stacked down the
+  sheet. That makes adding a fund an insert of 25 rows and makes every fund's
+  position depend on every fund before it; a column group is addressed by
+  itself.
+- **Row 2 is the marker.** A group is imported only when it reads exactly
+  `holdings`, so another List metric can be parked on the sheet without a
+  second convention to exclude it.
+- **`EnsureHoldingsSheet` in `Ycharts.bas` rebuilds it every run** from
+  `Securities!B`, rather than reconciling it. `SyncWatchlistTickers` has to
+  reconcile because column B carries 46 hand-entered holdings it must never
+  release; nothing on this sheet is hand-entered, so deriving all of it every
+  run is both cheaper and incapable of drifting. A dropped ticker's group
+  disappears on its own.
+- **It never aborts the run.** A failure costs the holdings list; it must not
+  cost the 120 columns of fund data the rest of the run is for. Errors go to
+  `watchlist-note.txt`.
+
+**THE MACRO CAN AUTHOR A `YCI()` FORMULA AND THE POWERSHELL HELPERS CANNOT.**
+This is the whole reason the sheet is built in VBA rather than by a script
+beside the others. `add-sheet-columns.ps1` and `fill-sheet-formulas.ps1` run as
+SYSTEM under `prlctl exec` — an account with **no YCharts add-in** — so
+assigning a string naming `_xll.YCI` stores an unknown function and the cell
+reads `#NAME?`. They copy an existing cell for exactly that reason, and there
+was no 25x3 array anywhere to copy. The macro runs in the interactive logon
+where the add-in is loaded, so there the formula can simply be written.
+
+**`holdings` was chosen over `holdings_weight` by running both.** The reference
+workbook documents neither shape — `holdings_weight` carries no Type and no
+Description at all. Run by hand: `holdings_weight` returns 25x2, symbol and
+decimal weight (SPY: `AAPL 0.078573` … summing to 0.5169, so SPY's top 25 is
+51.7% of it). `holdings` returns those plus the **name**, for the same one
+fetch. The name is the half that matters: a bond holding's symbol is a CUSIP,
+so `039956AA5` is unreadable where `RealTruck Group Inc FRN` is not.
+
+**The column ORDER is detected at import, not assumed.** The catalogue names
+the three fields and not their order, so `fundHoldingsUpload.ts` works it out —
+exactly one column is numeric, and of the two text columns a ticker is short
+where a security name is not. The detected order is printed on every run
+(`holdings column order: …`). If YCharts ever reorders them, nothing breaks
+silently.
+
+**Cost is negligible and the error ratio barely moves.** 107 List fetches
+against the ~12,800 scalar fetches the sheet already makes. The macro's
+`ErrorRatio`, `AnyStillLoading` and `ValuesFingerprint` all iterate every
+worksheet, so the new sheet joins the settle-detection and the 50% error guard
+with no change to any of them — and `SaveCopyAs` exports the whole workbook, so
+it reaches the Mac without touching `refresh.sh`.
+
 ### Adding a metric column
 
 ```bash
 scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-composition-codes.txt            # dry run
 scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-composition-codes.txt -Apply
+
+# An Info-tab code needs -Info, which copies a YCI column instead of a YCP one.
+scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-info-codes.txt -Info -Apply
 ```
+
+**`-Info` picks the model, and getting it wrong is silent.** The sheet carries
+both functions — C..N are `=YCI($B3,C$2)` and everything from O rightward is
+`=YCP($B3,…$2)` — and they are not interchangeable: a code from the reference
+workbook's `| Info` tab returns an error under `YCP` and vice versa. The script
+copies an existing cell rather than authoring one, so the model has to match
+the tab the code came from. Without `-Info` an Info code is pasted as a YCP
+formula and every row of it comes back `ERR`, which looks exactly like a metric
+YCharts does not publish.
+
+**It now refuses a READ-ONLY open.** With `DisplayAlerts` off, `Save()` on a
+read-only workbook writes nothing and raises nothing — the script reports SAVED
+and the file on disk is untouched. The usual cause is someone having the
+workbook open in the VM's interactive session, which is invisible from a
+`prlctl exec` shell.
 
 **`ALTER TABLE securities2` FIRST, every time.** The importer has no whitelist —
 it maps row 2 straight to DB columns — so a header with no matching column

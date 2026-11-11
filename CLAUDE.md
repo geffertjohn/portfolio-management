@@ -777,6 +777,76 @@ argument was fetched from the fund provider** because the app held none.
   component is present, and `fixedIncomeReconciles` is null for a fund with no
   bond sleeve rather than false.
 
+### A fund's actual holdings (`fund_holdings`)
+
+The top 25 positions of each fund, with weights, from the YCharts workbook's
+**`Holdings` sheet** (Nov 2026). Until this existed the committee could read a
+fund's sector and credit PERCENTAGES and never a single position — so two funds
+holding the same twenty names read as diversification, and nothing anywhere
+could say otherwise.
+
+- **A TABLE, not columns on `securities2`.** 25 holdings x 3 fields is a
+  repeating group, and the fund importer maps sheet header straight to DB
+  column, so columns would also mean 75 headers on the `Securities` sheet. The
+  vendor returns a list; store a list.
+- **A SEPARATE SHEET, because the SHAPE is different, and this is the lesson.**
+  `YCI(ticker,"holdings")` returns 25 rows for ONE fund while the `Securities`
+  sheet is one row PER fund. Entering it there put the row-3 fund's holdings
+  into the next 24 funds' rows and, being a legacy CSE array, locked those rows
+  out of carrying a formula of their own. Full layout and the macro that builds
+  it in `scripts/refresh/README.md`.
+- **Rewritten per fund on every import (delete-then-insert), never upserted.**
+  A fund whose list shortens — 25 names last month, 20 this month — would
+  otherwise keep ranks 21-25 from the previous holdings date, mixing two as-of
+  dates in one list with nothing on the row to show it.
+- **`holding_symbol` is NOT an FK to `securities2` and must not become one.** A
+  bond holding returns a CUSIP (`039956AA5`) and an equity holding a ticker the
+  firm need not track. **A symbol longer than 12 characters is filed as the
+  NAME** — a bank-loan fund returns `Polymer Group Inc 28-JUN-2028 Term Loan B`
+  in the symbol column, and keeping that as a symbol would make the cross-fund
+  overlap join match on prose.
+- **`as_of` is copied onto every row** from `securities2.latest_holdings_date`,
+  so a holdings row is self-describing. Funds disclose holdings monthly or
+  quarterly, so it is routinely **weeks behind the price columns on the same
+  `securities2` row** — which nothing said until this landed.
+- **The column ORDER is DETECTED, not assumed** (`detectLayout` in
+  `lib/fundHoldingsUpload.ts`). The reference workbook documents `holdings` as
+  "including weighting and symbol and name" — it names the three fields and not
+  their order. Exactly one column is numeric, and of the two text columns a
+  ticker is short where a security name is not. The detection is printed on
+  every unattended run and is covered by `fundHoldingsUpload.test.ts`.
+- **`ycharts_holdings` is its own `import_runs` source.** A holdings failure
+  must not mark the fund import failed, and its stamp says when we last ASKED
+  YCharts — not the holdings' as-of date, which is `fund_holdings.as_of` and is
+  a different fact.
+- **IT IS A FLOOR, NEVER A TOTAL.** Only the top 25 of each fund are known, so
+  a single-name look-through across a book under-counts a name held at position
+  30 in one fund and 5 in another. The committee prompt requires any figure
+  drawn from it to be quoted as "at least".
+- **`percent_of_assets_in_top_25_holdings` is the denominator and the list is
+  not readable without it.** Measured by holding COUNT the spread is enormous —
+  FTZIX holds 25 names, VBTLX holds 16,290 — but count is only a proxy. Where
+  the share is high the list IS the fund; where it is low it is the
+  twenty-five largest positions in a long tail.
+- **On the BOND side the composition columns remain the better read.** Twenty-
+  five loan tranches out of a thousand support no conclusion about credit; the
+  DHRIX finding of 9 Nov 2026 came from `investment_grade_bond_allocation_generic`
+  and `securitized_fixed_income_exposure_generic`, and would not have come from
+  a holdings list. Holdings earn their place there for ISSUER overlap between
+  two funds, which the percentages genuinely cannot show.
+
+**Four fund flags landed with it, each changing how an existing number is
+read** — all on `securities2`, all from the same import:
+`index_fund_generic` (trailing a benchmark is a finding for an active fund and
+the expense ratio for a tracker), `open_to_new_investors_generic` (an
+alternative that cannot be bought is not an alternative, and this book is built
+on the institutional share classes that close),
+`waiver_expense_ratio_generic` + `waiver_expiration_date` (where a waiver is
+set, `expense_ratio_generic` is not what the fund will charge next year), and
+`prospectus_objective` + `prospectus_benchmark_index` (a prospectus benchmark
+disagreeing with the category we grade against is the clearest evidence a fund
+is filed in the wrong sleeve).
+
 ### A benchmark has no composition of its own
 
 **YCharts computes no holdings for an INDEX.** A category or sector benchmark is

@@ -49,6 +49,15 @@ param(
     # this account, which has no YCharts add-in; Range.Replace edits a formula
     # that already exists, which works.
     [string]$RepointTo = '',
+    # Copy an Info column (YCI) instead of a Metrics column (YCP).
+    #
+    # The two function names are not interchangeable and the sheet carries
+    # both: C..N are =YCI($B3,C$2) and everything from O rightward is
+    # =YCP($B3,...$2). A code from the reference workbook's `| Info` tab
+    # returns ERR under YCP and vice versa, so the model has to match the tab
+    # the code came from. Same copy-never-author rule either way - this only
+    # changes which existing cell is copied.
+    [switch]$Info,
     [switch]$Apply,
     [string]$Workbook  = 'C:\portfolio\Ycharts.xlsm',
     [string]$SheetName = 'Securities',
@@ -87,6 +96,15 @@ try {
     $excel.CalculateBeforeSave = $false
     $wb = $excel.Workbooks.Open($Workbook)
 
+    # ASSERT THIS. With DisplayAlerts off, Save() on a read-only workbook
+    # writes nothing and raises nothing - the script reports SAVED and the
+    # file on disk is untouched. The usual cause is a person having the
+    # workbook open in the interactive session, which is invisible from here.
+    if ($wb.ReadOnly) {
+        throw ("ABORT: opened READ-ONLY, so any save would be silently discarded. " +
+               "Close the workbook in the VM's interactive session first.")
+    }
+
     $ws = $null
     foreach ($s in $wb.Worksheets) { if ($s.Name.Trim() -eq $SheetName) { $ws = $s; break } }
     if ($null -eq $ws) { throw "sheet '$SheetName' not found" }
@@ -107,14 +125,14 @@ try {
         if (-not [string]::IsNullOrWhiteSpace($h)) { $have[$h.Trim()] = $c }
     }
 
-    # The model must be a YCP column: every code here comes from the Metrics
-    # tab, and an Info column would carry YCI instead.
+    # Match the model to the tab the codes came from - see -Info above.
+    $want = if ($Info) { 'YCI\(' } else { 'YCP\(' }
     $model = 0
     for ($c = 3; $c -le $lastCol; $c++) {
         $f = [string]$ws.Cells.Item($FirstDataRow, $c).Formula
-        if ($f -match 'YCP\(') { $model = $c; break }
+        if ($f -match $want) { $model = $c; break }
     }
-    if ($model -eq 0) { throw "no YCP() column found to copy from" }
+    if ($model -eq 0) { throw "no $($want.TrimEnd('\(')) column found to copy from" }
     Say "model column $model : $($ws.Cells.Item($FirstDataRow,$model).Formula)"
     if ($RepointTo -ne '') { Say "added columns will fetch against column $RepointTo" }
 

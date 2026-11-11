@@ -76,6 +76,36 @@ Private Const ROSTER_COL   As Long = 2
 Private Const TICKER_COL   As Long = 2   ' Securities!B - the only literal on the row
 Private Const FIRST_FUND_ROW As Long = 3 ' 1 = group banner, 2 = DB column names
 
+' The top-25 holdings sheet, rebuilt from Securities!B on every run.
+'
+' A SEPARATE SHEET BECAUSE THE SHAPE IS DIFFERENT, and that is the whole
+' lesson. YCI(ticker,"holdings") returns a LIST - 25 rows for one fund - while
+' the Securities sheet is one row PER fund. Entering it there put one fund's
+' 25 holdings into the next 24 funds' rows and blocked those rows from
+' carrying a formula of their own. The two shapes do not reconcile on one
+' grid at any price, so holdings get a grid whose shape matches.
+'
+' Laid out one FUND PER COLUMN GROUP rather than one per 25-row block: a block
+' layout means inserting 25 rows to add a fund and makes a fund's position
+' depend on every fund before it, where a group is addressed by itself.
+'   row 1          the YCharts symbol, exactly as Securities!B carries it
+'   row 2          the metric code - the importer accepts a group ONLY if this
+'                  reads "holdings", which is what keeps the probe below out
+'   rows 3-27      the 25 x 3 array: weighting, symbol and name
+Private Const HOLDINGS_SHEET As String = "Holdings"
+Private Const HOLDINGS_CODE  As String = "holdings"
+Private Const HOLDINGS_ROWS  As Long = 25   ' the vendor returns the top 25
+Private Const HOLDINGS_COLS  As Long = 3    ' weighting + symbol + name
+Private Const HOLDINGS_FIRST_ROW As Long = 3
+
+' WHY `holdings` AND NOT `holdings_weight`. The catalogue documents neither
+' shape - `holdings_weight` carries no Type and no Description at all - so
+' both were run by hand before choosing. `holdings_weight` returns 25 x 2,
+' symbol and decimal weight (SPY: AAPL 0.078573 ... summing to 0.5169).
+' `holdings` returns those plus the NAME, and the name is the half that
+' matters here: a bond holding's symbol is a CUSIP, so 039956AA5 is unreadable
+' where "RealTruck Group Inc FRN" is not. A superset for the same one fetch.
+
 ' A guard, not a product limit.
 '
 ' The sheet GROWS when it runs out of pre-wired rows, so there is no cap on how
@@ -130,6 +160,12 @@ Private Sub Workbook_Open()
     ' place for the SAME fetch everything else is about to make. Added after,
     ' it would sit empty until tomorrow.
     SyncWatchlistTickers
+
+    ' After the watchlist sync and before the rebuild, for the same reason:
+    ' the sheet is built from Securities!B, so a fund added moments ago has to
+    ' be in column B already, and its formulas have to exist before the one
+    ' fetch everything else is about to make.
+    EnsureHoldingsSheet
 
     Application.CalculateFullRebuild
 
@@ -561,6 +597,91 @@ Private Function FirstFreeFundRow(ByVal ws As Worksheet, ByVal lastRow As Long) 
             Exit Function
         End If
     Next r
+End Function
+
+' Rebuild the Holdings sheet from the fund tickers on the Securities sheet.
+'
+' REBUILT, NOT RECONCILED. The alternative was to diff the existing groups
+' against Securities!B and add or remove the difference, which is what
+' SyncWatchlistTickers does for column B - and it has to, because that column
+' carries 46 hand-entered holdings it must never release. Nothing here is
+' hand-entered: every group is derived from column B, so the cheapest correct
+' thing is to derive all of them every run. A reconcile could drift; this
+' cannot.
+'
+' It can author a YCI() formula, which the PowerShell helpers deliberately
+' cannot. Those run as SYSTEM under prlctl exec - an account with no YCharts
+' add-in - so assigning a formula naming _xll.YCI would store an unknown
+' function and every cell would read #NAME?. They copy an existing cell for
+' exactly that reason. This macro runs in the interactive logon where the
+' add-in IS loaded, so here the formula can simply be written.
+'
+' NEVER ABORTS THE RUN. A failure here costs the holdings list; it must not
+' cost the 120 columns of fund data the rest of the run is for.
+Private Sub EnsureHoldingsSheet()
+    Dim src As Worksheet, ws As Worksheet
+    Dim lastRow As Long, r As Long, groups As Long, c As Long
+    Dim sym As String, letter As String
+
+    On Error GoTo Failed
+
+    Set src = FindSheetByTrimmedName(FUND_SHEET)
+    If src Is Nothing Then
+        WriteNote "HOLDINGS: no " & FUND_SHEET & " sheet - skipped"
+        Exit Sub
+    End If
+
+    Set ws = FindSheetByTrimmedName(HOLDINGS_SHEET)
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = HOLDINGS_SHEET
+    End If
+
+    ' Whole-sheet clear: an array formula cannot be cleared in part, and a
+    ' group left from a ticker that has since been dropped would otherwise
+    ' sit there being imported for ever.
+    ws.Cells.Clear
+
+    lastRow = src.UsedRange.Row + src.UsedRange.Rows.Count - 1
+    If lastRow > MAX_FUND_ROW Then lastRow = MAX_FUND_ROW
+
+    groups = 0
+    For r = FIRST_FUND_ROW To lastRow
+        sym = Trim$(CStr(src.Cells(r, TICKER_COL).Value))
+        If Len(sym) > 0 Then
+            c = groups * HOLDINGS_COLS + 1
+            ' 16,384 columns is a hard Excel limit, not a policy; stop short
+            ' of it and say so rather than raising on the assignment.
+            If c + HOLDINGS_COLS - 1 > 16384 Then
+                WriteNote "HOLDINGS: ran out of columns at " & groups & " funds - the rest were dropped"
+                Exit For
+            End If
+            letter = ColLetter(c)
+
+            ws.Cells(1, c).NumberFormat = "@"
+            ws.Cells(1, c).Value = sym
+            ws.Cells(2, c).NumberFormat = "@"
+            ws.Cells(2, c).Value = HOLDINGS_CODE
+
+            ws.Range(ws.Cells(HOLDINGS_FIRST_ROW, c), _
+                     ws.Cells(HOLDINGS_FIRST_ROW + HOLDINGS_ROWS - 1, c + HOLDINGS_COLS - 1)) _
+              .FormulaArray = "=YCI(" & letter & "$1," & letter & "$2)"
+
+            groups = groups + 1
+        End If
+    Next r
+
+    ws.Visible = xlSheetVisible
+    Exit Sub
+
+Failed:
+    WriteNote "HOLDINGS: skipped after error " & Err.Number & " - " & Err.Description
+End Sub
+
+' 1 -> "A", 27 -> "AA". Derived from a real cell rather than computed, so it
+' cannot disagree with Excel about the boundary cases.
+Private Function ColLetter(ByVal c As Long) As String
+    ColLetter = Split(ThisWorkbook.Worksheets(1).Cells(1, c).Address(True, False), "$")(0)
 End Function
 
 ' Append a line to the Mac-side WARNING file.

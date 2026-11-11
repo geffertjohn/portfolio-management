@@ -17,6 +17,7 @@ export type ImportSource =
   | 'ycharts_funds'
   | 'ycharts_portfolios'
   | 'ycharts_allocations'
+  | 'ycharts_holdings'
 
 /**
  * `partial` = wrote rows but reported errors; `failed` = wrote nothing. Recorded
@@ -107,6 +108,14 @@ export const YCHARTS_DATA_SOURCES: ImportSource[] = [
   'ycharts_benchmarks',
   'ycharts_funds',
   'ycharts_portfolios',
+  // Written by the same 05:30 run, so a holdings import that stops firing
+  // should raise the same action as any other dataset going quiet.
+  //
+  // Its STAMP is not the holdings' as-of date and must not be read as one.
+  // This says when we last asked YCharts; `fund_holdings.as_of` says what the
+  // fund last reported, and those are routinely weeks apart because funds
+  // disclose holdings monthly or quarterly.
+  'ycharts_holdings',
 ]
 
 /**

@@ -129,3 +129,34 @@ export function pickSheetName(wb: XLSX.WorkBook, names: string[]): string {
   if (!first) throw new Error('The workbook has no sheets.')
   return first
 }
+
+/**
+ * Strip a YCharts asset-class prefix from a symbol: `M:APDFX` -> `APDFX`,
+ * `E:SPY` -> `SPY`.
+ *
+ * Shared because two importers read the same symbols out of the same
+ * workbook — `fundBulkUpload` from the `Securities` sheet and
+ * `fundHoldingsUpload` from the `Holdings` sheet, whose row 1 is copied FROM
+ * that column by the macro. Two copies of this would mean a fund whose
+ * holdings could never join to it, which is invisible: the holdings rows
+ * would simply fail their foreign key and be reported as unknown tickers.
+ */
+export function stripYChartsPrefix(raw: string): string {
+  return raw.replace(/^[A-Z]{1,2}:/i, '').trim()
+}
+
+/**
+ * Excel/YCharts booleans. The add-in returns a real boolean for most fund
+ * Info flags, but a text `Yes`/`No` for some and 1/0 for others, and a
+ * `String(raw) === 'true'` test reads every one of the latter as false —
+ * which for `open_to_new_investors` would silently mark the whole book
+ * closed.
+ */
+export function coerceBoolean(raw: unknown): boolean | null {
+  if (typeof raw === 'boolean') return raw
+  if (typeof raw === 'number') return raw !== 0
+  const s = String(raw).trim().toLowerCase()
+  if (s === 'true' || s === 'yes' || s === 'y' || s === '1') return true
+  if (s === 'false' || s === 'no' || s === 'n' || s === '0') return false
+  return null
+}

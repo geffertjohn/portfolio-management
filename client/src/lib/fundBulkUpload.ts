@@ -25,8 +25,8 @@ import { seedScorecardCohorts } from './securities'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
 import {
-  assertExcelFile, coerceDate, coerceNumber, isValidCalendarDateString, pickSheetName,
-  ychartsError,
+  assertExcelFile, coerceBoolean, coerceDate, coerceNumber, isValidCalendarDateString,
+  pickSheetName, stripYChartsPrefix, ychartsError,
 } from '@/lib/excelImportShared'
 
 // ── Column classification ─────────────────────────────────────────────────────
@@ -54,10 +54,30 @@ const TEXT_COLS = new Set([
   'category_index',
   'peer_group_name',
   'ycharts_benchmark_category',
+  // Added Nov 2026 with the Holdings sheet.
+  'prospectus_objective',
+  'prospectus_benchmark_index',
+  'primary_share_class_symbol',
+])
+
+/**
+ * Fund Info flags. They are stored as real booleans rather than text because
+ * the committee filters on them — "is this an index fund" changes how every
+ * scorecard row is read, and `where index_fund_generic` has to mean something
+ * in SQL.
+ */
+const BOOL_COLS = new Set([
+  'index_fund_generic',
+  'open_to_new_investors_generic',
+  'fund_of_funds_generic',
 ])
 
 const DATE_COLS = new Set([
   'inception_date',
+  // The as-of date for the holdings list AND for the 33 composition columns.
+  // Weeks behind the price columns on the same row, by construction.
+  'latest_holdings_date',
+  'waiver_expiration_date',
 ])
 
 /**
@@ -105,14 +125,6 @@ const SKIP_COLS = new Set([
 
 // ── Row-level parsing ─────────────────────────────────────────────────────────
 
-/**
- * Strip YCharts asset-class prefixes from security_id values.
- * e.g. "M:APDFX" → "APDFX", "E:SPY" → "SPY"
- */
-function stripYChartsPrefix(raw: string): string {
-  return raw.replace(/^[A-Z]{1,2}:/i, '').trim()
-}
-
 /** `undefined` leaves the stored value alone; `null` clears it. */
 function coerceCell(col: string, raw: unknown): unknown {
   if (raw == null || raw === '') return undefined
@@ -124,6 +136,10 @@ function coerceCell(col: string, raw: unknown): unknown {
     const d = coerceDate(raw)
     if (d == null || !isValidCalendarDateString(d)) return undefined
     return d
+  }
+
+  if (BOOL_COLS.has(col)) {
+    return coerceBoolean(raw) ?? undefined
   }
 
   if (TEXT_COLS.has(col)) {

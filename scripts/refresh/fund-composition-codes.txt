@@ -56,3 +56,12 @@ turnover_ratio_generic
 total_assets_under_management
 number_of_holdings_generic
 1_year_fund_level_flows_to_aum
+
+# Added Nov 2026 with the Holdings sheet. These are the DENOMINATOR for the
+# top-25 holdings list: the share of the fund its top names actually carry.
+# Holding COUNT is only a proxy for it and a poor one - FTZIX holds 25 names
+# and VBTLX holds 16,290, but a count cannot say whether a bond index fund's
+# top 25 is 4% of it or 30%. Without these the committee cannot tell a
+# holdings list that describes the fund from one that describes a sliver.
+percent_of_assets_in_top_10_holdings
+percent_of_assets_in_top_25_holdings
