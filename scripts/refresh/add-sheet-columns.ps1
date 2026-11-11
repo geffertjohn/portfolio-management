@@ -100,9 +100,15 @@ try {
     # writes nothing and raises nothing - the script reports SAVED and the
     # file on disk is untouched. The usual cause is a person having the
     # workbook open in the interactive session, which is invisible from here.
+    # Scoped to -Apply: a dry run saves nothing, so a read-only open is
+    # harmless there and reporting what WOULD change is still useful while
+    # somebody has the file open.
     if ($wb.ReadOnly) {
-        throw ("ABORT: opened READ-ONLY, so any save would be silently discarded. " +
-               "Close the workbook in the VM's interactive session first.")
+        if ($Apply) {
+            throw ("ABORT: opened READ-ONLY, so the save would be silently discarded. " +
+                   "Close the workbook in the VM's interactive session first.")
+        }
+        Say "NOTE: opened read-only (someone has the workbook open) - dry run only."
     }
 
     $ws = $null
@@ -126,13 +132,14 @@ try {
     }
 
     # Match the model to the tab the codes came from - see -Info above.
-    $want = if ($Info) { 'YCI\(' } else { 'YCP\(' }
+    $fn = if ($Info) { 'YCI' } else { 'YCP' }
+    $want = $fn + '\('
     $model = 0
     for ($c = 3; $c -le $lastCol; $c++) {
         $f = [string]$ws.Cells.Item($FirstDataRow, $c).Formula
         if ($f -match $want) { $model = $c; break }
     }
-    if ($model -eq 0) { throw "no $($want.TrimEnd('\(')) column found to copy from" }
+    if ($model -eq 0) { throw ("no " + $fn + "() column found to copy from") }
     Say "model column $model : $($ws.Cells.Item($FirstDataRow,$model).Formula)"
     if ($RepointTo -ne '') { Say "added columns will fetch against column $RepointTo" }
 
