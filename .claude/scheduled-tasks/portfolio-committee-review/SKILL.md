@@ -160,9 +160,32 @@ the book: construction, risk, and the regime it is being run into.
    -- assemble a comparison set of your own: a name you introduce has had no
    -- research run on it, and the memo would recommend against a candidate the
    -- advisor never recorded.
-   with holding as (
+   -- `akey` is `alternativeKey` from `client/src/lib/prospects.ts`, in SQL.
+   -- Exact normalised category for most sleeves; the SLEEVE for mid- and
+   -- small-cap, which pool across styles because ASSET_CLASS_ROWS gives large
+   -- cap three rows and mid and small one each. Without this, FTZIX (Mid-Cap
+   -- Blend) is briefed on RSIYX alone while the advisor's screen shows FSMVX,
+   -- NAMAX and QVAL beside it -- a memo answering a narrower question than the
+   -- one that was handed over.
+   -- THIS IS A COPY of POOLED_SLEEVES + the mid/small rows of
+   -- ASSET_CLASS_BY_CATEGORY. If either changes, change it here too.
+   with akey as (
+     select 'mid-cap blend' c union all select 'mid-cap growth' union all
+     select 'mid-cap value' union all select 'mid cap core'    union all
+     select 'mid cap growth'
+   ), skey as (
+     select 'small blend' c union all select 'small growth' union all
+     select 'small value' union all select 'small cap core' union all
+     select 'small cap growth'
+   ), holding as (
      select p.security_id, p.allocation_pct, s.category_name,
-            lower(regexp_replace(trim(coalesce(s.category_name, '')), '\s+', ' ', 'g')) as ckey
+            case
+              when lower(regexp_replace(trim(coalesce(s.category_name,'')),'\s+',' ','g'))
+                   in (select c from akey) then 'sleeve:us_mid_cap'
+              when lower(regexp_replace(trim(coalesce(s.category_name,'')),'\s+',' ','g'))
+                   in (select c from skey) then 'sleeve:us_small_cap'
+              else lower(regexp_replace(trim(coalesce(s.category_name, '')), '\s+', ' ', 'g'))
+            end as ckey
      from positions p
      left join securities2 s on s.security_id = p.security_id
      where p.portfolio_name = :portfolio and p.deleted_at is null
@@ -171,7 +194,13 @@ the book: construction, risk, and the regime it is being run into.
      -- held HERE and held ELSEWHERE are different findings, so they are
      -- marked separately rather than as one "held" flag.
      select s.security_id,
-            lower(regexp_replace(trim(coalesce(s.category_name, '')), '\s+', ' ', 'g')) as ckey,
+            case
+              when lower(regexp_replace(trim(coalesce(s.category_name,'')),'\s+',' ','g'))
+                   in (select c from akey) then 'sleeve:us_mid_cap'
+              when lower(regexp_replace(trim(coalesce(s.category_name,'')),'\s+',' ','g'))
+                   in (select c from skey) then 'sleeve:us_small_cap'
+              else lower(regexp_replace(trim(coalesce(s.category_name, '')), '\s+', ' ', 'g'))
+            end as ckey,
             exists (select 1 from positions h
                     where h.security_id = s.security_id and h.deleted_at is null
                       and h.portfolio_name = :portfolio) as held_here,
@@ -269,12 +298,19 @@ the book: construction, risk, and the regime it is being run into.
    still being set, so re-read what the query returns and never assert a count
    from this file. Each rule stands without its example.
 
-   - **Match on the normalised `category_name` and nothing more** — trim,
-     lowercase, collapse runs of whitespace. Both sides are the same vendor
-     column, so case and spacing are the only variation there is. **Do not add
-     hyphen or spelling variants.** Those belong where two vocabularies meet (a
-     fund's "Large Growth" against a benchmark's "US Large Cap Growth"), and
-     inventing them here matches sleeves Morningstar considers distinct.
+   - **Match on the normalised `category_name`, EXCEPT that mid- and
+     small-cap pool across styles.** Both sides are the same vendor column, so
+     case and spacing are the only variation to allow for — **do not add
+     hyphen or spelling variants**, which belong where two vocabularies meet (a
+     fund's "Large Growth" against a benchmark's "US Large Cap Growth") and
+     here would match sleeves Morningstar considers distinct.
+     The one exception comes from the firm's own taxonomy, not from style
+     judgement: `ASSET_CLASS_ROWS` gives large cap three rows — blend, growth,
+     value — and mid and small ONE row each, so a Mid-Cap Blend holding
+     competes with every mid-cap idea on the watchlist. It is a LIST of two
+     sleeves, not "every unsplit sleeve": non-US developed is also one row and
+     pooling it would offer TIBIX, a global allocation fund, against foreign
+     large-blend index funds. The query above encodes this; do not widen it.
    - **A fund is never its own alternative.** A fund can be held in one book
      and watched for another — VBTLX is both — so the self-exclusion in the
      query is load-bearing, not tidying.
