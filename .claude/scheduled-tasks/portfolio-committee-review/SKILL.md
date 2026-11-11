@@ -374,6 +374,123 @@ the book: construction, risk, and the regime it is being run into.
    conclusions from the same columns, or the memo and the page will disagree
    about a fund in front of the person reading both.
 
+   **LOOK THROUGH THE FUNDS TO WHAT THEY ACTUALLY HOLD** (Nov 2026).
+   `fund_holdings` carries each fund's top 25 names with weights, from the
+   workbook's `Holdings` sheet. Until it existed the committee could see a
+   fund's sector and credit PERCENTAGES and never a single position, so two
+   funds holding the same twenty names read as diversification.
+
+   ```sql
+   -- THE DENOMINATOR FIRST. Read this before the list, every time.
+   select p.security_id, p.allocation_pct,
+          s.percent_of_assets_in_top_25_holdings as top25_share,
+          s.number_of_holdings_generic as n_holdings,
+          s.latest_holdings_date as holdings_as_of,
+          s.index_fund_generic as is_index, s.fund_of_funds_generic as is_fof
+   from positions p
+   join securities2 s on s.security_id = p.security_id
+   where p.portfolio_name = :portfolio and p.deleted_at is null
+   order by p.allocation_pct desc;
+
+   -- One fund's actual positions.
+   select rank, holding_symbol, holding_name, weight, as_of
+   from fund_holdings where security_id = :ticker order by rank;
+
+   -- SINGLE-NAME LOOK-THROUGH ACROSS THE WHOLE BOOK. allocation_pct is in
+   -- percent points and fund_holdings.weight is a decimal, so the product is
+   -- percent points of the portfolio.
+   select coalesce(fh.holding_symbol, fh.holding_name) as name,
+          round(sum(p.allocation_pct * fh.weight)::numeric, 2) as pct_of_book,
+          count(*) as in_funds,
+          string_agg(p.security_id, ', ' order by p.security_id) as via
+   from positions p
+   join fund_holdings fh on fh.security_id = p.security_id
+   where p.portfolio_name = :portfolio and p.deleted_at is null
+   group by 1
+   having count(*) > 1
+   order by 2 desc
+   limit 25;
+   ```
+
+   - **IT IS A FLOOR, NEVER A TOTAL, and you must say so wherever you quote a
+     number from it.** Only the top 25 of each fund are known, so a name held
+     at position 30 in one fund and 5 in another contributes from the second
+     alone. "At least 2.1% of the book" is a true sentence; "2.1% of the book"
+     is not, and an audit-defence memo cannot carry the second.
+   - **`top25_share` decides whether the list describes the fund or a sliver
+     of it.** Measured by holding COUNT the spread across this book is
+     enormous — FTZIX holds 25 names and VBTLX holds 16,290 — but count is
+     only a proxy and `percent_of_assets_in_top_25_holdings` is the real
+     figure. Where it is high the list IS the fund and a name in it is worth
+     arguing about; where it is low the list is the twenty-five largest
+     positions in a long tail and says almost nothing about the fund's
+     character. Quote the share alongside any claim drawn from the list.
+   - **`holdings_as_of` is weeks behind the price columns on the same row**,
+     because funds disclose holdings monthly or quarterly. Never present a
+     holding as current, and never reconcile it against a return window it
+     does not cover. Where the date is older than the period you are
+     discussing, say which.
+   - **A BOND FUND'S TOP 25 IS USUALLY NOT THE ARGUMENT.** It comes back as
+     individual loan tranches and CUSIPs — `039956AA5`, `Polymer Group Inc
+     28-JUN-2028 Term Loan B` — and twenty-five of a thousand such positions
+     supports no conclusion about credit. The composition columns
+     (`investment_grade_bond_allocation_generic`,
+     `securitized_fixed_income_exposure_generic`, `average_credit_quality_score`)
+     are the better read there and are what produced the DHRIX finding on
+     9 Nov 2026. Use holdings on the bond side for ISSUER overlap between two
+     funds, which the percentages genuinely cannot show, and for nothing else.
+   - **An empty list is not a finding.** YCharts does not publish holdings for
+     every fund and the sheet carries no row for one it cannot fetch. Report
+     the absence only where the memo turns on a question the holdings would
+     have answered.
+   - **A CASH SWEEP VEHICLE IS NOT AN EXPOSURE.** Funds park cash in their
+     own money-market vehicle and it surfaces in the top 25 like any other
+     holding — "Fidelity Cash Central Fund" came back as 1.18% of Hybrid
+     Balanced across two funds on 11 Nov 2026, and reporting that as a
+     concentrated position would be a false finding of exactly the kind this
+     report exists to avoid. The same goes for a fund-of-funds' underlying
+     funds; `fund_of_funds_generic` names those.
+   - **A STALE AS-OF IS ITSELF REPORTABLE where the memo leans on it.**
+     Measured 11 Nov 2026, `latest_holdings_date` on this book spans **31 Mar
+     to 9 Nov** — RSIYX at 225 days, and the HELD funds OBSIX and PGNPX at
+     134, PGNPX with 91% of its assets in that top 25. DHRIX was 72 days
+     stale when the committee analysed its credit on 9 Nov and nothing said
+     so. Name the date whenever a holdings figure carries an argument.
+
+   **THE FOUR NEW FUND FLAGS, and what each one changes.** All on
+   `securities2`, all from the same import:
+
+   - **`index_fund_generic`** — read every scorecard row through it. "Trailed
+     its benchmark by 40bp" is a finding against an active fund and is the
+     expense ratio against a passive one; grading a tracker on alpha, or
+     recommending a replacement for failing to generate it, is a category
+     error the committee has had no way to avoid making.
+   - **`open_to_new_investors_generic`** — **check it before recommending any
+     alternative, and check it FIRST.** An idea that cannot be bought is not
+     an alternative, and this book is built on institutional share classes,
+     which are exactly the ones that close.
+     - **THIS ALREADY HAPPENED.** Memo 2 (Hybrid Balanced, 10 Nov 2026)
+       recommended replacing BOTH small-cap holdings with **VSMIX at 4.00%**
+       and called it "the committee highest-confidence call" — two
+       `replace` recommendations resting on one fund. `VSMIX` is
+       `open_to_new_investors_generic = false` and is not held, so there is
+       no existing position to add to and the whole call is unexecutable.
+       The column did not exist when that memo was written; it does now, and
+       there is no excuse for repeating it.
+     - A flag is a reason to CHECK, not a fact to assert at the advisor. Say
+       the vendor reports it closed and that the share class needs
+       confirming, rather than declaring it shut.
+   - **`waiver_expense_ratio_generic` / `waiver_expiration_date`** — where a
+     waiver is set, `expense_ratio_generic` is NOT what the fund will charge
+     after that date. A cost comparison between two funds where one is
+     waived and the other is not is comparing a promotion against a price.
+   - **`prospectus_objective` / `prospectus_benchmark_index`** — the fund's
+     mandate and chosen benchmark in its own words. Where the prospectus
+     benchmark disagrees with the category we grade it against, that is the
+     clearest evidence the fund is filed in the wrong sleeve — which is the
+     failure `ASSET_CLASS_OVERRIDES` patches one ticker at a time. Raise it;
+     do not fix it.
+
 5. **DISPATCH THE THREE ROLES** via the Agent tool, in one message so they run
    together. These resolve from `.claude/agents/*.md`, so there is no inlined
    copy to keep in sync.
@@ -386,7 +503,10 @@ the book: construction, risk, and the regime it is being run into.
      measure — a scorecard rank, a composition difference, a cost, a drawdown.
      Where it has none, say the holding was judged on its own and why it
      stands. Where one idea sits against several holdings in a sleeve, answer
-     the sleeve.
+     the sleeve. **Two funds in one sleeve are a candidate for consolidation
+     only if their holdings say so** — the single-name look-through above is
+     the evidence for that, and it is the one reading a sleeve table cannot
+     give you.
    - **`risk-manager`** — concentration, factor exposure, and **verification
      against every active rule in the Compliance Rules hub**
      (`firm_compliance_rules` plus `compliance_rules` matching the portfolio OR
@@ -401,7 +521,8 @@ the book: construction, risk, and the regime it is being run into.
    category, and the ideas recorded against it, with the held-here /
    held-elsewhere marks intact
    — plus the scorecard and composition columns for the holdings AND the
-   alternatives, and the advisor's note if they left one. A role that cannot
+   alternatives, the look-through rows with their `top25_share` and
+   `holdings_as_of`, and the advisor's note if they left one. A role that cannot
    see the comparison answers a different question from the one the handoff
    asked, and the memo then talks past the page the advisor is reading.
 

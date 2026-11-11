@@ -76,6 +76,22 @@ Private Const ROSTER_COL   As Long = 2
 Private Const TICKER_COL   As Long = 2   ' Securities!B - the only literal on the row
 Private Const FIRST_FUND_ROW As Long = 3 ' 1 = group banner, 2 = DB column names
 
+' The Holdings sheet is STATIC and this macro does not touch it.
+'
+' It was built here once, deriving itself from Securities!B on every run, and
+' that cost two refreshes: an unproven addition sat on the critical path of
+' the job the whole firm's data depends on, and when it stalled the funds,
+' benchmarks and portfolios went down with it.
+'
+' A pre-wired sheet is also the convention `Securities` already follows, and
+' the deciding argument is visibility: a sheet built only during an unattended
+' run does not exist until one succeeds, so a person opening the workbook
+' cannot tell broken from not-yet-run. The blocks are wired by hand (or by
+' scripts/refresh/extend-holdings.ps1, which COPIES an existing block) and
+' every cell on it recalculates with everything else.
+'
+' Layout and the importer that reads it: scripts/refresh/README.md.
+
 ' A guard, not a product limit.
 '
 ' The sheet GROWS when it runs out of pre-wired rows, so there is no cap on how
@@ -95,7 +111,23 @@ Private Const STAMP_CELL   As String = "A1"
 
 Private Const POLL_SECS    As Long = 10      ' between checks
 Private Const STABLE_POLLS As Long = 3       ' unchanged this many times = settled
-Private Const LOAD_TIMEOUT As Long = 900     ' give up after 15 minutes
+' Give up after 15 minutes.
+'
+' RAISED TO 2400 ON A WRONG DIAGNOSIS AND PUT BACK. Three runs on 11 Nov died
+' without writing an error file, and the explanation offered for that -
+' CalculateFullRebuild being synchronous and running past the shell's
+' patience, so the macro never reached this timeout - was simply false. The
+' run that finally completed measured it: rebuild_secs=0. The add-in fetches
+' in the BACKGROUND, so the rebuild returns at once and this budget starts
+' immediately.
+'
+' The real cause was the VM being suspended mid-run, which reads exactly like
+' a hung Excel - a failure mode written up in README.md the day before and
+' not applied. See `settle_secs` below for what a healthy run actually costs.
+'
+' A LONGER BUDGET IS NOT FREE: every minute of it is a minute a genuinely
+' wedged Excel is tolerated, and a suspended VM takes that long to report.
+Private Const LOAD_TIMEOUT As Long = 900
 
 ' Do not even consider the values settled before this long.
 '
@@ -117,6 +149,7 @@ Private Sub Workbook_Open()
     Dim lastPrint As String, thisPrint As String
     Dim stableCount As Long
     Dim ratio As Double
+    Dim rebuildStart As Double, rebuildSecs As Double
 
     ' Everything below this line is the scheduled run. A person who opens the
     ' workbook gets a workbook.
@@ -131,7 +164,13 @@ Private Sub Workbook_Open()
     ' it would sit empty until tomorrow.
     SyncWatchlistTickers
 
+    ' After the watchlist sync and before the rebuild, for the same reason:
+    ' the sheet is built from Securities!B, so a fund added moments ago has to
+    ' be in column B already, and its formulas have to exist before the one
+    ' fetch everything else is about to make.
+    rebuildStart = Timer
     Application.CalculateFullRebuild
+    rebuildSecs = Timer - rebuildStart
 
     startTime = Timer
     lastPrint = "<none>"
@@ -169,6 +208,7 @@ Private Sub Workbook_Open()
     End If
 
     StampRefreshTime
+    StampTimings rebuildSecs, Timer - startTime
     SaveOutputAtomically
 
     ' Save, then quit — and do NOT call ThisWorkbook.Close first.
@@ -309,6 +349,35 @@ Private Sub StampRefreshTime()
         .NumberFormat = "@"
         .Value = Format(Now, "yyyy-mm-dd hh:nn:ss")
     End With
+End Sub
+
+' How long the run actually took, written where it can be READ BACK.
+'
+' FIRST MEASUREMENT, 11 Nov 2026: rebuild_secs=0, settle_secs=253 on a
+' workbook of 107 funds, 106 benchmark rows, 19 portfolios and 2 holdings
+' blocks. The settle is bounded by MIN_WAIT_SECS (240) rather than by
+' fetching, so the book settles about as fast as it is allowed to.
+'
+' The macro had no working diagnostic channel, and that is why three failures
+' in a row produced nothing to reason from: WriteNote appends to the Mac share
+' under On Error Resume Next, so when it fails it fails silently, and the
+' workbook is not saved until the end, so a run that dies leaves no trace of
+' its own progress at all. The Control sheet is saved with everything else and
+' the importer already reads A1 from it, so these two cells survive by the
+' same route the data does.
+'
+' The REBUILD time is the one that matters. It is synchronous, it happens
+' before the settle loop's clock starts, and it is therefore the only part of
+' a run that LOAD_TIMEOUT cannot bound.
+Private Sub StampTimings(ByVal rebuildSecs As Double, ByVal settleSecs As Double)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(STAMP_SHEET)
+    If ws Is Nothing Then Exit Sub
+    ws.Range("A2").NumberFormat = "@"
+    ws.Range("A2").Value = "rebuild_secs=" & Format(rebuildSecs, "0")
+    ws.Range("A3").NumberFormat = "@"
+    ws.Range("A3").Value = "settle_secs=" & Format(settleSecs, "0")
 End Sub
 
 ' Write to a temp name and rename, so the Mac side never sees a partial file.

@@ -1,0 +1,53 @@
+# Fund INFO codes for the Securities sheet - pass with -Info.
+#
+# These come from the reference workbook's `Mutual Fund | Info` / `ETF & CEF |
+# Info` tabs and are fetched with YCI(), not YCP(). add-sheet-columns.ps1
+# copies an existing cell rather than authoring one, so the model column has
+# to be a YCI column (C..N) - that is what -Info selects. Passing these
+# without it copies a YCP cell and every one returns an error.
+#
+# All nine were checked to be in the SHARED set of both fund tabs: one sheet
+# serves mutual funds and ETFs, so a code present for only one errors on every
+# row of the other (the `emerging_market_exposure` trap).
+#
+# Where the vendor offers both a plain and a `_generic` form, the _generic one
+# is taken and the DB column keeps the suffix - the house style set by
+# expense_ratio_generic, so no COLUMN_REMAP entry is needed for any of these.
+#
+# ALTER TABLE securities2 BEFORE adding any of these to the workbook. The
+# importer has no whitelist, so a header with no matching column fails the
+# entire upsert batch.
+
+# The as-of date for fund_holdings AND for the 33 composition columns. Funds
+# report holdings monthly or quarterly, so this is routinely weeks behind the
+# price columns sitting on the same row - and nothing said so until now.
+latest_holdings_date
+
+# Is it an index fund? Changes how every scorecard row is read: "trailed its
+# index by 40bp" is a finding for an active fund and the expense ratio for a
+# passive one.
+index_fund_generic
+
+# Can it still be bought? An alternative that is closed is not an alternative,
+# and this book is full of institutional share classes - exactly the ones that
+# close.
+open_to_new_investors_generic
+
+# A temporary fee waiver, and the date it lapses. Where this is set, the
+# expense ratio on the scorecard is not what the fund will charge next year.
+waiver_expense_ratio_generic
+waiver_expiration_date
+
+# The fund's mandate in its own words, and the benchmark IT claims - against
+# the category benchmark we grade it on. A disagreement between those two is
+# the clearest signal that a fund is filed in the wrong sleeve, which is the
+# failure ASSET_CLASS_OVERRIDES exists to patch one ticker at a time.
+prospectus_objective
+prospectus_benchmark_index
+
+# Is there a cheaper share class of the same fund?
+primary_share_class_symbol
+
+# A fund of funds' "holdings" are other funds, so its top-25 list and its
+# composition columns mean something different from everyone else's.
+fund_of_funds_generic

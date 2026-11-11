@@ -189,11 +189,16 @@ const REPORT_TYPE_VALUES: Exhaustive<ReportType, 'initial' | 'pre_earnings' | 'p
   ['initial', 'pre_earnings', 'post_earnings', 'update'] as const
 const THESIS_STATUS_VALUES: Exhaustive<ThesisStatus, 'intact' | 'at_risk' | 'broken'> =
   ['intact', 'at_risk', 'broken'] as const
-// Four, not six — CLAUDE.md said six until this test was written. The six-card
+// Five since Nov 2026, when the Holdings sheet got its own source. It was
+// four, and CLAUDE.md said six until this test was written — the six-card
 // import page collapsed to two in Sep 2026 and the prose did not follow.
 const IMPORT_SOURCE_VALUES: Exhaustive<
-  ImportSource, 'ycharts_benchmarks' | 'ycharts_funds' | 'ycharts_portfolios' | 'ycharts_allocations'
-> = ['ycharts_benchmarks', 'ycharts_funds', 'ycharts_portfolios', 'ycharts_allocations'] as const
+  ImportSource,
+  'ycharts_benchmarks' | 'ycharts_funds' | 'ycharts_portfolios' | 'ycharts_allocations' | 'ycharts_holdings'
+> = [
+  'ycharts_benchmarks', 'ycharts_funds', 'ycharts_portfolios', 'ycharts_allocations',
+  'ycharts_holdings',
+] as const
 
 describe('a bare type union still matches its constraint exactly', () => {
   it.each([

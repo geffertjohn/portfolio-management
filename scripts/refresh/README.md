@@ -256,6 +256,31 @@ the start of a run would read as an abort and kill a refresh that was working.
 Running out of pre-wired rows is the case that writes one; extend the `YCI()`
 formulas below row 101 to add slots.
 
+**CONFIRMED BROKEN — `WriteNote` writes nothing** (11 Nov 2026). It opens the
+Mac share under `On Error Resume Next`, so a failure to reach
+`\\Mac\Home\…` is silent by construction. Settled by an A/B test on the
+successful run of 12:07: `StampTimings` wrote `Control!A2`/`A3` from the same
+procedure moments later and both survived into the output file, while no
+`watchlist-note.txt` appeared. Same process, same instant, one channel works
+and the other does not.
+
+**That is worse than losing a debug line.** `SyncWatchlistTickers` reports a
+fund it could NOT add this way, so a watchlist fund dropped for want of a row
+would be announced nowhere at all: the run still succeeds, the roster looks
+healthy, and the fund silently never arrives. The same shape as the gotcha-23
+import warning that was computed and discarded for three months.
+
+**The fix is to stop using the share.** The Control sheet demonstrably
+reaches the Mac — the importer already reads `A1` off it — so a note written
+there survives by the same route the data does, and could be surfaced as an
+`import_runs` warning rather than as a file nobody opens. NOT YET DONE; the
+callers still write into the dead channel.
+
+**A second, independent reason notes are unreliable as a diagnostic:** the
+workbook is not saved until the END of a run, so a run that dies leaves no
+trace of its own progress whatever channel it used. Anything that must
+survive a failure has to leave the guest while the run is still alive.
+
 ### …and a new one no longer waits until morning
 
 The 05:30 run closes the gap within a day, which is right for a fund added at
@@ -359,6 +384,25 @@ last roster went out. Nothing is lost if you do not: the 05:30 run writes a
 fresh roster and picks them up. But the poller will stay quiet in the meantime,
 and its silence will look like a decision.
 
+### The VM must be set to KEEP RUNNING when its window closes
+
+```bash
+prlctl set "Windows 11" --on-window-close keep-running   # requires the VM STOPPED
+prlctl list -i "Windows 11" | grep -i "on window close"
+```
+
+**This is a precondition of the pipeline, not a preference.** Parallels shipped
+set to `suspend`, so closing the VM window stops the guest dead — and a run in
+flight dies with it. It never bit before 11 Nov 2026 because nobody had worked
+in that VM while a refresh was running; that day it killed **four runs in a
+row**, each reported as "no output after 1500s", which is the message for a
+hung Excel. Hours went into the wrong diagnosis.
+
+The setting can only be changed while the VM is **stopped** — not suspended,
+which is the state `refresh.sh` leaves it in, so resume and stop it first.
+`Autostop: suspend` is left alone: that is the idle behaviour and is what the
+scheduled job relies on to put the VM away afterwards.
+
 ### A SUSPENDED VM reads exactly like a hung Excel
 
 `refresh.sh` detects completion by the output file appearing, which is the right
@@ -410,12 +454,110 @@ If you want the workbook open for editing, let the run finish first;
 `refresh.sh` suspends the VM itself on the way out, so there is nothing to tidy
 up afterwards.
 
+## The Holdings sheet: when the vendor returns a LIST
+
+`YCI(ticker,"holdings_weight")` returns the fund's **top 25 holdings** — 25
+rows of holding and weight. The `Securities` sheet is one row **per fund**.
+Those two shapes do not reconcile on one grid, and the attempt is instructive:
+a `{=YCI($B3,DS$2)}` entered in column DS of `Securities` filled DS3:DS27 with
+the row-3 fund's holdings, which are the rows belonging to the next 24 funds —
+and because a legacy CSE array is a locked block, those funds could not carry
+a formula of their own either. One fund's data occupying another's rows is not
+a formatting problem to work around; it is the sheet saying the metric does
+not belong on it.
+
+So holdings get their own sheet, in **blocks of 26 rows**:
+
+```
+ row 1    A ='Securities '!B3   B holdings_weight   C1:D25   {=YCI(A1,B1)}
+ row 26   (blank separator)
+ row 27   A ='Securities '!B4   B holdings_weight   C27:D51  {=YCI(A27,B27)}
+```
+
+- **Column A is a LIVE reference to `Securities!B`**, not a copied value, so
+  the sheet follows that column by itself and a ticker swapped there needs
+  nothing done here.
+- **Column B is the marker.** A block is imported only when it reads
+  `holdings_weight`, so another List metric can be parked on the sheet without
+  a second convention to exclude it.
+- **Column C carries the symbol OR the name**, whichever identifies the
+  holding: `ASML` and `RHHVF:DL` for equities, a CUSIP like `039956AA5` for a
+  bond that has one, and a description — `Intertape Polymer Group Inc
+  28-JUN-2028 Term Loan B` — for one that does not. The importer splits them
+  on length; see `splitSymbolAndName`.
+
+**THE SHEET IS STATIC AND NO MACRO TOUCHES IT.** The first version had
+`EnsureHoldingsSheet` in `Ycharts.bas` derive the whole sheet from
+`Securities!B` on every run, and it **cost two refreshes**: unproven code sat
+on the critical path of the daily job, and when it stalled the funds,
+benchmarks and portfolios went down with it even though none of them had
+anything to do with holdings. Three reasons the static sheet is right, in the
+order they matter:
+
+1. **A person opening the workbook can SEE it.** A sheet built only during an
+   unattended run does not exist until one succeeds, so there is no way to
+   tell broken from not-yet-run.
+2. **It is the convention `Securities` already follows** — pre-wired, extended
+   when it runs out — rather than a second way of doing the same thing.
+3. **No new code on the refresh path.** The macro is back to not knowing this
+   sheet exists.
+
+**`extend-holdings.ps1` adds blocks for funds that do not have one.**
+
+```bash
+scripts/refresh/extend-holdings.ps1            # dry run
+scripts/refresh/extend-holdings.ps1 -Apply
+```
+
+It **copies the last block's array, it never writes one** — the same
+copy-never-author rule as `add-sheet-columns.ps1`, for the same reason: this
+runs as SYSTEM with no YCharts add-in, so a formula naming `_xll.YCI` would
+store an unknown function and read `#NAME?`. Copying down by a whole number of
+blocks adjusts `=YCI(A27,B27)` to `=YCI(A53,B53)` with no text to parse.
+Columns A and B are written outright, since a sheet reference and a text label
+need no add-in. The Securities row each block points at is read off that
+block's own formula rather than inferred from its position — position is what
+drifts. **Run it after adding funds**, and seed the very first block by hand
+in the VM's interactive session, where the add-in exists.
+
+**A Securities row with no ticker gets NO block.** A wired-but-empty row on
+the `Securities` sheet returns empty rather than an error, which is what makes
+the spare rows there free; `YCI` on an empty symbol is not known to behave the
+same way, and an errored or perpetually-`Loading` cell feeds both the macro's
+error-ratio guard and its settle detection.
+
+**`holdings_weight` over `holdings`.** The reference workbook documents neither
+shape — `holdings_weight` carries no Type and no Description at all — so both
+were run by hand. `holdings_weight` returns 25x2, the holding and its decimal
+weight (SPY: `AAPL 0.078573` … summing to 0.5169, so SPY's top 25 is 51.7% of
+it). `holdings` returns a third column with the name, but the name is not lost
+under `holdings_weight`: the vendor already puts a description in the symbol
+column for anything without a ticker, which is exactly where it is needed.
+
 ### Adding a metric column
 
 ```bash
 scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-composition-codes.txt            # dry run
 scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-composition-codes.txt -Apply
+
+# An Info-tab code needs -Info, which copies a YCI column instead of a YCP one.
+scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-info-codes.txt -Info -Apply
 ```
+
+**`-Info` picks the model, and getting it wrong is silent.** The sheet carries
+both functions — C..N are `=YCI($B3,C$2)` and everything from O rightward is
+`=YCP($B3,…$2)` — and they are not interchangeable: a code from the reference
+workbook's `| Info` tab returns an error under `YCP` and vice versa. The script
+copies an existing cell rather than authoring one, so the model has to match
+the tab the code came from. Without `-Info` an Info code is pasted as a YCP
+formula and every row of it comes back `ERR`, which looks exactly like a metric
+YCharts does not publish.
+
+**It now refuses a READ-ONLY open.** With `DisplayAlerts` off, `Save()` on a
+read-only workbook writes nothing and raises nothing — the script reports SAVED
+and the file on disk is untouched. The usual cause is someone having the
+workbook open in the VM's interactive session, which is invisible from a
+`prlctl exec` shell.
 
 **`ALTER TABLE securities2` FIRST, every time.** The importer has no whitelist —
 it maps row 2 straight to DB columns — so a header with no matching column

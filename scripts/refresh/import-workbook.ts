@@ -17,6 +17,7 @@ import * as XLSX from 'xlsx'
 
 import { uploadYchartBenchmarks } from '@/lib/ychartBenchmarksUpload'
 import { bulkUploadFundsFromExcel } from '@/lib/fundBulkUpload'
+import { bulkUploadFundHoldings } from '@/lib/fundHoldingsUpload'
 import { bulkUploadPortfoliosFromExcel } from '@/lib/portfolioExcelUpload'
 import { recordImportRuns, type ImportRunInput } from '@/lib/importRuns'
 import { unmappedCategoryWarning } from '@/lib/assetClass'
@@ -157,6 +158,40 @@ async function main(): Promise<void> {
     runs.push({ source: 'ycharts_funds', rows: 0, errors: [msg], status: 'failed' })
     notes.push(`funds FAILED: ${msg}`)
     hardFailure = true
+  }
+
+  // AFTER the funds, and that ordering is load-bearing: `fund_holdings`
+  // has an FK to securities2, so a fund added to the watchlist overnight only
+  // satisfies it once the Securities sheet has written its row in the step
+  // above. Run first, every new fund's holdings would be rejected on their
+  // first morning and silently appear a day late.
+  //
+  // No floor, unlike the three datasets around it. Holdings are genuinely
+  // absent for some funds and a floor would have to be guessed; the warnings
+  // below carry what a floor would have caught, without inventing a number.
+  try {
+    const r = await bulkUploadFundHoldings(file)
+    runs.push({
+      source: 'ycharts_holdings', rows: r.rows, errors: r.errors, warnings: r.warnings,
+    })
+    notes.push(`${r.rows} holdings across ${r.funds} funds`)
+    // Printed every run, not only when it changes. The column order of the
+    // `holdings` array is detected rather than documented — the reference
+    // workbook names the three fields and not their order — so the detection
+    // has to stay visible, or the day YCharts reorders them every weight
+    // lands in a text column and reads as null.
+    if (r.layout) console.log(`      holdings column order: ${r.layout}`)
+    for (const w of r.warnings) console.warn(`WARN  ${w}`)
+    for (const e of r.errors) console.warn(`WARN  holdings row failed: ${e}`)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    runs.push({ source: 'ycharts_holdings', rows: 0, errors: [msg], status: 'failed' })
+    notes.push(`holdings FAILED: ${msg}`)
+    // NOT a hard failure. Holdings are an addition to what the committee can
+    // read, not something the app depends on — every existing surface worked
+    // without them. Failing the whole run would send a workbook whose funds,
+    // benchmarks and portfolios all landed to failed/ and raise a refresh
+    // action over data that is sitting correctly in the database.
   }
 
   try {

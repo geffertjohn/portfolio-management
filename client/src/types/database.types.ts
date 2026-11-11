@@ -626,6 +626,44 @@ export type Database = {
         }
         Relationships: []
       }
+      fund_holdings: {
+        Row: {
+          as_of: string | null
+          holding_name: string | null
+          holding_symbol: string | null
+          rank: number
+          security_id: string
+          updated_at: string
+          weight: number | null
+        }
+        Insert: {
+          as_of?: string | null
+          holding_name?: string | null
+          holding_symbol?: string | null
+          rank: number
+          security_id: string
+          updated_at?: string
+          weight?: number | null
+        }
+        Update: {
+          as_of?: string | null
+          holding_name?: string | null
+          holding_symbol?: string | null
+          rank?: number
+          security_id?: string
+          updated_at?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fund_holdings_security_id_fkey"
+            columns: ["security_id"]
+            isOneToOne: false
+            referencedRelation: "securities2"
+            referencedColumns: ["security_id"]
+          },
+        ]
+      }
       holding_reviews: {
         Row: {
           action: string | null
@@ -2917,6 +2955,7 @@ export type Database = {
           five_year_total_return_rank_nav: number | null
           fund_company_name: string | null
           fund_family: string | null
+          fund_of_funds_generic: boolean | null
           government_fixed_income_exposure_generic: number | null
           healthcare_exposure_generic: number | null
           historical_sharpe_1y: number | null
@@ -2925,6 +2964,7 @@ export type Database = {
           historical_sortino_3y: number | null
           id: number
           inception_date: string | null
+          index_fund_generic: boolean | null
           industrials_exposure: number | null
           information_ratio_3y_vs_category: number | null
           information_ratio_3y_vs_pg: number | null
@@ -2935,6 +2975,7 @@ export type Database = {
           is_benchmark_proxy: boolean
           large_market_cap_exposure_generic: number | null
           last_earnings_release: string | null
+          latest_holdings_date: string | null
           long_description: string | null
           market_alpha_3y_vs_pg: number | null
           max_drawdown_3y: number | null
@@ -2960,10 +3001,16 @@ export type Database = {
           one_year_total_return_peer_group_size_nav: number | null
           one_year_total_return_rank_category_size_nav: number | null
           one_year_total_return_rank_nav: number | null
+          open_to_new_investors_generic: boolean | null
           other_fixed_income_exposure_generic: number | null
           peer_group_name: string | null
+          percent_of_assets_in_top_10_holdings: number | null
+          percent_of_assets_in_top_25_holdings: number | null
           preferred_benchmark1_id: number | null
           preferred_benchmark2_id: number | null
+          primary_share_class_symbol: string | null
+          prospectus_benchmark_index: string | null
+          prospectus_objective: string | null
           real_estate_exposure: number | null
           rsquared_3y_vs_category: number | null
           rsquared_3y_vs_pg: number | null
@@ -2995,6 +3042,8 @@ export type Database = {
           upside_downside_5y_vs_category: number | null
           upside_downside_5y_vs_pg: number | null
           utilities_exposure_generic: number | null
+          waiver_expense_ratio_generic: number | null
+          waiver_expiration_date: string | null
           ycharts_benchmark_category: string | null
           ytd_total_return: number | null
           ytd_total_return_nav: number | null
@@ -3050,6 +3099,7 @@ export type Database = {
           five_year_total_return_rank_nav?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
+          fund_of_funds_generic?: boolean | null
           government_fixed_income_exposure_generic?: number | null
           healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
@@ -3058,6 +3108,7 @@ export type Database = {
           historical_sortino_3y?: number | null
           id?: number
           inception_date?: string | null
+          index_fund_generic?: boolean | null
           industrials_exposure?: number | null
           information_ratio_3y_vs_category?: number | null
           information_ratio_3y_vs_pg?: number | null
@@ -3068,6 +3119,7 @@ export type Database = {
           is_benchmark_proxy?: boolean
           large_market_cap_exposure_generic?: number | null
           last_earnings_release?: string | null
+          latest_holdings_date?: string | null
           long_description?: string | null
           market_alpha_3y_vs_pg?: number | null
           max_drawdown_3y?: number | null
@@ -3093,10 +3145,16 @@ export type Database = {
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
+          open_to_new_investors_generic?: boolean | null
           other_fixed_income_exposure_generic?: number | null
           peer_group_name?: string | null
+          percent_of_assets_in_top_10_holdings?: number | null
+          percent_of_assets_in_top_25_holdings?: number | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
+          primary_share_class_symbol?: string | null
+          prospectus_benchmark_index?: string | null
+          prospectus_objective?: string | null
           real_estate_exposure?: number | null
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
@@ -3128,6 +3186,8 @@ export type Database = {
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
           utilities_exposure_generic?: number | null
+          waiver_expense_ratio_generic?: number | null
+          waiver_expiration_date?: string | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null
@@ -3183,6 +3243,7 @@ export type Database = {
           five_year_total_return_rank_nav?: number | null
           fund_company_name?: string | null
           fund_family?: string | null
+          fund_of_funds_generic?: boolean | null
           government_fixed_income_exposure_generic?: number | null
           healthcare_exposure_generic?: number | null
           historical_sharpe_1y?: number | null
@@ -3191,6 +3252,7 @@ export type Database = {
           historical_sortino_3y?: number | null
           id?: number
           inception_date?: string | null
+          index_fund_generic?: boolean | null
           industrials_exposure?: number | null
           information_ratio_3y_vs_category?: number | null
           information_ratio_3y_vs_pg?: number | null
@@ -3201,6 +3263,7 @@ export type Database = {
           is_benchmark_proxy?: boolean
           large_market_cap_exposure_generic?: number | null
           last_earnings_release?: string | null
+          latest_holdings_date?: string | null
           long_description?: string | null
           market_alpha_3y_vs_pg?: number | null
           max_drawdown_3y?: number | null
@@ -3226,10 +3289,16 @@ export type Database = {
           one_year_total_return_peer_group_size_nav?: number | null
           one_year_total_return_rank_category_size_nav?: number | null
           one_year_total_return_rank_nav?: number | null
+          open_to_new_investors_generic?: boolean | null
           other_fixed_income_exposure_generic?: number | null
           peer_group_name?: string | null
+          percent_of_assets_in_top_10_holdings?: number | null
+          percent_of_assets_in_top_25_holdings?: number | null
           preferred_benchmark1_id?: number | null
           preferred_benchmark2_id?: number | null
+          primary_share_class_symbol?: string | null
+          prospectus_benchmark_index?: string | null
+          prospectus_objective?: string | null
           real_estate_exposure?: number | null
           rsquared_3y_vs_category?: number | null
           rsquared_3y_vs_pg?: number | null
@@ -3261,6 +3330,8 @@ export type Database = {
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
           utilities_exposure_generic?: number | null
+          waiver_expense_ratio_generic?: number | null
+          waiver_expiration_date?: string | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null
