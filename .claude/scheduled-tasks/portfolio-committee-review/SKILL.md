@@ -437,12 +437,71 @@ the book: construction, risk, and the regime it is being run into.
      (`investment_grade_bond_allocation_generic`,
      `securitized_fixed_income_exposure_generic`, `average_credit_quality_score`)
      are the better read there and are what produced the DHRIX finding on
-     9 Nov 2026. Use holdings on the bond side for ISSUER overlap between two
-     funds, which the percentages genuinely cannot show, and for nothing else.
+     9 Nov 2026. Use holdings on the bond side ONLY for CORPORATE or CREDIT issuer overlap
+     between two funds. **Treasury and agency overlap is not a finding** —
+     the 11 Nov run surfaced two Treasury CUSIPs held through both BIMIX and
+     PYTRX and the risk manager dismissed it unprompted, correctly: two
+     Treasury issues carry no issuer credit risk worth diversifying. Report
+     it only if asked.
    - **An empty list is not a finding.** YCharts does not publish holdings for
      every fund and the sheet carries no row for one it cannot fetch. Report
      the absence only where the memo turns on a question the holdings would
      have answered.
+   **DERIVE THE THEME, NEVER RECOGNISE IT** (Nov 2026). `holding_profiles`
+   carries sector, industry, country and market cap for every holding symbol
+   FMP can resolve — 396 of 402 on this book.
+
+   ```sql
+   -- industry concentration, computed
+   select hp.industry,
+          round(sum(p.allocation_pct * fh.weight)::numeric, 2) as pct_of_book,
+          count(distinct fh.security_id) as via_funds
+   from positions p
+   join fund_holdings fh on fh.security_id = p.security_id
+   join holding_profiles hp on hp.symbol = fh.holding_symbol
+   where p.portfolio_name = :portfolio and p.deleted_at is null
+     and hp.unresolved = false and hp.industry is not null
+   group by 1 order by 2 desc limit 15;
+
+   -- does a sleeve hold what its label says? (median size, and the tails)
+   select p.security_id, s.category_name,
+          round((percentile_cont(0.5) within group (order by hp.market_cap))::numeric/1e9,1) as median_bn,
+          round(sum(case when hp.market_cap <  1e10 then fh.weight else 0 end)::numeric*100,1) as pct_under_10bn,
+          round(sum(case when hp.market_cap >= 1e11 then fh.weight else 0 end)::numeric*100,1) as pct_over_100bn,
+          round(s.percent_of_assets_in_top_25_holdings::numeric,2) as coverage
+   from positions p
+   join fund_holdings fh on fh.security_id = p.security_id
+   join holding_profiles hp on hp.symbol = fh.holding_symbol
+   join securities2 s on s.security_id = p.security_id
+   where p.portfolio_name = :portfolio and p.deleted_at is null
+     and hp.unresolved = false and hp.market_cap is not null
+   group by 1,2,6 order by median_bn;
+   ```
+
+   - **THIS IS NOT OPTIONAL WHERE A THEME IS CLAIMED.** On 11 Nov 2026 a role
+     agent assembled a "semiconductor cluster of 6.11% across 8 vehicles" by
+     recognising six tickers. Derived, it is **8.27% across 11 funds and 39
+     lines** — the book's largest thematic exposure, understated by a third
+     with three funds missed, and nothing in the system could have caught it.
+     If you name a theme, a sector or an issuer group, it comes from this
+     table. Recognising tickers is how the number was wrong.
+   - **MEDIAN MARKET CAP OF A TOP 25 IS BIASED UPWARD**, because the top 25
+     are a fund's largest positions. Quote `coverage` beside it every time.
+     Where coverage is ~100% the reading is sound — FTZIX at a 41.6bn median
+     inside a Mid-Cap Blend label is a finding. Where coverage is ~50% it is
+     suggestive only: OBSIX and NSMRX read 10.2bn and 12.3bn in a sleeve the
+     model calls "us small 4", which agrees with NSMRX's own "Mid-Cap Funds"
+     objective and Russell 2500 benchmark but is not settled by the data
+     alone.
+   - **`country` answers the sleeve question the prospectus string cannot.**
+     EICOX's objective reads "Frontier Markets" while its holdings are TSMC
+     and Samsung. Measure it rather than inferring from two names.
+   - **`unresolved = true` means FMP has no record** — six symbols here, OTC
+     and foreign-ordinary lines. Excluded from any total you quote, and say
+     so rather than letting them read as zero.
+   - **CUSIPs and cash lines carry NO profile by design.** A bond issue has
+     none, and the bond sleeve is read on composition percentages.
+
    - **A CASH SWEEP VEHICLE IS NOT AN EXPOSURE.** Funds park cash in their
      own money-market vehicle and it surfaces in the top 25 like any other
      holding — "Fidelity Cash Central Fund" came back as 1.18% of Hybrid
@@ -456,6 +515,36 @@ the book: construction, risk, and the regime it is being run into.
      134, PGNPX with 91% of its assets in that top 25. DHRIX was 72 days
      stale when the committee analysed its credit on 9 Nov and nothing said
      so. Name the date whenever a holdings figure carries an argument.
+
+   **TEST OVERLAP BEFORE RECOMMENDING A CONSOLIDATION.** "These two funds
+   are in one sleeve and one should go" is a holdings question, and ranked
+   metrics cannot answer it — two funds can rank identically and hold nothing
+   in common, or rank differently and be the same book.
+
+   ```sql
+   select round(sum(least(x.weight, y.weight))::numeric * 100, 2) as overlap_pct,
+          count(*) as common_names
+   from fund_holdings x
+   join fund_holdings y
+     on upper(coalesce(y.holding_symbol, y.holding_name))
+      = upper(coalesce(x.holding_symbol, x.holding_name))
+   where x.security_id = :fund_a and y.security_id = :fund_b;
+   ```
+
+   - **It is a FLOOR, and its tightness is `percent_of_assets_in_top_25_holdings`
+     on BOTH sides.** Where both are near 100% the answer is close to exact;
+     where either is near 50% an overlap of zero means "none observed", not
+     "none".
+   - **The 11 Nov run shows both readings.** FTZIX and AVERX share **zero**
+     names at 100% and 96% coverage — two Mid-Cap Blend funds that are
+     genuinely different books, which no ranked metric would have shown. And
+     **VOO against FLCSX overlaps by at least 35.6% on 11 common names** —
+     27% of that book in two funds, the largest redundancy in it, and the
+     committee held both without testing it.
+   - **Overlap cuts both ways and must be reported both ways.** High overlap
+     weakens the case for holding two; **low overlap weakens the case for
+     consolidating them**, because the diversification being given up is
+     real. Say which way it cut.
 
    **THE FOUR NEW FUND FLAGS, and what each one changes.** All on
    `securities2`, all from the same import:

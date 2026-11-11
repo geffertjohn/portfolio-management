@@ -848,6 +848,50 @@ could say otherwise.
   a holdings list. Holdings earn their place there for ISSUER overlap between
   two funds, which the percentages genuinely cannot show.
 
+### What the holdings ARE (`holding_profiles`)
+
+Sector, industry, country and market cap for every security inside a fund,
+from FMP, keyed on the symbol as `fund_holdings` spells it (Nov 2026).
+
+- **IT REPLACES RECOGNITION WITH DERIVATION, and that is the whole case for
+  it.** `fund_holdings` gives a symbol and a weight; knowing that NVDA, AVGO,
+  MU, AMD, TSMWF and SSNLF are one industry was being supplied by a model from
+  memory. On 11 Nov 2026 a role agent reported a "semiconductor cluster of
+  6.11% across 8 vehicles"; derived, it is **8.27% across 11 funds and 39
+  lines** — the book's largest thematic exposure, understated by a third,
+  with nothing in the system able to catch it.
+- **A DELIBERATE EXCEPTION TO "FMP IS READ ON DEMAND, NEVER PERSISTED."** That
+  rule holds because a stored copy of a live figure goes stale silently. Two
+  things override it here: the committee runs headless at 10:45 and needs
+  these facts in SQL, and ~2,500 live profile calls per run is worse than a
+  cached table. Sector, industry and country are near-static; **`market_cap`
+  is the only field that moves**, and its column comment says not to price off
+  it.
+- **CUSIPs and cash lines are excluded BY RULE, not missed.** `isCusipLike`
+  keys on a 9-character identifier starting with a digit — every bond line in
+  the book matches and no equity ticker does — and `isCashLike` catches
+  `USD Cash` and the `M:` money-market symbols. A stray match on the latter
+  would file a cash sweep as an equity exposure, which is the error the
+  committee prompt already warns about.
+- **`fmpQuerySymbol` is NOT `fmpSymbol`.** A dot before ONE letter is a share
+  class (`BRK.B` → `BRK-B`); a dot before two is an exchange (`ABX.TO`,
+  `L.TO`) and must survive. Blanket dot-to-hyphen breaks the second. It also
+  drops the YCharts `:DL` dual-listing marker.
+- **`unresolved = true` is a recorded answer, not an absence** — FMP has no
+  record, six symbols on this book — so the next import does not re-ask and a
+  reader can tell "we do not know" from "we never looked". A confirmed miss
+  is exempt from the 30-day staleness retry: FMP's catalogue is a fact, not a
+  value that ages.
+- **MEDIAN MARKET CAP OF A TOP 25 IS BIASED UPWARD** and must be quoted with
+  `percent_of_assets_in_top_25_holdings`. At ~100% coverage it is sound —
+  FTZIX shows a 41.6bn median inside a Mid-Cap Blend label. At ~50% it is
+  suggestive only.
+- **`apiKey()` gained a `process.env` fallback for this** (`lib/fmpClient.ts`),
+  mirroring `lib/supabase.ts`. It read only `import.meta.env`, so every call
+  threw under Node — and because callers catch per-symbol, that surfaced as
+  402 "fetch failed" results in 1.2 seconds rather than one missing-config
+  error. A credential problem wearing a data problem's clothes.
+
 **Four fund flags landed with it, each changing how an existing number is
 read** — all on `securities2`, all from the same import:
 `index_fund_generic` (trailing a benchmark is a finding for an active fund and
