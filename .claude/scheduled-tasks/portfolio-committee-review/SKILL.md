@@ -247,22 +247,27 @@ the book: construction, risk, and the regime it is being run into.
      research, selection, monitoring, sell discipline. It is the authority
      for "is the firm doing what it said it would do", which is a different
      test and the one an audit asks. It was renamed from
-     `investment_strategy` in Nov 2026 and **is editable on every model**,
-     unlike the philosophy, which is still gated to `id >= 10`.
+     `investment_strategy` in Nov 2026 and **is editable on every model**, as
+     is `objective_statement`. **`investment_philosophy` is the one narrative
+     field still gated to `id >= 10`**, which is why it is the one most often
+     missing.
    - **`securities2.investment_strategy` IS A DIFFERENT COLUMN ON A
      DIFFERENT TABLE** — a fund's description from the YCharts workbook.
      Never read it as a model's process.
 
    **A NULL NARRATIVE FIELD IS A FINDING, NOT A BLANK TO WORK AROUND**, and
    it is the one gap that silently limits every other judgement in the memo.
-   Measured 12 Nov 2026: **model 3 "Growth with Income" — which runs both
-   Hybrid Balanced and ETF Balanced — carries `objective_statement`,
-   `investment_philosophy` AND `investment_process` all NULL**, and eleven of
-   the fourteen models carry no philosophy at all. Where the rubric is
-   absent, say plainly in the memo that no mandate test was possible and name
-   the field, rather than inferring a rubric from the holdings and then
-   grading the holdings against it. **A model shared by two books must be
-   authored for both or neither.**
+   Re-measured 12 Nov 2026, after the narrative was consolidated onto
+   `objective_statement`: **objective 14/14, philosophy 3/14, process 3/14**,
+   and the three carrying a philosophy are exactly the stock models. So the
+   MANDATE RUBRIC is missing for all eleven fund models — model 3 "Growth
+   with Income" among them, and that one runs both Hybrid Balanced and ETF
+   Balanced. Where the rubric is absent, say plainly in the memo that no
+   mandate test was possible and name the field, rather than inferring a
+   rubric from the holdings and then grading the holdings against it.
+   **A model shared by two books must be authored for both or neither.**
+   Do not treat a present `objective_statement` as a rubric: every model has
+   one now, and it states the objective, not the criteria.
 
    **If that returns no row, say so in the memo and stop** rather than
    assessing construction against nothing. An unmapped portfolio falls back to
