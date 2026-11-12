@@ -73,20 +73,24 @@ export function ModelPortfoliosPage() {
         const renderCard = (mp: ModelPortfolio) => (
             <div key={mp.id} className="rounded-lg border border-gray-200 bg-white">
               {/* Header row */}
-              <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <div className="flex items-start justify-between gap-4 px-5 py-4">
                 <button
                   type="button"
                   onClick={() => setExpandedId(expandedId === mp.id ? null : mp.id)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  className="flex min-w-0 flex-1 items-start gap-3 text-left"
                 >
                   <svg
-                    className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${expandedId === mp.id ? 'rotate-90' : ''}`}
+                    className={`mt-1 h-4 w-4 shrink-0 text-gray-400 transition-transform ${expandedId === mp.id ? 'rotate-90' : ''}`}
                     fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900">
+                    {/* Two lines ALWAYS: 2 x 1.5rem leading. `line-clamp-2` is the
+                        other half of the reservation — without it a longer name
+                        added later would overflow the space and bring the ragged
+                        heights straight back. */}
+                    <p className="line-clamp-2 min-h-[3rem] font-semibold text-gray-900">
                       {mp.name || <span className="text-gray-400 font-normal italic">Untitled</span>}
                     </p>
                     {/* A label/value grid rather than four "Label: Value" lines —
@@ -94,7 +98,11 @@ export function ModelPortfoliosPage() {
                         value onto a second line, so a four-fact card ran to
                         eight. The labels are shortened for the same reason; the
                         VALUES are never abbreviated, since those are the facts. */}
-                    <dl className="mt-1 space-y-0.5 text-xs leading-snug">
+                    {/* Six lines ALWAYS (105px): four rows at text-xs/leading-snug
+                        (~16.5px) with three 2px gaps, sized so Objective and
+                        Benchmark can each take two lines. That is the worst case
+                        in the live book and the only row that varies. */}
+                    <dl className="mt-1 min-h-[105px] space-y-0.5 text-xs leading-snug">
                       {([
                         ['Objective', mp.investment_objective],
                         ['Risk',      mp.risk_profile],
