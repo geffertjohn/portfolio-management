@@ -1875,7 +1875,6 @@ export type Database = {
           industrials_exposure_generic: number | null
           investment_grade_bond_allocation_generic: number | null
           investment_objective: string | null
-          investment_philosophy: string | null
           large_cap_equity_allocation_generic: number | null
           last_rebalance_date: string | null
           latin_america_total_exposure_generic: number | null
@@ -1900,7 +1899,6 @@ export type Database = {
           name: string
           north_america_total_exposure_generic: number | null
           number_of_holdings: number | null
-          objective_statement: string | null
           one_month_total_return: number | null
           one_year_total_return: number | null
           other_bond_exposure_generic: number | null
@@ -2023,7 +2021,6 @@ export type Database = {
           industrials_exposure_generic?: number | null
           investment_grade_bond_allocation_generic?: number | null
           investment_objective?: string | null
-          investment_philosophy?: string | null
           large_cap_equity_allocation_generic?: number | null
           last_rebalance_date?: string | null
           latin_america_total_exposure_generic?: number | null
@@ -2048,7 +2045,6 @@ export type Database = {
           name: string
           north_america_total_exposure_generic?: number | null
           number_of_holdings?: number | null
-          objective_statement?: string | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
           other_bond_exposure_generic?: number | null
@@ -2171,7 +2167,6 @@ export type Database = {
           industrials_exposure_generic?: number | null
           investment_grade_bond_allocation_generic?: number | null
           investment_objective?: string | null
-          investment_philosophy?: string | null
           large_cap_equity_allocation_generic?: number | null
           last_rebalance_date?: string | null
           latin_america_total_exposure_generic?: number | null
@@ -2196,7 +2191,6 @@ export type Database = {
           name?: string
           north_america_total_exposure_generic?: number | null
           number_of_holdings?: number | null
-          objective_statement?: string | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
           other_bond_exposure_generic?: number | null

@@ -1999,7 +1999,11 @@ The settings/governance data was consolidated so each concept has one authoritat
 
 ### Narrative fields = the mandate rubric
 
-`objective_statement`, `investment_philosophy`, and `investment_process` live on **`model_portfolio_data`** (source of truth; `portfolio` holds a fallback copy of objective/philosophy). **`investment_philosophy`** = the income/stability/growth **criteria/rubric the committee reads** (mandate rubric, above). (These narrative fields + the bands/tiers/drift/cadence/benchmark are the **Model IPS** — see below.)
+`objective_statement`, `investment_philosophy`, and `investment_process` live on **`model_portfolio_data`**, which is now the ONLY home. **`investment_philosophy`** = the income/stability/growth **criteria/rubric the committee reads** (mandate rubric, above). (These narrative fields + the bands/tiers/drift/cadence/benchmark are the **Model IPS** — see below.)
+
+**`portfolio.objective_statement` and `portfolio.investment_philosophy` were DROPPED** (Nov 2026). This document used to call them "a fallback copy", which is what a second copy always is until it drifts — and it had: Equity Income's two differed from model 11's on both columns. Checked before dropping, every point in them survives across model 11's three narrative fields (the yield criterion in its objective, the payout/FCF/intrinsic-value/leadership criteria in its philosophy, the top-down-plus-bottom-up process bullets in its process); EI&CG's objective was byte-identical to model 13's. **The full text of both is recorded in the migration**, the way `prospects.thesis` was. Nothing read `investment_philosophy` at all, and the one reader of `objective_statement` was a dead `??` fallback in `PortfolioDetailPage` — dead because all 19 books are mapped to a model.
+- **`portfolio.description` survives** and is the last portfolio-level narrative column: it is `NOT NULL` and the workbook importer's insert path still writes `''` for a brand-new portfolio. It is blank on every book.
+- **The Overview now reads `modelPortfolio?.objective_statement` directly**, with no `usesModelNarrative` gate — there is nothing left to choose between. That is strictly better for an UNMAPPED portfolio, which the gate excluded: `modelPortfolio` falls back to the model matched by `investment_objective`, so such a book shows its strategy's objective instead of nothing.
 
 **`investment_process` was `investment_strategy` until Nov 2026, and the rename was not cosmetic.** Two reasons:
 
