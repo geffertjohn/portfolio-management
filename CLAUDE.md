@@ -1738,9 +1738,30 @@ under that list and none was ever completed.**
   and **amber clears the flag**. `basis` is `benchmarks` (live), because a fund's
   cohort re-ranks every quarter.
 - **This fixes a real gap.** The fund path called `addToAtRisk(securityId, [], …)`
-  — an EMPTY array — so IAGG has sat on the list with no metrics, nothing to
+  — an EMPTY array — so IAGG sat on the list with no metrics, nothing to
   re-measure, and a sell timer on the longest rung because `calcRemovalDate`
-  sizes on the failing count. `nextEarnings` is deliberately not passed for a
+  sizes on the failing count. **Worse, it could never raise a breach alert**:
+  the job fires on "any metric still red", which over an empty array is false
+  for ever, so the entry would have sat flagged past its timer with
+  `alert_events` never hearing about it.
+  - **BACKFILLED 12 Nov 2026** by `scripts/atrisk/backfill-fund-metrics.ts`
+    (dry-run by default), which calls the same `designatedCohort` →
+    `buildFundScorecard` → `atRiskMetricsFromScorecard` chain, so a backfilled
+    entry is what a flag raised today would have recorded. IAGG took three
+    bottom-tier readings against its category — Sharpe 3Y 56, Information
+    Ratio 3Y 60, Alpha 3Y 54, all against a tier-3 line of 51 — and all three
+    grade RED, which is the property that matters: these are rank percentiles,
+    so `higherIsBetter` is **false**, and had it been carried wrong they would
+    have graded green and the entry would still have been unalertable.
+  - **The readings are TODAY'S, not the flag day's, and the note says so.**
+    Nobody kept the figures from the day it was raised, and writing them
+    silently would assert the fund was flagged on numbers it was not — a false
+    record in an audit-defence tool. Same shape as the 29 Oct 2026 sell-timer
+    re-anchor recording each original date in its notes.
+  - **The sell timer was NOT re-derived.** It is set once, never recalculated;
+    the script reports what the new count implies (3 reds → 2 reports, ~May
+    2027 against the stored Sept 2027) and changes nothing, leaving that to the
+    advisor. `nextEarnings` is deliberately not passed for a
   fund: it does not report, so the day table is the right basis.
 - **The summary leads with At-Risk**, scoped to the portfolio's own holdings
   (`at_risk` is keyed by security, so the firm-wide list is mostly Equity

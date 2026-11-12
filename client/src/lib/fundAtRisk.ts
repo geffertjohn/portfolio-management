@@ -7,8 +7,9 @@
  *
  * **Why this exists.** A fund reaches the At-Risk list through the review
  * modal's At-Risk outcome, which called `addToAtRisk(securityId, [], …)` — an
- * EMPTY metrics array. IAGG has sat on the list since with no metrics at all,
- * and the consequences are not cosmetic:
+ * EMPTY metrics array. IAGG sat on the list since with no metrics at all, and
+ * the consequences were not cosmetic (backfilled 12 Nov 2026 by
+ * `scripts/atrisk/backfill-fund-metrics.ts`; this closes it for NEW flags):
  *
  *   - **The sell timer cannot tier.** `calcRemovalDate` sizes the deadline on
  *     the number of failing readings, so a count of zero takes the longest rung
