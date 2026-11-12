@@ -5,11 +5,13 @@ import {
   ychartsError,
 } from '@/lib/excelImportShared'
 
-const TEXT_COLS = new Set([
-  'security_id',
-  'security_name',
+// Only columns that are actually WRITTEN belong here. `security_id` and
+// `security_name` were listed too until Nov 2026 while also sitting in
+// SKIP_COLS, which wins first — so they never reached this branch and the
+// entry read as though they were imported when they are lookup keys. Removing
+// them changes no behaviour; it stops the two sets contradicting each other.
+export const TEXT_COLS = new Set([
   'detailed_security_type',
-  'description',
   'average_credit_quality_score',
 ])
 
@@ -21,12 +23,27 @@ const DATE_COLS = new Set([
   'year_low_date',
 ])
 
-const SKIP_COLS = new Set([
+export const SKIP_COLS = new Set([
   'portfolio_strategy',
   'created_at',
   // Identifier columns — used for lookup only, not sent as DB update fields
   'security_name', // legacy Excel template identifier (DB column is now "name")
   'security_id',
+  // THE SHEET'S `description` IS THE RAW SCRAPE AND MUST NOT BE WRITTEN
+  // (Nov 2026). The strategy narrative now lives on
+  // `model_portfolio_data.objective_statement`, and `portfolio.description`
+  // was blanked for every book so the Overview falls through to it. The
+  // workbook still carries the column — the original text, `&nbsp;` entities
+  // and all — so importing it would refill the very column that WINS over the
+  // objective, hiding the narrative again on the next refresh and putting the
+  // un-cleaned copy back. The refresh is a daily LaunchAgent, so that is a
+  // silent overnight revert, not a hypothetical.
+  //
+  // Skipped rather than dropped from the sheet: the parse loop ignores a
+  // SKIP_COLS header, which is the designed escape hatch for a column the DB
+  // no longer wants (gotcha 7). The INSERT path still writes '' for a new
+  // portfolio, since the column is NOT NULL.
+  'description',
 ])
 
 /**
