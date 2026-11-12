@@ -11,14 +11,24 @@ export async function fetchPortfolios(): Promise<Portfolio[]> {
   return data as Portfolio[]
 }
 
+/**
+ * Writes the objective ONLY.
+ *
+ * It used to take a `description` as well and copy it from whichever model
+ * matched the new objective. That stopped working in Nov 2026 when the
+ * narrative moved to `model_portfolio_data.objective_statement` and every
+ * model's `description` became null: the call then wrote NULL into
+ * `portfolio.description`, which is NOT NULL, so changing a portfolio's
+ * objective would have failed outright. There is nothing to copy any more —
+ * the narrative is resolved from the model at render time.
+ */
 export async function updatePortfolioObjective(
   portfolioName: string,
   investment_objective: string | null,
-  description: string | null,
 ): Promise<void> {
   const { error } = await supabase
     .from('portfolio')
-    .update({ investment_objective, description } as never)
+    .update({ investment_objective } as never)
     .eq('name', portfolioName)
   if (error) throw error
 }

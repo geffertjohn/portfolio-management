@@ -28,7 +28,17 @@ export interface ModelPortfolio {
   description: string | null
   objective_statement: string | null
   investment_philosophy: string | null
-  investment_strategy: string | null
+  /**
+   * How the strategy is actually run — screening, research, selection,
+   * monitoring, sell discipline.
+   *
+   * Renamed from `investment_strategy` (Nov 2026) when the field was
+   * ungated to every model and relabelled Investment Process on screen.
+   * **Not the same thing as `securities2.investment_strategy`**, which is a
+   * fund's description from the YCharts workbook and is unrelated — one name
+   * across two tables for two concepts was a standing trap for a grep.
+   */
+  investment_process: string | null
   category_drift_percentage: number | null
   asset_class_drift_percentage: number | null
   drift_percentage: number | null
@@ -237,6 +247,91 @@ export function hasSectorAllocations(name: string | null | undefined): boolean {
  */
 export function hasConvictionTiers(name: string | null | undefined): boolean {
   return !(name ?? '').startsWith('Foundation ')
+}
+
+/**
+ * The three families the Model Portfolios page groups by.
+ *
+ * The split is not cosmetic — the families differ in how many books a model
+ * runs, which is the thing a reader of this page needs to know before editing
+ * one:
+ *
+ * - **fund** — the five shared risk-tier models (ids 1-5). Each runs TWO
+ *   books, one ETF and one Hybrid, so an edit here lands in both. This is the
+ *   family where "never edit a shared model to fix one family" bites.
+ * - **foundation** — the five Foundation books, one model each.
+ * - **strategy** — the firm's own named strategies, one model each: the three
+ *   equity books plus Fixed Income Total Return.
+ *
+ * MATCHED BY NAME because `model_portfolio_data` carries no family column and
+ * the structural fact that separates them (how many portfolios map to the
+ * model) lives in `portfolio_model_map`, a table this page does not load. The
+ * name test and the structural fact agree on all fourteen models today.
+ */
+export type ModelFamily = 'foundation' | 'fund' | 'strategy'
+
+/**
+ * DERIVED from `EQUITY_MODEL_NAMES` rather than retyped, so a fourth equity
+ * book added there lands in the right column automatically instead of
+ * silently falling through to `fund`. Fixed Income Total Return is the one
+ * member that is not an equity book: it is a directly-run strategy, not a
+ * shared risk tier, which is what this column means.
+ */
+const STRATEGY_MODEL_NAMES = new Set<string>([
+  ...EQUITY_MODEL_NAMES,
+  'Fixed Income Total Return',
+])
+
+export function modelFamily(name: string | null | undefined): ModelFamily {
+  const n = name ?? ''
+  if (n.startsWith('Foundation ')) return 'foundation'
+  if (STRATEGY_MODEL_NAMES.has(n)) return 'strategy'
+  return 'fund'
+}
+
+export const MODEL_FAMILIES: { key: ModelFamily; label: string; blurb: string }[] = [
+  { key: 'foundation', label: 'Foundation', blurb: 'One model per Foundation book.' },
+  { key: 'fund',       label: 'Fund',       blurb: 'Shared risk tiers — each model runs an ETF book and a Hybrid book.' },
+  { key: 'strategy',   label: 'Strategy',   blurb: "The firm's own named strategies, one model each." },
+]
+
+/**
+ * The risk ladder the two multi-tier families are read in. A model whose
+ * benchmark is not on the ladder (every Strategy model) sorts after those that
+ * are and then by name, which puts the Strategy column in alphabetical order.
+ */
+const BENCHMARK_LADDER = [
+  'Conservative Benchmark (ETF)',
+  'Conservative Balanced Benchmark (ETF)',
+  'Balanced Benchmark (ETF)',
+  'Balanced w/ Growth Benchmark (ETF)',
+  'Growth Benchmark (ETF)',
+]
+
+export function compareModelsForDisplay(a: ModelPortfolio, b: ModelPortfolio): number {
+  const ai = BENCHMARK_LADDER.indexOf(a.benchmark ?? '')
+  const bi = BENCHMARK_LADDER.indexOf(b.benchmark ?? '')
+  if (ai !== bi) {
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  }
+  return (a.name ?? '').localeCompare(b.name ?? '')
+}
+
+/**
+ * Every family is returned whether or not it holds anything, for the same
+ * reason the Watchlist renders all fourteen asset classes: an empty column and
+ * a dropped column look identical to a reader, and only one of them is a fact
+ * about the book.
+ */
+export function groupModelsByFamily(
+  models: ModelPortfolio[],
+): { key: ModelFamily; label: string; blurb: string; models: ModelPortfolio[] }[] {
+  return MODEL_FAMILIES.map((f) => ({
+    ...f,
+    models: models.filter((m) => modelFamily(m.name) === f.key).sort(compareModelsForDisplay),
+  }))
 }
 
 export async function fetchModelPortfolioById(id: number): Promise<ModelPortfolio | null> {

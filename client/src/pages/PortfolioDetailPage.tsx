@@ -94,12 +94,7 @@ export function PortfolioDetailPage() {
 
   const objectiveMutation = useMutation({
     mutationFn: async (objective: string) => {
-      const model = modelPortfolios.find((m) => m.investment_objective === objective)
-      await updatePortfolioObjective(
-        id,
-        objective || null,
-        model?.description ?? null,
-      )
+      await updatePortfolioObjective(id, objective || null)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.portfolio(id) })

@@ -26,7 +26,10 @@
 # a running instance rather than starting its own. ASCII ONLY.
 
 param(
-    [Parameter(Mandatory = $true)][string]$CodesFile,
+    # Optional since Nov 2026: a removal-only run has nothing to add, and
+    # requiring a dummy file invited passing one whose codes were already on
+    # the sheet just to satisfy the parameter.
+    [string]$CodesFile = '',
     # old=new pairs. The header IS the metric code, so rewriting it repoints
     # the same cells at a different metric - no column is added or removed and
     # the formulas are untouched. Pair it with ALTER TABLE ... RENAME COLUMN.
@@ -71,12 +74,19 @@ $MAX_NAME_ERRORS = 20
 
 function Say($m) { Write-Host ("[addcol] " + $m) }
 
-if (-not (Test-Path $Workbook))  { throw "workbook not found: $Workbook" }
-if (-not (Test-Path $CodesFile)) { throw "codes file not found: $CodesFile" }
+if (-not (Test-Path $Workbook)) { throw "workbook not found: $Workbook" }
 
-$codes = @(Get-Content $CodesFile | ForEach-Object { $_.Trim() } |
-           Where-Object { $_ -ne '' -and -not $_.StartsWith('#') })
-if ($codes.Count -eq 0) { throw "no codes in $CodesFile" }
+$codes = @()
+if ($CodesFile -ne '') {
+    if (-not (Test-Path $CodesFile)) { throw "codes file not found: $CodesFile" }
+    $codes = @(Get-Content $CodesFile | ForEach-Object { $_.Trim() } |
+               Where-Object { $_ -ne '' -and -not $_.StartsWith('#') })
+    if ($codes.Count -eq 0) { throw "no codes in $CodesFile" }
+}
+# Doing nothing at all is a caller mistake, not a valid run.
+if ($codes.Count -eq 0 -and $Remove.Count -eq 0 -and $Rename.Count -eq 0) {
+    throw "nothing to do: give -CodesFile, -Remove or -Rename"
+}
 Say "$($codes.Count) code(s) requested"
 
 if ($Apply) {
@@ -139,7 +149,7 @@ try {
         $f = [string]$ws.Cells.Item($FirstDataRow, $c).Formula
         if ($f -match $want) { $model = $c; break }
     }
-    if ($model -eq 0) { throw ("no " + $fn + "() column found to copy from") }
+    if ($model -eq 0 -and $codes.Count -gt 0) { throw ("no " + $fn + "() column found to copy from") }
     Say "model column $model : $($ws.Cells.Item($FirstDataRow,$model).Formula)"
     if ($RepointTo -ne '') { Say "added columns will fetch against column $RepointTo" }
 

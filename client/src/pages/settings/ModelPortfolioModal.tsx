@@ -110,10 +110,9 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
   const [riskProfile,  setRiskProfile]  = useState(initial?.risk_profile ?? '')
   const [benchmark,           setBenchmark]           = useState(initial?.benchmark ?? '')
   const [rebalanceFrequency, setRebalanceFrequency]   = useState(initial?.rebalance_frequency ?? '')
-  const [description,        setDescription]          = useState(initial?.description ?? '')
   const [objectiveStatement,   setObjectiveStatement]   = useState(initial?.objective_statement ?? '')
   const [investmentPhilosophy, setInvestmentPhilosophy] = useState(initial?.investment_philosophy ?? '')
-  const [investmentStrategy,   setInvestmentStrategy]   = useState(initial?.investment_strategy ?? '')
+  const [investmentProcess,    setInvestmentProcess]    = useState(initial?.investment_process ?? '')
 
   // Independent drift % per level
   const [catDrift,    setCatDrift]    = useState(String(initial?.category_drift_percentage    ?? 20))
@@ -232,10 +231,14 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       risk_profile:                  riskProfile  || null,
       benchmark:                     benchmark           || null,
       rebalance_frequency:           rebalanceFrequency  || null,
-      description:                   description         || null,
+      // RETIRED Nov 2026 — the narrative lives on objective_statement, and the
+      // editor no longer renders a Description field. Written as null rather than
+      // omitted because ModelPortfolioInput requires the key, and writing it keeps
+      // a stray legacy value from surviving a save and re-winning on the Overview.
+      description:                   null,
       objective_statement:           objectiveStatement    || null,
       investment_philosophy:         investmentPhilosophy  || null,
-      investment_strategy:           investmentStrategy    || null,
+      investment_process:            investmentProcess     || null,
       category_drift_percentage:     cd || null,
       asset_class_drift_percentage:  ad || null,
       drift_percentage:              n(posDrift)  || null,
@@ -383,38 +386,54 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   <option value="Annual">Annual</option>
                 </select>
               </div>
-              {/* Equity Income / Core Growth consolidated their narrative onto Objective —
-                  the Description field/data was retired for them. */}
-              {!showSectors && (
-                <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <AutoGrowTextarea value={description} onChange={setDescription} maxHeightPx={160}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[4.5rem]" />
-                </div>
-              )}
+              {/* OBJECTIVE IS UNGATED — it is the model's ONE narrative now. The
+                  fund models kept theirs in `description` while the three stock
+                  models used this field, so one concept lived in two columns and
+                  the Overview labelled the same kind of text two ways. The data
+                  was moved onto this column in Nov 2026, which would have left
+                  ids 1-5 holding text they could neither see nor edit had the
+                  id >= 10 gate stayed.
 
-              {(initial?.id ?? 0) >= 10 && (
-                <>
-                  <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
-                    <label className="block text-sm font-medium text-gray-700">Objective</label>
-                    <p className="mt-0.5 text-xs text-gray-400">Narrative objective shown on the portfolio Overview.</p>
-                    <AutoGrowTextarea value={objectiveStatement} onChange={setObjectiveStatement} maxHeightPx={120}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none overflow-hidden leading-relaxed min-h-[3rem]" />
-                  </div>
-                  <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
-                    <label className="block text-sm font-medium text-gray-700">Investment Philosophy</label>
-                    <p className="mt-0.5 text-xs text-gray-400">Income / stability / growth criteria — the mandate rubric the AI committee reads.</p>
-                    <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy} maxHeightPx={260}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
-                  </div>
-                  <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
-                    <label className="block text-sm font-medium text-gray-700">Investment Strategy</label>
-                    <p className="mt-0.5 text-xs text-gray-400">How the philosophy is implemented — process, construction, diversification.</p>
-                    <AutoGrowTextarea value={investmentStrategy} onChange={setInvestmentStrategy} maxHeightPx={260}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
-                  </div>
-                </>
-              )}
+                  THE DESCRIPTION FIELD IS GONE with it. Every model's box is now
+                  empty, and PortfolioDetailPage prefers a description over an
+                  objective — so leaving the box would let one keystroke silently
+                  hide the Objective again and re-create the split this removes. */}
+              <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                <label className="block text-sm font-medium text-gray-700">Objective</label>
+                <p className="mt-0.5 text-xs text-gray-400">Narrative objective shown on the portfolio Overview. Read by the AI committee.</p>
+                <AutoGrowTextarea value={objectiveStatement} onChange={setObjectiveStatement} maxHeightPx={200}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[6rem]" />
+              </div>
+
+              {/* PHILOSOPHY IS UNGATED TOO — the last of the three narrative boxes
+                  to come off `id >= 10` (Nov 2026), and the one where the gate did
+                  real damage. This is the MANDATE RUBRIC the AI committee grades a
+                  holding's contribution against, and it was authored on 3 of 14
+                  models — the three stock models, which are exactly the ones the
+                  gate let through. The other eleven could not be given one at all,
+                  so the committee had no rubric for any fund book and said so.
+                  Model 3 is the sharp case: it runs BOTH Hybrid Balanced and ETF
+                  Balanced, so one unauthorable field left two books ungraded. */}
+              <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                <label className="block text-sm font-medium text-gray-700">Investment Philosophy</label>
+                <p className="mt-0.5 text-xs text-gray-400">Income / stability / growth criteria — the mandate rubric the AI committee reads.</p>
+                <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy} maxHeightPx={260}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
+              </div>
+
+              {/* INVESTMENT PROCESS IS UNGATED — every model gets it, unlike the
+                  three fields above, which stay on id >= 10. The others describe
+                  what a STRATEGY is; this describes how the firm RUNS it, and
+                  that is a question every model has an answer to. Eleven of the
+                  fourteen models had no narrative field at all before this. */}
+              <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                <label className="block text-sm font-medium text-gray-700">Investment Process</label>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  How this strategy is actually run — screening, research, selection, monitoring, sell discipline. Read by the AI committee.
+                </p>
+                <AutoGrowTextarea value={investmentProcess} onChange={setInvestmentProcess} maxHeightPx={260}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
+              </div>
             </div>
 
             <div className={asPage ? 'grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start' : 'space-y-5'}>
