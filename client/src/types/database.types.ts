@@ -1518,7 +1518,7 @@ export type Database = {
           ig_short_fixed_income_upper_limit: number | null
           investment_objective: string | null
           investment_philosophy: string | null
-          investment_strategy: string | null
+          investment_process: string | null
           large_cap_blend_lower_limit: number | null
           large_cap_blend_target: number | null
           large_cap_blend_upper_limit: number | null
@@ -1596,7 +1596,7 @@ export type Database = {
           ig_short_fixed_income_upper_limit?: number | null
           investment_objective?: string | null
           investment_philosophy?: string | null
-          investment_strategy?: string | null
+          investment_process?: string | null
           large_cap_blend_lower_limit?: number | null
           large_cap_blend_target?: number | null
           large_cap_blend_upper_limit?: number | null
@@ -1674,7 +1674,7 @@ export type Database = {
           ig_short_fixed_income_upper_limit?: number | null
           investment_objective?: string | null
           investment_philosophy?: string | null
-          investment_strategy?: string | null
+          investment_process?: string | null
           large_cap_blend_lower_limit?: number | null
           large_cap_blend_target?: number | null
           large_cap_blend_upper_limit?: number | null

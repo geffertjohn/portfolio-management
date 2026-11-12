@@ -1321,13 +1321,17 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_data" (
     "objective_statement" "text",
     "investment_philosophy" "text",
     "sector_allocations" "jsonb",
-    "investment_strategy" "text",
+    "investment_process" "text",
     CONSTRAINT "model_portfolio_data_rebalance_frequency_check" CHECK (("rebalance_frequency" = ANY (ARRAY['Quarterly'::"text", 'Semi-Annual'::"text", 'Annual'::"text"]))),
     CONSTRAINT "model_portfolio_data_review_frequency_check" CHECK (("review_frequency" = ANY (ARRAY['Quarterly'::"text", 'Semi-Annual'::"text", 'Annual'::"text"])))
 );
 
 
 ALTER TABLE "public"."model_portfolio_data" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."model_portfolio_data"."investment_process" IS 'How the strategy is actually run - screening, research, selection, monitoring, sell discipline. Editable on every model (the three narrative fields above it are still gated to id >= 10). Read by the AI committee alongside investment_philosophy: the philosophy is the mandate RUBRIC, this is the PROCESS, and they answer different questions. Not to be confused with securities2.investment_strategy, which is a fund description from YCharts and is unrelated.';
+
 
 
 ALTER TABLE "public"."model_portfolio_data" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (

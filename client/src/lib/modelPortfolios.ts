@@ -28,7 +28,17 @@ export interface ModelPortfolio {
   description: string | null
   objective_statement: string | null
   investment_philosophy: string | null
-  investment_strategy: string | null
+  /**
+   * How the strategy is actually run — screening, research, selection,
+   * monitoring, sell discipline.
+   *
+   * Renamed from `investment_strategy` (Nov 2026) when the field was
+   * ungated to every model and relabelled Investment Process on screen.
+   * **Not the same thing as `securities2.investment_strategy`**, which is a
+   * fund's description from the YCharts workbook and is unrelated — one name
+   * across two tables for two concepts was a standing trap for a grep.
+   */
+  investment_process: string | null
   category_drift_percentage: number | null
   asset_class_drift_percentage: number | null
   drift_percentage: number | null

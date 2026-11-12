@@ -113,7 +113,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
   const [description,        setDescription]          = useState(initial?.description ?? '')
   const [objectiveStatement,   setObjectiveStatement]   = useState(initial?.objective_statement ?? '')
   const [investmentPhilosophy, setInvestmentPhilosophy] = useState(initial?.investment_philosophy ?? '')
-  const [investmentStrategy,   setInvestmentStrategy]   = useState(initial?.investment_strategy ?? '')
+  const [investmentProcess,    setInvestmentProcess]    = useState(initial?.investment_process ?? '')
 
   // Independent drift % per level
   const [catDrift,    setCatDrift]    = useState(String(initial?.category_drift_percentage    ?? 20))
@@ -235,7 +235,7 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       description:                   description         || null,
       objective_statement:           objectiveStatement    || null,
       investment_philosophy:         investmentPhilosophy  || null,
-      investment_strategy:           investmentStrategy    || null,
+      investment_process:            investmentProcess     || null,
       category_drift_percentage:     cd || null,
       asset_class_drift_percentage:  ad || null,
       drift_percentage:              n(posDrift)  || null,
@@ -407,14 +407,22 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                     <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy} maxHeightPx={260}
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
                   </div>
-                  <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
-                    <label className="block text-sm font-medium text-gray-700">Investment Strategy</label>
-                    <p className="mt-0.5 text-xs text-gray-400">How the philosophy is implemented — process, construction, diversification.</p>
-                    <AutoGrowTextarea value={investmentStrategy} onChange={setInvestmentStrategy} maxHeightPx={260}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
-                  </div>
                 </>
               )}
+
+              {/* INVESTMENT PROCESS IS UNGATED — every model gets it, unlike the
+                  three fields above, which stay on id >= 10. The others describe
+                  what a STRATEGY is; this describes how the firm RUNS it, and
+                  that is a question every model has an answer to. Eleven of the
+                  fourteen models had no narrative field at all before this. */}
+              <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                <label className="block text-sm font-medium text-gray-700">Investment Process</label>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  How this strategy is actually run — screening, research, selection, monitoring, sell discipline. Read by the AI committee.
+                </p>
+                <AutoGrowTextarea value={investmentProcess} onChange={setInvestmentProcess} maxHeightPx={260}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
+              </div>
             </div>
 
             <div className={asPage ? 'grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start' : 'space-y-5'}>
