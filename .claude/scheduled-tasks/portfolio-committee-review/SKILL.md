@@ -258,17 +258,23 @@ the book: construction, risk, and the regime it is being run into.
 
    **A NULL NARRATIVE FIELD IS A FINDING, NOT A BLANK TO WORK AROUND**, and
    it is the one gap that silently limits every other judgement in the memo.
-   Re-measured 12 Nov 2026, after the narrative was consolidated onto
-   `objective_statement`: **objective 14/14, philosophy 3/14, process 3/14**,
-   and the three carrying a philosophy are exactly the stock models. So the
-   MANDATE RUBRIC is missing for all eleven fund models — model 3 "Growth
-   with Income" among them, and that one runs both Hybrid Balanced and ETF
-   Balanced. Where the rubric is absent, say plainly in the memo that no
+   Measured 12 Nov 2026: **objective 14/14, philosophy 13/14, process
+   13/14**. The one gap in all three is **model 12, Fixed Income Total
+   Return**. Where the rubric is absent, say plainly in the memo that no
    mandate test was possible and name the field, rather than inferring a
-   rubric from the holdings and then grading the holdings against it.
-   **A model shared by two books must be authored for both or neither.**
-   Do not treat a present `objective_statement` as a rubric: every model has
-   one now, and it states the objective, not the criteria.
+   rubric from the holdings and then grading the holdings against it. Do not
+   treat a present `objective_statement` as a rubric: every model has one,
+   and it states the objective, not the criteria.
+
+   **THE TEN FUND AND FOUNDATION MODELS SHARE ONE PHILOSOPHY AND ONE
+   PROCESS, WORD FOR WORD** — `Strategic Asset Allocation`, run as Capital
+   Market Assumptions → Asset Allocation → Investment Selection → Ongoing
+   Monitoring. Both families are strategic-allocation fund-of-fund mandates
+   run the same way, so this is deliberate. Two consequences for the memo:
+   finding the same rubric on another book is NOT corroboration, and the
+   shared text is a statement about how the firm runs the family, not
+   evidence that this particular book was reasoned about on its own. **The
+   four Strategy models each carry their own** and are run individually.
 
    **If that returns no row, say so in the memo and stop** rather than
    assessing construction against nothing. An unmapped portfolio falls back to
