@@ -258,23 +258,28 @@ the book: construction, risk, and the regime it is being run into.
 
    **A NULL NARRATIVE FIELD IS A FINDING, NOT A BLANK TO WORK AROUND**, and
    it is the one gap that silently limits every other judgement in the memo.
-   Measured 12 Nov 2026: **objective 14/14, philosophy 13/14, process
-   13/14**. The one gap in all three is **model 12, Fixed Income Total
-   Return**. Where the rubric is absent, say plainly in the memo that no
-   mandate test was possible and name the field, rather than inferring a
-   rubric from the holdings and then grading the holdings against it. Do not
-   treat a present `objective_statement` as a rubric: every model has one,
-   and it states the objective, not the criteria.
+   Measured 12 Nov 2026: **objective 14/14, philosophy 14/14, process
+   14/14** — no model is missing a narrative field today. Should one appear,
+   say plainly in the memo that no mandate test was possible and name the
+   field, rather than inferring a rubric from the holdings and then grading
+   the holdings against it. Do not treat a present `objective_statement` as
+   a rubric: every model has one, and it states the objective, not the
+   criteria.
 
-   **THE TEN FUND AND FOUNDATION MODELS SHARE ONE PHILOSOPHY AND ONE
-   PROCESS, WORD FOR WORD** — `Strategic Asset Allocation`, run as Capital
-   Market Assumptions → Asset Allocation → Investment Selection → Ongoing
-   Monitoring. Both families are strategic-allocation fund-of-fund mandates
-   run the same way, so this is deliberate. Two consequences for the memo:
-   finding the same rubric on another book is NOT corroboration, and the
-   shared text is a statement about how the firm runs the family, not
-   evidence that this particular book was reasoned about on its own. **The
-   four Strategy models each carry their own** and are run individually.
+   **ELEVEN OF THE FOURTEEN SHARE ONE PHILOSOPHY AND ONE PROCESS, WORD FOR
+   WORD** — `Strategic Asset Allocation`, run as Capital Market Assumptions
+   → Asset Allocation → Investment Selection → Ongoing Monitoring. All
+   eleven are strategic-allocation fund mandates run the same way, so this
+   is deliberate. Two consequences for the memo: finding the same rubric on
+   another book is NOT corroboration, and the shared text says how the firm
+   runs that whole set, not that this particular book was reasoned about on
+   its own.
+
+   **Only the three EQUITY books carry their own** — Core Growth, Equity
+   Income, Equity Income & Core Growth. Fixed Income Total Return does NOT,
+   despite being its own book rather than a shared risk tier, so do not
+   infer which rubric applies from how a model is grouped. Read
+   `investment_process`.
 
    **If that returns no row, say so in the memo and stop** rather than
    assessing construction against nothing. An unmapped portfolio falls back to
