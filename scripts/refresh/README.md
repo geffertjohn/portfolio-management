@@ -585,6 +585,25 @@ and `-FirstDataRow` default to that sheet; the `Model Portfolios` tab is also
 header-row 2 but loads the **`portfolio`** table rather than `securities2`, so
 check which importer owns a column before touching it.
 
+**A COLUMN DELETE IS SAFE OVER COM, unlike a `Range.Replace` repoint.** This
+was the open question when `description` was removed from `Model Portfolios`
+on 12 Nov 2026, because the documented trap is that making Excel RE-PARSE a
+formula as an account with no YCharts add-in turns `_xll.YCP` into `#NAME?`.
+Deleting a column is not a re-parse: Excel shifts the references in its own
+stored representation, so `=YCI($B3,F$2)` in column F simply becomes
+`=YCI($B3,E$2)` in column E and keeps its cached value. **Measured: 0 `#NAME?`
+before and 0 after**, 122 columns down to 121. The distinction is rewriting
+formula TEXT (breaks) versus Excel adjusting a reference structurally (fine).
+
+**Verify with the script's own dry run, NOT an ad-hoc COM session.** Checking
+the result by hand with `New-Object -ComObject Excel.Application` went wrong
+immediately: setting `$x.Calculation` before any workbook is open throws
+`SetValueInvocationException`, so calculation stayed AUTOMATIC, Excel
+recalculated the whole sheet on open, and every YCharts cell read `#NAME?`.
+Nothing was lost only because the session closed with `Close($false)` — had it
+saved, the cached values for all 100 rows would have been gone. A dry run
+probes the same thing safely and prints the `#NAME?` count.
+
 **`-Info` picks the model, and getting it wrong is silent.** The sheet carries
 both functions — C..N are `=YCI($B3,C$2)` and everything from O rightward is
 `=YCP($B3,…$2)` — and they are not interchangeable: a code from the reference
