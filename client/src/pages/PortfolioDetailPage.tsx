@@ -252,7 +252,14 @@ export function PortfolioDetailPage() {
           const description = (usesModelNarrative && modelPortfolio?.description)
             ? modelPortfolio.description
             : portfolio.description
-          const objective = (usesModelNarrative ? modelPortfolio?.objective_statement : null) ?? portfolio.objective_statement ?? null
+          // ONE SOURCE. `portfolio.objective_statement` was the other half of
+          // this and was dropped in Nov 2026, so there is nothing left to
+          // choose between and the `usesModelNarrative` gate does not apply.
+          // Reading the resolved model directly is also strictly better for an
+          // UNMAPPED portfolio: `modelPortfolio` falls back to the model matched
+          // by investment_objective, which the gate used to exclude — so such a
+          // book now shows its strategy's objective instead of nothing.
+          const objective = modelPortfolio?.objective_statement ?? null
           return description
             ? <PortfolioNarrative text={description} label="Description" />
             : <PortfolioNarrative text={objective} label="Objective" />

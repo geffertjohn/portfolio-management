@@ -4,9 +4,15 @@ export interface Portfolio {
   portfolio_strategy: string
   updated_at: string | null
   investment_objective: string | null
+  /**
+   * The portfolio-level narrative is DOWN TO THIS ONE COLUMN, and it is
+   * blank on every book. `objective_statement` and `investment_philosophy`
+   * were dropped in Nov 2026 — the narrative is authored on the model
+   * portfolio page and lives on `model_portfolio_data`. `description`
+   * survives only because it is NOT NULL and the importer's insert path
+   * still writes '' for a brand-new portfolio.
+   */
   description: string
-  objective_statement: string | null
-  investment_philosophy: string | null
   created_at: string
   market_alpha_12_month: number | null
   quarterly_market_beta_12_month: number | null

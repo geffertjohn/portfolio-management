@@ -1541,9 +1541,7 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio" (
     "other_bond_exposure_generic" numeric,
     "developed_equity_exposure" numeric,
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "last_rebalance_date" "date",
-    "objective_statement" "text",
-    "investment_philosophy" "text"
+    "last_rebalance_date" "date"
 );
 
 
