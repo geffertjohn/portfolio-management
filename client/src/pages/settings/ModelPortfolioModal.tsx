@@ -405,16 +405,21 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[6rem]" />
               </div>
 
-              {(initial?.id ?? 0) >= 10 && (
-                <>
-                  <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
-                    <label className="block text-sm font-medium text-gray-700">Investment Philosophy</label>
-                    <p className="mt-0.5 text-xs text-gray-400">Income / stability / growth criteria — the mandate rubric the AI committee reads.</p>
-                    <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy} maxHeightPx={260}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
-                  </div>
-                </>
-              )}
+              {/* PHILOSOPHY IS UNGATED TOO — the last of the three narrative boxes
+                  to come off `id >= 10` (Nov 2026), and the one where the gate did
+                  real damage. This is the MANDATE RUBRIC the AI committee grades a
+                  holding's contribution against, and it was authored on 3 of 14
+                  models — the three stock models, which are exactly the ones the
+                  gate let through. The other eleven could not be given one at all,
+                  so the committee had no rubric for any fund book and said so.
+                  Model 3 is the sharp case: it runs BOTH Hybrid Balanced and ETF
+                  Balanced, so one unauthorable field left two books ungraded. */}
+              <div className={asPage ? 'md:col-span-3' : 'col-span-2'}>
+                <label className="block text-sm font-medium text-gray-700">Investment Philosophy</label>
+                <p className="mt-0.5 text-xs text-gray-400">Income / stability / growth criteria — the mandate rubric the AI committee reads.</p>
+                <AutoGrowTextarea value={investmentPhilosophy} onChange={setInvestmentPhilosophy} maxHeightPx={260}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 resize-none leading-relaxed min-h-[8rem]" />
+              </div>
 
               {/* INVESTMENT PROCESS IS UNGATED — every model gets it, unlike the
                   three fields above, which stay on id >= 10. The others describe

@@ -248,9 +248,10 @@ the book: construction, risk, and the regime it is being run into.
      for "is the firm doing what it said it would do", which is a different
      test and the one an audit asks. It was renamed from
      `investment_strategy` in Nov 2026 and **is editable on every model**, as
-     is `objective_statement`. **`investment_philosophy` is the one narrative
-     field still gated to `id >= 10`**, which is why it is the one most often
-     missing.
+     are `objective_statement` and `investment_philosophy` — **no narrative
+     field is gated any more.** Until Nov 2026 the philosophy was, which is
+     why it is the one most often missing: it existed on exactly the three
+     models the gate let through.
    - **`securities2.investment_strategy` IS A DIFFERENT COLUMN ON A
      DIFFERENT TABLE** — a fund's description from the YCharts workbook.
      Never read it as a model's process.
