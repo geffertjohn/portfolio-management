@@ -298,42 +298,44 @@ the book: construction, risk, and the regime it is being run into.
    this job tells you how the book differs from the thing it is measured
    against.
 
-   **THE JOIN NEEDS AN ALIAS TABLE AND FAILS SILENTLY WITHOUT ONE.** The
-   model's `benchmark` is prose (`Balanced Benchmark (ETF)`) while the
-   benchmark row's `name` is short (`Balanced`), and stripping the suffix
-   resolves only 14 of the 19 books. Three cases need mapping and each was
-   measured: `Balanced w/ Growth Benchmark (ETF)` against a row named
-   `Balanced with Growth` (**w/ against with**), `Bloomberg US Aggregate`
-   against `Bloomberg US Agg`, and `Russell 1000`, whose row has **a NULL
-   name** and is identifiable only by `security_id = 'IWB'`. Same shape as the
-   `portfolio_model_map` trap above: a naive join returns no row and the step
-   reads as "no benchmark data" rather than as a mapping gap.
+   **THE JOIN IS A DIRECT MATCH ON `security_name`, and it only became one
+   today — check it still resolves before trusting it.** The benchmark row's
+   `security_name` and `model_portfolio_data.benchmark` now carry the same
+   eight strings, so:
 
    ```sql
-   with alias(model_text, bmk_key) as (values
-     ('Balanced w/ Growth Benchmark (ETF)','Balanced with Growth'),
-     ('Bloomberg US Aggregate','Bloomberg US Agg'),
-     ('Russell 1000','@IWB')              -- '@' prefix means match security_id
-   ), resolved as (
-     select p.name portfolio, p.security_id,
-            coalesce(a.bmk_key,
-                     regexp_replace(m.benchmark, '\s*Benchmark \(ETF\)$','')) key
-     from portfolio p
-     join portfolio_model_map pm on pm.security_id = p.security_id
-     join model_portfolio_data m on m.id = pm.model_portfolio_id
-     left join alias a on a.model_text = m.benchmark
-     where p.name = :portfolio
-   )
    select p.*, b.*
-   from resolved r
-   join portfolio p on p.name = r.portfolio
-   join model_portfolio_benchmarks b
-     on (r.key like '@%' and b.security_id = substring(r.key from 2))
-     or (r.key not like '@%' and b.name = r.key);
+   from portfolio p
+   join portfolio_model_map pm   on pm.security_id = p.security_id
+   join model_portfolio_data m   on m.id = pm.model_portfolio_id
+   join model_portfolio_benchmarks b on b.security_name = m.benchmark
+   where p.name = :portfolio;
    ```
 
-   Verified 12 Nov 2026: all 19 portfolios resolve with that alias table, none
-   without it.
+   **It needed a three-entry alias table until 12 Nov 2026**, when the advisor
+   rebuilt the benchmark sheet with new YCharts ids and short names and the
+   model text was aligned to match. Keep the failure in mind rather than the
+   alias: **`security_name` is written FROM THE SHEET on every import**, so a
+   rename there silently breaks the join for every book using that benchmark —
+   and it breaks it by returning a DIFFERENT row rather than none, because
+   superseded rows stay in the table until somebody deletes them. On the
+   morning it happened, **16 of the 19 books were reading a frozen benchmark
+   that could never refresh again**, and every page still rendered a number.
+
+   **So verify, do not assume.** This query must return 19 rows with no null
+   benchmark, and every `b.updated_at` should match the morning's import:
+
+   ```sql
+   select p.name, m.benchmark, b.security_id, b.updated_at
+   from portfolio p
+   join portfolio_model_map pm on pm.security_id = p.security_id
+   join model_portfolio_data m on m.id = pm.model_portfolio_id
+   left join model_portfolio_benchmarks b on b.security_name = m.benchmark
+   where b.id is null or b.updated_at < now() - interval '2 days';
+   ```
+
+   Anything it returns is a book whose benchmark comparison is stale or
+   missing: say so in that memo rather than quoting the figures.
 
    - **THIS IS THE LOOK-THROUGH BOOK, NOT THE TARGET VECTOR, and that is why
      it is worth reading.** `positions.allocation_pct` says what the model
