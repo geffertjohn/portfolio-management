@@ -287,6 +287,81 @@ the book: construction, risk, and the regime it is being run into.
    guess here would be a construction verdict measured against the wrong
    model -- worse than reporting that the mapping is missing.
 
+   **COMPARE THE BOOK TO ITS BENCHMARK'S ALLOCATION** (Nov 2026). This was
+   missing from the process until the advisor asked for it, and it is the
+   cheapest reading in this whole file: **`portfolio` and
+   `model_portfolio_benchmarks` carry the SAME 66 allocation columns** — the
+   nine-cell style box, size bands, eleven sectors, regions, credit-rating
+   buckets, maturity buckets, `effective_duration`, `yield_to_maturity` — both
+   computed by YCharts on the same look-through basis and both refreshed by
+   the same morning import. The comparison is a one-row join. Nothing else in
+   this job tells you how the book differs from the thing it is measured
+   against.
+
+   **THE JOIN NEEDS AN ALIAS TABLE AND FAILS SILENTLY WITHOUT ONE.** The
+   model's `benchmark` is prose (`Balanced Benchmark (ETF)`) while the
+   benchmark row's `name` is short (`Balanced`), and stripping the suffix
+   resolves only 14 of the 19 books. Three cases need mapping and each was
+   measured: `Balanced w/ Growth Benchmark (ETF)` against a row named
+   `Balanced with Growth` (**w/ against with**), `Bloomberg US Aggregate`
+   against `Bloomberg US Agg`, and `Russell 1000`, whose row has **a NULL
+   name** and is identifiable only by `security_id = 'IWB'`. Same shape as the
+   `portfolio_model_map` trap above: a naive join returns no row and the step
+   reads as "no benchmark data" rather than as a mapping gap.
+
+   ```sql
+   with alias(model_text, bmk_key) as (values
+     ('Balanced w/ Growth Benchmark (ETF)','Balanced with Growth'),
+     ('Bloomberg US Aggregate','Bloomberg US Agg'),
+     ('Russell 1000','@IWB')              -- '@' prefix means match security_id
+   ), resolved as (
+     select p.name portfolio, p.security_id,
+            coalesce(a.bmk_key,
+                     regexp_replace(m.benchmark, '\s*Benchmark \(ETF\)$','')) key
+     from portfolio p
+     join portfolio_model_map pm on pm.security_id = p.security_id
+     join model_portfolio_data m on m.id = pm.model_portfolio_id
+     left join alias a on a.model_text = m.benchmark
+     where p.name = :portfolio
+   )
+   select p.*, b.*
+   from resolved r
+   join portfolio p on p.name = r.portfolio
+   join model_portfolio_benchmarks b
+     on (r.key like '@%' and b.security_id = substring(r.key from 2))
+     or (r.key not like '@%' and b.name = r.key);
+   ```
+
+   Verified 12 Nov 2026: all 19 portfolios resolve with that alias table, none
+   without it.
+
+   - **THIS IS THE LOOK-THROUGH BOOK, NOT THE TARGET VECTOR, and that is why
+     it is worth reading.** `positions.allocation_pct` says what the model
+     specifies; `portfolio.stock_net` says what the funds actually hold once
+     you see through them. On Hybrid Balanced the target vector reads 66.00%
+     equity and the look-through reads **67.8%** — because a high-yield fund
+     in the bond sleeve holds equity. That gap is the kind of thing the sleeve
+     labels can never show, and it is measured here rather than argued.
+   - **Report DIFFERENCES, not levels.** "Technology 29.1% against a benchmark
+     32.2%" is a finding; "technology 29.1%" is a number. A book on benchmark
+     is as much a result as one off it.
+   - **A difference is not automatically a defect.** The mandate is strategic
+     allocation, so a deliberate tilt is allowed; what is not allowed is a
+     tilt nobody chose. Say which you think it is, and on what evidence.
+   - **`yield_to_maturity` LIVES HERE, on both sides.** It is the measure the
+     bond sleeve's compensation question actually needs, and SEC yield is not
+     a substitute: SEC yield measures 30-day net income, so a low-coupon fund
+     trading at a discount reads far worse than it is. A macro run on 12 Nov
+     2026 concluded from SEC yields that the sleeve was "barely paid" at about
+     +10bp over a 2-year Treasury, and said yield-to-maturity was carried
+     nowhere in the book. It was carried here all along: 5.59% against the
+     benchmark's 5.86%, which is +86bp over that same Treasury. **Read YTM
+     before making any claim about whether a bond sleeve is paid for its
+     risk.**
+   - **Not every row is populated.** 13 of 19 portfolios and 5 of 8 benchmarks
+     carry a `yield_to_maturity`; the all-equity books carry none, correctly.
+     A null is "not applicable here", not a gap to report.
+
    Also read the fund scorecard columns on `securities2` for each holding —
    the rank and ratio columns the app's scorecard uses. The advisor has just
    worked through them; you are reading the same evidence, not new evidence.
