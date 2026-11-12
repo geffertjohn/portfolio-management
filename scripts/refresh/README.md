@@ -571,7 +571,19 @@ scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-composition-codes.txt 
 
 # An Info-tab code needs -Info, which copies a YCI column instead of a YCP one.
 scripts/refresh/add-sheet-columns.ps1 -CodesFile …\fund-info-codes.txt -Info -Apply
+
+# REMOVAL ONLY — -CodesFile is optional (Nov 2026). It was mandatory, which
+# meant a removal run had to pass a dummy file whose codes were already on the
+# sheet just to satisfy the parameter. The script now refuses a run that would
+# do nothing at all instead.
+scripts/refresh/add-sheet-columns.ps1 -Remove description \
+  -SheetName 'Model Portfolios' -HeaderRow 2 -FirstDataRow 3 -Apply
 ```
+
+**The sheet it edits is not always `Securities`.** `-SheetName`, `-HeaderRow`
+and `-FirstDataRow` default to that sheet; the `Model Portfolios` tab is also
+header-row 2 but loads the **`portfolio`** table rather than `securities2`, so
+check which importer owns a column before touching it.
 
 **`-Info` picks the model, and getting it wrong is silent.** The sheet carries
 both functions — C..N are `=YCI($B3,C$2)` and everything from O rightward is
