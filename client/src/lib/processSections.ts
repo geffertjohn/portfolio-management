@@ -193,24 +193,24 @@ export function toMarkdown(title: string, sections: ProcessSection[]): string {
 }
 
 /**
- * Is this document fit to adopt?
+ * What would make this document impossible to use — the hard floor.
  *
  * The DB enforces the same floor (`process_documents_published_is_complete`),
  * deliberately: the CHECK is what stops a bad write whatever the caller does,
  * and this is what lets the UI say WHY before the advisor clicks.
+ *
+ * **An EMPTY SECTION is deliberately not here.** It was, and the first real
+ * document proved that wrong: a numbered heading whose content is entirely in
+ * its subsections ("3. Asset Allocation" above "3.1 Overview") is completely
+ * ordinary, and four of the twenty-four sections were that shape. Refusing to
+ * adopt a correct document because it has structural headings would have made
+ * the advisor flatten their own numbering to satisfy the tool. It is a
+ * CAUTION instead — see `adoptionCautions`.
  */
 export function adoptionBlockers(title: string, sections: ProcessSection[]): string[] {
   const out: string[] = []
   if (!title.trim()) out.push('The document needs a title.')
   if (sections.length === 0) out.push('The document has no sections.')
-  const empty = sections.filter((s) => !s.body.trim())
-  if (empty.length > 0) {
-    out.push(
-      empty.length === 1
-        ? `One section has no content: "${empty[0].heading}".`
-        : `${empty.length} sections have no content: ${empty.map((s) => `"${s.heading}"`).join(', ')}.`,
-    )
-  }
   const keys = new Set<string>()
   for (const s of sections) {
     if (keys.has(s.key)) {
@@ -220,4 +220,22 @@ export function adoptionBlockers(title: string, sections: ProcessSection[]): str
     keys.add(s.key)
   }
   return out
+}
+
+/**
+ * Worth seeing before adopting, but not a reason to refuse.
+ *
+ * An empty section is usually a structural parent heading and sometimes an
+ * unfinished clause. Only the advisor can tell which, so the panel names them
+ * and adopts anyway — the committee simply has nothing to test against a
+ * section with no text, which is the honest outcome either way.
+ */
+export function adoptionCautions(sections: ProcessSection[]): string[] {
+  const empty = sections.filter((s) => !s.body.trim())
+  if (empty.length === 0) return []
+  return [
+    empty.length === 1
+      ? `One section has no content and the committee will have nothing to test against it: "${empty[0].heading}".`
+      : `${empty.length} sections have no content and the committee will have nothing to test against them: ${empty.map((s) => `"${s.heading}"`).join(', ')}.`,
+  ]
 }

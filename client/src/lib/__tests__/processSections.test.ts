@@ -5,6 +5,7 @@ import {
   reconcile,
   toMarkdown,
   adoptionBlockers,
+  adoptionCautions,
   type ProcessSection,
 } from '../processSections'
 
@@ -159,21 +160,35 @@ describe('adoptionBlockers', () => {
     expect(adoptionBlockers('Process', ok)).toEqual([])
   })
 
-  it('blocks an empty document, a missing title and an empty section', () => {
+  it('blocks an empty document and a missing title', () => {
     // Mirrors process_documents_published_is_complete. The CHECK is what stops
     // a bad write; this is what says why before the advisor clicks.
     expect(adoptionBlockers('Process', [])).toHaveLength(1)
     expect(adoptionBlockers('  ', ok)).toHaveLength(1)
-    expect(adoptionBlockers('Process', [{ key: 'a', heading: 'A', body: '  ' }])).toHaveLength(1)
   })
 
-  it('names the empty sections so they can be found', () => {
-    const blockers = adoptionBlockers('Process', [
+  it('does NOT block a section with no body', () => {
+    // The real document proved this: four of its twenty-four headings are
+    // numbered parents whose content lives in their subsections ("3. Asset
+    // Allocation" above "3.1 Overview"). Refusing to adopt over that would
+    // make the advisor flatten their own numbering to satisfy the tool.
+    expect(adoptionBlockers('Process', [{ key: 'a', heading: 'A', body: '  ' }])).toEqual([])
+  })
+
+  it('cautions about an empty section and names it', () => {
+    const c = adoptionCautions([
       { key: 'a', heading: 'Alpha', body: '' },
       { key: 'b', heading: 'Beta', body: '' },
+      { key: 'c', heading: 'Gamma', body: 'Text.' },
     ])
-    expect(blockers[0]).toContain('Alpha')
-    expect(blockers[0]).toContain('Beta')
+    expect(c).toHaveLength(1)
+    expect(c[0]).toContain('Alpha')
+    expect(c[0]).toContain('Beta')
+    expect(c[0]).not.toContain('Gamma')
+  })
+
+  it('has nothing to caution about when every section has content', () => {
+    expect(adoptionCautions(ok)).toEqual([])
   })
 
   it('blocks a duplicate key — a memo citing it could not resolve', () => {

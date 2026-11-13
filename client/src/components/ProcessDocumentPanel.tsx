@@ -30,6 +30,7 @@ import {
   reconcile,
   toMarkdown,
   adoptionBlockers,
+  adoptionCautions,
   type ProcessSection,
   type SectionWarning,
 } from '@/lib/processSections'
@@ -138,6 +139,7 @@ export default function ProcessDocumentPanel() {
   })
 
   const blockers = useMemo(() => adoptionBlockers(title, sections), [title, sections])
+  const cautions = useMemo(() => adoptionCautions(sections), [sections])
   const isRevision = (draft?.version ?? 1) > 1
   const needsReason = isRevision && !revisionReason.trim()
 
@@ -501,6 +503,16 @@ export default function ProcessDocumentPanel() {
           {blockers.map((b, i) => (
             <li key={i} className="text-xs text-gray-600">
               {b}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {cautions.length > 0 && (
+        <ul className="mt-3 space-y-1 rounded border border-amber-200 bg-amber-50 px-3 py-2">
+          {cautions.map((c, i) => (
+            <li key={i} className="text-xs text-amber-800">
+              {c}
             </li>
           ))}
         </ul>
