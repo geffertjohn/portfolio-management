@@ -244,21 +244,19 @@ export function PortfolioDetailPage() {
         </dl>
 
         {(() => {
-          // Prefer the strategy Description; fall back to the Objective narrative for
-          // portfolios that no longer carry a Description (Equity Income / Core Growth).
-          const usesModelNarrative =
-            mappedModelPortfolioId != null ||
-            (['ETF', 'Foundation', 'Hybrid'].includes(portfolio.portfolio_strategy) && !isEquityStrategy)
-          const description = (usesModelNarrative && modelPortfolio?.description)
-            ? modelPortfolio.description
-            : portfolio.description
-          // ONE SOURCE. `portfolio.objective_statement` was the other half of
-          // this and was dropped in Nov 2026, so there is nothing left to
-          // choose between and the `usesModelNarrative` gate does not apply.
-          // Reading the resolved model directly is also strictly better for an
-          // UNMAPPED portfolio: `modelPortfolio` falls back to the model matched
-          // by investment_objective, which the gate used to exclude — so such a
-          // book now shows its strategy's objective instead of nothing.
+          // ONE SOURCE PER SIDE. `portfolio.objective_statement` was dropped in
+          // Nov 2026 and `model_portfolio_data.description` in Nov 2026 too, so
+          // there is nothing left to choose between on either half and the old
+          // `usesModelNarrative` gate is gone with them. Reading the resolved
+          // model directly is strictly better for an UNMAPPED portfolio:
+          // `modelPortfolio` falls back to the model matched by
+          // investment_objective, which the gate used to exclude — so such a
+          // book shows its strategy's objective instead of nothing.
+          //
+          // `portfolio.description` survives only because it is NOT NULL and the
+          // importer's insert path writes '' for a brand-new book; it is blank on
+          // all 19 today, so the Objective is what actually renders.
+          const description = portfolio.description
           const objective = modelPortfolio?.objective_statement ?? null
           return description
             ? <PortfolioNarrative text={description} label="Description" />

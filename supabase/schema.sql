@@ -1250,7 +1250,6 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_data" (
     "investment_objective" "text",
     "risk_profile" "text",
     "benchmark" "text",
-    "description" "text",
     "large_cap_blend_lower_limit" numeric,
     "large_cap_blend_target" numeric,
     "large_cap_blend_upper_limit" numeric,
@@ -1328,10 +1327,6 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_data" (
 
 
 ALTER TABLE "public"."model_portfolio_data" OWNER TO "postgres";
-
-
-COMMENT ON COLUMN "public"."model_portfolio_data"."description" IS 'RETIRED Nov 2026 -- the narrative moved to `objective_statement` and the editor no longer renders a Description field. Kept as a column because PortfolioDetailPage still prefers a description over an objective when one exists; nothing writes it now.';
-
 
 
 COMMENT ON COLUMN "public"."model_portfolio_data"."objective_statement" IS 'The model''s narrative objective, shown on the portfolio Overview and read by the AI committee. Single home for the strategy narrative since Nov 2026: the fund models kept theirs in `description` until then, so one concept lived in two columns. Editable on every model.';

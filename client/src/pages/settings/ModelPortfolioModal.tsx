@@ -231,11 +231,6 @@ export function ModelPortfolioModal({ initial, models, benchmarkOptions, onSave,
       risk_profile:                  riskProfile  || null,
       benchmark:                     benchmark           || null,
       rebalance_frequency:           rebalanceFrequency  || null,
-      // RETIRED Nov 2026 — the narrative lives on objective_statement, and the
-      // editor no longer renders a Description field. Written as null rather than
-      // omitted because ModelPortfolioInput requires the key, and writing it keeps
-      // a stray legacy value from surviving a save and re-winning on the Overview.
-      description:                   null,
       objective_statement:           objectiveStatement    || null,
       investment_philosophy:         investmentPhilosophy  || null,
       investment_process:            investmentProcess     || null,

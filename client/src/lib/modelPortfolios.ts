@@ -25,7 +25,6 @@ export interface ModelPortfolio {
    * (read by lib/rebalanceSchedule.ts to date the rebalance timers).
    */
   review_frequency: string | null
-  description: string | null
   objective_statement: string | null
   investment_philosophy: string | null
   /**
