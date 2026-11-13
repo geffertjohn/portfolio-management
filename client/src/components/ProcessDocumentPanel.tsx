@@ -310,7 +310,6 @@ export default function ProcessDocumentPanel() {
                   <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
                     {s.body}
                   </p>
-                  <p className="mt-1 font-mono text-[10px] text-gray-400">{s.key}</p>
                 </div>
               ))}
             </div>
@@ -463,9 +462,6 @@ export default function ProcessDocumentPanel() {
                 placeholder="Section heading"
                 className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-medium"
               />
-              <span className="shrink-0 font-mono text-[10px] text-gray-400" title="Anchor a committee memo cites. It does not change when you reword the heading.">
-                {s.key}
-              </span>
               <button onClick={() => move(i, -1)} disabled={i === 0} className="px-1 text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30">↑</button>
               <button onClick={() => move(i, 1)} disabled={i === sections.length - 1} className="px-1 text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30">↓</button>
               <button onClick={() => removeSection(i)} className="px-1 text-xs text-gray-400 hover:text-red-600">✕</button>

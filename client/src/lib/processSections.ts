@@ -16,7 +16,16 @@
  */
 
 export interface ProcessSection {
-  /** Stable kebab-case anchor. Derived from the heading at import, then carried. */
+  /**
+   * Stable kebab-case anchor. Derived from the heading at import, then carried.
+   *
+   * **Internal — it is deliberately NOT rendered anywhere in the app.** It is
+   * machinery for keeping a committee citation resolvable across a rewording,
+   * not something the advisor reads, and a column of grey slugs under every
+   * clause was noise on a page meant to be read as a document. The committee
+   * prompt therefore names the HEADING in its prose and carries the key
+   * alongside it, so a finding is both readable and still anchored.
+   */
   key: string
   heading: string
   body: string

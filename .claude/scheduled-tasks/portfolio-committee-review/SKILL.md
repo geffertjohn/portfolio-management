@@ -712,12 +712,15 @@ the book: construction, risk, and the regime it is being run into.
     where kind = 'portfolio_process' and status = 'current';
    ```
 
-   - **`sections` is an ordered array of `{key, heading, body}`, and `key` is
-     how you CITE a clause.** Quote the key, never the heading: headings are
-     reworded in place and the key deliberately survives that, so a memo
-     citing a heading stops resolving the first time the advisor rephrases
-     it. Record the `version` you read in the memo's rationale, so a reader
-     months from now knows which text the finding was measured against.
+   - **`sections` is an ordered array of `{key, heading, body}`. Name the
+     HEADING in the sentence and carry the `key` with it**, like
+     *Asset Allocation - Model Portfolios (`asset-allocation-model-portfolios`)*.
+     The key is a stable machine anchor that survives a rewording, so it is
+     what makes a finding still resolvable in six months -- but **it is not
+     shown anywhere in the app**, so a memo that cites only the key names
+     something the advisor cannot look up. Both, every time. Record the
+     `version` you read in the memo's rationale, so a reader months from now
+     knows which text the finding was measured against.
    - **IF NO ROW COMES BACK, SAY SO IN THE MEMO AND ASSESS NOTHING AGAINST
      IT.** Do not fall back to `investment_process`, which answers a
      different question (see below), and do not infer a standard from the
