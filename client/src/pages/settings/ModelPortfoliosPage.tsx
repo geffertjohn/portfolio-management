@@ -132,13 +132,8 @@ export function ModelPortfoliosPage() {
               {/* Expanded allocation table */}
               {expandedId === mp.id && (
                 <div className="border-t border-gray-100 px-5 pb-5 pt-3">
-                  {/* The narrative moved off `description` onto `objective_statement`
-                      in Nov 2026, so read that first. The fallback is kept for a
-                      legacy row the migration did not reach — nothing writes a
-                      description now, but a blank card here would read as a model
-                      with no narrative at all. */}
-                  {(mp.objective_statement ?? mp.description) && (
-                    <p className="mb-3 text-sm text-gray-600">{mp.objective_statement ?? mp.description}</p>
+                  {mp.objective_statement && (
+                    <p className="mb-3 text-sm text-gray-600">{mp.objective_statement}</p>
                   )}
 
                   {/* Asset Allocation — stored values */}

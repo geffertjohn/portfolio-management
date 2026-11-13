@@ -1498,7 +1498,6 @@ export type Database = {
           category_allocation_mode: string | null
           category_drift_percentage: number | null
           created_at: string | null
-          description: string | null
           drift_percentage: number | null
           emerging_market_lower_limit: number | null
           emerging_market_target: number | null
@@ -1576,7 +1575,6 @@ export type Database = {
           category_allocation_mode?: string | null
           category_drift_percentage?: number | null
           created_at?: string | null
-          description?: string | null
           drift_percentage?: number | null
           emerging_market_lower_limit?: number | null
           emerging_market_target?: number | null
@@ -1654,7 +1652,6 @@ export type Database = {
           category_allocation_mode?: string | null
           category_drift_percentage?: number | null
           created_at?: string | null
-          description?: string | null
           drift_percentage?: number | null
           emerging_market_lower_limit?: number | null
           emerging_market_target?: number | null
