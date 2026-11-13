@@ -7,6 +7,8 @@
  * deliverables (research_reports / risk_reports / ic_memos). Recommend-only.
  */
 
+import ProcessDocumentPanel from '@/components/ProcessDocumentPanel'
+
 interface Role {
   name: string
   question: string
@@ -175,6 +177,8 @@ export function InvestmentCommitteePage() {
           Recommend-only: the CIO makes the final call.
         </p>
       </div>
+
+      <ProcessDocumentPanel />
 
       {GROUPS.map((group) => (
         <section key={group.key}>

@@ -287,6 +287,47 @@ $$;
 ALTER FUNCTION "public"."log_position_change"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."process_documents_append_only"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+begin
+  if tg_op = 'DELETE' then
+    if old.status <> 'draft' then
+      raise exception 'process_documents: published versions cannot be deleted (% v%)', old.kind, old.version;
+    end if;
+    return old;
+  end if;
+
+  new.updated_at := now();
+
+  if old.status = 'draft' then
+    if new.status not in ('draft', 'current') then
+      raise exception 'process_documents: a draft may only remain draft or become current';
+    end if;
+    return new;
+  end if;
+
+  if old.status = 'current' then
+    if new.status <> 'superseded' then
+      raise exception 'process_documents: an adopted document is immutable (% v%)', old.kind, old.version;
+    end if;
+    if (new.kind, new.title, new.version, new.sections, new.revision_reason, new.adopted_at, new.created_at)
+       is distinct from
+       (old.kind, old.title, old.version, old.sections, old.revision_reason, old.adopted_at, old.created_at) then
+      raise exception 'process_documents: superseding must not alter the recorded document (% v%)', old.kind, old.version;
+    end if;
+    return new;
+  end if;
+
+  raise exception 'process_documents: superseded versions are immutable (% v%)', old.kind, old.version;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."process_documents_append_only"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."security_theses_append_only"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
@@ -1711,6 +1752,52 @@ COMMENT ON COLUMN "public"."positions"."drift_threshold" IS 'Per-position drift 
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."process_documents" (
+    "id" bigint NOT NULL,
+    "kind" "text" DEFAULT 'portfolio_process'::"text" NOT NULL,
+    "title" "text" NOT NULL,
+    "version" integer NOT NULL,
+    "status" "text" DEFAULT 'draft'::"text" NOT NULL,
+    "sections" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "revision_reason" "text",
+    "adopted_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "process_documents_kind_check" CHECK (("kind" = ANY (ARRAY['portfolio_process'::"text"]))),
+    CONSTRAINT "process_documents_published_is_complete" CHECK ((("status" = 'draft'::"text") OR (("jsonb_array_length"("sections") > 0) AND ("length"("btrim"("title")) > 0) AND ("adopted_at" IS NOT NULL)))),
+    CONSTRAINT "process_documents_revision_reason_required" CHECK ((("version" = 1) OR (("revision_reason" IS NOT NULL) AND ("length"("btrim"("revision_reason")) > 0)))),
+    CONSTRAINT "process_documents_sections_is_array" CHECK (("jsonb_typeof"("sections") = 'array'::"text")),
+    CONSTRAINT "process_documents_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'current'::"text", 'superseded'::"text"]))),
+    CONSTRAINT "process_documents_version_check" CHECK (("version" >= 1))
+);
+
+
+ALTER TABLE "public"."process_documents" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."process_documents" IS 'Append-only versions of the firm''s portfolio construction & monitoring process, authored in Settings -> Investment Committee and read by the AI committee as the standard a book is measured against. One draft and one current per kind; published versions are immutable (see process_documents_append_only). The lineage is the audit record, so this table carries no log_audit trigger.';
+
+
+
+COMMENT ON COLUMN "public"."process_documents"."kind" IS 'One value today (portfolio_process). The column exists so the partial unique indexes are keyed correctly if a second governing document is ever added -- structure ready, vocabulary minimal.';
+
+
+
+COMMENT ON COLUMN "public"."process_documents"."sections" IS 'Ordered [{key, heading, body}]. `key` is a stable kebab-case anchor so a committee memo can cite the clause a book departs from; renaming a heading must not change the key, or past memos stop resolving.';
+
+
+
+ALTER TABLE "public"."process_documents" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "public"."process_documents_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."prospect_portfolios" (
     "id" bigint NOT NULL,
     "prospect_id" bigint NOT NULL,
@@ -2761,6 +2848,11 @@ ALTER TABLE ONLY "public"."positions"
 
 
 
+ALTER TABLE ONLY "public"."process_documents"
+    ADD CONSTRAINT "process_documents_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."prospect_portfolios"
     ADD CONSTRAINT "prospect_portfolios_pkey" PRIMARY KEY ("id");
 
@@ -3058,6 +3150,18 @@ CREATE UNIQUE INDEX "portfolio_review_memos_one_per_review" ON "public"."portfol
 
 
 
+CREATE INDEX "process_documents_kind_version_idx" ON "public"."process_documents" USING "btree" ("kind", "version" DESC);
+
+
+
+CREATE UNIQUE INDEX "process_documents_one_current" ON "public"."process_documents" USING "btree" ("kind") WHERE ("status" = 'current'::"text");
+
+
+
+CREATE UNIQUE INDEX "process_documents_one_draft" ON "public"."process_documents" USING "btree" ("kind") WHERE ("status" = 'draft'::"text");
+
+
+
 CREATE INDEX "prospect_portfolios_prospect_idx" ON "public"."prospect_portfolios" USING "btree" ("prospect_id");
 
 
@@ -3263,6 +3367,10 @@ CREATE OR REPLACE TRIGGER "positions_audit" AFTER INSERT OR DELETE OR UPDATE ON 
 
 
 CREATE OR REPLACE TRIGGER "positions_set_updated_at" BEFORE UPDATE ON "public"."positions" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "process_documents_append_only" BEFORE DELETE OR UPDATE ON "public"."process_documents" FOR EACH ROW EXECUTE FUNCTION "public"."process_documents_append_only"();
 
 
 
@@ -4216,6 +4324,17 @@ ALTER TABLE "public"."portfolio_review_schedules" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."positions" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."process_documents" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "process_documents are readable" ON "public"."process_documents" FOR SELECT TO "authenticated", "anon" USING (true);
+
+
+
+CREATE POLICY "process_documents are writable" ON "public"."process_documents" TO "authenticated", "anon" USING (true) WITH CHECK (true);
+
+
+
 ALTER TABLE "public"."prospect_portfolios" ENABLE ROW LEVEL SECURITY;
 
 
@@ -4508,6 +4627,12 @@ GRANT ALL ON FUNCTION "public"."log_audit"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."log_position_change"() TO "anon";
 GRANT ALL ON FUNCTION "public"."log_position_change"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."log_position_change"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."process_documents_append_only"() TO "anon";
+GRANT ALL ON FUNCTION "public"."process_documents_append_only"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."process_documents_append_only"() TO "service_role";
 
 
 
@@ -4865,6 +4990,18 @@ GRANT ALL ON SEQUENCE "public"."portfolio_review_schedules_id_seq" TO "service_r
 GRANT ALL ON TABLE "public"."positions" TO "anon";
 GRANT ALL ON TABLE "public"."positions" TO "authenticated";
 GRANT ALL ON TABLE "public"."positions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."process_documents" TO "anon";
+GRANT ALL ON TABLE "public"."process_documents" TO "authenticated";
+GRANT ALL ON TABLE "public"."process_documents" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "public"."process_documents_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "public"."process_documents_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "public"."process_documents_id_seq" TO "service_role";
 
 
 

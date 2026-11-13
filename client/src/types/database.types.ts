@@ -2492,6 +2492,45 @@ export type Database = {
           },
         ]
       }
+      process_documents: {
+        Row: {
+          adopted_at: string | null
+          created_at: string
+          id: number
+          kind: string
+          revision_reason: string | null
+          sections: Json
+          status: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          adopted_at?: string | null
+          created_at?: string
+          id?: never
+          kind?: string
+          revision_reason?: string | null
+          sections?: Json
+          status?: string
+          title: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          adopted_at?: string | null
+          created_at?: string
+          id?: never
+          kind?: string
+          revision_reason?: string | null
+          sections?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       prospect_portfolios: {
         Row: {
           created_at: string

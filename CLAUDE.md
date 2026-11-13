@@ -1962,6 +1962,66 @@ On-demand: re-synthesizes a candidate's committee output into the Add Security w
 - **Construction is relative (opportunity cost), not standalone merit.** The PM uses `model_portfolio_data` (style/asset-class targets, bands, conviction tiers) + the current book to place the candidate in its sector, read the book's allocation there, and run the opportunity-cost test vs the existing names — **a high-merit stock can be `watchlist`/`reject` when keeping the incumbents is the better allocation** (the quant supplies the incumbent comparison; the memo states a construction-based decline explicitly).
 - **Objective / risk profile are allocation-derived** (see the portfolio-objective convention in memory), NOT the income-vs-growth style; the style/mandate lives in the narrative fields (below).
 
+### The firm's process document (`process_documents`)
+
+**The standard the committee measures a book against** — the firm's own
+portfolio construction & monitoring process, authored on Settings → Investment
+Committee and read by `portfolio-committee-review` (Nov 2026). Until it existed
+the firm's stated process **was not anywhere a query could reach**, so nothing
+in the system could say where a book departed from it.
+
+- **A TABLE, NOT A FILE IN STORAGE.** The committee runs headless in Claude
+  Code and sees Supabase; a PDF in a bucket is opaque to it. An upload is an
+  IMPORT PATH and the row is the authority — the same reason the localStorage
+  firm-settings store was deleted.
+- **VERSIONED APPEND-ONLY, mirroring `security_theses` exactly** —
+  `draft → current → superseded`, partial unique indexes allowing one of each
+  per `kind`, a `process_documents_append_only` trigger, `version`, and a
+  `revision_reason` required from v2. A memo written in March must be
+  reconstructable against the process as it stood in March. **The lineage IS
+  the audit record**, which is why this table carries no `log_audit` trigger
+  (same as `security_theses`).
+- **`sections` is `[{key, heading, body}]` and `key` is the citable anchor.**
+  **The key is derived from the heading ONCE, at import, then carried** —
+  `reconcile()` in `lib/processSections.ts` matches a re-imported section by
+  position and by heading so a rewording in place keeps its key. Re-deriving on
+  every save would silently re-key a clause on a typo fix and every memo citing
+  it would stop resolving — the benchmark-rename failure, applied to prose. The
+  committee prompt is told to cite the key, never the heading.
+- **SCOPE IS FIRM-WIDE, and it does NOT absorb the per-model narrative.**
+  `model_portfolio_data.investment_philosophy` / `.investment_process` stay as
+  the per-model mandate: the firm document says how the firm constructs and
+  monitors *any* book, the model fields say what *this* strategy's rubric is.
+  They are not two copies of one fact, and the prompt states that precedence
+  rather than leaving it to be inferred. A genuine contradiction between them
+  is itself a finding.
+- **THE DOCUMENT IS NOT EXPECTED TO MATCH THE APP, AND THAT IS THE POINT.**
+  The advisor's real process and the app's configuration grew separately, so
+  the first adoption will produce departures on every book. **The gap is the
+  deliverable** — reporting it is work nothing else here can do. The prompt
+  requires a departure to be a difference that can be pointed at (clause key,
+  what it requires, what the book does, the measurement); a clause that cannot
+  be tested from the data is reported as untestable rather than guessed at,
+  the same rule already applied to an unmeasurable compliance rule.
+- **WHERE THE PROSE AND A STORED NUMBER DISAGREE, THE STORED NUMBER IS WHAT
+  THE FIRM DOES.** Report both; never re-grade a book against a limit that is
+  not configured. Anything genuinely checkable belongs in the Compliance hub,
+  where the risk manager already measures it per portfolio — the §23 rule
+  against duplicating a fact that lives somewhere authoritative.
+- **A FAILED READ MUST NOT RENDER AS "none adopted."** Both leave the query's
+  `data` undefined, and the panel would otherwise tell the advisor no standard
+  exists on the one page whose job is to say what is in force. `ProcessDocumentPanel`
+  branches on the error explicitly. The same distinction the import warning
+  draws between a missing category and an unmapped one.
+- **`status = 'current'` is the only thing in force.** A draft is explicitly
+  not what the committee reads, and the panel says so in amber while one is
+  open — otherwise editing the standard would look like changing it.
+- Data layer `lib/processDocuments.ts`; the pure half (markdown → sections, key
+  reconciliation, adoption blockers) is `lib/processSections.ts`, tested. The
+  adopt path retires the live version **before** promoting the draft, because
+  `process_documents_one_current` is a partial unique index — the
+  `publishThesis` ordering, for the same reason.
+
 ### Compliance architecture (rules hub → risk report)
 
 Compliance rules live **only** in the Settings **Compliance Rules hub** (`pages/settings/CompliancePage.tsx`, route `/settings/compliance`), stored in `firm_compliance_rules` (firm-wide, e.g. Max Single Position, Minimum Holdings Count) and `compliance_rules` (per-portfolio). **There is no per-portfolio Compliance tab** (the old `CompliancePanel` was removed). The **risk manager verifies each portfolio against every active rule and folds the results into `mandate_checks`**, measured against the **ACTUAL** book — the most recent file in the `Portfolio Documents` storage bucket, parsed by `lib/currentAllocation.ts` — falling back to model targets (and flagging the basis) if no actual-allocation file exists. The AI risk report **is** the compliance surface; there is no separate per-portfolio compliance report.

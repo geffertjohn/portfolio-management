@@ -701,6 +701,56 @@ the book: construction, risk, and the regime it is being run into.
      failure `ASSET_CLASS_OVERRIDES` patches one ticker at a time. Raise it;
      do not fix it.
 
+   **READ THE FIRM'S OWN PROCESS DOCUMENT, AND REPORT WHERE THE BOOK DEPARTS
+   FROM IT** (Nov 2026). This is the standard the advisor authors and
+   maintains in the app, and it is the authority for *how the firm says it
+   constructs and monitors a portfolio*:
+
+   ```sql
+   select version, title, adopted_at, sections
+     from process_documents
+    where kind = 'portfolio_process' and status = 'current';
+   ```
+
+   - **`sections` is an ordered array of `{key, heading, body}`, and `key` is
+     how you CITE a clause.** Quote the key, never the heading: headings are
+     reworded in place and the key deliberately survives that, so a memo
+     citing a heading stops resolving the first time the advisor rephrases
+     it. Record the `version` you read in the memo's rationale, so a reader
+     months from now knows which text the finding was measured against.
+   - **IF NO ROW COMES BACK, SAY SO IN THE MEMO AND ASSESS NOTHING AGAINST
+     IT.** Do not fall back to `investment_process`, which answers a
+     different question (see below), and do not infer a standard from the
+     holdings and then grade the holdings against it — the same trap this
+     file already names for a null narrative field. A DRAFT is not the
+     standard: only `status = 'current'` is in force.
+   - **EXPECT DEPARTURES, AND REPORT THEM PLAINLY FROM THE FIRST RUN.** The
+     document describes how the firm intends to work; the app's configuration
+     and the book itself grew separately. **The gap is the deliverable** —
+     nothing else in this system can produce it, because until this document
+     existed the firm's stated process was not anywhere a query could reach.
+     Do not soften a departure into a caveat, and do not quietly reconcile it
+     by reading the clause loosely.
+   - **A DEPARTURE IS A DIFFERENCE YOU CAN POINT AT**, not a feeling that a
+     clause is imperfectly honoured. Name the clause key, what it requires,
+     what the book or the configuration actually does, and the measurement
+     that shows it. A clause you cannot test from the data is **not** a
+     finding — say it was not testable rather than guessing, the same rule
+     already applied to an unmeasurable compliance rule.
+   - **WHERE THE DOCUMENT AND A STORED NUMBER DISAGREE, THE STORED NUMBER IS
+     WHAT THE FIRM ACTUALLY DOES** and the document is what it says it does.
+     Report both. Do not treat the prose as licence to re-grade the book
+     against a limit that is not configured — that is the
+     `do-not-grade-a-portfolio-against-a-mandate-it-was-never-given` rule, one
+     level up.
+   - **PRECEDENCE AGAINST THE MODEL'S OWN NARRATIVE FIELDS**: the process
+     document is FIRM-WIDE and says how any book is constructed and
+     monitored; `model_portfolio_data.investment_philosophy` and
+     `.investment_process` are PER-MODEL and say what this strategy's rubric
+     is. They are not competing copies of one fact. Where a model's field
+     genuinely contradicts the firm document, that is itself a finding worth
+     a sentence — report it, do not pick a winner.
+
 5. **DISPATCH THE THREE ROLES** via the Agent tool, in one message so they run
    together. These resolve from `.claude/agents/*.md`, so there is no inlined
    copy to keep in sync.

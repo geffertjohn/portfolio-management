@@ -129,6 +129,16 @@ export const QUERY_KEYS = {
   scorecardMetrics: (symbol: string) => ['scorecard_metrics', symbol] as const,
   stockNews: (symbol: string) => ['stock_news', symbol] as const,
   pressReleases: (symbol: string) => ['press_releases', symbol] as const,
+  /**
+   * The firm's portfolio construction & monitoring process. The draft and the
+   * history are CHILDREN of the current key, so a single
+   * invalidateQueries({ queryKey: QUERY_KEYS.processDocument }) after an adopt
+   * clears all three — TanStack matches by prefix, and a sibling key would
+   * leave the history showing a version that is no longer in force.
+   */
+  processDocument: ['process_document'] as const,
+  processDraft: ['process_document', 'draft'] as const,
+  processHistory: ['process_document', 'history'] as const,
   indexConstituents: (index: string) => ['index_constituents', index] as const,
   indexBaselines: (index: string) => ['index_baselines', index] as const,
 }
