@@ -110,6 +110,7 @@ export interface SecurityDetail extends Security {
    */
   tracking_error_5y_vs_pg: number | null
   tracking_error_3y_vs_category: number | null
+  tracking_error_3y_vs_pg: number | null
 
   // ── Information ratio ─────────────────────────────────────────────────────
   information_ratio_3y_vs_category: number | null

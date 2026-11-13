@@ -2238,6 +2238,7 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "percent_of_assets_in_top_25_holdings" numeric,
     "tracking_error_5y_vs_pg" numeric,
     "tracking_error_3y_vs_category" numeric,
+    "tracking_error_3y_vs_pg" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2286,6 +2287,10 @@ COMMENT ON COLUMN "public"."securities2"."tracking_error_5y_vs_pg" IS 'YCharts t
 
 
 COMMENT ON COLUMN "public"."securities2"."tracking_error_3y_vs_category" IS 'YCharts tracking_error_3y_vs_category. Same measure against the CATEGORY on the 3Y basis the monitoring scorecard already uses, so it is directly comparable with rsquared_3y_vs_category. Not scored as of Nov 2026 -- loaded as data while the R-Squared tiering is reconsidered.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."tracking_error_3y_vs_pg" IS 'YCharts tracking_error_3y_vs_pg. Annualised standard deviation of the fund''s excess return over its PEER GROUP, 3Y. Scored by the peer-group monitoring scorecard in place of R-Squared (Nov 2026), higher-is-better: an active mandate is paid to deviate. The category twin is tracking_error_3y_vs_category; the 5Y peer form is the selection-screen metric and is not scored.';
 
 
 

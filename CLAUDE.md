@@ -927,11 +927,34 @@ one manager genuinely deviating.
   fund. The split already stated for `index_fund_generic` is the right one:
   trailing a benchmark is a finding for an active fund and the expense ratio
   for a tracker.
-- **`tracking_error_5y_vs_pg` and `tracking_error_3y_vs_category` were added
-  to `securities2` and to the workbook's `Securities` sheet (13 Nov 2026) and
-  are DELIBERATELY NOT SCORED.** The R-Squared tiering is left alone until the
-  columns carry real values, so the rule is decided against the numbers rather
-  than ahead of them.
+- **TRACKING ERROR REPLACED R-SQUARED IN THE MONITORING SCORECARD** (13 Nov
+  2026), at the same 5% weight, reading **higher-is-better**. `rsquared_3y_*`
+  stays on the row as the cross-check below; it is no longer scored.
+- **THE BANDS ARE PER BROAD ASSET CLASS, and that is measured, not assumed.**
+  Over the 74 non-proxy funds carrying a 3Y figure: fixed income p25/p50/p75 =
+  **65 / 106 / 192bp**, equity = **248 / 544 / 772bp**. A bond fund at the TOP
+  of its class (395bp) sits below the equity MEDIAN. One shared threshold set
+  would have put every bond fund in the bottom tier and most equity funds in
+  the top — scoring asset class, not manager behaviour. `TRACKING_ERROR_TIERS`
+  in `lib/fundScorecard.ts` holds the quartiles rounded to 5bp; re-derive them
+  from the same query rather than nudging them by hand.
+  - **An unplaceable broad class gets NO TIER**, not a guessed one — grading a
+    bond fund on equity bands would fail it for being a bond fund. It resolves
+    through `getBroadAssetClass`, so this cannot disagree with `FundPeerPanel`.
+- **THE PEER COHORT NEEDED ITS OWN COLUMN.** `tracking_error_3y_vs_pg` was
+  added for it: scoring the peer scorecard off the 5Y column would have mixed a
+  5-year metric among 3-year siblings (Sharpe 3Y, Information Ratio 3Y, Alpha
+  3Y), so the two cohorts could differ for a reason that has nothing to do with
+  the cohort. `tracking_error_5y_vs_pg` is the SELECTION-screen basis and
+  remains unscored.
+- **IT STILL HAS NO ZERO CASE**, like the R-Squared it replaced: a fund that
+  hugs its index is worth 25% of the weight, not nothing. It is still a holding.
+- **THIS CHANGES WHAT THE AT-RISK JOB SEES.** `atRiskMetricsFromScorecard`
+  reads bottom-tier scorecard rows, so a fund previously failing on a low
+  R-Squared may now pass — the inversion is the point, but it means the flag
+  list moves. FPX is the live case: R² 0.642 was a tier-4 reading against it,
+  and a fund that does not track its peer group is exactly what an active
+  mandate is paying for.
 - **A LOW R-SQUARED IS AMBIGUOUS AND TRACKING ERROR IS WHAT DISAMBIGUATES IT.**
   It means active management OR the fund is filed in the wrong category.
   **FAGIX is both** — Fidelity Capital & Income holds **25% equity** inside a

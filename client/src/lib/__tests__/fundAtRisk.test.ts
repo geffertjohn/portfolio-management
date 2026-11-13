@@ -18,7 +18,7 @@ function row(over: Partial<ScorecardRow> = {}): ScorecardRow {
   return {
     label: 'Sharpe Ratio 3Y', weight: 0.2, displayVal: 150, size: 200,
     tier: 4, score: 5, tier3Threshold: 100, tier2Threshold: 50, tier1Threshold: 20,
-    higherIsBetter: false, ...over,
+    higherIsBetter: false, tier1Exclusive: false, ...over,
   }
 }
 
@@ -142,8 +142,10 @@ describe('FPX against its designated peer-group cohort', () => {
   const fpx = {
     security_id: 'FPX',
     scorecard_cohort: 'peer',
+    broad_asset_class: 'US Equity',
     upside_downside_5y_vs_pg: 0.862859,
-    rsquared_3y_vs_pg: 0.64190251,
+    // 1481bp against equity bands topping out at 775bp -- TIER 1.
+    tracking_error_3y_vs_pg: 0.14807271,
     max_manager_tenure: 20.48,
     sharpe_peer_group_rank: 26,
     three_year_total_return_peer_group_size_nav: 342,
@@ -156,27 +158,33 @@ describe('FPX against its designated peer-group cohort', () => {
   const { rows } = buildFundScorecard(fpx, 'peer')
   const metrics = atRiskMetricsFromScorecard(rows, 'peer')
 
-  it('finds exactly the two readings the review offers to record', () => {
-    expect(metrics.map((m) => m.label)).toEqual([
-      'Upside/Downside 5Y (vs peer group)',
-      'R-Square 3Y (vs peer group)',
-    ])
+  it('finds the one reading the review offers to record', () => {
+    expect(metrics.map((m) => m.label)).toEqual(['Upside/Downside 5Y (vs peer group)'])
   })
 
-  it('freezes the readings and the lines they failed', () => {
-    const [ud, rsq] = metrics
+  /**
+   * IT USED TO BE TWO. FPX's R-Squared of 0.642 was a tier-4 reading against
+   * it until tracking error replaced R-Squared in the scorecard (13 Nov 2026).
+   * Not tracking its peer group is what an active mandate is FOR, and FPX
+   * deviates 1481bp -- the top tier. The flag list moving is the intended
+   * effect of that change, not a regression, and this test is where it shows.
+   */
+  it('no longer counts "does not track its peer group" against it', () => {
+    expect(metrics.map((m) => m.label).join(' ')).not.toContain('Tracking Error')
+    expect(metrics.map((m) => m.label).join(' ')).not.toContain('R-Square')
+  })
+
+  it('freezes the reading and the lines it failed', () => {
+    const [ud] = metrics
     expect(ud.flaggedValue).toBeCloseTo(0.8629, 4)
     expect(ud.flaggedBenchmark).toBe(0.9)    // out of tier 4
     expect(ud.flaggedBenchmark2).toBe(1.0)   // into tier 2
-    expect(rsq.flaggedValue).toBeCloseTo(0.6419, 4)
-    expect(rsq.flaggedBenchmark).toBe(0.70)
-    expect(rsq.flaggedBenchmark2).toBe(0.85)
   })
 
-  it('both read red, so the sell timer is sized on two real failures', () => {
+  it('it reads red, so the sell timer is sized on a real failure', () => {
     // Not zero, which is what every fund entry has recorded until now — and
     // zero takes the longest rung on the day table.
-    expect(metrics).toHaveLength(2)
+    expect(metrics).toHaveLength(1)
     for (const m of metrics) expect(isMetricFailing(m), m.label).toBe(true)
   })
 
@@ -228,7 +236,7 @@ describe('assessFundFlag', () => {
 
   it('does NOT flag one or two bottom-tier readings on a healthy total', () => {
     // VVIAX and VIGAX fail only Manager Tenure at a total of 94.3; AVERX and
-    // FPX only Upside/Downside and R-Square. Those describe a fund rather than
+    // FPX only Upside/Downside. Those describe a fund rather than
     // judge it, and flagging them would teach the reader to ignore the list.
     expect(assessFundFlag(card({ total: 94.3, rows: [row({ tier: 4 })] })).qualifies).toBe(false)
     expect(assessFundFlag(card({ total: 72.5, rows: [row({ tier: 4 }), row({ tier: 4, label: 'R' })] })).qualifies).toBe(false)
