@@ -94,6 +94,23 @@ export interface SecurityDetail extends Security {
   rsquared_3y_vs_category: number | null
   rsquared_3y_vs_pg: number | null
 
+  /**
+   * ── Tracking error (Nov 2026) ───────────────────────────────────────────
+   * HOW MUCH THE MANAGER ACTUALLY DEVIATES. Loaded but NOT SCORED: the
+   * scorecard's R-Square rule reads higher-is-better, which is right for a
+   * tracker and backwards for an active mandate, and the rule is deliberately
+   * left alone until these carry real values.
+   *
+   * Read them BESIDE `rsquared_3y_vs_category`, never instead of it — high
+   * R-squared with low tracking error is closet indexing, while LOW R-squared
+   * with low tracking error usually means the fund is filed in the wrong
+   * category rather than being run actively. R-squared alone cannot tell those
+   * apart; FAGIX is both at once (25% equity inside a High Yield Bond
+   * category, R² 0.574).
+   */
+  tracking_error_5y_vs_pg: number | null
+  tracking_error_3y_vs_category: number | null
+
   // ── Information ratio ─────────────────────────────────────────────────────
   information_ratio_3y_vs_category: number | null
   information_ratio_3y_vs_pg: number | null

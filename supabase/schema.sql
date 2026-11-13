@@ -2236,6 +2236,8 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "fund_of_funds_generic" boolean,
     "percent_of_assets_in_top_10_holdings" numeric,
     "percent_of_assets_in_top_25_holdings" numeric,
+    "tracking_error_5y_vs_pg" numeric,
+    "tracking_error_3y_vs_category" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2276,6 +2278,14 @@ COMMENT ON COLUMN "public"."securities2"."waiver_expense_ratio_generic" IS 'A te
 
 
 COMMENT ON COLUMN "public"."securities2"."percent_of_assets_in_top_25_holdings" IS 'Share of the fund held in its top 25 names - the denominator for fund_holdings. Where this is small the holdings list describes a sliver of the fund and must not be read as its character.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."tracking_error_5y_vs_pg" IS 'YCharts tracking_error_5y_vs_pg. Annualised standard deviation of the fund''s excess return over its PEER GROUP, 5Y. HIGHER means the manager deviates more -- a positive for an active mandate and the metric Appendix B of the firm process document screens fixed income on. Read it beside rsquared_3y_vs_category: high R-Squared with low tracking error is closet indexing; low R-Squared with low tracking error usually means the fund is in the wrong category rather than active.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."tracking_error_3y_vs_category" IS 'YCharts tracking_error_3y_vs_category. Same measure against the CATEGORY on the 3Y basis the monitoring scorecard already uses, so it is directly comparable with rsquared_3y_vs_category. Not scored as of Nov 2026 -- loaded as data while the R-Squared tiering is reconsidered.';
 
 
 

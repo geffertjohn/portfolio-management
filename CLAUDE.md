@@ -912,6 +912,51 @@ one fund's `security_name` is the expected state, not a broken formula. It
 clears on the first `CalculateFullRebuild`, which is the unattended run.
 Check the FORMULA, not the value, when auditing a freshly added column.
 
+### Is the manager active, or tracking the index? (`tracking_error_*`)
+
+**The monitoring scorecard scores R-Squared HIGHER-IS-BETTER**
+(`≥0.95 → tier 1`, `<0.70 → tier 4`), which is correct for a tracker and
+backwards for an active mandate. On the held fixed-income book it gives full
+marks to funds charging 39–48bp to move with the index — PYTRX 0.997, GIBIX
+0.992, DHRIX 0.990, FTHRX 0.957 — and the BOTTOM tier to FAGIX at 0.574, the
+one manager genuinely deviating.
+
+- **The metric is not wrong, it is answering a different question.** A high
+  R-Squared means no style drift, which the firm's own process document asks
+  for in its annual review. The defect is that ONE reading is applied to every
+  fund. The split already stated for `index_fund_generic` is the right one:
+  trailing a benchmark is a finding for an active fund and the expense ratio
+  for a tracker.
+- **`tracking_error_5y_vs_pg` and `tracking_error_3y_vs_category` were added
+  to `securities2` and to the workbook's `Securities` sheet (13 Nov 2026) and
+  are DELIBERATELY NOT SCORED.** The R-Squared tiering is left alone until the
+  columns carry real values, so the rule is decided against the numbers rather
+  than ahead of them.
+- **A LOW R-SQUARED IS AMBIGUOUS AND TRACKING ERROR IS WHAT DISAMBIGUATES IT.**
+  It means active management OR the fund is filed in the wrong category.
+  **FAGIX is both** — Fidelity Capital & Income holds **25% equity** inside a
+  High Yield Bond category. High R² with low tracking error is closet indexing;
+  low R² with low tracking error is usually a mis-filed fund. Neither reading
+  is available from R² alone, which is why re-ruling it first would have
+  swapped one wrong answer for another.
+- **`index_fund_generic` cannot stand in for this today** — it is `true` on
+  only five securities and null on all thirteen non-index fixed-income
+  holdings, so the tracker-vs-active split is not derivable from it yet.
+- **The 5Y/peer-group form is the one the firm's process document screens
+  on**; the 3Y/category form matches the basis the monitoring scorecard
+  already uses, so it is directly comparable with `rsquared_3y_vs_category`
+  without re-basing anything. Both verified present on the reference
+  workbook's **Mutual Fund** *and* **ETF & CEF** tabs before being added — one
+  sheet serves both types, so a code present for only one errors on every row
+  of the other.
+- **THE SELECTION SCORECARD IS NOT THIS SCORECARD.** Appendix B of the firm's
+  process document defines two scorecards (equity 12 metrics, fixed income 14,
+  5-year, including tracking error and tax cost); those are run in a **YCharts
+  screener at selection**. `lib/fundScorecard.ts` is **monitoring after
+  purchase**. They are different stages with different metric sets and the
+  difference between them is NOT a gap to close — an earlier reading of this
+  document called it the largest misalignment, and that was wrong.
+
 ### A benchmark has no composition of its own
 
 **YCharts computes no holdings for an INDEX.** A category or sector benchmark is
