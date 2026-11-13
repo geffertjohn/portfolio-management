@@ -54,11 +54,39 @@ export function keyFor(heading: string): string {
 }
 
 /**
+ * Strip a leading outline number: "3.1 Overview" → "Overview", "1. Intro" →
+ * "Intro". The numbering is a word-processor artifact; it carries no meaning
+ * once the document is a list of sections, and it makes every key noisier
+ * (`3-1-overview`) and every heading harder to read in isolation.
+ *
+ * An appendix letter is NOT numbering — "APPENDIX B: Scorecards" keeps its
+ * label, because that is how the document refers to itself in its own prose.
+ */
+export function stripNumbering(heading: string): string {
+  const stripped = heading.replace(/^\s*\d+(?:\.\d+)*\.?\s+/, '')
+  return stripped.trim() || heading.trim()
+}
+
+/**
  * Parse a markdown document into ordered sections.
  *
  * Splits on ATX headings (`#` … `######`). The FIRST heading becomes the title
  * only when it is a level-1 heading AND something follows it — a document whose
  * only heading is its title has one section, not zero.
+ *
+ * **A HEADING WITH NO TEXT OF ITS OWN, FOLLOWED BY DEEPER HEADINGS, IS A GROUP
+ * — not a section.** A document written in a word processor is full of them:
+ * "3. Asset Allocation" exists only to hold "3.1 Overview" and its siblings.
+ * Carrying it through as a section produced an empty box the advisor could not
+ * fill and the committee could not test, so the group's name is folded into its
+ * children instead ("Asset Allocation — Overview"). The result is a flat list
+ * where **every section has content**, which is the shape the rest of this
+ * module already assumes. We are not reproducing the source document's
+ * hierarchy; we are extracting its clauses.
+ *
+ * A heading that has BOTH text and sub-headings stays a section in its own
+ * right and does not prefix anything — it is a clause that happens to be
+ * followed by others, and folding it would duplicate its text.
  *
  * **Text before the first heading is kept as a `preamble` section, never
  * dropped.** A process document that opens with a paragraph of scope before its
@@ -68,10 +96,10 @@ export function keyFor(heading: string): string {
 export function parseMarkdown(src: string): ParsedDocument {
   const lines = src.replace(/\r\n?/g, '\n').split('\n')
   const warnings: SectionWarning[] = []
-  const raw: { heading: string; body: string[] }[] = []
+  const raw: { heading: string; level: number; body: string[] }[] = []
 
   let title: string | null = null
-  let current: { heading: string; body: string[] } | null = null
+  let current: { heading: string; level: number; body: string[] } | null = null
   let sawHeading = false
 
   for (const line of lines) {
@@ -87,23 +115,44 @@ export function parseMarkdown(src: string): ParsedDocument {
       }
       sawHeading = true
       if (current) raw.push(current)
-      current = { heading: text, body: [] }
+      current = { heading: text, level, body: [] }
       continue
     }
     if (current) {
       current.body.push(line)
     } else if (line.trim() !== '') {
-      // Prose before the first heading.
-      current = { heading: 'Preamble', body: [line] }
+      // Prose before the first heading. Level 1 so nothing folds into it.
+      current = { heading: 'Preamble', level: 1, body: [line] }
     }
   }
   if (current) raw.push(current)
 
+  // Fold away the structural headings: no text of its own, and followed by at
+  // least one DEEPER heading. Its name prefixes those descendants instead.
+  const flattened: { heading: string; body: string }[] = []
+  const prefixes: { level: number; text: string }[] = []
+
+  for (let i = 0; i < raw.length; i += 1) {
+    const r = raw[i]
+    const body = r.body.join('\n').trim()
+    while (prefixes.length > 0 && prefixes[prefixes.length - 1].level >= r.level) {
+      prefixes.pop()
+    }
+    const name = stripNumbering(r.heading)
+    const next = raw[i + 1]
+    if (!body && next && next.level > r.level) {
+      prefixes.push({ level: r.level, text: name })
+      continue
+    }
+    const heading = [...prefixes.map((p) => p.text), name].join(' — ')
+    flattened.push({ heading, body })
+  }
+
   const sections: ProcessSection[] = []
   const used = new Set<string>()
 
-  for (const r of raw) {
-    const body = r.body.join('\n').trim()
+  for (const r of flattened) {
+    const body = r.body
     let key = keyFor(r.heading)
 
     if (!key) {

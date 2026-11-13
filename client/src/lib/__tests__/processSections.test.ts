@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   keyFor,
+  stripNumbering,
   parseMarkdown,
   reconcile,
   toMarkdown,
@@ -86,6 +87,69 @@ describe('parseMarkdown', () => {
     const d = parseMarkdown('## ???\n\nBody.\n')
     expect(d.sections[0].key).toBe('section-1')
     expect(d.warnings[0].reason).toBe('empty-key')
+  })
+})
+
+describe('a word-processor outline becomes a flat list of clauses', () => {
+  /**
+   * The rule the advisor's real document forced. Its sections 3-6 are numbered
+   * parents that hold nothing but subsections, so carrying them through made
+   * four empty boxes nobody could fill and the committee could not test. We
+   * extract clauses; we do not reproduce the source document's hierarchy.
+   */
+
+  it('folds a structural heading into its children', () => {
+    const d = parseMarkdown(
+      '# Doc\n\n## 3. Asset Allocation\n\n### 3.1 Overview\n\nA\n\n### 3.2 Models\n\nB\n',
+    )
+    expect(d.sections.map((s) => s.heading)).toEqual([
+      'Asset Allocation — Overview',
+      'Asset Allocation — Models',
+    ])
+    expect(d.sections.every((s) => s.body !== '')).toBe(true)
+    expect(d.warnings).toEqual([])
+  })
+
+  it('leaves a heading that has BOTH text and sub-headings as its own section', () => {
+    // It is a clause that happens to be followed by others. Folding it would
+    // duplicate its text into every child.
+    const d = parseMarkdown('# Doc\n\n## Scope\n\nIntro text.\n\n### Detail\n\nMore.\n')
+    expect(d.sections.map((s) => s.heading)).toEqual(['Scope', 'Detail'])
+  })
+
+  it('folds through two levels', () => {
+    const d = parseMarkdown('# D\n\n## A\n\n### B\n\n#### C\n\nbody\n')
+    expect(d.sections.map((s) => s.heading)).toEqual(['A — B — C'])
+  })
+
+  it('does not fold a heading whose next sibling is at the SAME level', () => {
+    // Empty and followed by a peer: a genuinely unfinished clause, not a group.
+    const d = parseMarkdown('# D\n\n## Empty\n\n## Next\n\nbody\n')
+    expect(d.sections.map((s) => s.heading)).toEqual(['Empty', 'Next'])
+    expect(d.warnings).toEqual([{ heading: 'Empty', reason: 'empty-body' }])
+  })
+
+  it('stops prefixing once the outline comes back up a level', () => {
+    const d = parseMarkdown('# D\n\n## A\n\n### A1\n\nx\n\n## B\n\n### B1\n\ny\n')
+    expect(d.sections.map((s) => s.heading)).toEqual(['A — A1', 'B — B1'])
+  })
+})
+
+describe('stripNumbering', () => {
+  it('removes an outline number', () => {
+    expect(stripNumbering('3.1 Overview')).toBe('Overview')
+    expect(stripNumbering('1. Introduction')).toBe('Introduction')
+    expect(stripNumbering('6 Ongoing Monitoring Process')).toBe('Ongoing Monitoring Process')
+  })
+
+  it('keeps an appendix label — the document cites itself by it', () => {
+    expect(stripNumbering('APPENDIX B: Scorecards')).toBe('APPENDIX B: Scorecards')
+  })
+
+  it('never strips a heading down to nothing', () => {
+    // "4.2" alone is a bad heading, but an empty one is worse: it would key to
+    // a positional anchor and lose the only identifier it had.
+    expect(stripNumbering('4.2')).toBe('4.2')
   })
 })
 
