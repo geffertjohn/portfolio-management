@@ -13,7 +13,8 @@ import { useState } from 'react'
 import type { SecurityDetail } from '@/lib/securities'
 import {
   buildFundScorecard, fmtScorecardValue, scoreBand,
-  type Tier, type ScorecardCohort, type ScoreBand,
+  tierBandLines, scoreFormulaLines,
+  type Tier, type ScorecardCohort, type ScoreBand, type ScorecardRow,
 } from '@/lib/fundScorecard'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -46,12 +47,36 @@ function scoreTextClass(score: number): string {
   return SCORE_TEXT_CLASS[scoreBand(score) ?? 'red']
 }
 
-function TierBadge({ tier }: { tier: Tier }) {
+function TierBadge({ tier, title }: { tier: Tier; title?: string }) {
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${TIER_STYLES[tier]}`}>
+    <span
+      title={title}
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums ${TIER_STYLES[tier]} ${
+        title ? 'cursor-help' : ''
+      }`}
+    >
       {tier}
     </span>
   )
+}
+
+/**
+ * Tooltip text for a cell. Built from the row's own carried thresholds via the
+ * lib, so the explanation and the number it explains cannot drift apart.
+ * Returns undefined rather than an empty string when there is nothing to say,
+ * so no cursor-help hint appears on a cell with no tooltip.
+ */
+function tooltip(lines: string[]): string | undefined {
+  return lines.length > 0 ? lines.join('\n') : undefined
+}
+
+function tierTitle(r: ScorecardRow): string | undefined {
+  const bands = tierBandLines(r)
+  return tooltip(bands.length > 0 ? [`${r.label} — tier bands`, '', ...bands] : [])
+}
+
+function scoreTitle(r: ScorecardRow): string | undefined {
+  return tooltip([`${r.label} — how this score is calculated`, '', ...scoreFormulaLines(r)])
 }
 
 function fmtScore(score: number | null): string {
@@ -163,9 +188,14 @@ function ScorecardTable({
                       {r.size != null ? Math.round(r.size).toString() : '—'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-center">
-                      {r.tier != null ? <TierBadge tier={r.tier} /> : <span className="text-xs text-gray-400">—</span>}
+                      {r.tier != null
+                        ? <TierBadge tier={r.tier} title={tierTitle(r)} />
+                        : <span className="text-xs text-gray-400" title={tierTitle(r)}>—</span>}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs font-medium text-gray-900">
+                    <td
+                      title={scoreTitle(r)}
+                      className="cursor-help whitespace-nowrap px-3 py-2 text-right tabular-nums text-xs font-medium text-gray-900"
+                    >
                       {fmtScore(r.score)}
                     </td>
                   </tr>

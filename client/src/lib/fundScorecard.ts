@@ -13,14 +13,14 @@
  *   Tier 3: percentile < 0.50  → top 50%   →  50% of weight
  *   Tier 4: percentile ≥ 0.50  → bottom 50%→  25% of weight
  *
- * Value-based tiers (Manager Tenure, R-Square, Upside/Downside) use fixed thresholds
+ * Value-based tiers (Manager Tenure, Tracking Error, Upside/Downside) use fixed thresholds
  * matching the original YCharts scorecard formulas.
  *
  * Upside/Downside 5Y uses custom fixed point values (not weight × multiplier):
  *   > 1.1  → 10 pts (Tier 1)  |  ≥ 1.0 → 8 pts (Tier 2)
  *   ≥ 0.9  → 6 pts  (Tier 3)  |  > 0.01 → 4 pts (Tier 4)  |  ≤ 0.01 → 0 pts
  */
-import type { SecurityDetail } from './securities'
+import { getBroadAssetClass, type SecurityDetail } from './securities'
 
 export type Tier = 1 | 2 | 3 | 4
 export type ScorecardCohort = 'category' | 'peer'
@@ -35,7 +35,7 @@ export type MetricDef = {
   sizeKey?: keyof SecurityDetail
   /** Actual value column — used for value-based tier calculation. */
   valueKey?: keyof SecurityDetail
-  valueType?: 'tenure' | 'rsquared' | 'updown'
+  valueType?: 'tenure' | 'trackingError' | 'updown'
 }
 
 /**
@@ -53,7 +53,7 @@ export const CATEGORY_METRICS: MetricDef[] = [
   { label: 'Upside/Downside 5Y',   weight: 0.10, valueKey: 'upside_downside_5y_vs_category',   valueType: 'updown' },
   { label: 'Alpha 3Y',             weight: 0.10, rankKey: 'alpha_rank',                        sizeKey: 'three_year_total_return_rank_category_size_nav' },
   { label: 'Manager Tenure',       weight: 0.05, valueKey: 'max_manager_tenure',               valueType: 'tenure' },
-  { label: 'R-Square 3Y',          weight: 0.05, valueKey: 'rsquared_3y_vs_category',          valueType: 'rsquared' },
+  { label: 'Tracking Error 3Y',    weight: 0.05, valueKey: 'tracking_error_3y_vs_category',    valueType: 'trackingError' },
 ]
 
 /** Peer group scorecard metrics. Same weights; peer group rank/size columns used. */
@@ -67,8 +67,44 @@ export const PEER_GROUP_METRICS: MetricDef[] = [
   { label: 'Upside/Downside 5Y',   weight: 0.10, valueKey: 'upside_downside_5y_vs_pg',                  valueType: 'updown' },
   { label: 'Alpha 3Y',             weight: 0.10, rankKey: 'alpha_peer_group_rank',                      sizeKey: 'three_year_total_return_peer_group_size_nav' },
   { label: 'Manager Tenure',       weight: 0.05, valueKey: 'max_manager_tenure',                        valueType: 'tenure' },
-  { label: 'R-Square 3Y',          weight: 0.05, valueKey: 'rsquared_3y_vs_pg',                         valueType: 'rsquared' },
+  { label: 'Tracking Error 3Y',    weight: 0.05, valueKey: 'tracking_error_3y_vs_pg',                   valueType: 'trackingError' },
 ]
+
+/**
+ * Tracking-error tier bands, as decimals, PER BROAD ASSET CLASS.
+ *
+ * **One set of thresholds cannot serve both, and that is measured rather than
+ * assumed.** Across the 74 non-proxy funds carrying a 3Y figure on 13 Nov 2026:
+ *
+ *   fixed income (n=26)   p25 0.0065   p50 0.0106   p75 0.0192   max 0.0395
+ *   equity       (n=48)   p25 0.0248   p50 0.0544   p75 0.0772   max 0.1787
+ *
+ * A bond fund at the very TOP of its class (395bp) sits below the equity
+ * MEDIAN (544bp). Shared thresholds would score asset class, not manager
+ * behaviour — every bond fund in the bottom tier, most equity funds in the top.
+ *
+ * The bands are those quartiles rounded to the nearest 5bp, so tier 1 is
+ * roughly the top quartile of deviation within the fund's own broad class,
+ * tier 2 above the median, tier 3 above the bottom quartile. They are a
+ * snapshot of this book and will drift as it changes; re-derive them from the
+ * same query rather than nudging them by hand.
+ */
+export const TRACKING_ERROR_TIERS: Record<'equity' | 'fixed income', [number, number, number]> = {
+  // [tier 3 floor, tier 2 floor, tier 1 floor]
+  'equity':       [0.0250, 0.0550, 0.0775],
+  'fixed income': [0.0065, 0.0105, 0.0190],
+}
+
+/**
+ * The bands for this security, or null when its broad asset class cannot be
+ * placed. Null means NO TIER — see the caller. Reusing `getBroadAssetClass`
+ * rather than reading `broad_asset_class` directly keeps this agreeing with
+ * `FundPeerPanel`, which already decides which breakdown is meaningful.
+ */
+export function trackingErrorBands(s: SecurityDetail): [number, number, number] | null {
+  const broad = getBroadAssetClass(s)
+  return broad == null ? null : TRACKING_ERROR_TIERS[broad]
+}
 
 function numVal(s: SecurityDetail, key: keyof SecurityDetail): number | null {
   const v = s[key]
@@ -104,6 +140,15 @@ export interface ScorecardRow {
   tier2Threshold: number | null
   tier1Threshold: number | null
   higherIsBetter: boolean
+  /**
+   * True when the TIER 1 boundary is strictly greater-than rather than
+   * at-or-above. Only Upside/Downside is (`v > 1.1`), and it matters because
+   * that metric rounds to 2dp before comparing, so exactly 1.10 is reachable
+   * and lands in tier 2. Carried rather than re-derived: a tooltip that
+   * restated the operator would be a second copy of the rule, which is how a
+   * card ends up saying one thing and the table another.
+   */
+  tier1Exclusive: boolean
 }
 
 function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
@@ -126,6 +171,7 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       tier2Threshold: size != null && size > 0 ? size * 0.25 : null,
       tier1Threshold: size != null && size > 0 ? size * 0.10 : null,
       higherIsBetter: false,
+      tier1Exclusive: false,
     }
   }
 
@@ -135,7 +181,8 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
     if (val == null) {
       return {
         label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null,
-        valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null, higherIsBetter: true,
+        valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null,
+        higherIsBetter: true, tier1Exclusive: false,
       }
     }
 
@@ -153,13 +200,25 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       tier3Threshold = 3
       tier2Threshold = 5
       tier1Threshold = 7
-    } else if (def.valueType === 'rsquared') {
-      // R-Squared: always scores at least 25% of weight (no zero case)
-      tier = val >= 0.95 ? 1 : val >= 0.85 ? 2 : val >= 0.70 ? 3 : 4
+    } else if (def.valueType === 'trackingError') {
+      // HIGHER IS BETTER -- an active mandate is paid to deviate, and a fund
+      // that does not is charging an active fee for index behaviour.
+      const bands = trackingErrorBands(s)
+      if (bands == null) {
+        // Unplaceable asset class: NO TIER rather than a guessed one. Grading a
+        // bond fund on equity bands would fail it for being a bond fund.
+        return {
+          label: def.label, weight: def.weight, displayVal: val, size: null,
+          tier: null, score: null, valueType: def.valueType,
+          tier3Threshold: null, tier2Threshold: null, tier1Threshold: null,
+          higherIsBetter: true, tier1Exclusive: false,
+        }
+      }
+      ;[tier3Threshold, tier2Threshold, tier1Threshold] = bands
+      tier = val >= tier1Threshold ? 1 : val >= tier2Threshold ? 2 : val >= tier3Threshold ? 3 : 4
+      // Like R-Squared before it, always worth at least 25% of weight: a fund
+      // that hugs its index is still a holding, not a zero.
       score = def.weight * TIER_MULTIPLIERS[tier] * 100
-      tier3Threshold = 0.70
-      tier2Threshold = 0.85
-      tier1Threshold = 0.95
     } else {
       // Upside/Downside — fixed point values (not weight × multiplier).
       // Round to 2 dp before comparing so a DB value like 0.9997 (displayed
@@ -180,13 +239,95 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       valueType: def.valueType,
       tier3Threshold, tier2Threshold, tier1Threshold,
       higherIsBetter: true,  // every value-type metric here reads higher-is-better
+      tier1Exclusive: def.valueType === 'updown',
     }
   }
 
   return {
     label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null,
-    valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null, higherIsBetter: true,
+    valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null,
+    higherIsBetter: true, tier1Exclusive: false,
   }
+}
+
+/**
+ * The tier bands this row was graded against, as display lines.
+ *
+ * Built ENTIRELY from the thresholds the row already carries — never by
+ * re-deriving the rule. That is the whole reason `tier{1,2,3}Threshold`,
+ * `higherIsBetter` and `tier1Exclusive` are on `ScorecardRow`: a second copy of
+ * the thresholds is how a tooltip ends up disagreeing with the tier beside it.
+ *
+ * Empty when the row has no bands — an unscored metric, or a tracking error on
+ * a fund whose broad asset class could not be placed.
+ */
+export function tierBandLines(r: ScorecardRow): string[] {
+  const { tier1Threshold: t1, tier2Threshold: t2, tier3Threshold: t3 } = r
+  if (t1 == null || t2 == null || t3 == null) return []
+
+  const fmt = (v: number) => fmtScorecardValue(v, r.valueType)
+
+  if (!r.higherIsBetter) {
+    // A rank: lower is better, and the bands are shares of the cohort.
+    const share = (v: number) => (r.size != null && r.size > 0 ? ` (top ${Math.round((v / r.size) * 100)}%)` : '')
+    return [
+      `Tier 1   rank ${fmt(t1)} or better${share(t1)}`,
+      `Tier 2   rank ${fmt(t2)} or better${share(t2)}`,
+      `Tier 3   rank ${fmt(t3)} or better${share(t3)}`,
+      `Tier 4   anything below`,
+    ]
+  }
+
+  return [
+    `Tier 1   ${r.tier1Exclusive ? 'above' : 'at or above'} ${fmt(t1)}`,
+    `Tier 2   at or above ${fmt(t2)}`,
+    `Tier 3   at or above ${fmt(t3)}`,
+    `Tier 4   below ${fmt(t3)}`,
+  ]
+}
+
+/**
+ * How this row's score was arrived at.
+ *
+ * Two shapes, because the scorer has two. Most metrics are
+ * `weight x tier multiplier x 100`; Upside/Downside awards FIXED points and
+ * says so, since presenting it as a weighted calculation would invite the
+ * reader to check arithmetic that was never performed.
+ */
+export function scoreFormulaLines(r: ScorecardRow): string[] {
+  if (r.tier == null || r.score == null) {
+    return ['Not scored — no value for this metric.']
+  }
+
+  const pct = `${Math.round(r.weight * 100)}%`
+
+  if (r.valueType === 'updown') {
+    return [
+      `Tier ${r.tier} -> ${r.score.toFixed(1)} points`,
+      `Fixed points for this metric, not weight x multiplier.`,
+    ]
+  }
+
+  const mult = TIER_MULTIPLIERS[r.tier]
+  // Show the EXACT product, and name the rounding when the cell differs from
+  // it. The table prints one decimal, so "5% x 25% x 100 = 1.3" is arithmetic
+  // that does not add up — and an explanation whose sums are wrong is worse
+  // than no explanation.
+  const exact = r.weight * mult * 100
+  const shown = r.score.toFixed(1)
+  // Compare NUMERICALLY: "20" and "20.0" are the same number, and noting a
+  // rounding that did not happen is its own small lie.
+  const rounds = Math.abs(exact - Number(shown)) < 1e-9
+  const exactStr = rounds ? shown : String(Number(exact.toFixed(4)))
+  const tail = rounds ? '' : ` (shown as ${shown})`
+  const lines = [
+    `${pct} weight x ${Math.round(mult * 100)}% (tier ${r.tier}) x 100 = ${exactStr}${tail}`,
+    `Tier 1 pays 100% of the weight, tier 2 75%, tier 3 50%, tier 4 25%.`,
+  ]
+  if (r.valueType === 'tenure' && r.score === 0) {
+    lines.push(`Scored 0: a manager of 1 year or less pays nothing whatever the tier.`)
+  }
+  return lines
 }
 
 export interface FundScorecard {
@@ -273,7 +414,9 @@ export function scoreBand(score: number | null | undefined): ScoreBand | null {
 export function fmtScorecardValue(val: number | null, valueType?: MetricDef['valueType']): string {
   if (val == null) return '—'
   if (valueType === 'tenure') return val.toFixed(1)
-  if (valueType === 'rsquared') return val.toFixed(2)
+  // Tracking error is a decimal fraction and small: 0.0192 reads as "1.92%".
+  // Two decimals of a raw fraction would print every bond fund as "0.01".
+  if (valueType === 'trackingError') return `${(val * 100).toFixed(2)}%`
   if (valueType === 'updown') return val.toFixed(2)
   return Math.round(val).toString() // rank — integer
 }

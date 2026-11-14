@@ -912,6 +912,74 @@ one fund's `security_name` is the expected state, not a broken formula. It
 clears on the first `CalculateFullRebuild`, which is the unattended run.
 Check the FORMULA, not the value, when auditing a freshly added column.
 
+### Is the manager active, or tracking the index? (`tracking_error_*`)
+
+**The monitoring scorecard scores R-Squared HIGHER-IS-BETTER**
+(`≥0.95 → tier 1`, `<0.70 → tier 4`), which is correct for a tracker and
+backwards for an active mandate. On the held fixed-income book it gives full
+marks to funds charging 39–48bp to move with the index — PYTRX 0.997, GIBIX
+0.992, DHRIX 0.990, FTHRX 0.957 — and the BOTTOM tier to FAGIX at 0.574, the
+one manager genuinely deviating.
+
+- **The metric is not wrong, it is answering a different question.** A high
+  R-Squared means no style drift, which the firm's own process document asks
+  for in its annual review. The defect is that ONE reading is applied to every
+  fund. The split already stated for `index_fund_generic` is the right one:
+  trailing a benchmark is a finding for an active fund and the expense ratio
+  for a tracker.
+- **TRACKING ERROR REPLACED R-SQUARED IN THE MONITORING SCORECARD** (13 Nov
+  2026), at the same 5% weight, reading **higher-is-better**. `rsquared_3y_*`
+  stays on the row as the cross-check below; it is no longer scored.
+- **THE BANDS ARE PER BROAD ASSET CLASS, and that is measured, not assumed.**
+  Over the 74 non-proxy funds carrying a 3Y figure: fixed income p25/p50/p75 =
+  **65 / 106 / 192bp**, equity = **248 / 544 / 772bp**. A bond fund at the TOP
+  of its class (395bp) sits below the equity MEDIAN. One shared threshold set
+  would have put every bond fund in the bottom tier and most equity funds in
+  the top — scoring asset class, not manager behaviour. `TRACKING_ERROR_TIERS`
+  in `lib/fundScorecard.ts` holds the quartiles rounded to 5bp; re-derive them
+  from the same query rather than nudging them by hand.
+  - **An unplaceable broad class gets NO TIER**, not a guessed one — grading a
+    bond fund on equity bands would fail it for being a bond fund. It resolves
+    through `getBroadAssetClass`, so this cannot disagree with `FundPeerPanel`.
+- **THE PEER COHORT NEEDED ITS OWN COLUMN.** `tracking_error_3y_vs_pg` was
+  added for it: scoring the peer scorecard off the 5Y column would have mixed a
+  5-year metric among 3-year siblings (Sharpe 3Y, Information Ratio 3Y, Alpha
+  3Y), so the two cohorts could differ for a reason that has nothing to do with
+  the cohort. `tracking_error_5y_vs_pg` is the SELECTION-screen basis and
+  remains unscored.
+- **IT STILL HAS NO ZERO CASE**, like the R-Squared it replaced: a fund that
+  hugs its index is worth 25% of the weight, not nothing. It is still a holding.
+- **THIS CHANGES WHAT THE AT-RISK JOB SEES.** `atRiskMetricsFromScorecard`
+  reads bottom-tier scorecard rows, so a fund previously failing on a low
+  R-Squared may now pass — the inversion is the point, but it means the flag
+  list moves. FPX is the live case: R² 0.642 was a tier-4 reading against it,
+  and a fund that does not track its peer group is exactly what an active
+  mandate is paying for.
+- **A LOW R-SQUARED IS AMBIGUOUS AND TRACKING ERROR IS WHAT DISAMBIGUATES IT.**
+  It means active management OR the fund is filed in the wrong category.
+  **FAGIX is both** — Fidelity Capital & Income holds **25% equity** inside a
+  High Yield Bond category. High R² with low tracking error is closet indexing;
+  low R² with low tracking error is usually a mis-filed fund. Neither reading
+  is available from R² alone, which is why re-ruling it first would have
+  swapped one wrong answer for another.
+- **`index_fund_generic` cannot stand in for this today** — it is `true` on
+  only five securities and null on all thirteen non-index fixed-income
+  holdings, so the tracker-vs-active split is not derivable from it yet.
+- **The 5Y/peer-group form is the one the firm's process document screens
+  on**; the 3Y/category form matches the basis the monitoring scorecard
+  already uses, so it is directly comparable with `rsquared_3y_vs_category`
+  without re-basing anything. Both verified present on the reference
+  workbook's **Mutual Fund** *and* **ETF & CEF** tabs before being added — one
+  sheet serves both types, so a code present for only one errors on every row
+  of the other.
+- **THE SELECTION SCORECARD IS NOT THIS SCORECARD.** Appendix B of the firm's
+  process document defines two scorecards (equity 12 metrics, fixed income 14,
+  5-year, including tracking error and tax cost); those are run in a **YCharts
+  screener at selection**. `lib/fundScorecard.ts` is **monitoring after
+  purchase**. They are different stages with different metric sets and the
+  difference between them is NOT a gap to close — an earlier reading of this
+  document called it the largest misalignment, and that was wrong.
+
 ### A benchmark has no composition of its own
 
 **YCharts computes no holdings for an INDEX.** A category or sector benchmark is
@@ -1961,6 +2029,66 @@ On-demand: re-synthesizes a candidate's committee output into the Add Security w
 - **Mandate fit is PORTFOLIO-LEVEL and CRITERIA-BASED, not a per-security gate.** For an income strategy the requirement is that the *portfolio's* yield exceeds its benchmark (carried by the mix — a name like VZ ~6.6% does the heavy lifting), so a low-yield name is fine if the book stays above its benchmark. The strategy's **Investment Philosophy** (`model_portfolio_data.investment_philosophy`) is the justification rubric: a candidate need not meet every INCOME/STABILITY/GROWTH criterion but must justify inclusion by the combination it contributes. **Never disqualify a name on its own dividend yield alone.**
 - **Construction is relative (opportunity cost), not standalone merit.** The PM uses `model_portfolio_data` (style/asset-class targets, bands, conviction tiers) + the current book to place the candidate in its sector, read the book's allocation there, and run the opportunity-cost test vs the existing names — **a high-merit stock can be `watchlist`/`reject` when keeping the incumbents is the better allocation** (the quant supplies the incumbent comparison; the memo states a construction-based decline explicitly).
 - **Objective / risk profile are allocation-derived** (see the portfolio-objective convention in memory), NOT the income-vs-growth style; the style/mandate lives in the narrative fields (below).
+
+### The firm's process document (`process_documents`)
+
+**The standard the committee measures a book against** — the firm's own
+portfolio construction & monitoring process, authored on Settings → Investment
+Committee and read by `portfolio-committee-review` (Nov 2026). Until it existed
+the firm's stated process **was not anywhere a query could reach**, so nothing
+in the system could say where a book departed from it.
+
+- **A TABLE, NOT A FILE IN STORAGE.** The committee runs headless in Claude
+  Code and sees Supabase; a PDF in a bucket is opaque to it. An upload is an
+  IMPORT PATH and the row is the authority — the same reason the localStorage
+  firm-settings store was deleted.
+- **VERSIONED APPEND-ONLY, mirroring `security_theses` exactly** —
+  `draft → current → superseded`, partial unique indexes allowing one of each
+  per `kind`, a `process_documents_append_only` trigger, `version`, and a
+  `revision_reason` required from v2. A memo written in March must be
+  reconstructable against the process as it stood in March. **The lineage IS
+  the audit record**, which is why this table carries no `log_audit` trigger
+  (same as `security_theses`).
+- **`sections` is `[{key, heading, body}]` and `key` is the citable anchor.**
+  **The key is derived from the heading ONCE, at import, then carried** —
+  `reconcile()` in `lib/processSections.ts` matches a re-imported section by
+  position and by heading so a rewording in place keeps its key. Re-deriving on
+  every save would silently re-key a clause on a typo fix and every memo citing
+  it would stop resolving — the benchmark-rename failure, applied to prose. The
+  committee prompt is told to cite the key, never the heading.
+- **SCOPE IS FIRM-WIDE, and it does NOT absorb the per-model narrative.**
+  `model_portfolio_data.investment_philosophy` / `.investment_process` stay as
+  the per-model mandate: the firm document says how the firm constructs and
+  monitors *any* book, the model fields say what *this* strategy's rubric is.
+  They are not two copies of one fact, and the prompt states that precedence
+  rather than leaving it to be inferred. A genuine contradiction between them
+  is itself a finding.
+- **THE DOCUMENT IS NOT EXPECTED TO MATCH THE APP, AND THAT IS THE POINT.**
+  The advisor's real process and the app's configuration grew separately, so
+  the first adoption will produce departures on every book. **The gap is the
+  deliverable** — reporting it is work nothing else here can do. The prompt
+  requires a departure to be a difference that can be pointed at (clause key,
+  what it requires, what the book does, the measurement); a clause that cannot
+  be tested from the data is reported as untestable rather than guessed at,
+  the same rule already applied to an unmeasurable compliance rule.
+- **WHERE THE PROSE AND A STORED NUMBER DISAGREE, THE STORED NUMBER IS WHAT
+  THE FIRM DOES.** Report both; never re-grade a book against a limit that is
+  not configured. Anything genuinely checkable belongs in the Compliance hub,
+  where the risk manager already measures it per portfolio — the §23 rule
+  against duplicating a fact that lives somewhere authoritative.
+- **A FAILED READ MUST NOT RENDER AS "none adopted."** Both leave the query's
+  `data` undefined, and the panel would otherwise tell the advisor no standard
+  exists on the one page whose job is to say what is in force. `ProcessDocumentPanel`
+  branches on the error explicitly. The same distinction the import warning
+  draws between a missing category and an unmapped one.
+- **`status = 'current'` is the only thing in force.** A draft is explicitly
+  not what the committee reads, and the panel says so in amber while one is
+  open — otherwise editing the standard would look like changing it.
+- Data layer `lib/processDocuments.ts`; the pure half (markdown → sections, key
+  reconciliation, adoption blockers) is `lib/processSections.ts`, tested. The
+  adopt path retires the live version **before** promoting the draft, because
+  `process_documents_one_current` is a partial unique index — the
+  `publishThesis` ordering, for the same reason.
 
 ### Compliance architecture (rules hub → risk report)
 

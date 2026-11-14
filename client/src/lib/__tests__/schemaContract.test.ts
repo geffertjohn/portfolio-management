@@ -148,6 +148,24 @@ describe('numeric guards match the constraint they stand in for', () => {
   })
 })
 
+describe('the process document is append-only', () => {
+  /**
+   * `process_documents` carries no `log_audit` trigger: its VERSION LINEAGE is
+   * the audit record, and that only holds while adopted versions are immutable.
+   * Drop this trigger and the table silently becomes an editable blob with a
+   * version number on it — which would read as an audit trail while being none.
+   */
+  it('still has its append-only trigger', () => {
+    expect(SCHEMA).toContain('CREATE OR REPLACE TRIGGER "process_documents_append_only"')
+  })
+
+  it('still refuses to adopt an empty document', () => {
+    // The committee reads the adopted row; an empty one would be a standard
+    // that says nothing while reading as a standard that exists.
+    expect(SCHEMA).toContain('process_documents_published_is_complete')
+  })
+})
+
 describe('the invariants enforced by a partial unique index still exist', () => {
   /**
    * Each of these IS a documented rule rather than an optimisation, so dropping
@@ -163,6 +181,8 @@ describe('the invariants enforced by a partial unique index still exist', () => 
     ['one open portfolio review per cadence',  'portfolio_review_log_one_draft'],
     ['one open candidate per ticker',          'security_additions_one_draft'],
     ['one unacknowledged at-risk alert',       'alert_events_one_live_at_risk'],
+    ['one draft process document',             'process_documents_one_draft'],
+    ['one adopted process document',           'process_documents_one_current'],
   ]
 
   it.each(INDEXES)('%s', (_rule, index) => {

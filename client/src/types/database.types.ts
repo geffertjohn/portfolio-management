@@ -2492,6 +2492,45 @@ export type Database = {
           },
         ]
       }
+      process_documents: {
+        Row: {
+          adopted_at: string | null
+          created_at: string
+          id: number
+          kind: string
+          revision_reason: string | null
+          sections: Json
+          status: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          adopted_at?: string | null
+          created_at?: string
+          id?: never
+          kind?: string
+          revision_reason?: string | null
+          sections?: Json
+          status?: string
+          title: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          adopted_at?: string | null
+          created_at?: string
+          id?: never
+          kind?: string
+          revision_reason?: string | null
+          sections?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       prospect_portfolios: {
         Row: {
           created_at: string
@@ -3063,6 +3102,9 @@ export type Database = {
           three_year_total_return_rank_category_size_nav: number | null
           three_year_total_return_rank_nav: number | null
           total_assets_under_management: number | null
+          tracking_error_3y_vs_category: number | null
+          tracking_error_3y_vs_pg: number | null
+          tracking_error_5y_vs_pg: number | null
           turnover_ratio_generic: number | null
           united_states_region_total_exposure_generic: number | null
           updated_at: string
@@ -3207,6 +3249,9 @@ export type Database = {
           three_year_total_return_rank_category_size_nav?: number | null
           three_year_total_return_rank_nav?: number | null
           total_assets_under_management?: number | null
+          tracking_error_3y_vs_category?: number | null
+          tracking_error_3y_vs_pg?: number | null
+          tracking_error_5y_vs_pg?: number | null
           turnover_ratio_generic?: number | null
           united_states_region_total_exposure_generic?: number | null
           updated_at?: string
@@ -3351,6 +3396,9 @@ export type Database = {
           three_year_total_return_rank_category_size_nav?: number | null
           three_year_total_return_rank_nav?: number | null
           total_assets_under_management?: number | null
+          tracking_error_3y_vs_category?: number | null
+          tracking_error_3y_vs_pg?: number | null
+          tracking_error_5y_vs_pg?: number | null
           turnover_ratio_generic?: number | null
           united_states_region_total_exposure_generic?: number | null
           updated_at?: string
