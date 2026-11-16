@@ -2228,8 +2228,6 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "latest_holdings_date" "date",
     "index_fund_generic" boolean,
     "open_to_new_investors_generic" boolean,
-    "waiver_expense_ratio_generic" numeric,
-    "waiver_expiration_date" "date",
     "prospectus_objective" "text",
     "prospectus_benchmark_index" "text",
     "primary_share_class_symbol" "text",
@@ -2271,10 +2269,6 @@ COMMENT ON COLUMN "public"."securities2"."index_fund_generic" IS 'Separates "the
 
 
 COMMENT ON COLUMN "public"."securities2"."open_to_new_investors_generic" IS 'An alternative that cannot be bought is not an alternative. Read by the annual review''s Considerations step before a watchlist idea is offered against a holding.';
-
-
-
-COMMENT ON COLUMN "public"."securities2"."waiver_expense_ratio_generic" IS 'A temporary fee waiver. Where this is set, expense_ratio_generic is not the cost the fund will charge after waiver_expiration_date.';
 
 
 

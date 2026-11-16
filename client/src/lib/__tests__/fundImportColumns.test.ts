@@ -44,6 +44,27 @@ describe('Securities sheet → securities2 columns', () => {
     }
   })
 
+  /**
+   * THE TEST THAT WOULD HAVE CAUGHT A REAL BUG, 16 Nov 2026.
+   *
+   * Both waiver columns were added to `BOOL_COLS` instead of `SKIP_COLS` and
+   * merged to main that way. Nothing failed: the sheet headers had been
+   * removed in the same change, so no row carried either column and the
+   * verifying import passed. The defect only bites on an OLDER workbook —
+   * exactly the case the skip exists to handle — where the columns would have
+   * been coerced to booleans and SENT to a table that no longer has them,
+   * failing the whole upsert batch.
+   *
+   * The no-overlap case below could not catch it, because an entry in the
+   * wrong set alone is not an overlap. Assert the set each column belongs to.
+   */
+  it('skips both waiver columns, and does not coerce them as booleans', () => {
+    for (const c of ['waiver_expense_ratio_generic', 'waiver_expiration_date']) {
+      expect(SKIP_COLS.has(c), `${c} must be skipped`).toBe(true)
+      expect(BOOL_COLS.has(c), `${c} must not be a bool col`).toBe(false)
+    }
+  })
+
   it('has no column in both sets', () => {
     // SKIP wins silently, so an overlap means someone believes a column is
     // imported when it is not.

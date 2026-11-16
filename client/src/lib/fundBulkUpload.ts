@@ -76,7 +76,6 @@ const DATE_COLS = new Set([
   // The as-of date for the holdings list AND for the 33 composition columns.
   // Weeks behind the price columns on the same row, by construction.
   'latest_holdings_date',
-  'waiver_expiration_date',
 ])
 
 /**
@@ -117,6 +116,23 @@ export const SKIP_COLS = new Set([
   // no longer overwrites a hand-corrected value — the silent overnight revert
   // that `portfolio.description` already cost us once.
   'open_to_new_investors_generic',
+  // FEE WAIVERS — both columns dropped from securities2 on 16 Nov 2026, and
+  // removed from the Securities sheet, so these entries are the escape hatch
+  // for an OLDER workbook that still carries the headers (gotcha 7).
+  //
+  // `waiver_expense_ratio_generic` could not be read: its convention was never
+  // established. IDHIX carried 0.45 against a 0.70% gross ratio, which as a
+  // waiver AMOUNT is a 64% reduction and as a net ratio a conventional 25bp
+  // one, while AVERX 0.04, NSMRX 0.19 and FESM 0.01 only make sense as
+  // amounts. The Hybrid Balanced annual review had to quote every cost GROSS.
+  //
+  // `waiver_expiration_date` went with it. Keeping the date alone was
+  // considered and rejected by the advisor: a date with no amount beside it
+  // says a cost is about to change by an unknown number, which is a prompt the
+  // system cannot act on and the advisor does not need — they track the
+  // waivers themselves.
+  'waiver_expense_ratio_generic',
+  'waiver_expiration_date',
   // Dropped from securities2 — still in the sheet, read by nothing.
   'assets_under_management',
   'discount_or_premium_to_nav',

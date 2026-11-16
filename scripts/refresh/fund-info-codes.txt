@@ -33,11 +33,6 @@ index_fund_generic
 # close.
 open_to_new_investors_generic
 
-# A temporary fee waiver, and the date it lapses. Where this is set, the
-# expense ratio on the scorecard is not what the fund will charge next year.
-waiver_expense_ratio_generic
-waiver_expiration_date
-
 # The fund's mandate in its own words, and the benchmark IT claims - against
 # the category benchmark we grade it on. A disagreement between those two is
 # the clearest signal that a fund is filed in the wrong sleeve, which is the
