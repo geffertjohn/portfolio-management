@@ -18,7 +18,7 @@ function row(over: Partial<ScorecardRow> = {}): ScorecardRow {
   return {
     label: 'Sharpe Ratio 3Y', weight: 0.2, displayVal: 150, size: 200,
     tier: 4, score: 5, tier3Threshold: 100, tier2Threshold: 50, tier1Threshold: 20,
-    higherIsBetter: false, tier1Exclusive: false, ...over,
+    higherIsBetter: false, tier1Exclusive: false, note: null, ...over,
   }
 }
 
@@ -144,7 +144,12 @@ describe('FPX against its designated peer-group cohort', () => {
     scorecard_cohort: 'peer',
     broad_asset_class: 'US Equity',
     upside_downside_5y_vs_pg: 0.862859,
-    // 1481bp against equity bands topping out at 775bp -- TIER 1.
+    // 1481bp against equity bands topping out at 775bp -- TIER 1. It is also a
+    // flagged index fund (it tracks the IPOX-100), so from 16 Nov 2026 the tier
+    // comes from the flag rather than the bands. Both give 1 here, which is why
+    // the flag could be added to this fixture without changing an expectation
+    // -- the honest version of the row, and a check that the two agree.
+    index_fund_generic: true,
     tracking_error_3y_vs_pg: 0.14807271,
     max_manager_tenure: 20.48,
     sharpe_peer_group_rank: 26,

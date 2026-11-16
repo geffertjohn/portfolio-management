@@ -96,10 +96,10 @@ export interface SecurityDetail extends Security {
 
   /**
    * ── Tracking error (Nov 2026) ───────────────────────────────────────────
-   * HOW MUCH THE MANAGER ACTUALLY DEVIATES. Loaded but NOT SCORED: the
-   * scorecard's R-Square rule reads higher-is-better, which is right for a
-   * tracker and backwards for an active mandate, and the rule is deliberately
-   * left alone until these carry real values.
+   * HOW MUCH THE MANAGER ACTUALLY DEVIATES. The 3Y pair IS SCORED by
+   * `lib/fundScorecard.ts`, higher-is-better, at the 5% weight R-Squared used
+   * to hold; `tracking_error_5y_vs_pg` is the selection-screen basis and stays
+   * unscored.
    *
    * Read them BESIDE `rsquared_3y_vs_category`, never instead of it — high
    * R-squared with low tracking error is closet indexing, while LOW R-squared
@@ -111,6 +111,21 @@ export interface SecurityDetail extends Security {
   tracking_error_5y_vs_pg: number | null
   tracking_error_3y_vs_category: number | null
   tracking_error_3y_vs_pg: number | null
+
+  /**
+   * Does this fund track an index? Vendor flag, read by the scorecard.
+   *
+   * **It is why tracking error is not graded on a tracker.** The metric asks
+   * whether an active mandate is being run actively; a fund whose mandate is to
+   * follow an index answers a different question, and scoring it on the
+   * active-manager bands marked VOO down for deviating 48bp — which is
+   * precisely its job.
+   *
+   * **Only `true` means tracker.** It is null on 80 of 102 securities, so a
+   * null must fall through to the ordinary bands rather than be read as either
+   * answer. See `INDEX_FUND_TRACKING_NOTE`.
+   */
+  index_fund_generic: boolean | null
 
   // ── Information ratio ─────────────────────────────────────────────────────
   information_ratio_3y_vs_category: number | null

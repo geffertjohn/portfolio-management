@@ -106,6 +106,44 @@ export function trackingErrorBands(s: SecurityDetail): [number, number, number] 
   return broad == null ? null : TRACKING_ERROR_TIERS[broad]
 }
 
+/**
+ * A TRACKER IS NOT GRADED ON ITS DEVIATION, and this is the note that says so.
+ *
+ * Tracking error replaced R-Squared at the same weight reading
+ * higher-is-better, which is right for an active mandate and wrong for an index
+ * fund in exactly the way R-Squared was wrong for an active one. Left
+ * unqualified it marked ten held trackers into the bottom tier for doing their
+ * job — VOO deviates 48bp because that is the product.
+ *
+ * So an index fund takes **tier 1 by rule** and carries this note. Tier 1
+ * rather than "not scored" is deliberate: the metric is worth 5 points, and
+ * dropping them would score the tracker out of 95 while every other fund is
+ * scored out of 100, making the totals incomparable — the same failure
+ * `scoreBand` already warns about, where a partly scored fund reads as a bad
+ * one.
+ *
+ * **The reading is still displayed, ungraded.** Six of the nineteen flagged
+ * funds are factor or rules-based ETFs that deviate enormously from the
+ * category they are filed against (FPX 1138bp, PWB 1003bp), so suppressing the
+ * value would hide the most interesting thing on the row. The note says the
+ * number is not graded; it does not claim the number is small.
+ */
+export const INDEX_FUND_TRACKING_NOTE =
+  'Index fund — tracking its benchmark closely is the mandate, not a shortfall, ' +
+  'so deviation is not graded against the active-manager bands. Scored tier 1 by rule.'
+
+/**
+ * Is this fund a tracker?
+ *
+ * **Strictly `true`.** `index_fund_generic` is null on most of the book, and a
+ * null is "the workbook has not told us", not "actively managed" — reading it
+ * as the latter is what the ordinary bands already assume, and reading it as
+ * the former would hand tier 1 to eighty funds.
+ */
+export function isIndexFund(s: SecurityDetail): boolean {
+  return s.index_fund_generic === true
+}
+
 function numVal(s: SecurityDetail, key: keyof SecurityDetail): number | null {
   const v = s[key]
   return typeof v === 'number' && Number.isFinite(v) ? v : null
@@ -149,6 +187,17 @@ export interface ScorecardRow {
    * card ends up saying one thing and the table another.
    */
   tier1Exclusive: boolean
+  /**
+   * Why this row was scored the way it was, when something other than the
+   * ordinary rule applied. Null for every row graded normally.
+   *
+   * Lives on the row rather than in the table so the on-page scorecard and the
+   * review-evidence PDF carry the same sentence — an unexplained tier 1 on a
+   * fund deviating 48bp is exactly the kind of number an audit document must
+   * not contain, and a second copy of the wording is how the screen and the
+   * frozen evidence start disagreeing.
+   */
+  note: string | null
 }
 
 function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
@@ -172,6 +221,7 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       tier1Threshold: size != null && size > 0 ? size * 0.10 : null,
       higherIsBetter: false,
       tier1Exclusive: false,
+      note: null,
     }
   }
 
@@ -182,7 +232,7 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       return {
         label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null,
         valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null,
-        higherIsBetter: true, tier1Exclusive: false,
+        higherIsBetter: true, tier1Exclusive: false, note: null,
       }
     }
 
@@ -201,6 +251,23 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       tier2Threshold = 5
       tier1Threshold = 7
     } else if (def.valueType === 'trackingError') {
+      // A TRACKER IS NOT GRADED. Checked BEFORE the bands are resolved: an
+      // index fund's deviation answers a different question from the one this
+      // metric asks, so there is no reading at which its tier would change and
+      // no thresholds to carry. `tierBandLines` therefore returns nothing for
+      // it and the note stands in -- printing "tier 1 at or above 7.75%" beside
+      // a graded tier 1 on a fund reading 0.48% would be a tooltip
+      // contradicting the number it explains.
+      if (isIndexFund(s)) {
+        return {
+          label: def.label, weight: def.weight, displayVal: val, size: null,
+          tier: 1, score: def.weight * TIER_MULTIPLIERS[1] * 100,
+          valueType: def.valueType,
+          tier3Threshold: null, tier2Threshold: null, tier1Threshold: null,
+          higherIsBetter: true, tier1Exclusive: false,
+          note: INDEX_FUND_TRACKING_NOTE,
+        }
+      }
       // HIGHER IS BETTER -- an active mandate is paid to deviate, and a fund
       // that does not is charging an active fee for index behaviour.
       const bands = trackingErrorBands(s)
@@ -211,7 +278,7 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
           label: def.label, weight: def.weight, displayVal: val, size: null,
           tier: null, score: null, valueType: def.valueType,
           tier3Threshold: null, tier2Threshold: null, tier1Threshold: null,
-          higherIsBetter: true, tier1Exclusive: false,
+          higherIsBetter: true, tier1Exclusive: false, note: null,
         }
       }
       ;[tier3Threshold, tier2Threshold, tier1Threshold] = bands
@@ -240,13 +307,14 @@ function computeMetric(def: MetricDef, s: SecurityDetail): ScorecardRow {
       tier3Threshold, tier2Threshold, tier1Threshold,
       higherIsBetter: true,  // every value-type metric here reads higher-is-better
       tier1Exclusive: def.valueType === 'updown',
+      note: null,
     }
   }
 
   return {
     label: def.label, weight: def.weight, displayVal: null, size: null, tier: null, score: null,
     valueType: def.valueType, tier3Threshold: null, tier2Threshold: null, tier1Threshold: null,
-    higherIsBetter: true, tier1Exclusive: false,
+    higherIsBetter: true, tier1Exclusive: false, note: null,
   }
 }
 
@@ -296,7 +364,7 @@ export function tierBandLines(r: ScorecardRow): string[] {
  */
 export function scoreFormulaLines(r: ScorecardRow): string[] {
   if (r.tier == null || r.score == null) {
-    return ['Not scored — no value for this metric.']
+    return ['Not scored — no value for this metric.', ...(r.note ? [r.note] : [])]
   }
 
   const pct = `${Math.round(r.weight * 100)}%`
@@ -305,6 +373,7 @@ export function scoreFormulaLines(r: ScorecardRow): string[] {
     return [
       `Tier ${r.tier} -> ${r.score.toFixed(1)} points`,
       `Fixed points for this metric, not weight x multiplier.`,
+      ...(r.note ? [r.note] : []),
     ]
   }
 
@@ -327,6 +396,8 @@ export function scoreFormulaLines(r: ScorecardRow): string[] {
   if (r.valueType === 'tenure' && r.score === 0) {
     lines.push(`Scored 0: a manager of 1 year or less pays nothing whatever the tier.`)
   }
+  // The reason the tier is what it is, when the ordinary rule did not set it.
+  if (r.note) lines.push(r.note)
   return lines
 }
 
