@@ -22,7 +22,8 @@ import { fetchPortfolioReviewSchedules, CADENCE_LABELS } from './portfolioReview
 import { fetchUnacknowledgedAlerts } from './alertRules'
 import { fetchAllFiles, PORTFOLIO_DOCS_BUCKET, type StoredFile } from './documents'
 import {
-  fetchLatestActualAllocation, portfoliosWithActualAllocation,
+  fetchLatestActualAllocation, portfoliosWithActualAllocation, newAllocationMemo,
+  type AllocationMemo,
   type CurrentAllocation,
 } from './currentAllocation'
 import { fetchRebalanceSchedules } from './rebalanceSchedule'
@@ -214,7 +215,10 @@ async function fetchCandidateActions(): Promise<UnifiedAction[]> {
 //
 // Only portfolios with an uploaded allocation file can be evaluated; the rest
 // have no actual to compare against and are skipped rather than reported clean.
-async function fetchDriftActions(files: StoredFile[] | null): Promise<UnifiedAction[]> {
+async function fetchDriftActions(
+  files: StoredFile[] | null,
+  memo: AllocationMemo,
+): Promise<UnifiedAction[]> {
   // The Express file store being down must not take out the whole Actions hub.
   if (!files) return []
 
@@ -231,7 +235,7 @@ async function fetchDriftActions(files: StoredFile[] | null): Promise<UnifiedAct
     withFiles.map(async (name): Promise<UnifiedAction | null> => {
     try {
       const [actual, positions, model] = await Promise.all([
-        fetchLatestActualAllocation(name, files),
+        fetchLatestActualAllocation(name, files, memo),
         fetchPositionsByPortfolioId(name),
         resolveModelForPortfolio(name),
       ])
@@ -290,7 +294,10 @@ async function fetchDriftActions(files: StoredFile[] | null): Promise<UnifiedAct
 //
 // Batched deliberately. This spans 19 portfolios, so per-portfolio lookups would
 // mean ~57 round trips; the reference data is fetched once and joined in memory.
-async function fetchAllocationBandActions(files: StoredFile[] | null): Promise<UnifiedAction[]> {
+async function fetchAllocationBandActions(
+  files: StoredFile[] | null,
+  memo: AllocationMemo,
+): Promise<UnifiedAction[]> {
   const [portfoliosRes, mapRes, models, positionsRes, securities] = await Promise.all([
     supabase.from('portfolio').select('name, security_id, investment_objective'),
     supabase.from('portfolio_model_map').select('security_id, model_portfolio_id'),
@@ -322,7 +329,7 @@ async function fetchAllocationBandActions(files: StoredFile[] | null): Promise<U
   const actualByPortfolio = new Map<string, CurrentAllocation | null>()
   await Promise.all([...withActual].map(async (name) => {
     try {
-      actualByPortfolio.set(name, await fetchLatestActualAllocation(name, files ?? undefined))
+      actualByPortfolio.set(name, await fetchLatestActualAllocation(name, files ?? undefined, memo))
     } catch {
       actualByPortfolio.set(name, null)  // falls back to position targets below
     }
@@ -642,6 +649,16 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     portfolioFiles = null
   }
 
+  // ONE read memo for the whole fan-out, for the same reason as the listing
+  // above and one level deeper. Drift and the allocation bands each resolve
+  // every portfolio's allocation file, and a derived blend re-reads the legs
+  // its parents have already read: 6 distinct files were being fetched,
+  // downloaded and parsed 16 times. They run concurrently inside this
+  // `Promise.all`, so the memo holds the in-flight PROMISE — a resolved-value
+  // cache would still have missed on every pair. Created here and dropped when
+  // this function returns, so it can never go stale behind an upload.
+  const allocationMemo = newAllocationMemo()
+
   const [manual, reviews, portfolioReviews, alerts, atRisk, ic, candidates, drift, dataRefresh, allocationBands, scheduledRebalances, jobHealth] = await Promise.all([
     fetchActionItems(),
     fetchReviewSchedules(),
@@ -650,9 +667,9 @@ export async function fetchAllActions(): Promise<UnifiedAction[]> {
     fetchActiveAtRisk(),
     fetchIcActions(),
     fetchCandidateActions(),
-    fetchDriftActions(portfolioFiles),
+    fetchDriftActions(portfolioFiles, allocationMemo),
     fetchDataRefreshActions(),
-    fetchAllocationBandActions(portfolioFiles),
+    fetchAllocationBandActions(portfolioFiles, allocationMemo),
     fetchScheduledRebalanceActions(),
     fetchJobHealthActions(),
   ])

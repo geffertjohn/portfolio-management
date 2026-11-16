@@ -2708,9 +2708,28 @@ in its body, so six portfolios meant six serialised rounds of download-and-parse
 Nothing in either depends on the previous portfolio's answer.
 
 Measured on the same page: **52.4s and never rendering → 4.3s**, one bucket
-listing instead of seven. What remains is ~14 signed-URL downloads, because
-drift and the allocation bands each resolve the same portfolio's file
-separately; sharing that result between the two sources is the next win.
+listing instead of seven.
+
+**The reads themselves are now shared too** (Nov 2026) — this paragraph used to
+end by naming that as the next win. It was **6 distinct files fetched,
+downloaded and parsed 16 times**: four twice, because drift and the allocation
+bands each resolve every portfolio, and Core Growth and Equity Income FOUR times
+each, being portfolios in their own right and the two legs of the Equity Income
+& Core Growth blend. `fetchAllActions` now creates one `AllocationMemo` and
+hands it to both adapters, exactly as it already hands them the listing. **16
+signed-URL round trips → 6**, and the same six downloads and parses.
+
+- **It memoises the in-flight PROMISE, not the result**, which is the only thing
+  that works here: the two adapters sit in one `Promise.all`, so they are
+  concurrent and a resolved-value cache would have missed on every pair. The
+  second caller waits on the first's read instead of racing it.
+- **A memo, not a cache** — created per request and dropped when
+  `fetchAllActions` returns, so it cannot outlive an upload. Same reasoning as
+  the listing being a parameter. Never hoist one to module scope.
+- **The win is request count, not wall clock.** The redundant reads were already
+  parallel, so removing them saves parse time and server load rather than ten
+  round trips of latency: a warm `fetchAllActions` went ~520ms → ~345ms. Do not
+  expect another 52s.
 
 
 The Actions page is a **unified command center**, not a plain to-do list. It shows one `UnifiedAction[]` assembled by **per-source adapters** in **`lib/actions.ts`** (`fetchAllActions`), keeping each domain single-sourced.
