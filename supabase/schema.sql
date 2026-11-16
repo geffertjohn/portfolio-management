@@ -2228,7 +2228,6 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "latest_holdings_date" "date",
     "index_fund_generic" boolean,
     "open_to_new_investors_generic" boolean,
-    "waiver_expiration_date" "date",
     "prospectus_objective" "text",
     "prospectus_benchmark_index" "text",
     "primary_share_class_symbol" "text",

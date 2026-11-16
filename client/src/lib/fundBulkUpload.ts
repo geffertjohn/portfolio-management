@@ -77,9 +77,13 @@ const BOOL_COLS = new Set([
   // FESM 0.01 only make sense as amounts. The Hybrid Balanced annual review
   // had to quote every cost GROSS because no net figure could be trusted.
   //
-  // `waiver_expiration_date` is KEPT and still imported: a date is unambiguous
-  // and knowing a waiver lapses is the prompt to go and check what replaces it.
+  // `waiver_expiration_date` went with it. Keeping the date alone was
+  // considered and rejected by the advisor: a date with no amount beside it
+  // says a cost is about to change by an unknown number, which is a prompt the
+  // system cannot act on and the advisor does not need — they track the
+  // waivers. Neither column is imported and neither remains on securities2.
   'waiver_expense_ratio_generic',
+  'waiver_expiration_date',
   'fund_of_funds_generic',
 ])
 
@@ -88,7 +92,6 @@ const DATE_COLS = new Set([
   // The as-of date for the holdings list AND for the 33 composition columns.
   // Weeks behind the price columns on the same row, by construction.
   'latest_holdings_date',
-  'waiver_expiration_date',
 ])
 
 /**
