@@ -1546,12 +1546,27 @@ more than seventy days past a call. The Overdue count went 3 → 23.
   8. A row pulled back to its missed call says *for the call of <date>*; the
   date alone cannot say that, and an unexplained backward jump reads as a bug.
 
-**SEVENTEEN CALLS ARE CLOSED WITHOUT REVIEW** (`REVIEW_AMNESTY` in
-`lib/reviewSchedules.ts`, 16 Nov 2026). A stock review is drafted from its
-post-earnings brief; those seventeen have none, and for ten of them none can
-ever be written — `research_reports_post_needs_parent` needs a pre-brief and
-those windows closed months ago. A review with no evidence behind it is a
-rubber stamp, which in an audit-defence tool is worse than an honest gap.
+**EIGHTEEN CALLS ARE CLOSED WITHOUT REVIEW** (`REVIEW_AMNESTY` in
+`lib/reviewSchedules.ts`, 16 Nov 2026). A stock review is drafted from the
+committee's recommendation on its post-earnings brief, and for those eighteen
+there is none to draft from. A review with no evidence behind it is a rubber
+stamp, which in an audit-defence tool is worse than an honest gap.
+
+- **THE CRITERION IS "NO COMMITTEE RECOMMENDATION", NOT "NO BRIEF"**, and
+  recording it the other way round would make the eighteenth entry look like a
+  mistake. Seventeen have no post-earnings brief at all, and for ten of those
+  none can ever be written (`research_reports_post_needs_parent` needs a
+  pre-brief and those windows closed months ago). **TSM is the exception that
+  names the real rule**: its 15 Oct call carries a complete pre+post pair — 4
+  estimates, 4 street questions, 3 thesis checks, 3 risk checks, a
+  2,128-character thesis — but the post-brief was written on **19 Oct** and
+  `review_recommendations` was not added until the **27th** (`4cd8691`). It is
+  the only post-brief of 37 without the block, so the modal had nothing to
+  pre-fill and the review could not be drafted. Its next brief will carry it.
+  - **A blank pre-fill reads as a broken page**, which is how this surfaced.
+    `recs = brief?.review_recommendations ?? []` makes the effect return early
+    and the form renders empty with nothing said. Worth a note there if it ever
+    recurs — the missing-vs-unmapped distinction, applied to a modal.
 
 - **THEY HAD BEEN "CLEARED" ONCE BEFORE, AND THAT IS THE LESSON.** On 28 Oct
   2026 at 12:28:28 one transaction updated **33 `review_schedules` rows,
@@ -1570,7 +1585,7 @@ rubber stamp, which in an audit-defence tool is worse than an honest gap.
   running would quietly excuse the reviews it should have fed — the opposite of
   what the job exists for.
 - **It does NOT touch `review_log`, so the record stays true.** The coverage
-  report still counts all seventeen as missed and the answered-call rate does
+  report still counts all eighteen as missed and the answered-call rate does
   not move. The amnesty governs the WORKLIST, not the history — which is the
   whole reason it was preferred over writing seventeen reviews nobody did.
 - **An amnestied call also LIFTS the two `redatedStockSchedules` guards**,
@@ -1580,9 +1595,9 @@ rubber stamp, which in an audit-defence tool is worse than an honest gap.
   held on 27 Oct. Without this it stays pinned and overdue for ever. Its row
   was corrected to 10 Feb 2027 by hand at the same time rather than waiting for
   someone to open the Review Calendar.
-- **The five with a complete brief pair are deliberately absent** — TSM, MSI,
-  ALL, APP and ELF are reviewable today and stay due. Overdue reviews went
-  **22 → 5**.
+- **The four whose briefs carry a recommendation are deliberately absent** —
+  MSI, ALL, APP and ELF are draftable today and stay due. Overdue reviews went
+  **22 → 4**.
 - In git rather than in a table, like `ASSET_CLASS_OVERRIDES`: a finished list
   of deliberate exceptions whose every change belongs in a PR diff.
 
