@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the CATCH-UP run — the companion to com.john.ycharts-refresh.
+
+  That agent fires at 05:30 on weekdays and launchd carries it over a SLEEPING
+  Mac by running it on the next wake. The case neither it nor `pmset` covers is
+  the Mac being SHUT DOWN: scheduled power-on from a full shutdown does not
+  exist on Apple Silicon. `pmset repeat wakepoweron` registers happily and only
+  ever wakes, so the failure looks exactly like a healthy configuration.
+
+  The sibling plist already named the symptom and accepted it — "The one hole
+  left is a reboot: FileVault is on, so the Studio stops at the unlock screen
+  with no user session, and no LaunchAgent runs until someone logs in." This is
+  that hole closed from the other side: it cannot make the job run while nobody
+  is logged in, but the moment somebody is, the missed run happens.
+
+  RunAtLoad is TRUE here, which is the whole point — an agent loads when the
+  user logs in, so that is the first instant after a boot at which anything can
+  run. The guard against re-running lives in catchup.sh, not in the schedule.
+
+  StartInterval re-checks every 30 minutes, for the boot where Parallels is not
+  ready yet and for a login that happens before 05:30. Each check is a handful
+  of shell builtins and exits in milliseconds when there is nothing to do.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.john.ycharts-refresh-catchup</string>
+
+  <!-- Same TCC constraint as the sibling: the repo must stay out of ~/Desktop,
+       ~/Documents and ~/Downloads or bash cannot even read the script. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/johngeffert/Developer/Portfolio Management/scripts/refresh/catchup.sh</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StartInterval</key>
+  <integer>1800</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/johngeffert/portfolio-refresh/logs/catchup-launchd.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/johngeffert/portfolio-refresh/logs/catchup-launchd.err</string>
+
+  <!-- prlctl lives in /usr/local/bin; launchd's default PATH does not include it. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>
