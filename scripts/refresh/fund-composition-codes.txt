@@ -65,3 +65,23 @@ number_of_holdings_generic
 # holdings list that describes the fund from one that describes a sliver.
 percent_of_assets_in_top_10_holdings
 percent_of_assets_in_top_25_holdings
+
+# ── Maturity structure (added 16 Nov 2026) ──────────────────────────────────
+# securities2 carried effective_duration and nothing else, so no committee run
+# could see WHERE on the curve a bond fund sits. That produced a wrong
+# recommendation: the Hybrid Balanced annual review proposed swapping PYTRX for
+# VBTLX on a fee argument assuming they were the same exposure. They carry
+# near-identical duration -- 5.81 years against 5.68 -- and reach it from
+# opposite ends: 49.90% long-term against 38.47%, 48.21% intermediate against
+# 61.49% (YCharts, 30 Sep 2026).
+#
+# All eight verified present on BOTH the "ETF & CEF | Metrics" and "Mutual Fund
+# | Metrics" reference tabs before being added. METRICS (YCP), not Info (YCI).
+maturity_less_than_1_year_generic
+1_to_3_years_maturity_bond_exposure
+3_to_5_years_maturity_bond_exposure
+maturity_5_to_10_years_generic
+maturity_10_to_20_years_generic
+maturity_20_to_30_years_generic
+over_30_years_maturity_bond_exposure
+effective_maturity

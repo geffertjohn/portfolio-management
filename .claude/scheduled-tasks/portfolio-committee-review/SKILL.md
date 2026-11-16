@@ -872,14 +872,17 @@ the book: construction, risk, and the regime it is being run into.
    and the memo recommended swapping one for the other on a fee argument that
    assumed they were the same exposure.
 
-   **MATURITY IS NOT IN THE DATA.** `securities2` carries no maturity-bucket
-   columns, so the committee is blind to the dimension on which those two funds
-   differ most — PYTRX is 49.90% long-term against VBTLX's 38.47%, and 48.21%
-   intermediate against 61.49%, per YCharts as at 30 Sep 2026. **Say so when
-   duration structure bears on a recommendation**, rather than reasoning as
-   though effective duration alone describes the maturity profile. Two funds
-   can carry the same effective duration — 5.81 against 5.68 years here — and
-   reach it from opposite ends of the curve.
+   **READ MATURITY, NOT ONLY DURATION.** `securities2` carries seven maturity
+   buckets and `effective_maturity` alongside `effective_duration` (added 16
+   Nov 2026, first populated on the 17th). **Two funds can carry the same
+   effective duration and reach it from opposite ends of the curve** — PYTRX
+   and VBTLX sit at 5.81 and 5.68 years while PYTRX is 49.90% long-term
+   against VBTLX's 38.47% and 48.21% intermediate against 61.49%. Duration
+   alone does not describe a bond fund's shape, and the maturity buckets are
+   now there to be read before any fixed-income replacement is proposed.
+
+   A null across all seven on a bond fund means the workbook has not reached
+   it yet; say so rather than treating the fund as having no maturity profile.
 
       **THE SCORECARD IS EVIDENCE, NOT THE DECISION — AND NEVER A TIEBREAK YOU
    HIDE BEHIND.** The firm's score ranks a fund against its cohort on nine

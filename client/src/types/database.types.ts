@@ -2975,6 +2975,8 @@ export type Database = {
       }
       securities2: {
         Row: {
+          "1_to_3_years_maturity_bond_exposure": number | null
+          "3_to_5_years_maturity_bond_exposure": number | null
           aaa_bond_exposure_generic: number | null
           alpha_3y_vs_category: number | null
           alpha_peer_group_rank: number | null
@@ -3007,6 +3009,7 @@ export type Database = {
           detailed_security_type: string | null
           developed_market_exposure: number | null
           effective_duration: number | null
+          effective_maturity: number | null
           emerging_market_exposure_generic: number | null
           energy_exposure: number | null
           eps_growth_1_yr_generic: number | null
@@ -3044,6 +3047,10 @@ export type Database = {
           latest_holdings_date: string | null
           long_description: string | null
           market_alpha_3y_vs_pg: number | null
+          maturity_10_to_20_years_generic: number | null
+          maturity_20_to_30_years_generic: number | null
+          maturity_5_to_10_years_generic: number | null
+          maturity_less_than_1_year_generic: number | null
           max_drawdown_3y: number | null
           max_drawdown_5y: number | null
           max_manager_tenure: number | null
@@ -3069,6 +3076,7 @@ export type Database = {
           one_year_total_return_rank_nav: number | null
           open_to_new_investors_generic: boolean | null
           other_fixed_income_exposure_generic: number | null
+          over_30_years_maturity_bond_exposure: number | null
           peer_group_name: string | null
           percent_of_assets_in_top_10_holdings: number | null
           percent_of_assets_in_top_25_holdings: number | null
@@ -3120,6 +3128,8 @@ export type Database = {
           ytd_total_return_rank_nav: number | null
         }
         Insert: {
+          "1_to_3_years_maturity_bond_exposure"?: number | null
+          "3_to_5_years_maturity_bond_exposure"?: number | null
           aaa_bond_exposure_generic?: number | null
           alpha_3y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
@@ -3152,6 +3162,7 @@ export type Database = {
           detailed_security_type?: string | null
           developed_market_exposure?: number | null
           effective_duration?: number | null
+          effective_maturity?: number | null
           emerging_market_exposure_generic?: number | null
           energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
@@ -3189,6 +3200,10 @@ export type Database = {
           latest_holdings_date?: string | null
           long_description?: string | null
           market_alpha_3y_vs_pg?: number | null
+          maturity_10_to_20_years_generic?: number | null
+          maturity_20_to_30_years_generic?: number | null
+          maturity_5_to_10_years_generic?: number | null
+          maturity_less_than_1_year_generic?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
@@ -3214,6 +3229,7 @@ export type Database = {
           one_year_total_return_rank_nav?: number | null
           open_to_new_investors_generic?: boolean | null
           other_fixed_income_exposure_generic?: number | null
+          over_30_years_maturity_bond_exposure?: number | null
           peer_group_name?: string | null
           percent_of_assets_in_top_10_holdings?: number | null
           percent_of_assets_in_top_25_holdings?: number | null
@@ -3265,6 +3281,8 @@ export type Database = {
           ytd_total_return_rank_nav?: number | null
         }
         Update: {
+          "1_to_3_years_maturity_bond_exposure"?: number | null
+          "3_to_5_years_maturity_bond_exposure"?: number | null
           aaa_bond_exposure_generic?: number | null
           alpha_3y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
@@ -3297,6 +3315,7 @@ export type Database = {
           detailed_security_type?: string | null
           developed_market_exposure?: number | null
           effective_duration?: number | null
+          effective_maturity?: number | null
           emerging_market_exposure_generic?: number | null
           energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
@@ -3334,6 +3353,10 @@ export type Database = {
           latest_holdings_date?: string | null
           long_description?: string | null
           market_alpha_3y_vs_pg?: number | null
+          maturity_10_to_20_years_generic?: number | null
+          maturity_20_to_30_years_generic?: number | null
+          maturity_5_to_10_years_generic?: number | null
+          maturity_less_than_1_year_generic?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
@@ -3359,6 +3382,7 @@ export type Database = {
           one_year_total_return_rank_nav?: number | null
           open_to_new_investors_generic?: boolean | null
           other_fixed_income_exposure_generic?: number | null
+          over_30_years_maturity_bond_exposure?: number | null
           peer_group_name?: string | null
           percent_of_assets_in_top_10_holdings?: number | null
           percent_of_assets_in_top_25_holdings?: number | null
