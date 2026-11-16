@@ -1546,6 +1546,46 @@ more than seventy days past a call. The Overdue count went 3 → 23.
   8. A row pulled back to its missed call says *for the call of <date>*; the
   date alone cannot say that, and an unexplained backward jump reads as a bug.
 
+**SEVENTEEN CALLS ARE CLOSED WITHOUT REVIEW** (`REVIEW_AMNESTY` in
+`lib/reviewSchedules.ts`, 16 Nov 2026). A stock review is drafted from its
+post-earnings brief; those seventeen have none, and for ten of them none can
+ever be written — `research_reports_post_needs_parent` needs a pre-brief and
+those windows closed months ago. A review with no evidence behind it is a
+rubber stamp, which in an audit-defence tool is worse than an honest gap.
+
+- **THEY HAD BEEN "CLEARED" ONCE BEFORE, AND THAT IS THE LESSON.** On 28 Oct
+  2026 at 12:28:28 one transaction updated **33 `review_schedules` rows,
+  pushing `next_review_at` forward and leaving `last_reviewed_at` untouched** —
+  `redatedStockSchedules` doing its job. The overdue list emptied while every
+  missed call stayed missed, and the moment `outstandingCallReviewDay` started
+  reading the CALL rather than the stored date, all of them came back. **A
+  derived value cannot be suppressed by editing the date it does not read.**
+  (Found in `audit_log`, which is what that table is for.)
+- **Keyed on the CALL, never the ticker.** HD is excused for its 18 Aug 2026
+  print and nothing else; when HD reports again the review is due as normal. A
+  ticker-keyed exemption would have retired those stocks from the review
+  process permanently, which is the failure mode worth fearing here.
+- **`REVIEW_AMNESTY_CUTOFF` (4 Nov 2026) is asserted by a test**, so the list
+  cannot grow to cover current work. If it ever did, a brief job that stopped
+  running would quietly excuse the reviews it should have fed — the opposite of
+  what the job exists for.
+- **It does NOT touch `review_log`, so the record stays true.** The coverage
+  report still counts all seventeen as missed and the answered-call rate does
+  not move. The amnesty governs the WORKLIST, not the history — which is the
+  whole reason it was preferred over writing seventeen reviews nobody did.
+- **An amnestied call also LIFTS the two `redatedStockSchedules` guards**,
+  because both protect an obligation that no longer exists. HOOD is the case
+  that needed it: its schedule read 5 Nov, derived from a
+  `next_earnings_release` of 4 Nov that never happened, while the real call was
+  held on 27 Oct. Without this it stays pinned and overdue for ever. Its row
+  was corrected to 10 Feb 2027 by hand at the same time rather than waiting for
+  someone to open the Review Calendar.
+- **The five with a complete brief pair are deliberately absent** — TSM, MSI,
+  ALL, APP and ELF are reviewable today and stay due. Overdue reviews went
+  **22 → 5**.
+- In git rather than in a table, like `ASSET_CLASS_OVERRIDES`: a finished list
+  of deliberate exceptions whose every change belongs in a PR diff.
+
 **The COVERAGE REPORT answers the other half: which calls were never
 answered** (`lib/reviewCoverage.ts`, `/reviews/coverage`, Nov 2026).
 `outstandingCallReviewDay` names only the MOST RECENT unreviewed call, so a

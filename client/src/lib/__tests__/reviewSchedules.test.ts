@@ -4,6 +4,7 @@ import {
   outstandingCallReviewDay, effectiveReviewDay,
   needsEarningsCheck, correctedFutureEarnings, upcomingEarnings,
   type ReviewScheduleWithSecurity,
+  REVIEW_AMNESTY, REVIEW_AMNESTY_CUTOFF, isAmnestiedCall,
 } from '../reviewSchedules'
 
 /**
@@ -137,9 +138,15 @@ describe('redatedStockSchedules', () => {
      *
      * A schedule dated off an estimate that never happened lands in exactly
      * that blind spot: between the real call and the next one.
+     *
+     * **The fixture keeps HOOD's SHAPE but not its ticker**, because on 16 Nov
+     * 2026 HOOD's 27 Oct call was put in `REVIEW_AMNESTY` — no brief existed
+     * for it and none could be written. An amnestied call lifts this guard by
+     * design, so naming HOOD here would assert the amnesty rather than the
+     * guard. HOOD's own new behaviour is covered in the amnesty block below.
      */
     const hood = {
-      security_id: 'HOOD',
+      security_id: 'TEST',
       next_review_at: '2026-11-05T00:00:00Z',
       last_earnings_release: '2026-10-27',
       next_earnings_release: '2027-02-09',
@@ -156,7 +163,7 @@ describe('redatedStockSchedules', () => {
     it('still re-dates a row that is not yet due', () => {
       // The guard must not disarm the feature it sits inside.
       expect(redatedStockSchedules([hood], '2026-11-04')).toEqual([
-        { securityId: 'HOOD', from: '2026-11-05', nextReviewAt: '2027-02-10T00:00:00Z' },
+        { securityId: 'TEST', from: '2026-11-05', nextReviewAt: '2027-02-10T00:00:00Z' },
       ])
     })
 
@@ -167,7 +174,7 @@ describe('redatedStockSchedules', () => {
         [{ ...hood, next_earnings_release: '2026-10-20' }],
         '2026-11-05',
       )).toEqual([
-        { securityId: 'HOOD', from: '2026-11-05', nextReviewAt: '2026-10-21T00:00:00Z' },
+        { securityId: 'TEST', from: '2026-11-05', nextReviewAt: '2026-10-21T00:00:00Z' },
       ])
     })
   })
@@ -187,6 +194,11 @@ describe('an unreviewed call is surfaced as overdue', () => {
    * anchored to the older call while the real obligation moved on.
    */
   const stock = (over: Partial<Parameters<typeof effectiveReviewDay>[0]> = {}) => ({
+    // The SHAPE is JNJ's, the ticker deliberately is not: JNJ's 13 Oct call is
+    // in `REVIEW_AMNESTY`, so naming it here would make every case below assert
+    // the amnesty instead of the rule it was written for. The amnesty has its
+    // own block further down, which uses the real pairs.
+    security_id: 'TEST',
     next_review_at: '2027-01-21T00:00:00Z',
     last_reviewed_at: null,
     last_earnings_release: '2026-10-13',
@@ -467,5 +479,88 @@ describe('the calls about to land', () => {
   it('reads a full timestamp the same as a bare day', () => {
     const [c] = upcomingEarnings([stock('AMAT', '2026-11-12T00:00:00Z')], TODAY, 7)
     expect(c.callOn).toBe('2026-11-12')
+  })
+})
+
+describe('calls the firm closed without review (REVIEW_AMNESTY)', () => {
+  /**
+   * The 16 Nov 2026 decision. Twenty-two stocks were showing an overdue review
+   * for a call that had come and gone; seventeen of them had NO post-earnings
+   * brief, and for ten a brief was structurally impossible, because
+   * `research_reports_post_needs_parent` needs a pre-brief and that window had
+   * closed months earlier. A review drafted from nothing is a rubber stamp.
+   *
+   * They had been "cleared" once before, on 28 Oct 2026, by a re-date that
+   * pushed `next_review_at` forward on 33 rows and left `last_reviewed_at`
+   * untouched — so the missed call was never addressed, and the moment
+   * `outstandingCallReviewDay` started reading the call rather than the stored
+   * date, all of them came back. That is why this is keyed on the CALL and not
+   * on a date somebody can move.
+   */
+
+  const row = (security_id: string, call: string) => ({
+    security_id,
+    next_review_at: '2027-02-10T00:00:00Z',
+    last_reviewed_at: '2026-05-04',
+    last_earnings_release: call,
+    detailed_security_type: 'Common Stock',
+  })
+
+  it('excuses an amnestied call', () => {
+    expect(outstandingCallReviewDay(row('HD', '2026-08-18'))).toBeNull()
+    expect(outstandingCallReviewDay(row('NXPI', '2026-10-27'))).toBeNull()
+  })
+
+  it('excuses THAT CALL ONLY — the next one is due as normal', () => {
+    // The property the whole design rests on. A ticker-keyed exemption would
+    // have retired these stocks from the review process for ever.
+    expect(outstandingCallReviewDay(row('HD', '2026-11-17'))).toBe('2026-11-18')
+    expect(outstandingCallReviewDay(row('NXPI', '2027-02-02'))).toBe('2027-02-03')
+  })
+
+  it('leaves a stock that is not in the map alone', () => {
+    expect(outstandingCallReviewDay(row('MSI', '2026-11-04'))).toBe('2026-11-05')
+    expect(outstandingCallReviewDay(row('TSM', '2026-10-15'))).toBe('2026-10-16')
+  })
+
+  it('keeps the five that DO have a brief pair', () => {
+    // These are reviewable today: the modal pre-fills from the post-brief.
+    for (const t of ['TSM', 'MSI', 'ALL', 'APP', 'ELF']) {
+      expect(REVIEW_AMNESTY[t], t).toBeUndefined()
+    }
+  })
+
+  it('names no call after the cutoff', () => {
+    // The amnesty closes a historical gap. If it ever covered current work, a
+    // brief job that stopped running would quietly excuse the reviews it should
+    // have fed instead of raising them.
+    for (const [t, call] of Object.entries(REVIEW_AMNESTY)) {
+      expect(call <= REVIEW_AMNESTY_CUTOFF, `${t} ${call}`).toBe(true)
+    }
+  })
+
+  it('matches on the calendar day, whatever the stored precision', () => {
+    expect(isAmnestiedCall('HD', '2026-08-18T00:00:00Z')).toBe(true)
+    expect(isAmnestiedCall('HD', '2026-08-18')).toBe(true)
+    expect(isAmnestiedCall('HD', null)).toBe(false)
+    expect(isAmnestiedCall('NOPE', '2026-08-18')).toBe(false)
+  })
+
+  it('lets a pinned schedule be re-dated once its call is excused', () => {
+    // HOOD: schedule 5 Nov, derived from a `next_earnings_release` of 4 Nov
+    // that never happened; the real call was 27 Oct and is amnestied. The
+    // "already due, do not defer" guard would otherwise pin it for ever.
+    const hood = {
+      security_id: 'HOOD',
+      next_review_at: '2026-11-05T00:00:00Z',
+      last_earnings_release: '2026-10-27',
+      next_earnings_release: '2027-02-09',
+    }
+    expect(redatedStockSchedules([hood], '2026-11-16')).toEqual([
+      { securityId: 'HOOD', from: '2026-11-05', nextReviewAt: '2027-02-10T00:00:00Z' },
+    ])
+    // The same row WITHOUT the amnesty stays pinned — the guard still works.
+    const other = { ...hood, security_id: 'OTHER' }
+    expect(redatedStockSchedules([other], '2026-11-16')).toEqual([])
   })
 })

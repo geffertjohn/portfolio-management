@@ -269,10 +269,21 @@ export function redatedStockSchedules(
     const current = reviewDueDay(r.next_review_at)
     const target = addUtcDays(r.next_earnings_release, 1)
     if (current === target) continue
-    // Outstanding review for a call that already happened — leave it alone.
-    if (r.last_earnings_release && current <= addUtcDays(r.last_earnings_release, 1)) continue
-    // Already due, and the correction would defer it. Leave it on the calendar.
-    if (current <= today && target > today) continue
+    // **Both guards below protect an OBLIGATION, so an amnestied call lifts
+    // them.** They exist to stop a correction cancelling a review that is
+    // genuinely owed; once the firm has closed that call without review there
+    // is nothing left to protect, and leaving the row pinned would keep it on
+    // the worklist for ever. HOOD is the live case: its schedule reads 5 Nov
+    // because it was derived from a `next_earnings_release` of 4 Nov that never
+    // happened, while the real call was held on 27 Oct and is amnestied. Only
+    // this lets it move to its true next review of 10 Feb 2027.
+    const excused = isAmnestiedCall(r.security_id, r.last_earnings_release)
+    if (!excused) {
+      // Outstanding review for a call that already happened — leave it alone.
+      if (r.last_earnings_release && current <= addUtcDays(r.last_earnings_release, 1)) continue
+      // Already due, and the correction would defer it. Leave it on the calendar.
+      if (current <= today && target > today) continue
+    }
     out.push({ securityId: r.security_id, from: current, nextReviewAt: `${target}T00:00:00Z` })
   }
   return out
@@ -626,7 +637,76 @@ export async function fetchOrphanedSchedules(): Promise<string[]> {
 }
 
 /** Fields the outstanding-call rule reads. Classifier columns gate it to stocks. */
+/**
+ * Calls the firm has CLOSED WITHOUT REVIEW, because no brief exists for them
+ * and none will be written.
+ *
+ * **This is an amnesty for one historical gap, not a rule.** A stock review is
+ * drafted from its post-earnings brief; for these seventeen calls no brief
+ * exists, and for ten of them none ever can — `research_reports_post_needs_parent`
+ * requires a pre-brief, and the pre-earnings window for those quarters closed
+ * months ago. Asking for a review that has no evidence behind it and no way to
+ * get any is asking for a rubber stamp, which is worse in an audit-defence tool
+ * than an honest gap.
+ *
+ * **Keyed on the CALL, never on the ticker**, and that is the property that
+ * makes it safe. HD is excused for its 18 Aug 2026 print and nothing else: when
+ * HD reports again the new call is not in this map, the review becomes due, and
+ * the amnesty has no further effect on it ever. A ticker-keyed exemption would
+ * have silently retired that stock from the review process.
+ *
+ * **It does NOT touch `review_log`, so the record stays true.** These calls
+ * were not reviewed, the coverage report at `/reviews/coverage` still counts
+ * them as missed, and the 49%-of-calls-answered figure does not move. The
+ * amnesty governs the WORKLIST — what the advisor is still being asked to do —
+ * not the history.
+ *
+ * **It is in git rather than in a table on purpose**, like
+ * `ASSET_CLASS_OVERRIDES`: a fixed, finished list of deliberate exceptions
+ * whose every change should appear in a PR diff. It is not expected to grow,
+ * and `REVIEW_AMNESTY_CUTOFF` is asserted in the tests so it cannot quietly
+ * start covering current work.
+ *
+ * Decided 16 Nov 2026 against the 22 then outstanding; the five with a complete
+ * pre+post brief pair (TSM, MSI, ALL, APP, ELF) are deliberately absent — those
+ * are reviewable today and remain due.
+ */
+export const REVIEW_AMNESTY: Readonly<Record<string, string>> = {
+  HD:   '2026-08-18',
+  LOW:  '2026-08-19',
+  TJX:  '2026-08-19',
+  WMT:  '2026-08-20',
+  NVDA: '2026-08-26',
+  AVGO: '2026-09-02',
+  SNOW: '2026-09-02',
+  MU:   '2026-09-30',
+  JNJ:  '2026-10-13',
+  JPM:  '2026-10-13',
+  BLK:  '2026-10-14',
+  VZ:   '2026-10-26',
+  WELL: '2026-10-26',
+  GLW:  '2026-10-27',
+  HCA:  '2026-10-27',
+  HOOD: '2026-10-27',
+  NXPI: '2026-10-27',
+}
+
+/**
+ * No entry may name a call after this day. The amnesty closes a historical gap;
+ * anything from here on must surface, so that a brief job which stops working
+ * is reported rather than quietly excusing the review it should have fed.
+ */
+export const REVIEW_AMNESTY_CUTOFF = '2026-11-04'
+
+/** Was this specific call closed without review? See `REVIEW_AMNESTY`. */
+export function isAmnestiedCall(securityId: string, call: string | null): boolean {
+  if (!call) return false
+  return REVIEW_AMNESTY[securityId] === call.slice(0, 10)
+}
+
 export interface OutstandingReviewInput {
+  /** Needed for the amnesty lookup — see `REVIEW_AMNESTY`. */
+  security_id: string
   next_review_at: string
   last_reviewed_at: string | null
   last_earnings_release: string | null
@@ -685,6 +765,8 @@ export function outstandingCallReviewDay(r: OutstandingReviewInput): string | nu
   if (!r.last_earnings_release) return null
   const call = r.last_earnings_release.slice(0, 10)
   if (r.last_reviewed_at && r.last_reviewed_at.slice(0, 10) >= call) return null
+  // Closed without review, deliberately and once. See `REVIEW_AMNESTY`.
+  if (isAmnestiedCall(r.security_id, call)) return null
   return addUtcDays(call, 1)
 }
 
