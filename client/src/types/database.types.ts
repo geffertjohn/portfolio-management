@@ -3111,8 +3111,6 @@ export type Database = {
           upside_downside_5y_vs_category: number | null
           upside_downside_5y_vs_pg: number | null
           utilities_exposure_generic: number | null
-          waiver_expense_ratio_generic: number | null
-          waiver_expiration_date: string | null
           ycharts_benchmark_category: string | null
           ytd_total_return: number | null
           ytd_total_return_nav: number | null
@@ -3258,8 +3256,6 @@ export type Database = {
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
           utilities_exposure_generic?: number | null
-          waiver_expense_ratio_generic?: number | null
-          waiver_expiration_date?: string | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null
@@ -3405,8 +3401,6 @@ export type Database = {
           upside_downside_5y_vs_category?: number | null
           upside_downside_5y_vs_pg?: number | null
           utilities_exposure_generic?: number | null
-          waiver_expense_ratio_generic?: number | null
-          waiver_expiration_date?: string | null
           ycharts_benchmark_category?: string | null
           ytd_total_return?: number | null
           ytd_total_return_nav?: number | null

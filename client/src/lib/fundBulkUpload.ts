@@ -69,6 +69,21 @@ const TEXT_COLS = new Set([
 const BOOL_COLS = new Set([
   'index_fund_generic',
   'open_to_new_investors_generic',
+  // WAIVER EXPENSE RATIO — dropped from securities2 16 Nov 2026. The advisor
+  // tracks fee waivers themselves, and the column could not be read reliably:
+  // its convention was never established. IDHIX carried 0.45 against a 0.70%
+  // gross ratio, which as a waiver AMOUNT implies a 64% reduction and as a net
+  // ratio implies a conventional 25bp one, while AVERX 0.04, NSMRX 0.19 and
+  // FESM 0.01 only make sense as amounts. The Hybrid Balanced annual review
+  // had to quote every cost GROSS because no net figure could be trusted.
+  //
+  // `waiver_expiration_date` went with it. Keeping the date alone was
+  // considered and rejected by the advisor: a date with no amount beside it
+  // says a cost is about to change by an unknown number, which is a prompt the
+  // system cannot act on and the advisor does not need — they track the
+  // waivers. Neither column is imported and neither remains on securities2.
+  'waiver_expense_ratio_generic',
+  'waiver_expiration_date',
   'fund_of_funds_generic',
 ])
 
@@ -77,7 +92,6 @@ const DATE_COLS = new Set([
   // The as-of date for the holdings list AND for the 33 composition columns.
   // Weeks behind the price columns on the same row, by construction.
   'latest_holdings_date',
-  'waiver_expiration_date',
 ])
 
 /**
