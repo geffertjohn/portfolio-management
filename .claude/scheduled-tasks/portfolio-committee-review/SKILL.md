@@ -690,10 +690,12 @@ the book: construction, risk, and the regime it is being run into.
      - A flag is a reason to CHECK, not a fact to assert at the advisor. Say
        the vendor reports it closed and that the share class needs
        confirming, rather than declaring it shut.
-   - **`waiver_expense_ratio_generic` / `waiver_expiration_date`** — where a
-     waiver is set, `expense_ratio_generic` is NOT what the fund will charge
-     after that date. A cost comparison between two funds where one is
-     waived and the other is not is comparing a promotion against a price.
+   - **`waiver_expiration_date`** — a fee waiver lapsing means
+     `expense_ratio_generic` is not what the fund will charge next year. The
+     SIZE of the change is not in the data: `waiver_expense_ratio_generic` was
+     dropped on 16 Nov 2026 because its convention was never established and
+     the advisor tracks waivers themselves. **Quote costs GROSS and name the
+     expiry date; never state a net cost or the size of an increase.**
    - **`prospectus_objective` / `prospectus_benchmark_index`** — the fund's
      mandate and chosen benchmark in its own words. Where the prospectus
      benchmark disagrees with the category we grade it against, that is the
