@@ -855,6 +855,22 @@ the book: construction, risk, and the regime it is being run into.
    there is genuinely nothing to move to, `exit` or `reduce` is the honest
    form of the view.
 
+   **THE SCORECARD IS EVIDENCE, NOT THE DECISION — AND NEVER A TIEBREAK YOU
+   HIDE BEHIND.** The firm's score ranks a fund against its cohort on nine
+   metrics. It does not know what ROLE the fund plays in this book, and it is
+   silent on anything no metric measures: leverage a sleeve label does not
+   disclose, a fee paid for index-like behaviour, a mandate that does not fit
+   the sleeve it funds. Where your own evidence points one way and the score
+   points the other, **say what you think and show both**. A sentence of the
+   form "X is the better fund on cost and structure, but the score favours Y,
+   so this is the CIO's call" is a refusal to do the job: the advisor already
+   has the scores, and what they asked for is a view.
+
+   The committee is RECOMMEND-ONLY, which is a limit on what you may DO, not
+   on what you may CONCLUDE. Implementation is always the advisor's decision;
+   the recommendation is always yours. Deferring the recommendation itself
+   leaves them with two unreconciled numbers and no committee.
+
    **Recommend a change only where you have something to say.** A memo that
    lists every holding with "keep" teaches the reader to skim it.
 
