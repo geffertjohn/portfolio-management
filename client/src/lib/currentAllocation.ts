@@ -43,6 +43,39 @@ export const DERIVED_ACTUAL_BLENDS: Record<string, { source: string; weight: num
 }
 
 /**
+ * A PER-REQUEST memo of in-flight file reads, keyed by portfolio name.
+ *
+ * Reading one portfolio's allocation is a signed-URL round trip, a download and
+ * a CSV parse, and the Actions hub asks for the same ones repeatedly: the drift
+ * adapter and the allocation-band adapter each resolve every portfolio, and a
+ * derived blend re-reads the legs its parents already read. Measured on the
+ * live book (Nov 2026): **6 distinct files fetched 16 times** — four of them
+ * twice, and Core Growth and Equity Income four times each, being both
+ * portfolios in their own right and the two legs of Equity Income & Core
+ * Growth.
+ *
+ * **It holds PROMISES, not results, and that is the whole point.** The two
+ * adapters run inside one `Promise.all`, so they are concurrent: by the time
+ * either finished, a resolved-value cache would already have missed and both
+ * would have fetched. Memoising the in-flight promise is what makes the second
+ * caller wait for the first instead of racing it.
+ *
+ * **A memo, not a cache.** It is created by the caller for one request and
+ * discarded when that request returns, so it cannot outlive an upload — the
+ * same reasoning that made the bucket listing a parameter rather than a cached
+ * value in `lib/actions.ts`. Never hoist one to module scope.
+ */
+export type AllocationMemo = Map<string, Promise<OwnAllocation | null>>
+
+/** One memo for one request. See `AllocationMemo`. */
+export function newAllocationMemo(): AllocationMemo {
+  return new Map()
+}
+
+/** A portfolio's own file, before any blending. */
+type OwnAllocation = Omit<CurrentAllocation, 'derivedFrom'>
+
+/**
  * Latest actual allocation for a portfolio, or `null` when no allocation file has
  * been uploaded to its Documents folder. Throws if the Express file store is
  * unreachable or the download fails (callers can surface a graceful banner via
@@ -60,16 +93,24 @@ export async function fetchLatestActualAllocation(
    * cannot go stale behind an upload.
    */
   knownFiles?: StoredFile[],
+  /**
+   * Shared read memo for one request. Omit it and every call does its own
+   * download — correct, just wasteful when the caller asks repeatedly. See
+   * `AllocationMemo`.
+   */
+  memo?: AllocationMemo,
 ): Promise<CurrentAllocation | null> {
   const files = knownFiles ?? (await fetchAllFiles(PORTFOLIO_DOCS_BUCKET)).files
 
-  const own = await latestFileFor(files, portfolioName)
+  const own = await latestFileFor(files, portfolioName, memo)
   if (own) return { ...own, derivedFrom: null }
 
   const blend = DERIVED_ACTUAL_BLENDS[portfolioName]
   if (!blend) return null
 
-  const legs = await Promise.all(blend.map((b) => latestFileFor(files, b.source)))
+  // The legs go through the same memo, so a blend costs nothing when its
+  // parents have already been read — which on this book is always.
+  const legs = await Promise.all(blend.map((b) => latestFileFor(files, b.source, memo)))
   // All or nothing: half a blend is not a 100% book, and a Current column that
   // silently covers only one sleeve is worse than no column at all.
   if (legs.some((l) => l == null)) return null
@@ -110,10 +151,25 @@ export function portfoliosWithActualAllocation(folders: Set<string>): Set<string
 }
 
 /** Newest uploaded allocation file for one portfolio folder, parsed. */
-async function latestFileFor(
+function latestFileFor(
   files: StoredFile[],
   portfolioName: string,
-): Promise<Omit<CurrentAllocation, 'derivedFrom'> | null> {
+  memo?: AllocationMemo,
+): Promise<OwnAllocation | null> {
+  if (!memo) return readLatestFileFor(files, portfolioName)
+  // Keyed on the portfolio alone: `files` is one listing for the whole request
+  // by construction, so it cannot vary between two hits on the same memo.
+  const hit = memo.get(portfolioName)
+  if (hit) return hit
+  const pending = readLatestFileFor(files, portfolioName)
+  memo.set(portfolioName, pending)
+  return pending
+}
+
+async function readLatestFileFor(
+  files: StoredFile[],
+  portfolioName: string,
+): Promise<OwnAllocation | null> {
   const mine = files
     .filter((f) => f.folder === portfolioName && isSpreadsheet(f.name))
     // Most recent upload first.
