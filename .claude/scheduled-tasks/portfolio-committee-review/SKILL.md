@@ -855,7 +855,33 @@ the book: construction, risk, and the regime it is being run into.
    there is genuinely nothing to move to, `exit` or `reduce` is the honest
    form of the view.
 
-   **THE SCORECARD IS EVIDENCE, NOT THE DECISION — AND NEVER A TIEBREAK YOU
+   **TRACKING ERROR ALONE CANNOT SUPPORT A CLOSET-INDEXING FINDING, AND IT IS
+   NOT MEASURED AGAINST WHAT YOU THINK.** `tracking_error_3y_vs_category` is
+   measured against the CATEGORY — an average of many funds — not against the
+   index or against any particular alternative. A fund can sit 32 basis points
+   from its category average and still be built nothing like the index fund you
+   are proposing to replace it with.
+
+   **Before writing that a fund is priced as active while moving like an index
+   fund, read its composition against the SPECIFIC fund you would swap it for**
+   — sector, credit quality and, where you can see it, maturity. PYTRX and
+   VBTLX are the case that produced this rule: a 32bp tracking error made PYTRX
+   look like a closet Aggregate tracker, while the composition columns already
+   in `securities2` showed 38.29% government against VBTLX's 51.41%, 18.64%
+   BBB against 12.89%, and 12.73% AAA against 3.34%. They are different funds,
+   and the memo recommended swapping one for the other on a fee argument that
+   assumed they were the same exposure.
+
+   **MATURITY IS NOT IN THE DATA.** `securities2` carries no maturity-bucket
+   columns, so the committee is blind to the dimension on which those two funds
+   differ most — PYTRX is 49.90% long-term against VBTLX's 38.47%, and 48.21%
+   intermediate against 61.49%, per YCharts as at 30 Sep 2026. **Say so when
+   duration structure bears on a recommendation**, rather than reasoning as
+   though effective duration alone describes the maturity profile. Two funds
+   can carry the same effective duration — 5.81 against 5.68 years here — and
+   reach it from opposite ends of the curve.
+
+      **THE SCORECARD IS EVIDENCE, NOT THE DECISION — AND NEVER A TIEBREAK YOU
    HIDE BEHIND.** The firm's score ranks a fund against its cohort on nine
    metrics. It does not know what ROLE the fund plays in this book, and it is
    silent on anything no metric measures: leverage a sleeve label does not
