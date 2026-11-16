@@ -7,12 +7,18 @@
 > runs in Oct 2026; the first clean unattended run was **3 Nov 2026** and it has
 > run green since. Check `~/portfolio-refresh/logs/<date>.log` for the last run.
 >
+> **There are TWO agents.** `com.john.ycharts-refresh` holds the 05:30 slot;
+> `com.john.ycharts-refresh-catchup` runs the slot it missed when the Mac was
+> OFF or locked at 05:30 — which `pmset` cannot prevent on Apple Silicon. See
+> *The Mac being OFF is not the same as the Mac being asleep*.
+>
 > - **The host is the Mac Studio, not the mini.** The mini was evaluated and
 >   dropped: 8GB with a Windows VM was tight, but the deciding factor was that
 >   the Studio already has Parallels, the repo, Node, the `.env` and the
 >   scheduled-task setup, so a second machine meant duplicating and then
 >   syncing all of it. The Studio sleeps, which `sudo pmset repeat
->   wakeorpoweron MTWRF 05:25:00` solves. The install steps below have been
+>   wakeorpoweron MTWRF 05:25:00` solves — **sleeping only; the `poweron` half
+>   does nothing on Apple Silicon**, which is what the catch-up agent is for. The install steps below have been
 >   corrected to say Studio; any remaining `johnauxcomp` path is a leftover.
 > - **`watch-trigger.cmd` and the trigger-file handshake ARE still needed** — I
 >   was wrong to say otherwise. The Studio's Parallels licence does allow
@@ -397,6 +403,57 @@ last roster went out. Nothing is lost if you do not: the 05:30 run writes a
 fresh roster and picks them up. But the poller will stay quiet in the meantime,
 and its silence will look like a decision.
 
+### The Mac being OFF is not the same as the Mac being asleep
+
+**Scheduled power-on from a full shutdown does not exist on Apple Silicon**, and
+this fails looking exactly like a working configuration. Found 16 Nov 2026: the
+Studio booted at 09:37, the 05:30 agent had never fired, and the app showed
+"Last updated 11/13/2026" while `pmset -g sched` cheerfully reported
+`wakepoweron at 5:25AM weekdays only` and the last line in `launchd.out` was
+`=== refresh OK ===`. Nothing anywhere said a day had been missed.
+
+- **Asleep is covered twice.** `pmset repeat wakepoweron` wakes the Studio at
+  05:25, and independently launchd runs a `StartCalendarInterval` job that was
+  due during sleep on the next wake. Either alone would do.
+- **Off is covered by neither**, because only the WAKE half of that pmset event
+  does anything on this hardware. The `poweron` half is an Intel-era feature;
+  `pmset` still accepts the syntax and still lists the event. `autorestart 1`
+  is set and covers a power CUT only — not a deliberate shutdown.
+- **Locked is the same problem.** FileVault means a reboot stops at the unlock
+  screen with no user session, and a LaunchAgent is per-session. The
+  `com.john.ycharts-refresh.plist` comment named this hole and accepted it.
+
+**`catchup.sh` + `com.john.ycharts-refresh-catchup.plist` close it from the
+other side.** The agent has `RunAtLoad`, so it runs the instant a user session
+exists after a boot, plus a 30-minute `StartInterval` for the boot where
+Parallels is not ready yet. It cannot make the refresh run while the Mac is off
+or locked — nothing can, on this hardware — but the first moment somebody is
+logged in, the missed run happens.
+
+Four rules it follows, each deliberate:
+
+- **It catches up a MISSED run, not a FAILED one.** The test is whether
+  `=== refresh start ===` appears in today's log, not whether
+  `=== refresh OK ===` does. A failure already raises the `data_refresh` action
+  in the Actions hub where a person can judge it; a wrapper that re-ran every
+  failure on a half-hour timer would spend the morning restarting Excel against
+  a vendor outage, turning a visible problem into a noisy one.
+- **It is a WRAPPER, never a change to `refresh.sh`.** That guard must not apply
+  to `bash scripts/refresh/refresh.sh`, which is the documented by-hand path and
+  has to run when a person asks, unconditionally.
+- **Weekdays only, and inside a window** — from the 05:30 slot to 20:00. Before
+  the slot there is nothing to catch up; after 20:00 a refresh would resume the
+  VM a few hours before the morning run would have done it anyway. Both bounds
+  are env-overridable (`SLOT_HHMM`, `LATEST_HHMM`) so the window is testable
+  without faking the clock.
+- **It waits for `prlctl` rather than failing**, bounded at 5 minutes, because
+  at login Parallels is often not up yet. Resolving on the first attempt beats
+  relying on the retry, which the "did a run start today" guard would suppress
+  once a log existed.
+
+Its own log is `~/portfolio-refresh/logs/catchup.log`, and it writes nothing at
+all on the ordinary day where there is nothing to do.
+
 ### The VM must be set to KEEP RUNNING when its window closes
 
 ```bash
@@ -777,11 +834,19 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
    mini mapped `Z:` to the Mac home; the Studio maps `Y:` to Home and `Z:` to
    AllFiles) and mapped drives are per-session, so they are invisible to
    anything outside the interactive logon.
-6. Install the agent:
+6. Install **both** agents — the 05:30 schedule and the catch-up that covers a
+   Mac that was off or locked at 05:30 (see *The Mac being OFF is not the same
+   as asleep* below). Installing only the first loses a day every time the
+   machine is shut down overnight.
    ```
    cp scripts/refresh/com.john.ycharts-refresh.plist ~/Library/LaunchAgents/
-   launchctl load ~/Library/LaunchAgents/com.john.ycharts-refresh.plist
+   cp scripts/refresh/com.john.ycharts-refresh-catchup.plist ~/Library/LaunchAgents/
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.john.ycharts-refresh.plist
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.john.ycharts-refresh-catchup.plist
    ```
+   The catch-up agent has `RunAtLoad`, so bootstrapping it fires one check
+   immediately. That is harmless: it exits in milliseconds unless a run is
+   genuinely owed.
 
 ### In the Windows VM
 

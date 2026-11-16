@@ -13,11 +13,28 @@
   `sudo pmset repeat wakeorpoweron MTWRF 05:25:00` — five minutes ahead. With
   `autorestart 1` it also comes back after a power cut.
 
-  The one hole left is a reboot: FileVault is on, so the Studio stops at the
-  unlock screen with no user session, and no LaunchAgent runs until someone logs
-  in. Disabling FileVault on a primary workstation to fix a 5am job is the wrong
-  trade, so this is accepted — the stale-data action in the app is what surfaces
-  the missed days.
+  **THE `poweron` HALF OF THAT IS A NO-OP ON APPLE SILICON** (found 16 Nov
+  2026). Scheduled start-up from a full shutdown is an Intel-era feature;
+  `pmset` on this M4 Max accepts the syntax and lists the repeating event, so
+  the configuration reads as correct and simply never fires. Only the WAKE half
+  works. A Mac that is asleep at 05:30 is covered twice over — by the wake, and
+  by launchd running a missed StartCalendarInterval job on the next wake — but a
+  Mac that is OFF misses the day entirely, with every log saying the last run was
+  fine. That is what happened on 16 Nov: the Studio booted at 09:37 and the book
+  sat on Friday's figures.
+
+  The same is true of a reboot, which this comment used to name as the one
+  remaining hole and accept: FileVault is on, so the Studio stops at the unlock
+  screen with no user session and no LaunchAgent runs until someone logs in.
+  Disabling FileVault on a primary workstation to fix a 5am job is still the
+  wrong trade.
+
+  **Both are now closed from the other side by
+  `com.john.ycharts-refresh-catchup`**, which runs at login and catches up a
+  slot that was missed. It cannot make the job run while the Mac is off or
+  locked — nothing can, on this hardware — but the first moment somebody is
+  logged in, the missed run happens. The stale-data action in the app remains
+  the backstop.
 -->
 <plist version="1.0">
 <dict>
