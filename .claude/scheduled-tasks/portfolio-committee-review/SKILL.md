@@ -159,7 +159,9 @@ the book: construction, risk, and the regime it is being run into.
    -- + `alternativesFor` in `client/src/lib/prospects.ts`. REPRODUCE IT. Do not
    -- assemble a comparison set of your own: a name you introduce has had no
    -- research run on it, and the memo would recommend against a candidate the
-   -- advisor never recorded.
+   -- advisor never recorded. This bars NEW names only — the book's own
+   -- holdings are always available as a destination for weight, and the
+   -- memo-synthesis step requires you to consider them.
    -- `akey` is `alternativeKey` from `client/src/lib/prospects.ts`, in SQL.
    -- Exact normalised category for most sleeves; the SLEEVE for mid- and
    -- small-cap, which pool across styles because ASSET_CLASS_ROWS gives large
@@ -770,6 +772,15 @@ the book: construction, risk, and the regime it is being run into.
      only if their holdings say so** — the single-name look-through above is
      the evidence for that, and it is the one reading a sleeve table cannot
      give you.
+
+     **THE OTHER HOLDINGS ARE ALSO CANDIDATES.** Weight can move between two
+     funds the book already owns, and a fund already held is a valid
+     replacement for a weaker one beside it in the same sleeve. That is not
+     the same as introducing a name of your own, which stays forbidden: an
+     existing holding has already been diligenced and bought, and using more
+     of it costs no new research and no second fee. Ask of every multi-fund
+     sleeve whether the split between its funds is still the right split,
+     not only whether each fund beats its watchlist alternative.
    - **`risk-manager`** — concentration, factor exposure, and **verification
      against every active rule in the Compliance Rules hub**
      (`firm_compliance_rules` plus `compliance_rules` matching the portfolio OR
@@ -801,13 +812,45 @@ the book: construction, risk, and the regime it is being run into.
    `targetWeight` only for a size change; on `keep` or `exit` it is noise or a
    contradiction.
 
-   **`replace` MUST name the fund it replaces with, and that fund must be one
-   of the alternatives.** It is the one recommendation the alternatives column
-   makes answerable, and a `replace` with no counterparty sends the advisor
-   back to find one — which is the work the handoff just did. Put the ticker in
-   the rationale; `targetWeight` is the weight the replacement should carry. A
-   holding with no alternative recorded cannot be recommended for `replace`:
-   `exit` or `reduce` is the honest form of that view.
+   **`replace` MUST name what it replaces with.** A `replace` with no
+   counterparty sends the advisor back to find one, which is the work the
+   handoff just did. Put the ticker in the rationale; `targetWeight` is the
+   weight the replacement should carry.
+
+   **A FUND THE BOOK ALREADY HOLDS IS A VALID REPLACEMENT.** The counterparty
+   does not have to come off the watchlist. If the right answer to a weak
+   small-cap holding is more of the small-cap fund already owned, say that —
+   recommend `exit` on the one and `increase` on the other, and name each in
+   the other's rationale so the pair reads as one decision. A memo that will
+   only ever swap a holding for a NEW fund silently rules out the cheapest
+   change available: the advisor already owns it, already diligenced it, and
+   pays no second fee to use more of it. Restricting `replace` to the
+   alternatives column was wrong and is withdrawn.
+
+   **WEIGHT MAY MOVE BETWEEN FUNDS IN A SLEEVE. You are not limited to the
+   weights you were handed.** Two funds at 2.00% each can be recommended as
+   3.00% and 1.00% if the evidence says one earns more of the sleeve than the
+   other. Use `increase` and `reduce` with a `targetWeight` on each, keep the
+   sleeve total on its model target unless you are explicitly arguing to move
+   the sleeve, and say in the rationale that the two are one decision. This is
+   often the better recommendation than a replace: it acts on a conviction
+   difference without introducing a new manager.
+
+   **A FREED ALLOCATION DOES NOT HAVE TO LAND IN ONE PLACE, AND NOT NECESSARILY
+   IN THE SAME SLEEVE.** An 8.00% holding that you recommend exiting can be
+   redeployed 2.00% to a fund already held and 6.00% to a new one — or any
+   combination, including across more than two destinations. Make every leg its
+   own entry in `recommendations` with its own `targetWeight`, and make the
+   legs sum to what was freed. State the arithmetic in the rationale of the
+   exiting holding so the advisor can check it in one place: "exit 8.00%; 2.00%
+   to X (held, 4.00% to 6.00%) and 6.00% to Y (new)." A recommendation whose
+   legs do not add up is worse than no recommendation, because the advisor has
+   to reconstruct the intent before they can judge it.
+
+   **A holding with no alternative recorded can still be recommended for
+   `replace`** — against another holding, under the first rule above. Where
+   there is genuinely nothing to move to, `exit` or `reduce` is the honest
+   form of the view.
 
    **Recommend a change only where you have something to say.** A memo that
    lists every holding with "keep" teaches the reader to skim it.
