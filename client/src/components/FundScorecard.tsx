@@ -70,9 +70,19 @@ function tooltip(lines: string[]): string | undefined {
   return lines.length > 0 ? lines.join('\n') : undefined
 }
 
+/**
+ * The tier tooltip: the bands when the row was graded against bands, and the
+ * row's own note when it was not.
+ *
+ * A row carrying a note has no thresholds — the index-fund case, where there is
+ * no reading at which the tier would change — so the two are never both
+ * available and this cannot show a band set the tier did not come from.
+ */
 function tierTitle(r: ScorecardRow): string | undefined {
   const bands = tierBandLines(r)
-  return tooltip(bands.length > 0 ? [`${r.label} — tier bands`, '', ...bands] : [])
+  if (bands.length > 0) return tooltip([`${r.label} — tier bands`, '', ...bands])
+  if (r.note) return tooltip([`${r.label} — not graded against the usual bands`, '', r.note])
+  return undefined
 }
 
 function scoreTitle(r: ScorecardRow): string | undefined {
@@ -99,6 +109,7 @@ function ScorecardTable({
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const { rows: results, total: totalScore, hasData: hasAnyData } = buildFundScorecard(security, cohort)
+  const noted = results.filter((r) => r.note)
 
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4">
@@ -191,6 +202,13 @@ function ScorecardTable({
                       {r.tier != null
                         ? <TierBadge tier={r.tier} title={tierTitle(r)} />
                         : <span className="text-xs text-gray-400" title={tierTitle(r)}>—</span>}
+                      {/* Marks a tier the ordinary rule did not set; the
+                          footnote below the table carries the reason. */}
+                      {r.note && (
+                        <span className="ml-1 cursor-help align-super text-[10px] text-gray-500" title={r.note}>
+                          †
+                        </span>
+                      )}
                     </td>
                     <td
                       title={scoreTitle(r)}
@@ -212,6 +230,20 @@ function ScorecardTable({
                 </tr>
               </tbody>
             </table>
+
+            {/* A tier set by something other than the bands has to say so ON
+                the scorecard, not only in a tooltip: a hover is invisible in a
+                screenshot and to anyone reading over a shoulder. */}
+            {noted.length > 0 && (
+              <dl className="mt-2 space-y-1">
+                {noted.map((r) => (
+                  <div key={r.label} className="flex gap-1.5 text-xs text-gray-500">
+                    <dt className="shrink-0 font-medium text-gray-600">† {r.label}</dt>
+                    <dd>{r.note}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </div>
         )
       )}

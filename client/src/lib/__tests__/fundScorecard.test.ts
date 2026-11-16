@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  TRACKING_ERROR_TIERS, tierBandLines, scoreFormulaLines,
+  TRACKING_ERROR_TIERS, tierBandLines, scoreFormulaLines, INDEX_FUND_TRACKING_NOTE,
   CATEGORY_METRICS, PEER_GROUP_METRICS, SCORE_GREEN_MIN, SCORE_YELLOW_MIN,
   buildFundScorecard, categoryScorecardScore, fmtScorecardValue,
   peerGroupScorecardScore, scoreBand,
@@ -225,6 +225,104 @@ describe('tracking error is tiered per broad asset class', () => {
     const cat = CATEGORY_METRICS.find((m) => m.label === 'Tracking Error 3Y')!
     expect(peer.valueKey).toBe('tracking_error_3y_vs_pg')
     expect(cat.valueKey).toBe('tracking_error_3y_vs_category')
+  })
+})
+
+describe('an index fund is not graded on its deviation', () => {
+  /**
+   * The symmetric cost of reading tracking error higher-is-better: it marked
+   * ten held trackers into the bottom tier for doing exactly their job. VOO
+   * deviates 48bp from Large Blend because that is the product, not because
+   * anyone is asleep. Measured 16 Nov 2026, nineteen held funds carry the flag.
+   */
+
+  const tracker = (over: Record<string, unknown> = {}) =>
+    row('Tracking Error 3Y', sec({
+      index_fund_generic: true,
+      tracking_error_3y_vs_category: 0.0048,  // VOO
+      ...over,
+    }))
+
+  it('takes tier 1 on a reading that would otherwise be tier 4', () => {
+    expect(tracker().tier).toBe(1)
+    // Same reading, unflagged: the bands apply and it is bottom tier.
+    expect(row('Tracking Error 3Y', sec({ tracking_error_3y_vs_category: 0.0048 })).tier).toBe(4)
+  })
+
+  it('pays the FULL weight, not nothing', () => {
+    // Dropping the metric would score the tracker out of 95 while every other
+    // fund is scored out of 100, making the two totals incomparable.
+    expect(tracker().score).toBeCloseTo(5, 10)
+  })
+
+  it('carries the note, and the note is the shared one', () => {
+    expect(tracker().note).toBe(INDEX_FUND_TRACKING_NOTE)
+    // Every ordinarily graded row has nothing to explain.
+    expect(row('Tracking Error 3Y', sec({ tracking_error_3y_vs_category: 0.0048 })).note).toBeNull()
+    expect(row('Sharpe Ratio 3Y', perfect).note).toBeNull()
+  })
+
+  it('offers NO tier bands, so no tooltip can contradict the tier', () => {
+    // "Tier 1 at or above 7.75%" beside a tier 1 on a fund reading 0.48% is an
+    // explanation that disagrees with the number it explains. There is no
+    // reading at which this row's tier would change, so there is no band set.
+    const r = tracker()
+    expect([r.tier3Threshold, r.tier2Threshold, r.tier1Threshold]).toEqual([null, null, null])
+    expect(tierBandLines(r)).toEqual([])
+  })
+
+  it('explains itself in the score tooltip', () => {
+    expect(scoreFormulaLines(tracker()).join('\n')).toContain('Index fund')
+  })
+
+  it('still SHOWS the reading, ungraded', () => {
+    // Six of the nineteen flagged funds are factor ETFs deviating enormously
+    // from the category they are filed against — FPX 1138bp, PWB 1003bp. The
+    // note says the number is not graded; it must not hide the number.
+    expect(tracker({ tracking_error_3y_vs_category: 0.1138 }).displayVal).toBeCloseTo(0.1138, 10)
+    expect(tracker().displayVal).toBeCloseTo(0.0048, 10)
+  })
+
+  it('does NOT award tier 1 when there is no reading at all', () => {
+    // Consistent with every other metric: a value we do not have scores
+    // nothing. The flag explains a reading; it does not substitute for one.
+    const r = tracker({ tracking_error_3y_vs_category: null })
+    expect(r.tier).toBeNull()
+    expect(r.score).toBeNull()
+  })
+
+  it('reads ONLY `true` — a null falls through to the bands', () => {
+    // `index_fund_generic` is null on 80 of 102 securities. Treating a null as
+    // a tracker would hand tier 1 to almost the whole book.
+    for (const flag of [null, undefined, false]) {
+      const r = row('Tracking Error 3Y',
+        sec({ index_fund_generic: flag, tracking_error_3y_vs_category: 0.0048 }))
+      expect(r.tier, String(flag)).toBe(4)
+      expect(r.note, String(flag)).toBeNull()
+    }
+  })
+
+  it('applies to the peer cohort too', () => {
+    const s = sec({ index_fund_generic: true, tracking_error_3y_vs_pg: 0.0001 })
+    const r = buildFundScorecard(s, 'peer').rows.find((x) => x.label === 'Tracking Error 3Y')!
+    expect(r.tier).toBe(1)
+    expect(r.note).toBe(INDEX_FUND_TRACKING_NOTE)
+  })
+
+  it('leaves the rest of the scorecard alone', () => {
+    // The flag qualifies one metric. A tracker's returns, fees and tenure are
+    // graded exactly as any other fund's.
+    const flagged = buildFundScorecard(sec({ ...perfect, index_fund_generic: true }), 'category')
+    const plain = buildFundScorecard(perfect, 'category')
+    for (const r of plain.rows.filter((x) => x.label !== 'Tracking Error 3Y')) {
+      const f = flagged.rows.find((x) => x.label === r.label)!
+      expect(f.tier, r.label).toBe(r.tier)
+      expect(f.score, r.label).toBe(r.score)
+    }
+    // `perfect` already holds top-tier equity deviation, so the total is
+    // unchanged — the flag costs nothing and gains nothing on a fund that
+    // already cleared the bands.
+    expect(flagged.total).toBeCloseTo(plain.total, 10)
   })
 })
 

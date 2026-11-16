@@ -152,6 +152,21 @@ export function buildFundReviewPdf(input: FundReviewPdfInput): FundReviewPdfResu
       },
     })
     cursorY = afterTable()
+
+    // A tier the ordinary rule did not set must be explained HERE, not only on
+    // the screen this was captured from. This document is the frozen evidence,
+    // and a tier 1 beside 0.48% of tracking error with nothing accounting for
+    // it is precisely the unexplained number an audit reader stops on. The
+    // sentence comes from the row so the PDF and the page cannot drift.
+    const noted = sc.rows.filter((r) => r.note)
+    if (noted.length > 0) {
+      doc.setFont('helvetica', 'italic').setFontSize(7.5).setTextColor(107, 114, 128)
+      for (const r of noted) {
+        const wrapped = doc.splitTextToSize(`\u2020 ${r.label} \u2014 ${r.note}`, pageW - marginX * 2)
+        doc.text(wrapped, marginX, cursorY + 11, { lineHeightFactor: 1.3 })
+        cursorY += wrapped.length * 9 + 3
+      }
+    }
   }
 
   const blob = doc.output('blob')

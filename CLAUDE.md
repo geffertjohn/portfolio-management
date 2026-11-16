@@ -962,9 +962,49 @@ one manager genuinely deviating.
   low R² with low tracking error is usually a mis-filed fund. Neither reading
   is available from R² alone, which is why re-ruling it first would have
   swapped one wrong answer for another.
-- **`index_fund_generic` cannot stand in for this today** — it is `true` on
-  only five securities and null on all thirteen non-index fixed-income
-  holdings, so the tracker-vs-active split is not derivable from it yet.
+- **AN INDEX FUND IS NOT GRADED ON IT — it takes tier 1 by rule, and the
+  scorecard says so on the row** (16 Nov 2026). Higher-is-better is right for an
+  active mandate and wrong for a tracker in exactly the way R-Squared was wrong
+  for an active one, and the swap simply moved the error: **ten held trackers
+  landed in the bottom tier for doing their job**, VOO deviating 48bp from Large
+  Blend because that is the product. `isIndexFund` reads
+  `index_fund_generic === true`; that bullet used to say the flag was `true` on
+  only five securities and could not stand in for this. **The refreshes filled
+  it** — 19 held funds carry it now.
+  - **ONLY `true`.** The flag is null on 80 of 102 securities, so a null must
+    fall through to the bands. Reading it as "tracker" would hand tier 1 to
+    almost the whole book; reading it as "active" is what the bands already
+    assume.
+  - **Tier 1, not "not scored".** The metric is worth 5 points, and dropping
+    them would score a tracker out of 95 while every other fund is scored out
+    of 100 — the comparability failure `scoreBand` already warns about, where
+    a partly scored fund reads as a bad one.
+  - **The reading is still DISPLAYED, ungraded**, because six of the nineteen
+    are factor or rules-based ETFs that deviate enormously from the category
+    they are filed against (FPX 1138bp, PWB 1003bp, XSMO 818bp, VEMAX 777bp).
+    Suppressing the value would hide the most interesting thing on the row. The
+    note says the number is not graded; it does not claim the number is small.
+  - **No value, no tier.** A flagged fund with no tracking-error figure stays
+    unscored like any other missing metric — the flag explains a reading, it
+    does not substitute for one.
+  - **`ScorecardRow.note` carries the sentence, so the PAGE and the
+    REVIEW-EVIDENCE PDF print the same one.** A tier 1 beside 0.48% with
+    nothing accounting for it is exactly the unexplained number an audit reader
+    stops on, so the note is rendered as a dagger footnote *under the table* on
+    both — not only in a tooltip, which is invisible in a screenshot. It is
+    also the one row with **no tier bands**: there is no reading at which its
+    tier would change, so `tierBandLines` returns nothing and the note stands
+    in. Printing "Tier 1 at or above 7.75%" beside a tier 1 on a fund reading
+    0.48% would be an explanation contradicting the number it explains.
+  - **What remains in the bottom tier is the question that was asked.** After
+    the rule, the only held funds scoring tier 4 are six ACTIVE bond mandates
+    behaving like the index — PYTRX 32bp, UITB 35bp, AVIG 51bp, GIBIX 54bp,
+    DFCF 60bp, DHRIX 63bp.
+  - **Measured impact (16 Nov 2026):** 15 of the 19 change score on their
+    designated cohort (ten 4→1, four 3→1, IAGG 2→1); the other four already
+    scored tier 1 on merit and gain only the note. **No fund crosses the 70/60
+    bands**, and the At-Risk list does not move — IAGG stays red at 49.3,
+    failing on Sharpe, Information Ratio and Alpha, none of which this touches.
 - **The 5Y/peer-group form is the one the firm's process document screens
   on**; the 3Y/category form matches the basis the monitoring scorecard
   already uses, so it is directly comparable with `rsquared_3y_vs_category`
