@@ -66,24 +66,8 @@ const TEXT_COLS = new Set([
  * scorecard row is read, and `where index_fund_generic` has to mean something
  * in SQL.
  */
-const BOOL_COLS = new Set([
+export const BOOL_COLS = new Set([
   'index_fund_generic',
-  'open_to_new_investors_generic',
-  // WAIVER EXPENSE RATIO — dropped from securities2 16 Nov 2026. The advisor
-  // tracks fee waivers themselves, and the column could not be read reliably:
-  // its convention was never established. IDHIX carried 0.45 against a 0.70%
-  // gross ratio, which as a waiver AMOUNT implies a 64% reduction and as a net
-  // ratio implies a conventional 25bp one, while AVERX 0.04, NSMRX 0.19 and
-  // FESM 0.01 only make sense as amounts. The Hybrid Balanced annual review
-  // had to quote every cost GROSS because no net figure could be trusted.
-  //
-  // `waiver_expiration_date` went with it. Keeping the date alone was
-  // considered and rejected by the advisor: a date with no amount beside it
-  // says a cost is about to change by an unknown number, which is a prompt the
-  // system cannot act on and the advisor does not need — they track the
-  // waivers. Neither column is imported and neither remains on securities2.
-  'waiver_expense_ratio_generic',
-  'waiver_expiration_date',
   'fund_of_funds_generic',
 ])
 
@@ -105,11 +89,50 @@ const DATE_COLS = new Set([
  * until those columns are removed from the workbook; once they are, these
  * entries become harmless no-ops rather than a trap.
  */
-const SKIP_COLS = new Set([
+export const SKIP_COLS = new Set([
   '',           // blank col 0
   'id',
   'created_at',
   'updated_at',
+  // OPEN TO NEW INVESTORS — stopped being imported 16 Nov 2026.
+  //
+  // The vendor is wrong more often than it is right. It read false on only
+  // three of 108 funds — APDFX, MNHAX and VSMIX — and the advisor confirmed
+  // that TWO OF THE THREE are open. On a flag whose whole purpose is to STRIKE
+  // a fund from the alternatives list, a two-in-three error rate removes live
+  // candidates from consideration silently: VSMIX
+  // scores 100.0 and costs 18bp less than the holding it was being compared
+  // against, and the Hybrid Balanced annual review excluded it on this column
+  // alone before the error surfaced.
+  //
+  // It is also redundant. The watchlist is the advisor's own list of funds
+  // they would buy, so a fund that cannot be owned does not reach it — the
+  // question the flag answers is already answered by the list's existence.
+  //
+  // SKIPPED, NOT DROPPED. The column stays on `securities2` holding the values
+  // as last corrected, and the sheet keeps its header: this importer maps
+  // header straight to DB column with no whitelist, so SKIP_COLS is the
+  // designed escape hatch (gotcha 7). What changes is that the morning refresh
+  // no longer overwrites a hand-corrected value — the silent overnight revert
+  // that `portfolio.description` already cost us once.
+  'open_to_new_investors_generic',
+  // FEE WAIVERS — both columns dropped from securities2 on 16 Nov 2026, and
+  // removed from the Securities sheet, so these entries are the escape hatch
+  // for an OLDER workbook that still carries the headers (gotcha 7).
+  //
+  // `waiver_expense_ratio_generic` could not be read: its convention was never
+  // established. IDHIX carried 0.45 against a 0.70% gross ratio, which as a
+  // waiver AMOUNT is a 64% reduction and as a net ratio a conventional 25bp
+  // one, while AVERX 0.04, NSMRX 0.19 and FESM 0.01 only make sense as
+  // amounts. The Hybrid Balanced annual review had to quote every cost GROSS.
+  //
+  // `waiver_expiration_date` went with it. Keeping the date alone was
+  // considered and rejected by the advisor: a date with no amount beside it
+  // says a cost is about to change by an unknown number, which is a prompt the
+  // system cannot act on and the advisor does not need — they track the
+  // waivers themselves.
+  'waiver_expense_ratio_generic',
+  'waiver_expiration_date',
   // Dropped from securities2 — still in the sheet, read by nothing.
   'assets_under_management',
   'discount_or_premium_to_nav',
