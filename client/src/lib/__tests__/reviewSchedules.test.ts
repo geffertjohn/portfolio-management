@@ -520,14 +520,25 @@ describe('calls the firm closed without review (REVIEW_AMNESTY)', () => {
 
   it('leaves a stock that is not in the map alone', () => {
     expect(outstandingCallReviewDay(row('MSI', '2026-11-04'))).toBe('2026-11-05')
-    expect(outstandingCallReviewDay(row('TSM', '2026-10-15'))).toBe('2026-10-16')
+    expect(outstandingCallReviewDay(row('ALL', '2026-11-04'))).toBe('2026-11-05')
   })
 
-  it('keeps the five that DO have a brief pair', () => {
-    // These are reviewable today: the modal pre-fills from the post-brief.
-    for (const t of ['TSM', 'MSI', 'ALL', 'APP', 'ELF']) {
+  it('keeps the four whose briefs carry a recommendation', () => {
+    // These are draftable today: the modal pre-fills from the post-brief's
+    // `review_recommendations`.
+    for (const t of ['MSI', 'ALL', 'APP', 'ELF']) {
       expect(REVIEW_AMNESTY[t], t).toBeUndefined()
     }
+  })
+
+  it('excuses TSM, whose brief predates the recommendation block', () => {
+    // The criterion is NO COMMITTEE RECOMMENDATION, not no brief. TSM's 15 Oct
+    // call has a complete pre+post pair, but the post-brief was written on 19
+    // Oct and `review_recommendations` was added on the 27th — so there is
+    // nothing for the review to be drafted from, exactly as if no brief
+    // existed. Its next call is unaffected like every other entry.
+    expect(outstandingCallReviewDay(row('TSM', '2026-10-15'))).toBeNull()
+    expect(outstandingCallReviewDay(row('TSM', '2027-01-21'))).toBe('2027-01-22')
   })
 
   it('names no call after the cutoff', () => {

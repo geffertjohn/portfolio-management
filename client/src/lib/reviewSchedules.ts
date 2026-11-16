@@ -642,12 +642,19 @@ export async function fetchOrphanedSchedules(): Promise<string[]> {
  * and none will be written.
  *
  * **This is an amnesty for one historical gap, not a rule.** A stock review is
- * drafted from its post-earnings brief; for these seventeen calls no brief
- * exists, and for ten of them none ever can — `research_reports_post_needs_parent`
- * requires a pre-brief, and the pre-earnings window for those quarters closed
- * months ago. Asking for a review that has no evidence behind it and no way to
- * get any is asking for a rubber stamp, which is worse in an audit-defence tool
- * than an honest gap.
+ * drafted from the committee's recommendation on its post-earnings brief, and
+ * for these eighteen calls there is none to draft from. Asking for a review
+ * with no evidence behind it and no way to get any is asking for a rubber
+ * stamp, which is worse in an audit-defence tool than an honest gap.
+ *
+ * **Two causes, one consequence.** Seventeen have no post-earnings brief at
+ * all, and for ten of those none can ever be written —
+ * `research_reports_post_needs_parent` requires a pre-brief and those windows
+ * closed months ago. TSM has a complete brief whose only gap is the
+ * recommendation block, because it was written eight days before that block
+ * existed. The criterion is **no committee recommendation**, not **no brief**;
+ * recording it that way is what stops the next reader assuming TSM was an
+ * oversight.
  *
  * **Keyed on the CALL, never on the ticker**, and that is the property that
  * makes it safe. HD is excused for its 18 Aug 2026 print and nothing else: when
@@ -667,9 +674,9 @@ export async function fetchOrphanedSchedules(): Promise<string[]> {
  * and `REVIEW_AMNESTY_CUTOFF` is asserted in the tests so it cannot quietly
  * start covering current work.
  *
- * Decided 16 Nov 2026 against the 22 then outstanding; the five with a complete
- * pre+post brief pair (TSM, MSI, ALL, APP, ELF) are deliberately absent — those
- * are reviewable today and remain due.
+ * Decided 16 Nov 2026 against the 22 then outstanding. The four whose briefs
+ * carry a recommendation (MSI, ALL, APP, ELF) are deliberately absent: those
+ * are draftable today and remain due.
  */
 export const REVIEW_AMNESTY: Readonly<Record<string, string>> = {
   HD:   '2026-08-18',
@@ -681,6 +688,14 @@ export const REVIEW_AMNESTY: Readonly<Record<string, string>> = {
   SNOW: '2026-09-02',
   MU:   '2026-09-30',
   JNJ:  '2026-10-13',
+  // TSM is here for a DIFFERENT REASON from the other seventeen, and it is the
+  // reason that generalises. Its 15 Oct call has a complete pre+post brief --
+  // estimates, street questions, three thesis checks, three risk checks, a
+  // 2,128-character thesis -- but the brief was written on 19 Oct and
+  // `review_recommendations` did not exist until the 27th. So the modal has no
+  // committee recommendation to draft a review from, which is the same place a
+  // missing brief leaves it. It is the ONLY post-brief of 37 without the block.
+  TSM:  '2026-10-15',
   JPM:  '2026-10-13',
   BLK:  '2026-10-14',
   VZ:   '2026-10-26',
