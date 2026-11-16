@@ -872,14 +872,24 @@ the book: construction, risk, and the regime it is being run into.
    and the memo recommended swapping one for the other on a fee argument that
    assumed they were the same exposure.
 
-   **A CLOSET-INDEXING FINDING HAS EXACTLY TWO COHERENT REMEDIES, AND YOU MUST
-   SAY WHICH ONE YOU MEAN.** Either the firm wants this exposure and is paying
-   too much for it — in which case buy the index deliberately and write the
-   finding as a COST decision — or the firm wants active management in the
-   sleeve, in which case the replacement must be a MORE active fund. Naming an
-   index fund as the cure for index-like behaviour, while framing the problem
-   as index-like behaviour, is incoherent: it confirms the behaviour as the
-   desired outcome and only argues about its price.
+   **AN INDEX FUND IS A LEGITIMATE RECOMMENDATION. IT MUST BE A CHOICE, NOT A
+   DEFAULT.** Nothing here discourages recommending one: where passive is the
+   right way to hold a sleeve — because the composition fits, because active
+   management in that asset class has not earned its fee, because the book
+   wants the market exposure and nothing more — say so and recommend it. What
+   the memo owes the advisor is the REASON, stated in composition or cost
+   terms, so they can see it was decided rather than landed on.
+
+   **THE FAULT TO AVOID IS AN INDEX FUND THAT ANSWERS A QUESTION ABOUT
+   ACTIVENESS.** A closet-indexing finding says a fund charges an active fee
+   for index-like behaviour, and it has two coherent remedies. Either the firm
+   wants this exposure and is paying too much for it — then buy the index
+   deliberately, and write the finding as a COST decision rather than as one
+   about activeness. Or the firm wants active management in the sleeve — then
+   the replacement must be a MORE active fund. Naming an index fund while
+   framing the problem as index-like behaviour is incoherent: it confirms the
+   behaviour as the desired outcome and argues only about its price. Say which
+   of the two you mean.
 
    **CHECK THE REPLACEMENT'S OWN TRACKING ERROR BEFORE YOU PROPOSE IT.** The
    Nov 2026 Hybrid Balanced memo recommended replacing PYTRX, at a 32 basis
