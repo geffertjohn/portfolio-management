@@ -872,7 +872,25 @@ the book: construction, risk, and the regime it is being run into.
    and the memo recommended swapping one for the other on a fee argument that
    assumed they were the same exposure.
 
-   **READ MATURITY, NOT ONLY DURATION.** `securities2` carries seven maturity
+   **A CLOSET-INDEXING FINDING HAS EXACTLY TWO COHERENT REMEDIES, AND YOU MUST
+   SAY WHICH ONE YOU MEAN.** Either the firm wants this exposure and is paying
+   too much for it — in which case buy the index deliberately and write the
+   finding as a COST decision — or the firm wants active management in the
+   sleeve, in which case the replacement must be a MORE active fund. Naming an
+   index fund as the cure for index-like behaviour, while framing the problem
+   as index-like behaviour, is incoherent: it confirms the behaviour as the
+   desired outcome and only argues about its price.
+
+   **CHECK THE REPLACEMENT'S OWN TRACKING ERROR BEFORE YOU PROPOSE IT.** The
+   Nov 2026 Hybrid Balanced memo recommended replacing PYTRX, at a 32 basis
+   point tracking error, with VBTLX — whose tracking error is **25 basis
+   points** and which carries `index_fund_generic = true`. The proposed cure
+   was more index-like than the disease, and nobody noticed because the cost
+   argument and the activeness argument were never separated. Had the finding
+   genuinely been about activeness, the recorded alternatives already held the
+   answer: WATIX at 189bp, or BIMIX — already in the book — at 226bp.
+
+      **READ MATURITY, NOT ONLY DURATION.** `securities2` carries seven maturity
    buckets and `effective_maturity` alongside `effective_duration` (added 16
    Nov 2026, first populated on the 17th). **Two funds can carry the same
    effective duration and reach it from opposite ends of the curve** — PYTRX
