@@ -255,7 +255,19 @@ async function fetchDriftActions(files: StoredFile[] | null): Promise<UnifiedAct
         subtitle: `${breaches} position${breaches > 1 ? 's' : ''} outside drift tolerance`,
         context: null,
         route: `/portfolio/${encodeURIComponent(name)}`,
-        dueDate: null,
+        // THE DATE OF THE FILE THIS WAS MEASURED AGAINST, not null.
+        //
+        // A breach is not undated. It has been true since the allocation file
+        // that shows it, and `asOf` is that file's timestamp. Returning null
+        // put every breach in the `no_date` bucket, which `DEFAULT_COLLAPSED`
+        // hides on the reasoning that an undated row is a forward-calendar row
+        // — true of a schedule nobody has dated yet, false of a book that is
+        // out of tolerance right now. Ten real findings sat collapsed beneath
+        // 22 visible overdue reviews.
+        //
+        // Dating it also makes `agingLabel` say something worth knowing: how
+        // long the book has been out of band.
+        dueDate: actual.asOf,
         priority: 'medium' as const,
         isManual: false,
       }
@@ -339,8 +351,10 @@ async function fetchAllocationBandActions(files: StoredFile[] | null): Promise<U
 
     let weights: Map<string, number> | null = null
     let basis: 'actual' | 'holdings' = 'holdings'
+    // Only an ACTUAL-holdings basis has a measurement date. See `dueDate` below.
+    let asOf: string | null = null
     const actual = actualByPortfolio.get(name)
-    if (actual) { weights = actual.weights; basis = 'actual' }
+    if (actual) { weights = actual.weights; basis = 'actual'; asOf = actual.asOf }
     if (!weights) weights = posByPortfolio.get(name) ?? null
     if (!weights || weights.size === 0) continue
 
@@ -361,7 +375,15 @@ async function fetchAllocationBandActions(files: StoredFile[] | null): Promise<U
         ` · vs ${basis === 'actual' ? 'actual holdings' : 'position targets'}`,
       context: null,
       route: `/portfolio/${encodeURIComponent(name)}`,
-      dueDate: null,
+      // Dated from the allocation file, as the drift rows are — but ONLY when
+      // there is one. A breach measured against POSITION TARGETS has no
+      // measurement date at all: it is a standing disagreement between the
+      // model and the targets, true continuously rather than as of a moment.
+      // Stamping it with today would reset its age on every render, so
+      // `agingLabel` would read "0d" for ever and assert that a breach of long
+      // standing had just appeared. Null is the honest answer there, and the
+      // subtitle already names which basis was used.
+      dueDate: basis === 'actual' ? asOf : null,
       priority: 'medium' as const,
       isManual: false,
     })

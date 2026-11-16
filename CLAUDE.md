@@ -2678,6 +2678,27 @@ The Actions page is a **unified command center**, not a plain to-do list. It sho
 - **Two kinds of action.** **Manual** tasks are real `action_items` rows (created, completed, snoozed, recurring). **Derived** actions are projected **READ-ONLY** from their own authoritative tables and carry a **route into their own workflow** — they are completed **THERE, never from the Actions page** (no derived state is duplicated into `action_items`). Sources: `review_schedules`, `portfolio_review_schedules`, `ic_memos` (`pending_cio`), `security_additions` (`draft`), `alert_events`, `at_risk` (sell timer), drift breaches (computed from `positions`), `import_runs` (a YCharts refresh that failed or did not fire) and `job_runs` (a scheduled routine that died or missed a run — see the heartbeat convention above).
 - **`action_items` is the manual-task backbone** (extended Jul 2026): `category` (`security`/`portfolio`/`ic`/`compliance`/`client`/`trade`/`operational`), `source` (always `manual` here), polymorphic **`linked_type`/`linked_id`** (e.g. `client`), `recurrence` + `recurrence_interval`, `snoozed_until`, and a widened `status` (`open`/`in_progress`/`waiting`/`blocked`/`snoozed`/`closed`). CHECK constraints enforce the category/recurrence/status sets. Data layer + labels + `advanceDate`/`snoozeActionItem`/recurrence-on-complete live in **`lib/actionItems.ts`**. **Closing a recurring task spawns the next occurrence** (due date advanced by the cadence). Still soft-deleted (`deleted_at`); status transitions audited in `action_item_events` (`ActionItemTimeline`).
 - **Page** (`ActionItemsPage`): a summary band over sidebar facets (category + source, with counts) and a column table, **date-bucket grouping** (Overdue/Due Today/This Week/Upcoming/No Date) or group-by-category, auto-priority, snooze, bulk close/snooze, recurring **Templates**, CSV export, an **Automation** button opening `AutomationPanel` (also reachable at `/actions?automation=1`, which is where the `job_health` action routes), and **persisted filters** (`hooks/useActionFilters.ts` — six pieces of view state behind one localStorage key; device-local UI state, OK). The CSV is built by **`buildActionsCsv`** in `lib/actions.ts`, beside `actionLabel`, so the exported row and the on-screen row cannot name an action differently; the page owns only the download. Manual rows are editable; derived rows show **"Open →"**.
+- **A BREACH IS NOT UNDATED — it is dated by the file it was measured
+  against** (Nov 2026). `fetchDriftActions` and `fetchAllocationBandActions`
+  both returned `dueDate: null`, so every drift and allocation-band breach fell
+  into the `no_date` bucket — which `DEFAULT_COLLAPSED` hides, on the reasoning
+  (written in its own comment) that an undated row belongs to the forward
+  calendar. **Undated and not-yet-due are different things.** A book outside its
+  drift tolerance is a finding about right now, and ten of them sat collapsed
+  beneath 22 visible overdue reviews. `CurrentAllocation.asOf` is the file
+  timestamp and was already being fetched; passing it through moves them into
+  Overdue and makes `agingLabel` say the thing worth knowing — Core Growth and
+  Equity Income have been out of band for 14 days, ETF Conservative Balanced for
+  12. Actionable rows went 24 → 32.
+  - **An allocation breach measured against POSITION TARGETS stays null**,
+    because it has no measurement moment: it is a standing disagreement between
+    the model and the targets, true continuously. Stamping it with `today` would
+    reset its age on every render and have `agingLabel` read "0d" for ever,
+    asserting that a breach of long standing had just appeared. The subtitle
+    already names which basis was used. Two of the six are in this state.
+  - **Not unit-tested, deliberately**: both are async Supabase/file fetchers, and
+    the suite is scoped to the pure `lib` layer. The rule lives in a comment at
+    each call site.
 - **The page mixes a worklist and a calendar, and the calendar is the bigger half.** Every `review_schedules` and `portfolio_review_schedules` row is projected whether or not it is due, so 98 of 171 actions were future-dated reviews reading "this reports in six weeks". Two devices keep that from burying the ~15 rows that need doing, and **neither hides anything without a count saying so**:
   - **Upcoming and No Date are collapsed by default** (`DEFAULT_COLLAPSED`), and the group header carries the full count. A **horizon** control (7/30/90/all days) trims how far the list reaches; overdue rows always pass it, since a negative `daysUntil` is within any horizon.
   - **`clusterActions` collapses repeated DERIVED actions** sharing a source and a day into one line — "Portfolio Review — 37 due Jun 29, 2026". One fact printed 37 times is not 37 facts. Manual tasks never cluster (two sharing a date is coincidence, not a common cause), and a group under `COLLAPSE_MIN` (3) renders as itself.

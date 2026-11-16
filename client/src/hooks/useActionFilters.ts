@@ -25,6 +25,19 @@ const FILTERS_KEY = 'actions_filters_v2'
  * "Upcoming" is every schedule whose date is more than a week out — 80 rows of
  * "this reports in six weeks". They are real and they stay on the page, but
  * rendering them open by default buried the ~15 rows that actually need doing.
+ *
+ * **`no_date` IS NOT PART OF THAT ARGUMENT, and collapsing it on the same
+ * reasoning hid real findings** (Nov 2026). Undated and not-yet-due are
+ * different: a drift or allocation-band breach is a book that is out of
+ * tolerance NOW. Both carried `dueDate: null`, so ten of them sat collapsed
+ * beneath 22 visible overdue reviews. They are dated from the allocation file
+ * they were measured against now (`lib/actions.ts`), so they sort into Overdue
+ * where they belong.
+ *
+ * What is left here is genuinely undated: a manual task nobody gave a date,
+ * and an allocation breach measured against position targets rather than a
+ * file, which has no measurement moment to carry. Collapsing those is right —
+ * but check what actually lands in this bucket before adding to the list.
  */
 export const DEFAULT_COLLAPSED = ['upcoming', 'no_date']
 
