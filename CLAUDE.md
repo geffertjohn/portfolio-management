@@ -895,14 +895,37 @@ from FMP, keyed on the symbol as `fund_holdings` spells it (Nov 2026).
 **Four fund flags landed with it, each changing how an existing number is
 read** — all on `securities2`, all from the same import:
 `index_fund_generic` (trailing a benchmark is a finding for an active fund and
-the expense ratio for a tracker), `open_to_new_investors_generic` (an
-alternative that cannot be bought is not an alternative, and this book is built
-on the institutional share classes that close),
+the expense ratio for a tracker), `open_to_new_investors_generic` (**NO LONGER
+IMPORTED — see below**),
 `waiver_expense_ratio_generic` + `waiver_expiration_date` (where a waiver is
 set, `expense_ratio_generic` is not what the fund will charge next year), and
 `prospectus_objective` + `prospectus_benchmark_index` (a prospectus benchmark
 disagreeing with the category we grade against is the clearest evidence a fund
 is filed in the wrong sleeve).
+
+**`open_to_new_investors_generic` IS NO LONGER IMPORTED** (16 Nov 2026). It is
+in `fundBulkUpload`'s `SKIP_COLS`, the column stays on `securities2` holding
+its last values, and those are maintained by hand.
+
+- **A one-in-three error rate on a flag whose job is to STRIKE a candidate.**
+  It read `false` on three of 108 funds — APDFX, MNHAX, VSMIX — and VSMIX was
+  simply open. The Hybrid Balanced annual review excluded it from the small
+  sleeve on this column alone, and VSMIX scores 100.0 at 18bp less than the
+  holding it was being compared against. A flag that removes live candidates
+  silently has to be right.
+- **It was also redundant.** The watchlist is the advisor's own list of funds
+  they would buy, so one that cannot be owned never reaches it — the list's
+  existence already answers the question.
+- **SKIPPED rather than dropped, and the distinction is the point.** A direct
+  `UPDATE` to the column would have been overwritten by the 05:30 refresh,
+  which is the silent overnight revert `portfolio.description` already cost us.
+  Skipping is what makes a hand correction durable. The sheet keeps its header;
+  `fundImportColumns.test.ts` pins the skip, the absence from `BOOL_COLS`, and
+  the two flags that are still imported.
+- **MNHAX still reads `false` and has not been verified.** It is a recorded
+  watchlist alternative to FAGIX scoring 98.8 against FAGIX's 98.3, so if that
+  reading is also wrong a live candidate is being excluded from the high-yield
+  sleeve. The flag is now a prompt to check, not a settled fact.
 
 **A newly added column shows the SOURCE cell's value until something
 recalculates.** `add-sheet-columns.ps1` pastes a copied formula with

@@ -66,9 +66,8 @@ const TEXT_COLS = new Set([
  * scorecard row is read, and `where index_fund_generic` has to mean something
  * in SQL.
  */
-const BOOL_COLS = new Set([
+export const BOOL_COLS = new Set([
   'index_fund_generic',
-  'open_to_new_investors_generic',
   'fund_of_funds_generic',
 ])
 
@@ -91,11 +90,33 @@ const DATE_COLS = new Set([
  * until those columns are removed from the workbook; once they are, these
  * entries become harmless no-ops rather than a trap.
  */
-const SKIP_COLS = new Set([
+export const SKIP_COLS = new Set([
   '',           // blank col 0
   'id',
   'created_at',
   'updated_at',
+  // OPEN TO NEW INVESTORS — stopped being imported 16 Nov 2026.
+  //
+  // The vendor is wrong often enough that the flag cost more than it gave.
+  // It read false on only three of 108 funds — APDFX, MNHAX and VSMIX — and
+  // VSMIX was simply open, which the advisor confirmed. On a flag whose whole
+  // purpose is to STRIKE a fund from the alternatives list, a one-in-three
+  // error rate removes live candidates from consideration silently: VSMIX
+  // scores 100.0 and costs 18bp less than the holding it was being compared
+  // against, and the Hybrid Balanced annual review excluded it on this column
+  // alone before the error surfaced.
+  //
+  // It is also redundant. The watchlist is the advisor's own list of funds
+  // they would buy, so a fund that cannot be owned does not reach it — the
+  // question the flag answers is already answered by the list's existence.
+  //
+  // SKIPPED, NOT DROPPED. The column stays on `securities2` holding the values
+  // as last corrected, and the sheet keeps its header: this importer maps
+  // header straight to DB column with no whitelist, so SKIP_COLS is the
+  // designed escape hatch (gotcha 7). What changes is that the morning refresh
+  // no longer overwrites a hand-corrected value — the silent overnight revert
+  // that `portfolio.description` already cost us once.
+  'open_to_new_investors_generic',
   // Dropped from securities2 — still in the sheet, read by nothing.
   'assets_under_management',
   'discount_or_premium_to_nav',
