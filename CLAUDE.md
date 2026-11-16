@@ -907,12 +907,13 @@ is filed in the wrong sleeve).
 in `fundBulkUpload`'s `SKIP_COLS`, the column stays on `securities2` holding
 its last values, and those are maintained by hand.
 
-- **A one-in-three error rate on a flag whose job is to STRIKE a candidate.**
-  It read `false` on three of 108 funds — APDFX, MNHAX, VSMIX — and VSMIX was
-  simply open. The Hybrid Balanced annual review excluded it from the small
-  sleeve on this column alone, and VSMIX scores 100.0 at 18bp less than the
-  holding it was being compared against. A flag that removes live candidates
-  silently has to be right.
+- **A TWO-in-three error rate on a flag whose job is to STRIKE a candidate.**
+  It read `false` on three of 108 funds — APDFX, MNHAX, VSMIX — and the advisor
+  confirmed that **two of the three are open**. The Hybrid Balanced annual
+  review excluded VSMIX from the small sleeve on this column alone (it scores
+  100.0 at 18bp less than the holding it was compared against), and excluded
+  MNHAX from the high-yield sleeve, where it is now the recommended replacement
+  for FAGIX. A flag that removes live candidates silently has to be right.
 - **It was also redundant.** The watchlist is the advisor's own list of funds
   they would buy, so one that cannot be owned never reaches it — the list's
   existence already answers the question.
@@ -922,10 +923,8 @@ its last values, and those are maintained by hand.
   Skipping is what makes a hand correction durable. The sheet keeps its header;
   `fundImportColumns.test.ts` pins the skip, the absence from `BOOL_COLS`, and
   the two flags that are still imported.
-- **MNHAX still reads `false` and has not been verified.** It is a recorded
-  watchlist alternative to FAGIX scoring 98.8 against FAGIX's 98.3, so if that
-  reading is also wrong a live candidate is being excluded from the high-yield
-  sleeve. The flag is now a prompt to check, not a settled fact.
+- **Only APDFX still reads `false`**, and it is neither held nor watched, so
+  nothing turns on it. The flag is a prompt to check, not a settled fact.
 
 **A newly added column shows the SOURCE cell's value until something
 recalculates.** `add-sheet-columns.ps1` pastes a copied formula with

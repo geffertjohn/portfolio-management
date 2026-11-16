@@ -97,11 +97,11 @@ export const SKIP_COLS = new Set([
   'updated_at',
   // OPEN TO NEW INVESTORS — stopped being imported 16 Nov 2026.
   //
-  // The vendor is wrong often enough that the flag cost more than it gave.
-  // It read false on only three of 108 funds — APDFX, MNHAX and VSMIX — and
-  // VSMIX was simply open, which the advisor confirmed. On a flag whose whole
-  // purpose is to STRIKE a fund from the alternatives list, a one-in-three
-  // error rate removes live candidates from consideration silently: VSMIX
+  // The vendor is wrong more often than it is right. It read false on only
+  // three of 108 funds — APDFX, MNHAX and VSMIX — and the advisor confirmed
+  // that TWO OF THE THREE are open. On a flag whose whole purpose is to STRIKE
+  // a fund from the alternatives list, a two-in-three error rate removes live
+  // candidates from consideration silently: VSMIX
   // scores 100.0 and costs 18bp less than the holding it was being compared
   // against, and the Hybrid Balanced annual review excluded it on this column
   // alone before the error surfaced.

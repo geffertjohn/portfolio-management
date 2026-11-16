@@ -10,9 +10,10 @@ describe('Securities sheet → securities2 columns', () => {
   /**
    * `open_to_new_investors_generic` stopped being imported on 16 Nov 2026.
    *
-   * The vendor read it false on three of 108 funds and VSMIX, one of the
-   * three, was simply open. A flag whose purpose is to STRIKE a fund from the
-   * alternatives list cannot carry a one-in-three error rate: the Hybrid
+   * The vendor read it false on three of 108 funds and TWO of the three —
+   * VSMIX and MNHAX — were simply open. A flag whose purpose is to STRIKE a
+   * fund from the alternatives list cannot be wrong more often than right: the
+   * Hybrid
    * Balanced annual review excluded VSMIX — 100.0 on the scorecard and 18bp
    * cheaper than the holding it was compared against — on this column alone.
    *
