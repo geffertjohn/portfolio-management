@@ -66,6 +66,12 @@ const VOCAB: Map<string, Set<string>> = (() => {
  * shrink is how a stopgap becomes permanent.
  */
 const KNOWN_ALIASES: Record<string, string> = {
+  // `investment_grade_bond_allocation_generic` WAS HERE and was repointed to
+  // `investment_grade_bond_allocation_morn` on 17 Nov 2026 — the first entry
+  // taken off this list, and the proof that it is meant to shrink. It went
+  // first because its per-fund values had no coherent denominator; the `_morn`
+  // family turned out to be Morningstar ALLOCATIONS (a share of assets) where
+  // the `*_exposure` family is a share of its sleeve, which is very likely why.
   // Documented: `aaa_bond_exposure`. Carried on the Securities sheet since
   // before the reference was checked; deliberately not "corrected", because
   // repointing a populated column buys nothing on its own.
@@ -84,14 +90,6 @@ const KNOWN_ALIASES: Record<string, string> = {
   government_fixed_income_exposure_generic: 'government_fixed_income_exposure',
   municipal_fixed_income_exposure_generic: 'municipal_fixed_income_exposure',
   securitized_fixed_income_exposure_generic: 'securitized_fixed_income_exposure',
-  // THE ONE TO REPOINT FIRST. Documented as `investment_grade_bond_allocation_morn`
-  // — a `_morn` suffix, a different family again — and this is the field whose
-  // per-fund values have no coherent denominator: the implied bond share is
-  // 168% for BIMIX and 53% for DHRIX, a core bond fund. The Nov 2026 Hybrid
-  // Balanced review's largest recommendation rested on it reading 41.86% for
-  // DHRIX, which the credit ladder contradicted by 37 points. That it is also
-  // an undocumented alias is unlikely to be a coincidence.
-  investment_grade_bond_allocation_generic: 'investment_grade_bond_allocation_morn',
   small_cap_exposure: 'latest_percent_market_cap_small_generic (or a stylebox code)',
   united_states_region_total_exposure_generic: 'united_states_total_exposure',
 }

@@ -196,7 +196,10 @@ export interface SecurityDetail extends Security {
   effective_duration: number | null
   sec_yield_generic: number | null
   average_credit_quality_score: number | null
-  investment_grade_bond_allocation_generic: number | null
+  // Morningstar ALLOCATION: a share of ASSETS, not of the bond sleeve. Renamed
+  // from the undocumented `..._generic` alias on 17 Nov 2026; never divide it by
+  // `bond_net` to get a sleeve share, which implied 168% for BIMIX.
+  investment_grade_bond_allocation_morn: number | null
   aaa_bond_exposure_generic: number | null
   bbb_bond_exposure_generic: number | null
   government_fixed_income_exposure_generic: number | null

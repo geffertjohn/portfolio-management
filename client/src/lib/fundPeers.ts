@@ -167,7 +167,7 @@ export function buildComposition(s: SecurityDetail): FundComposition {
     effectiveDuration: num(s, 'effective_duration'),
     secYield: num(s, 'sec_yield_generic'),
     creditQuality: num(s, 'average_credit_quality_score'),
-    investmentGrade: num(s, 'investment_grade_bond_allocation_generic'),
+    investmentGrade: num(s, 'investment_grade_bond_allocation_morn'),
     fixedIncome: fi.items,
     fixedIncomeSum: fi.sum,
     fixedIncomeReconciles: fi.sum == null || !hasSleeve

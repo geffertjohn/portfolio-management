@@ -1261,11 +1261,12 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_benchmarks" (
     "large_cap_equity_allocation_generic" double precision,
     "medium_cap_equity_allocation_generic" double precision,
     "small_cap_equity_allocation_generic" double precision,
-    "investment_grade_bond_allocation_generic" double precision,
+    "investment_grade_bond_allocation_morn" double precision,
     "high_yield_bond_allocation_generic" double precision,
     "other_bond_exposure_generic" double precision,
     "developed_equity_exposure" double precision,
-    "maturity_other_generic" double precision
+    "maturity_other_generic" double precision,
+    "not_rated_bond_allocation_morn" double precision
 );
 
 
@@ -1277,6 +1278,10 @@ COMMENT ON COLUMN "public"."model_portfolio_benchmarks"."maturity_greater_than_3
 
 
 COMMENT ON COLUMN "public"."model_portfolio_benchmarks"."effective_maturity_generic" IS 'The benchmark''s effective maturity, renamed with its siblings so both sides of the comparison use the documented code.';
+
+
+
+COMMENT ON COLUMN "public"."model_portfolio_benchmarks"."investment_grade_bond_allocation_morn" IS 'The benchmark''s Morningstar investment-grade allocation, renamed with its siblings so both sides of the comparison use the documented code.';
 
 
 
@@ -1581,13 +1586,14 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio" (
     "large_cap_equity_allocation_generic" numeric,
     "medium_cap_equity_allocation_generic" numeric,
     "small_cap_equity_allocation_generic" numeric,
-    "investment_grade_bond_allocation_generic" numeric,
+    "investment_grade_bond_allocation_morn" numeric,
     "high_yield_bond_allocation_generic" numeric,
     "other_bond_exposure_generic" numeric,
     "developed_equity_exposure" numeric,
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "last_rebalance_date" "date",
-    "maturity_other_generic" numeric
+    "maturity_other_generic" numeric,
+    "not_rated_bond_allocation_morn" numeric
 );
 
 
@@ -1599,6 +1605,14 @@ COMMENT ON COLUMN "public"."portfolio"."maturity_greater_than_30_years_generic" 
 
 
 COMMENT ON COLUMN "public"."portfolio"."effective_maturity_generic" IS 'Look-through effective maturity of the book''s bond sleeve, in years. See securities2.effective_maturity_generic for the rename.';
+
+
+
+COMMENT ON COLUMN "public"."portfolio"."investment_grade_bond_allocation_morn" IS 'Look-through Morningstar investment-grade allocation, a share of the book''s ASSETS. See securities2 for the rename and the denominator warning.';
+
+
+
+COMMENT ON COLUMN "public"."portfolio"."not_rated_bond_allocation_morn" IS 'Look-through not-rated bond allocation, a share of the book''s assets.';
 
 
 
@@ -2208,7 +2222,7 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "effective_duration" numeric,
     "sec_yield_generic" numeric,
     "average_credit_quality_score" numeric,
-    "investment_grade_bond_allocation_generic" numeric,
+    "investment_grade_bond_allocation_morn" numeric,
     "aaa_bond_exposure_generic" numeric,
     "bbb_bond_exposure_generic" numeric,
     "government_fixed_income_exposure_generic" numeric,
@@ -2270,6 +2284,7 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "below_b_bond_exposure_generic" numeric,
     "maturity_other_generic" numeric,
     "duration_generic" numeric,
+    "not_rated_bond_allocation_morn" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2282,6 +2297,10 @@ COMMENT ON TABLE "public"."securities2" IS 'Extended fund metrics snapshot (secu
 
 
 COMMENT ON COLUMN "public"."securities2"."scorecard_cohort" IS 'Cohort the fund/ETF is reviewed against: category | peer. NULL = not yet chosen; review automation must skip and report these. App-managed only — the YCharts import never writes it.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."investment_grade_bond_allocation_morn" IS 'Morningstar investment-grade bond ALLOCATION — a share of ASSETS, not of the bond sleeve. RENAMED 17 Nov 2026 from the undocumented alias `investment_grade_bond_allocation_generic`. Do NOT divide it by bond_net to get a sleeve share: that gave an implied bond share of 168% for BIMIX and 53% for DHRIX. Prior values were KEPT so the next refresh tests whether the alias was the same metric.';
 
 
 
@@ -2354,6 +2373,10 @@ COMMENT ON COLUMN "public"."securities2"."maturity_other_generic" IS 'Share of t
 
 
 COMMENT ON COLUMN "public"."securities2"."duration_generic" IS 'Duration in years — the vendor''s OTHER documented duration measure, added 17 Nov 2026 because `effective_duration` is genuinely absent for FAGIX (24.77% equity, 13.84% cash, 57.43% bonds). A SECOND READING, NOT A SUBSTITUTE: do not mix it with effective_duration in one comparison without saying which fund uses which.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."not_rated_bond_allocation_morn" IS 'Morningstar not-rated bond allocation, a share of ASSETS. Added 17 Nov 2026 to measure what the credit ladder leaves out: the ladder''s seven buckets are independent exposures that exclude unrated paper, so DHRIX summing to 79.5% left a ~20pp residual the risk leg could only hypothesise about. This is that residual as a number.';
 
 
 

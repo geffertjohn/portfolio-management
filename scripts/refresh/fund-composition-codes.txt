@@ -22,7 +22,19 @@
 effective_duration
 sec_yield_generic
 average_credit_quality_score
-investment_grade_bond_allocation_generic
+# REPOINTED 17 Nov 2026. `investment_grade_bond_allocation_generic` was an
+# UNDOCUMENTED ALIAS; the code is investment_grade_bond_allocation_morn, on all
+# three Metrics tabs. It was the first alias to repoint because it is the field
+# whose per-fund values had no coherent denominator - divided by bond_net it
+# implied a 168% bond share for BIMIX and 53% for DHRIX, a core bond fund.
+#
+# The _morn family is a Morningstar ALLOCATION set: a share of ASSETS, where an
+# *_exposure is a share of its sleeve. That is very likely the whole confusion.
+investment_grade_bond_allocation_morn
+# The residual the credit ladder cannot show. Its seven buckets are independent
+# exposures that EXCLUDE unrated paper, so DHRIX summing to 79.5% left ~20pp the
+# risk leg could only hypothesise was unrated tranches. This measures it.
+not_rated_bond_allocation_morn
 aaa_bond_exposure_generic
 bbb_bond_exposure_generic
 # The rest of the credit ladder, added 17 Nov 2026. THE VENDOR SUFFIXES THESE

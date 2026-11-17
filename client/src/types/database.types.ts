@@ -1160,7 +1160,7 @@ export type Database = {
           historical_treynor_measure_all: number | null
           id: number
           industrials_exposure_generic: number | null
-          investment_grade_bond_allocation_generic: number | null
+          investment_grade_bond_allocation_morn: number | null
           investment_objective: string | null
           large_cap_equity_allocation_generic: number | null
           latin_america_total_exposure_generic: number | null
@@ -1182,6 +1182,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic: number | null
           name: string | null
           north_america_total_exposure_generic: number | null
+          not_rated_bond_allocation_morn: number | null
           number_of_holdings: number | null
           one_month_total_return: number | null
           one_year_total_return: number | null
@@ -1294,7 +1295,7 @@ export type Database = {
           historical_treynor_measure_all?: number | null
           id?: number
           industrials_exposure_generic?: number | null
-          investment_grade_bond_allocation_generic?: number | null
+          investment_grade_bond_allocation_morn?: number | null
           investment_objective?: string | null
           large_cap_equity_allocation_generic?: number | null
           latin_america_total_exposure_generic?: number | null
@@ -1316,6 +1317,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic?: number | null
           name?: string | null
           north_america_total_exposure_generic?: number | null
+          not_rated_bond_allocation_morn?: number | null
           number_of_holdings?: number | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
@@ -1428,7 +1430,7 @@ export type Database = {
           historical_treynor_measure_all?: number | null
           id?: number
           industrials_exposure_generic?: number | null
-          investment_grade_bond_allocation_generic?: number | null
+          investment_grade_bond_allocation_morn?: number | null
           investment_objective?: string | null
           large_cap_equity_allocation_generic?: number | null
           latin_america_total_exposure_generic?: number | null
@@ -1450,6 +1452,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic?: number | null
           name?: string | null
           north_america_total_exposure_generic?: number | null
+          not_rated_bond_allocation_morn?: number | null
           number_of_holdings?: number | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
@@ -1873,7 +1876,7 @@ export type Database = {
           historical_treynor_measure_5y: number | null
           historical_treynor_measure_all: number | null
           industrials_exposure_generic: number | null
-          investment_grade_bond_allocation_generic: number | null
+          investment_grade_bond_allocation_morn: number | null
           investment_objective: string | null
           large_cap_equity_allocation_generic: number | null
           last_rebalance_date: string | null
@@ -1900,6 +1903,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic: number | null
           name: string
           north_america_total_exposure_generic: number | null
+          not_rated_bond_allocation_morn: number | null
           number_of_holdings: number | null
           one_month_total_return: number | null
           one_year_total_return: number | null
@@ -2020,7 +2024,7 @@ export type Database = {
           historical_treynor_measure_5y?: number | null
           historical_treynor_measure_all?: number | null
           industrials_exposure_generic?: number | null
-          investment_grade_bond_allocation_generic?: number | null
+          investment_grade_bond_allocation_morn?: number | null
           investment_objective?: string | null
           large_cap_equity_allocation_generic?: number | null
           last_rebalance_date?: string | null
@@ -2047,6 +2051,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic?: number | null
           name: string
           north_america_total_exposure_generic?: number | null
+          not_rated_bond_allocation_morn?: number | null
           number_of_holdings?: number | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
@@ -2167,7 +2172,7 @@ export type Database = {
           historical_treynor_measure_5y?: number | null
           historical_treynor_measure_all?: number | null
           industrials_exposure_generic?: number | null
-          investment_grade_bond_allocation_generic?: number | null
+          investment_grade_bond_allocation_morn?: number | null
           investment_objective?: string | null
           large_cap_equity_allocation_generic?: number | null
           last_rebalance_date?: string | null
@@ -2194,6 +2199,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic?: number | null
           name?: string
           north_america_total_exposure_generic?: number | null
+          not_rated_bond_allocation_morn?: number | null
           number_of_holdings?: number | null
           one_month_total_return?: number | null
           one_year_total_return?: number | null
@@ -3051,7 +3057,7 @@ export type Database = {
           information_ratio_3y_vs_pg: number | null
           information_ratio_peer_group_rank: number | null
           information_ratio_rank: number | null
-          investment_grade_bond_allocation_generic: number | null
+          investment_grade_bond_allocation_morn: number | null
           investment_strategy: string | null
           is_benchmark_proxy: boolean
           large_market_cap_exposure_generic: number | null
@@ -3075,6 +3081,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic: number | null
           next_earnings_release: string | null
           north_america_total_exposure_generic: number | null
+          not_rated_bond_allocation_morn: number | null
           number_of_holdings_generic: number | null
           one_month_total_return: number | null
           one_month_total_return_nav: number | null
@@ -3211,7 +3218,7 @@ export type Database = {
           information_ratio_3y_vs_pg?: number | null
           information_ratio_peer_group_rank?: number | null
           information_ratio_rank?: number | null
-          investment_grade_bond_allocation_generic?: number | null
+          investment_grade_bond_allocation_morn?: number | null
           investment_strategy?: string | null
           is_benchmark_proxy?: boolean
           large_market_cap_exposure_generic?: number | null
@@ -3235,6 +3242,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic?: number | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
+          not_rated_bond_allocation_morn?: number | null
           number_of_holdings_generic?: number | null
           one_month_total_return?: number | null
           one_month_total_return_nav?: number | null
@@ -3371,7 +3379,7 @@ export type Database = {
           information_ratio_3y_vs_pg?: number | null
           information_ratio_peer_group_rank?: number | null
           information_ratio_rank?: number | null
-          investment_grade_bond_allocation_generic?: number | null
+          investment_grade_bond_allocation_morn?: number | null
           investment_strategy?: string | null
           is_benchmark_proxy?: boolean
           large_market_cap_exposure_generic?: number | null
@@ -3395,6 +3403,7 @@ export type Database = {
           municipal_fixed_income_exposure_generic?: number | null
           next_earnings_release?: string | null
           north_america_total_exposure_generic?: number | null
+          not_rated_bond_allocation_morn?: number | null
           number_of_holdings_generic?: number | null
           one_month_total_return?: number | null
           one_month_total_return_nav?: number | null

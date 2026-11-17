@@ -41,7 +41,7 @@ export interface Portfolio {
   large_cap_equity_allocation_generic: number | null
   medium_cap_equity_allocation_generic: number | null
   small_cap_equity_allocation_generic: number | null
-  investment_grade_bond_allocation_generic: number | null
+  investment_grade_bond_allocation_morn: number | null
   high_yield_bond_allocation_generic: number | null
   other_bond_exposure_generic: number | null
   developed_equity_exposure: number | null
