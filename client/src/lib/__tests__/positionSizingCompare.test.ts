@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
-import { compareSizing, parseActualAllocations, readAllocationFile } from '../positionSizingCompare'
+import { compareSizing, parseActualAllocations, readAllocationFile, lineupChange } from '../positionSizingCompare'
 import type { PortfolioPosition } from '@/types/position'
 
 /**
@@ -37,6 +37,83 @@ const TEMPLATE_HEADER = [
   'Security Ticker/CUSIP', 'Target', 'Lower Tolerance', 'Higher Tolerance',
   'Cash Indicator (Y/N)', 'Alternate Products',
 ]
+
+describe('lineupChange — drift across a rebalance is not drift', () => {
+  // Foundation Conservative, 17 Nov 2026. Its last holdings file (2 Nov) is the
+  // older SIX-holding book; the current targets are eight holdings, with part
+  // of VBTLX having moved into VBILX, VMSAX and VWEAX. Against those targets
+  // the file yields exactly one breach — VBTLX 34.00 against a 20.00-30.00
+  // band — and that breach is the pre-rebalance weight, not a book out of
+  // tolerance.
+  const fcTargets = [
+    { symbol: 'FXAIX', target: 21 }, { symbol: 'VBILX', target: 33 },
+    { symbol: 'VBTLX', target: 25 }, { symbol: 'VFWAX', target: 5 },
+    { symbol: 'VIMAX', target: 4 }, { symbol: 'VMSAX', target: 3 },
+    { symbol: 'VWEAX', target: 7 }, { symbol: '$Cash', target: 2 },
+  ]
+  const fcFile = new Map([
+    ['VIMAX', 4], ['VBTLX', 34], ['VBILX', 34], ['FDXCASH', 1], ['FXAIX', 22], ['VFWAX', 5],
+  ])
+
+  it('reports the two holdings the basis predates, and their target weight', () => {
+    const c = lineupChange(fcTargets, fcFile)
+    expect(c).not.toBeNull()
+    expect(c!.missingFromBasis.sort()).toEqual(['VMSAX', 'VWEAX'])
+    expect(c!.missingWeight).toBe(10)   // 3.00 + 7.00
+    expect(c!.notInModel).toEqual([])
+    expect(c!.offModelWeight).toBe(0)
+  })
+
+  it('returns null when the file matches the book name for name', () => {
+    // Core Growth and Equity Income are both in this state: real drifted
+    // weights over the same lineup, so their drift readings stay valid.
+    const targets = [{ symbol: 'BSX', target: 2.5 }, { symbol: 'MSFT', target: 6 }, { symbol: '$Cash', target: 1 }]
+    const file = new Map([['BSX', 1.22], ['MSFT', 6.7], ['FDXCASH', 0.86]])
+    expect(lineupChange(targets, file)).toBeNull()
+  })
+
+  it('EXCLUDES cash from both sides', () => {
+    // The file spells it FDXCASH and the book $Cash, and a file omitting its
+    // cash row is common — counting it would make nearly every book read as
+    // changed and cost them all their drift readings.
+    expect(lineupChange(
+      [{ symbol: '$Cash', target: 1 }, { symbol: 'MSFT', target: 6 }],
+      new Map([['MSFT', 6.1]]),            // no cash row at all
+    )).toBeNull()
+    expect(lineupChange(
+      [{ symbol: 'MSFT', target: 6 }],
+      new Map([['MSFT', 6.1], ['FDXCASH', 0.9]]),  // cash in the file only
+    )).toBeNull()
+  })
+
+  it('reports a file ticker that is not a holding, with its weight', () => {
+    // ETF Conservative Balanced's shape: a basis naming funds the book does
+    // not hold. (Its own file is a target template, so it is skipped upstream.)
+    const c = lineupChange(
+      [{ symbol: 'VOO', target: 10 }],
+      new Map([['VOO', 17], ['CPLB', 14], ['SPMO', 7]]),
+    )
+    expect(c!.notInModel.sort()).toEqual(['CPLB', 'SPMO'])
+    expect(c!.offModelWeight).toBe(21)
+    expect(c!.missingFromBasis).toEqual([])
+  })
+
+  it('triggers on a single name, with no threshold', () => {
+    // One holding bought since the upload still overstates every other weight.
+    // The weights are returned so a caller can say how much moved; the remedy
+    // is the same either way.
+    const c = lineupChange(
+      [{ symbol: 'MSFT', target: 6 }, { symbol: 'NVDA', target: 1 }],
+      new Map([['MSFT', 6.1]]),
+    )
+    expect(c!.missingFromBasis).toEqual(['NVDA'])
+    expect(c!.missingWeight).toBe(1)
+  })
+
+  it('matches case-insensitively and ignores surrounding space', () => {
+    expect(lineupChange([{ symbol: ' msft ', target: 6 }], new Map([['MSFT', 6.1]]))).toBeNull()
+  })
+})
 
 describe('readAllocationFile — a target file is not an actual allocation', () => {
   // The defect: both shapes parse, so a target file silently became "the

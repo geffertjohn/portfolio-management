@@ -29,6 +29,7 @@ import {
 import { fetchRebalanceSchedules } from './rebalanceSchedule'
 import { fetchPositionsByPortfolioId } from './positions'
 import { computePositionBands, isCashTicker } from './positionBands'
+import { lineupChange } from './positionSizingCompare'
 import { computeAllocationBands } from './allocationBands'
 import { fetchSecurities } from './securities'
 import {
@@ -242,6 +243,59 @@ async function fetchDriftActions(
       if (!actual || positions.length === 0) return null
 
       const bands = computePositionBands(positions, model)
+
+      // A LINEUP CHANGE IS NOT DRIFT, and reporting it as drift tells the
+      // advisor to act on a trade they have already made. See `lineupChange`:
+      // the basis sums to 100% over the holdings it names, so once the book
+      // buys or sells something every surviving weight is mis-stated by the
+      // missing weight redistributed, and the breach that surfaces is the
+      // rebalance. Foundation Conservative's 2 Nov file is the live case — the
+      // older six-holding book, producing one breach (VBTLX 34.00 against a
+      // 20.00-30.00 band) that is simply its pre-rebalance weight.
+      //
+      // Reported as its own row rather than suppressed: "nobody has uploaded
+      // holdings since the rebalance" is a real finding with a real remedy,
+      // and it is the honest form of what the drift row was saying wrongly.
+      const changed = lineupChange(
+        bands.map((b) => ({ symbol: b.symbol, target: b.target })),
+        actual.weights,
+      )
+      if (changed) {
+        const parts: string[] = []
+        if (changed.missingFromBasis.length > 0) {
+          parts.push(
+            `${changed.missingFromBasis.length} holding${changed.missingFromBasis.length > 1 ? 's' : ''}` +
+              ` not in the file (${changed.missingFromBasis.slice(0, 3).join(', ')}` +
+              `${changed.missingFromBasis.length > 3 ? ', …' : ''}` +
+              `, ${changed.missingWeight.toFixed(2)}% of target)`,
+          )
+        }
+        if (changed.notInModel.length > 0) {
+          parts.push(
+            `${changed.notInModel.length} in the file that are not holdings` +
+              ` (${changed.notInModel.slice(0, 3).join(', ')}` +
+              `${changed.notInModel.length > 3 ? ', …' : ''}` +
+              `, ${changed.offModelWeight.toFixed(2)}%)`,
+          )
+        }
+        return {
+          key: `basis_lineup:${name}`,
+          category: 'operational' as const,
+          source: 'drift' as const,
+          subject: name,
+          title: 'Holdings file predates a lineup change',
+          subtitle: `${parts.join('; ')} · drift cannot be measured against it`,
+          context: null,
+          route: `/portfolio/${encodeURIComponent(name)}`,
+          // The file's own date, as a drift row is: this has been true since
+          // that upload, and `agingLabel` then says how long the basis has
+          // been out of date.
+          dueDate: actual.asOf,
+          priority: 'medium' as const,
+          isManual: false,
+        }
+      }
+
       let breaches = 0
       for (const b of bands) {
         const a = actualWeightFor(actual.weights, b.symbol)
@@ -361,7 +415,20 @@ async function fetchAllocationBandActions(
     // Only an ACTUAL-holdings basis has a measurement date. See `dueDate` below.
     let asOf: string | null = null
     const actual = actualByPortfolio.get(name)
-    if (actual) { weights = actual.weights; basis = 'actual'; asOf = actual.asOf }
+    // A LINEUP-CHANGED BASIS IS NOT A BASIS HERE EITHER. The rollup would be of
+    // the OLD book, so it would name asset classes the current lineup does not
+    // hold. Falling through to position targets is the same thing this adapter
+    // already does for every portfolio with no file, and the subtitle names
+    // which basis was used — so the honest answer costs nothing extra. The
+    // drift adapter raises the stale-basis finding itself; raising it twice
+    // from two sources would be one fact printed twice.
+    const stale = actual
+      ? lineupChange(
+          [...(posByPortfolio.get(name) ?? new Map())].map(([symbol, target]) => ({ symbol, target })),
+          actual.weights,
+        ) != null
+      : false
+    if (actual && !stale) { weights = actual.weights; basis = 'actual'; asOf = actual.asOf }
     if (!weights) weights = posByPortfolio.get(name) ?? null
     if (!weights || weights.size === 0) continue
 

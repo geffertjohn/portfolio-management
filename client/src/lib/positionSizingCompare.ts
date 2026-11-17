@@ -135,6 +135,83 @@ export function parseActualAllocations(buf: ArrayBuffer): Map<string, number> {
   return readAllocationFile(buf).weights
 }
 
+export interface LineupChange {
+  /** Target positions the basis does not name at all. */
+  missingFromBasis: string[]
+  /** Basis tickers that are not target positions. */
+  notInModel: string[]
+  /** Summed TARGET weight of `missingFromBasis` (percent points). */
+  missingWeight: number
+  /** Summed BASIS weight of `notInModel` (percent points). */
+  offModelWeight: number
+}
+
+/**
+ * Has the book's LINEUP changed since this basis was uploaded?
+ *
+ * **DRIFT MEASURED ACROSS A LINEUP CHANGE IS NOT DRIFT.** A basis file's
+ * weights sum to 100% over the set of holdings it names, so if the book has
+ * since bought or sold something, every surviving name is mis-stated by the
+ * missing weight redistributed — and the breach that shows up is the
+ * REBALANCE, not a market move.
+ *
+ * Foundation Conservative is the case this was written for (17 Nov 2026). Its
+ * last holdings file, 2 Nov, is the older six-holding book: VBTLX at 34.00
+ * with no VMSAX or VWEAX. The current targets are eight holdings with VBTLX at
+ * 25.00, VBILX 33.00, VMSAX 3.00 and VWEAX 7.00 — so part of VBTLX moved into
+ * the other three. Compared against those targets the 2 Nov file produces
+ * exactly one breach, VBTLX at 34.00 against a 20.00–30.00 band, and that
+ * breach is the pre-rebalance weight rather than a book out of tolerance.
+ * Reporting it as drift tells the advisor to act on a trade they already made.
+ *
+ * **CASH IS EXCLUDED FROM BOTH SIDES.** It is a residual rather than a holding
+ * whose presence defines the lineup, the file spells it differently from the
+ * book (`FDXCASH` against `$Cash`), and a file omitting its cash row entirely
+ * is common — so counting it would make almost every book read as changed and
+ * cost them all their drift readings, which is worse than the defect.
+ *
+ * **Any set difference counts, with no threshold**, and the weights are
+ * returned so the caller can say how much moved rather than relying on a magic
+ * number. Even one missing name overstates every other weight; a caller that
+ * wants to treat 1pp differently from 10pp has the figures to do it, and the
+ * remedy is the same either way — upload the current holdings.
+ *
+ * Returns null when the two sets agree, which is the normal case: Core Growth
+ * and Equity Income both match their files name for name.
+ */
+export function lineupChange(
+  positions: { symbol: string; target: number }[],
+  actuals: Map<string, number>,
+): LineupChange | null {
+  const basis = new Map<string, number>()
+  for (const [k, v] of actuals) {
+    if (isCashTicker(k)) continue
+    basis.set(k.trim().toUpperCase(), v)
+  }
+
+  const targets = new Set<string>()
+  const missingFromBasis: string[] = []
+  let missingWeight = 0
+  for (const p of positions) {
+    const sym = p.symbol.trim().toUpperCase()
+    if (isCashTicker(sym)) continue
+    targets.add(sym)
+    if (!basis.has(sym)) {
+      missingFromBasis.push(p.symbol)
+      missingWeight += p.target
+    }
+  }
+
+  const notInModel: string[] = []
+  let offModelWeight = 0
+  for (const [sym, w] of basis) {
+    if (!targets.has(sym)) { notInModel.push(sym); offModelWeight += w }
+  }
+
+  if (missingFromBasis.length === 0 && notInModel.length === 0) return null
+  return { missingFromBasis, notInModel, missingWeight, offModelWeight }
+}
+
 export interface SizingBreach {
   symbol: string
   name: string | null
