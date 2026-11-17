@@ -32,13 +32,28 @@ import {
 // ── Column classification ─────────────────────────────────────────────────────
 
 /** DB column name remap: template header → actual securities2 column name. */
-const COLUMN_REMAP: Record<string, string> = {
+export const COLUMN_REMAP: Record<string, string> = {
   inception_date_generic: 'inception_date',
   // A Postgres identifier cannot start with a digit, and the sheet's header IS
   // the YCharts metric code — it is passed as the argument to YCP() as well as
   // read as a column name — so the header has to keep the digit and the DB
   // column takes the spelled-out form.
   '1_year_fund_level_flows_to_aum': 'one_year_fund_level_flows_to_aum',
+  // THE CREDIT LADDER IS SUFFIXED INCONSISTENTLY BY THE VENDOR, and the header
+  // has to be the code YCP() reads. Verified on both the `Mutual Fund |
+  // Metrics` and `ETF & CEF | Metrics` reference tabs (17 Nov 2026): `a_`,
+  // `bbb_` and `bb_` are documented WITH `_generic` while `aa_`, `b_` and
+  // `below_b_` are documented WITHOUT it. The DB columns all take the
+  // `_generic` form so they match `portfolio`'s five exactly and the fund side
+  // joins the book side without translating; these three bridge the gap.
+  //
+  // `aaa_bond_exposure_generic` is deliberately absent from this map: the
+  // sheet has carried that header since before the reference was checked and
+  // YCharts accepts it, so the suffix is an alias rather than a strict code.
+  // Do not "correct" a working column to the documented form.
+  aa_bond_exposure: 'aa_bond_exposure_generic',
+  b_bond_exposure: 'b_bond_exposure_generic',
+  below_b_bond_exposure: 'below_b_bond_exposure_generic',
 }
 
 const TEXT_COLS = new Set([

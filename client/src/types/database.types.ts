@@ -2977,6 +2977,8 @@ export type Database = {
         Row: {
           "1_to_3_years_maturity_bond_exposure": number | null
           "3_to_5_years_maturity_bond_exposure": number | null
+          a_bond_exposure_generic: number | null
+          aa_bond_exposure_generic: number | null
           aaa_bond_exposure_generic: number | null
           alpha_3y_vs_category: number | null
           alpha_peer_group_rank: number | null
@@ -2990,8 +2992,11 @@ export type Database = {
           annualized_five_year_total_return_nav: number | null
           annualized_three_year_total_return_nav: number | null
           average_credit_quality_score: number | null
+          b_bond_exposure_generic: number | null
           basic_materials_exposure_generic: number | null
+          bb_bond_exposure_generic: number | null
           bbb_bond_exposure_generic: number | null
+          below_b_bond_exposure_generic: number | null
           bond_net: number | null
           broad_asset_class: string | null
           broad_category_group: string | null
@@ -3130,6 +3135,8 @@ export type Database = {
         Insert: {
           "1_to_3_years_maturity_bond_exposure"?: number | null
           "3_to_5_years_maturity_bond_exposure"?: number | null
+          a_bond_exposure_generic?: number | null
+          aa_bond_exposure_generic?: number | null
           aaa_bond_exposure_generic?: number | null
           alpha_3y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
@@ -3143,8 +3150,11 @@ export type Database = {
           annualized_five_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
           average_credit_quality_score?: number | null
+          b_bond_exposure_generic?: number | null
           basic_materials_exposure_generic?: number | null
+          bb_bond_exposure_generic?: number | null
           bbb_bond_exposure_generic?: number | null
+          below_b_bond_exposure_generic?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null
@@ -3283,6 +3293,8 @@ export type Database = {
         Update: {
           "1_to_3_years_maturity_bond_exposure"?: number | null
           "3_to_5_years_maturity_bond_exposure"?: number | null
+          a_bond_exposure_generic?: number | null
+          aa_bond_exposure_generic?: number | null
           aaa_bond_exposure_generic?: number | null
           alpha_3y_vs_category?: number | null
           alpha_peer_group_rank?: number | null
@@ -3296,8 +3308,11 @@ export type Database = {
           annualized_five_year_total_return_nav?: number | null
           annualized_three_year_total_return_nav?: number | null
           average_credit_quality_score?: number | null
+          b_bond_exposure_generic?: number | null
           basic_materials_exposure_generic?: number | null
+          bb_bond_exposure_generic?: number | null
           bbb_bond_exposure_generic?: number | null
+          below_b_bond_exposure_generic?: number | null
           bond_net?: number | null
           broad_asset_class?: string | null
           broad_category_group?: string | null

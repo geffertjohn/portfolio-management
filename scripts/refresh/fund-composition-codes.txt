@@ -25,6 +25,18 @@ average_credit_quality_score
 investment_grade_bond_allocation_generic
 aaa_bond_exposure_generic
 bbb_bond_exposure_generic
+# The rest of the credit ladder, added 17 Nov 2026. THE VENDOR SUFFIXES THESE
+# INCONSISTENTLY: a_/bbb_/bb_ are documented with `_generic` and aa_/b_/below_b_
+# without it, all verified on both the Mutual Fund and ETF & CEF Metrics tabs.
+# The header must be the code, so the three bare forms are mapped to the
+# `_generic` DB columns by COLUMN_REMAP in fundBulkUpload.ts - the DB names
+# match `portfolio`'s five so the fund side and the book side join directly.
+# The ladder does NOT sum to 100%: not_rated and not_available sit outside it.
+aa_bond_exposure
+a_bond_exposure_generic
+bb_bond_exposure_generic
+b_bond_exposure
+below_b_bond_exposure
 government_fixed_income_exposure_generic
 corporate_fixed_income_exposure_generic
 securitized_fixed_income_exposure_generic
