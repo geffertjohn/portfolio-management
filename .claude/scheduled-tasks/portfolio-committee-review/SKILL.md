@@ -346,9 +346,25 @@ the book: construction, risk, and the regime it is being run into.
      equity and the look-through reads **67.8%** — because a high-yield fund
      in the bond sleeve holds equity. That gap is the kind of thing the sleeve
      labels can never show, and it is measured here rather than argued.
-   - **Report DIFFERENCES, not levels.** "Technology 29.1% against a benchmark
-     32.2%" is a finding; "technology 29.1%" is a number. A book on benchmark
-     is as much a result as one off it.
+   - **Report DIFFERENCES, not levels, AND THE SIGN IS THE FINDING.**
+     "Technology 29.03% against a benchmark 29.52%, an active −0.49pp" is a
+     finding; "technology 29.03%" is a number; and "a 29.03% technology
+     concentration" is a number dressed as a finding (read 17 Nov 2026 —
+     recompute it rather than quoting this). A book on benchmark is as much a
+     result as one off it.
+
+     **Reserve ACTIVE, BET, TILT, OVERWEIGHT and UNDERWEIGHT for a difference
+     you have measured, and state its sign.** The 11 Nov 2026 macro leg called
+     two UNDERWEIGHTS "the book's two biggest active positions" — not a
+     weaker version of the right answer but the opposite of it. An absolute
+     level has its own uses; it is never an active position.
+   - **STATE THE BASIS when the two sides hold different amounts of equity.**
+     Hybrid Balanced is 67.30% equity against the benchmark's 63.81%, so a
+     sector weight can differ for a reason that has nothing to do with that
+     sector. Technology is −0.49pp of the whole book and −3.12pp as a share
+     of each side's equity — both underweights here, but a finding that FLIPS
+     between the two bases is a finding about the equity weight, and must be
+     written as one.
    - **A difference is not automatically a defect.** The mandate is strategic
      allocation, so a deliberate tilt is allowed; what is not allowed is a
      tilt nobody chose. Say which you think it is, and on what evidence.
@@ -574,6 +590,47 @@ the book: construction, risk, and the regime it is being run into.
      at position 30 in one fund and 5 in another contributes from the second
      alone. "At least 2.1% of the book" is a true sentence; "2.1% of the book"
      is not, and an audit-defence memo cannot carry the second.
+   - **AN INDUSTRY FIGURE OFF THIS LIST IS EQUITY ONLY — SAY "EQUITIES", NOT
+     "EXPOSURE".** `holding_profiles` excludes CUSIP-like identifiers by rule,
+     so a bond cannot be classified by industry here and semiconductor DEBT
+     held in a bond sleeve is invisible to the measure. Every one of the 36
+     semiconductor lines in Hybrid Balanced is a common-stock ticker, FAGIX's
+     three included — NVDA, TSM and MU, which sit in its 24.8% EQUITY sleeve
+     rather than among its bonds. Written as "7.71% semiconductor exposure" a
+     reader may reasonably take it to include credit, or to be a share of the
+     bond sleeve; it is neither. Name the denominator (percent of the whole
+     book) and the instrument (equities) in the same sentence.
+   - **A LEVEL IS NOT AN ACTIVE POSITION, AND THIS LIST CANNOT PRODUCE ONE.**
+     Nothing derived here is benchmark-relative: `fund_holdings` exists for
+     the funds this book owns and **there is no holdings table for a benchmark
+     at all**, so a single-name or industry figure off this list has no
+     counterpart to be measured against. Report it as the absolute exposure it
+     is.
+
+     The 11 Nov 2026 Hybrid Balanced macro leg is the case, and it is the
+     reason this bullet exists. It opened "THE BOOK'S TWO BIGGEST ACTIVE
+     POSITIONS ARE THE SAME BET" over a semiconductor floor of 8.25% and a
+     long-maturity bond leg, and **both halves are underweights**:
+
+     - Semiconductors is an INDUSTRY, and neither `portfolio` nor
+       `model_portfolio_benchmarks` carries an industry column — the
+       benchmark's semiconductor weight **cannot be computed in this system at
+       all**. The nearest measurable proxy is the technology SECTOR, which
+       both rows do carry: **29.03% against 29.52%, an active −0.49pp**.
+     - The maturity claim WAS directly testable, on columns both rows carry,
+       and is further out: the **20-to-30-year bucket is 17.06% of the book's
+       bond sleeve against the benchmark's 27.87%**, with effective duration
+       **4.93 years against 5.35** (read 17 Nov 2026).
+
+     So the memo told the advisor the book was making two large bets it is in
+     fact positioned the other way on. **The behaviour observation underneath
+     it was fair** — long-duration growth equity and long bonds do respond to
+     the same rate move — so make that claim as what it is: how the book would
+     MOVE, with the measured direction stated. It is not a concentration
+     finding and cannot be escalated into one by adding up levels. "Nothing in
+     the compliance hub can raise it" is also not an argument on its own: the
+     hub has no sector or industry rule, so that is true of every industry
+     figure, overweight or under.
    - **`top25_share` decides whether the list describes the fund or a sliver
      of it.** Measured by holding COUNT the spread across this book is
      enormous — FTZIX holds 25 names and VBTLX holds 16,290 — but count is
@@ -898,7 +955,11 @@ the book: construction, risk, and the regime it is being run into.
      and say so when you fall back to targets.
    - **`macro-strategist`** — the regime this book is being run into, and what
      it means for duration, credit and equity-style tilts at these weights.
-     Context, not a stock call.
+     Context, not a stock call. **Any exposure it calls a tilt must be a
+     measured difference from the benchmark**, and the book's maturity buckets
+     and sector weights sit on `portfolio` beside the benchmark's own on
+     `model_portfolio_benchmarks` — one join away. A regime view about long
+     rates is legitimate; calling an underweight a bet is not.
 
    **Hand each role the alternatives table** — every holding, its weight, its
    category, and the ideas recorded against it, with the held-here /
