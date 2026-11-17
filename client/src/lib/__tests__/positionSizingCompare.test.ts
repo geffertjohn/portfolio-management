@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
-import { compareSizing, parseActualAllocations } from '../positionSizingCompare'
+import { compareSizing, parseActualAllocations, readAllocationFile } from '../positionSizingCompare'
 import type { PortfolioPosition } from '@/types/position'
 
 /**
@@ -26,6 +26,85 @@ function workbook(rows: unknown[][]): ArrayBuffer {
 }
 
 const model = { drift_percentage: 20, cash_lower_limit: 1, cash_upper_limit: 8 }
+
+/**
+ * The real header rows, copied from the two file shapes living in the live
+ * `Portfolio Documents` bucket on 17 Nov 2026. Both carry `Ticker, Target` as
+ * their first two columns and they mean opposite things.
+ */
+const HOLDINGS_HEADER = ['Security Ticker/CUSIP', 'Target']
+const TEMPLATE_HEADER = [
+  'Security Ticker/CUSIP', 'Target', 'Lower Tolerance', 'Higher Tolerance',
+  'Cash Indicator (Y/N)', 'Alternate Products',
+]
+
+describe('readAllocationFile — a target file is not an actual allocation', () => {
+  // The defect: both shapes parse, so a target file silently became "the
+  // actual allocation" and the book was measured against itself. Hybrid
+  // Balanced read zero drift for ever (false negative) while ETF Conservative
+  // Balanced reported the difference between two target vintages as drift
+  // (false positive).
+  it('reads the two-column holdings export as holdings', () => {
+    // Core Growth's real file: weights genuinely drifted off the targets.
+    const f = readAllocationFile(workbook([HOLDINGS_HEADER, ['BSX', 1.22], ['MSFT', 6.7]]))
+    expect(f.kind).toBe('holdings')
+    expect(f.weights.get('BSX')).toBeCloseTo(1.22, 6)
+  })
+
+  it('reads the six-column rebalance template as targets', () => {
+    // Hybrid Balanced's real file, whose 17 weights equal `positions` exactly.
+    const f = readAllocationFile(workbook([
+      TEMPLATE_HEADER,
+      ['IDEQ', 4.5, 3.6, 5.4, 'N', null],
+      ['BIMIX', 11.0, 8.8, 13.2, 'N', null],
+    ]))
+    expect(f.kind).toBe('targets')
+    // The weights are still parsed — the caller decides what to do with them.
+    expect(f.weights.get('BIMIX')).toBeCloseTo(11, 6)
+  })
+
+  it('keys on the HEADER, not on whether the weights match the targets', () => {
+    // This is the whole design. Weight equality identifies Hybrid Balanced and
+    // MISSES ETF Conservative Balanced, whose template carries a new lineup
+    // against stale `positions` — so equality is a coincidence and provenance
+    // is the fact. A template with drifted-looking weights is still a template.
+    const f = readAllocationFile(workbook([
+      TEMPLATE_HEADER, ['CPLB', 14.0, 11.2, 16.8, 'N', null], ['SPMO', 7.0, 5.6, 8.4, 'N', null],
+    ]))
+    expect(f.kind).toBe('targets')
+  })
+
+  it('takes ANY ONE template marker, so a trimmed export is still caught', () => {
+    for (const marker of ['Lower Tolerance', 'Higher Tolerance', 'Upper Tolerance',
+                          'Cash Indicator (Y/N)', 'Alternate Products']) {
+      const f = readAllocationFile(workbook([['Ticker', 'Target', marker], ['AAPL', 5, 4]]))
+      expect(f.kind, marker).toBe('targets')
+    }
+  })
+
+  it('does not reclassify a file because a HOLDING NAME contains a marker', () => {
+    // The markers are looked for on the header row only. A fund legitimately
+    // called something like this must not turn its own file into a template.
+    const f = readAllocationFile(workbook([
+      HOLDINGS_HEADER, ['CASH INDICATOR FUND', 3], ['MSFT', 6.7],
+    ]))
+    expect(f.kind).toBe('holdings')
+  })
+
+  it('calls an empty parse unreadable whatever the header said', () => {
+    // A dated long-format history file is the standing case: its first column
+    // is a date, so every row is skipped. Template headers over no rows are
+    // not a target vector either.
+    expect(readAllocationFile(workbook([TEMPLATE_HEADER])).kind).toBe('unreadable')
+    expect(readAllocationFile(workbook([['2026-11-09', 'IDEQ', 4.5]])).kind).toBe('unreadable')
+  })
+
+  it('parseActualAllocations still returns the weights for either kind', () => {
+    // The hand-chosen-file paths keep it; only the measuring paths gate on kind.
+    expect(parseActualAllocations(workbook([TEMPLATE_HEADER, ['IDEQ', 4.5, 3.6, 5.4, 'N', null]])).get('IDEQ'))
+      .toBeCloseTo(4.5, 6)
+  })
+})
 
 describe('parseActualAllocations', () => {
   it('reads ticker and weight, upper-casing and trimming the ticker', () => {
