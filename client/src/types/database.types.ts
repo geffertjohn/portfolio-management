@@ -1127,7 +1127,7 @@ export type Database = {
           dividend_yield: number | null
           earliest_performance_date: string | null
           effective_duration: number | null
-          effective_maturity: number | null
+          effective_maturity_generic: number | null
           emerging_equity_exposure: number | null
           energy_exposure_generic: number | null
           equity_stylebox_large_cap_blend_exposure: number | null
@@ -1261,7 +1261,7 @@ export type Database = {
           dividend_yield?: number | null
           earliest_performance_date?: string | null
           effective_duration?: number | null
-          effective_maturity?: number | null
+          effective_maturity_generic?: number | null
           emerging_equity_exposure?: number | null
           energy_exposure_generic?: number | null
           equity_stylebox_large_cap_blend_exposure?: number | null
@@ -1395,7 +1395,7 @@ export type Database = {
           dividend_yield?: number | null
           earliest_performance_date?: string | null
           effective_duration?: number | null
-          effective_maturity?: number | null
+          effective_maturity_generic?: number | null
           emerging_equity_exposure?: number | null
           energy_exposure_generic?: number | null
           equity_stylebox_large_cap_blend_exposure?: number | null
@@ -1841,7 +1841,7 @@ export type Database = {
           dividend_yield: number | null
           earliest_performance_date: string | null
           effective_duration: number | null
-          effective_maturity: number | null
+          effective_maturity_generic: number | null
           emerging_equity_exposure: number | null
           energy_exposure_generic: number | null
           equity_stylebox_large_cap_blend_exposure: number | null
@@ -1988,7 +1988,7 @@ export type Database = {
           dividend_yield?: number | null
           earliest_performance_date?: string | null
           effective_duration?: number | null
-          effective_maturity?: number | null
+          effective_maturity_generic?: number | null
           emerging_equity_exposure?: number | null
           energy_exposure_generic?: number | null
           equity_stylebox_large_cap_blend_exposure?: number | null
@@ -2135,7 +2135,7 @@ export type Database = {
           dividend_yield?: number | null
           earliest_performance_date?: string | null
           effective_duration?: number | null
-          effective_maturity?: number | null
+          effective_maturity_generic?: number | null
           emerging_equity_exposure?: number | null
           energy_exposure_generic?: number | null
           equity_stylebox_large_cap_blend_exposure?: number | null
@@ -3019,8 +3019,9 @@ export type Database = {
           derivative_fixed_income_exposure: number | null
           detailed_security_type: string | null
           developed_market_exposure: number | null
+          duration_generic: number | null
           effective_duration: number | null
-          effective_maturity: number | null
+          effective_maturity_generic: number | null
           emerging_market_exposure_generic: number | null
           energy_exposure: number | null
           eps_growth_1_yr_generic: number | null
@@ -3178,8 +3179,9 @@ export type Database = {
           derivative_fixed_income_exposure?: number | null
           detailed_security_type?: string | null
           developed_market_exposure?: number | null
+          duration_generic?: number | null
           effective_duration?: number | null
-          effective_maturity?: number | null
+          effective_maturity_generic?: number | null
           emerging_market_exposure_generic?: number | null
           energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
@@ -3337,8 +3339,9 @@ export type Database = {
           derivative_fixed_income_exposure?: number | null
           detailed_security_type?: string | null
           developed_market_exposure?: number | null
+          duration_generic?: number | null
           effective_duration?: number | null
-          effective_maturity?: number | null
+          effective_maturity_generic?: number | null
           emerging_market_exposure_generic?: number | null
           energy_exposure?: number | null
           eps_growth_1_yr_generic?: number | null
