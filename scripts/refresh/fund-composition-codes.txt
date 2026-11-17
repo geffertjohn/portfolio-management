@@ -95,5 +95,13 @@ maturity_less_than_1_year_generic
 maturity_5_to_10_years_generic
 maturity_10_to_20_years_generic
 maturity_20_to_30_years_generic
-over_30_years_maturity_bond_exposure
+# `over_30_years_maturity_bond_exposure` WAS NOT A CODE - it is the metric's
+# DISPLAY NAME. The code is maturity_greater_than_30_years_generic, verified
+# 17 Nov 2026 on the Mutual Fund, ETF & CEF and Model Portfolio Metrics tabs.
+# The old string returned something the vendor page contradicted (PYTRX 11.94%
+# against 4.60%) and left the seven buckets summing 97.9-109.3%.
+maturity_greater_than_30_years_generic
+# The vendor's generic maturity family has an explicit residual bucket and we
+# never imported it - the other half of why the ladder would not close.
+maturity_other_generic
 effective_maturity
