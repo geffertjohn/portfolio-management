@@ -1069,10 +1069,52 @@ freshly added column.
   `Mutual Fund | Metrics` reference tabs before being added — one sheet serves
   both types, so a code present for only one errors on every row of the other.
   They are METRICS (`YCP`), not Info (`YCI`).
-- **CREDIT QUALITY IS STILL PARTIAL.** `securities2` carries only
-  `aaa_bond_exposure_generic` and `bbb_bond_exposure_generic`; the AA, A, BB, B
-  and below-B buckets that `portfolio` has are absent, so a fund's credit
-  ladder cannot be read in full here.
+- **THE PER-FUND CREDIT LADDER IS COMPLETE AND DOES NOT RECONCILE** (added and
+  first populated 17 Nov 2026). `securities2` now carries all seven buckets —
+  AA, A, BB, B and below-B joined the AAA and BBB it already had — on the 34
+  funds with a bond sleeve. It was added because the book's largest credit
+  positions (AA −10.84pp and BBB +8.23pp against its benchmark on Hybrid
+  Balanced) were a known aggregate on `portfolio` with **no attribution**:
+  nothing could say which fund carried them.
+  - **It overshoots as well as undershooting, which no coverage gap explains.**
+    Measured over all 34: the seven buckets sum to between **8.52% and
+    116.68%**, and only **12 of 34** land within 2pp of 100%. Its IG portion
+    (AAA+AA+A+BBB) disagrees with the separately stored
+    `investment_grade_bond_allocation_generic` on **20 of 34, in BOTH
+    directions** — BIMIX −39.29pp, AVIG −35.93, FTHRX −35.46, UITB −31.81
+    understating, against **DHRIX +37.22**, DFCF +18.88, VBTLX +17.23,
+    PYTRX +17.08 overstating.
+  - **The obvious explanation was TESTED AND REJECTED.** That the AA bucket is
+    really the securitized sleeve holds for DHRIX alone (AA 61.01% against
+    securitized 60.68%, 0.33pp apart) and fails everywhere else: DFCF reads AA
+    **79.93% on 0.00% securitized**, VBTLX AA 72.63% on 20.70%, UITB AA 6.17%
+    on 38.65%. There is no single explanation and the two fields are not
+    reconcilable.
+  - **USE IT FOR SHAPE, NOT FOR LEVEL.** Comparing two funds in one category is
+    the sound use: FAGIX (BB 30.03, B 38.34, below-B 13.56) against MNHAX
+    (BB 43.99, B 41.56, below-B **5.29**), both carrying
+    `average_credit_quality_score` 15 and both summing near 95%, is
+    like-for-like — and it says FAGIX takes the deeper credit risk, which no
+    other column showed. Do NOT weight the buckets across a book and expect the
+    result to match `portfolio`'s own ladder, and do not read one bucket as
+    settled where it contradicts `investment_grade_bond_allocation_generic` or
+    `average_credit_quality_score`.
+  - **So the attribution gap is only PARTLY closed**, and the Nov 2026 risk
+    report's claim that these columns would make the book's largest credit
+    position "traceable to a holding" is weaker than it reads: the shape of a
+    fund's credit is now visible, the level is not dependable, and a weighted
+    roll-up does not tie to the book.
+  - **THE VENDOR SUFFIXES THEM INCONSISTENTLY** and the sheet header must be the
+    YCharts code: `a_`, `bbb_` and `bb_` are documented **with** `_generic`,
+    `aa_`, `b_` and `below_b_` **without** it (verified on both the `Mutual
+    Fund | Metrics` and `ETF & CEF | Metrics` reference tabs). The DB columns
+    all take the `_generic` form so they match `portfolio`'s five and the two
+    sides join without translating; `COLUMN_REMAP` in `fundBulkUpload.ts`
+    bridges the three bare headers and `fundImportColumns.test.ts` pins them —
+    dropping one sends a header to a column that does not exist, which fails
+    the ENTIRE upsert batch. **`aaa_bond_exposure_generic` is deliberately not
+    remapped**: the sheet has carried that header for months and YCharts
+    accepts it, so the suffix is an alias rather than a strict code.
 
 ### A benchmark has no composition of its own
 

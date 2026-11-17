@@ -2305,23 +2305,23 @@ COMMENT ON COLUMN "public"."securities2"."effective_maturity" IS 'Average maturi
 
 
 
-COMMENT ON COLUMN "public"."securities2"."aa_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated AA, as a decimal. Workbook header is the YCharts code `aa_bond_exposure` (no _generic suffix); COLUMN_REMAP bridges it.';
+COMMENT ON COLUMN "public"."securities2"."aa_bond_exposure_generic" IS 'Share rated AA. Workbook header is the YCharts code `aa_bond_exposure` (no _generic suffix); COLUMN_REMAP bridges it. THE LADDER DOES NOT RECONCILE - see below_b_bond_exposure_generic.';
 
 
 
-COMMENT ON COLUMN "public"."securities2"."a_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated A, as a decimal. Workbook header matches this name.';
+COMMENT ON COLUMN "public"."securities2"."a_bond_exposure_generic" IS 'Share rated A. Workbook header matches this name. THE LADDER DOES NOT RECONCILE - see below_b_bond_exposure_generic.';
 
 
 
-COMMENT ON COLUMN "public"."securities2"."bb_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated BB, as a decimal. Workbook header matches this name.';
+COMMENT ON COLUMN "public"."securities2"."bb_bond_exposure_generic" IS 'Share rated BB. Workbook header matches this name. THE LADDER DOES NOT RECONCILE - see below_b_bond_exposure_generic.';
 
 
 
-COMMENT ON COLUMN "public"."securities2"."b_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated B, as a decimal. Workbook header is the YCharts code `b_bond_exposure`; COLUMN_REMAP bridges it.';
+COMMENT ON COLUMN "public"."securities2"."b_bond_exposure_generic" IS 'Share rated B. Workbook header is the YCharts code `b_bond_exposure`; COLUMN_REMAP bridges it. THE LADDER DOES NOT RECONCILE - see below_b_bond_exposure_generic.';
 
 
 
-COMMENT ON COLUMN "public"."securities2"."below_b_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated below B, as a decimal. Workbook header is the YCharts code `below_b_bond_exposure`; COLUMN_REMAP bridges it. The ladder does not sum to 100%: not-rated and not-available paper sit outside these seven buckets.';
+COMMENT ON COLUMN "public"."securities2"."below_b_bond_exposure_generic" IS 'Share rated below B. Workbook header is the YCharts code `below_b_bond_exposure`; COLUMN_REMAP bridges it. THE LADDER DOES NOT RECONCILE (measured 17 Nov 2026, 34 funds): the seven buckets sum to between 8.52% and 116.68% and only 12 of 34 land within 2pp of 100%, so it overshoots as well as undershooting. Its IG portion disagrees with investment_grade_bond_allocation_generic on 20 of 34 funds in BOTH directions (BIMIX -39.29pp, DHRIX +37.22pp). The theory that AA is really the securitized sleeve was tested and rejected: true of DHRIX alone (61.01 vs 60.68) and false elsewhere (DFCF AA 79.93 on 0.00 securitized). USE IT FOR SHAPE, NOT LEVEL: comparing two funds in one category is sound (FAGIX BB/B/below-B 30.03/38.34/13.56 against MNHAX 43.99/41.56/5.29, both credit-quality score 15, both summing near 95%). Do not weight it across a book and expect it to match portfolio''s own ladder.';
 
 
 
