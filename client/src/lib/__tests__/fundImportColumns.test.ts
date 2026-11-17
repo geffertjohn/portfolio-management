@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SKIP_COLS, BOOL_COLS } from '../fundBulkUpload'
+import { SKIP_COLS, BOOL_COLS, COLUMN_REMAP } from '../fundBulkUpload'
 
 /**
  * The YCharts "Securities" sheet loads `securities2`, and this importer has no
@@ -24,6 +24,51 @@ describe('Securities sheet → securities2 columns', () => {
    * been enough in this repo before; re-adding the header to the import would
    * silently overwrite a correction on the next morning's refresh.
    */
+  /**
+   * THE CREDIT LADDER IS SUFFIXED INCONSISTENTLY BY THE VENDOR, and the sheet
+   * header has to be the code YCP() reads. Verified on both the `Mutual Fund |
+   * Metrics` and `ETF & CEF | Metrics` reference tabs, 17 Nov 2026: `a_`,
+   * `bbb_` and `bb_` are documented WITH `_generic`, while `aa_`, `b_` and
+   * `below_b_` are documented WITHOUT it.
+   *
+   * The DB columns all take the `_generic` form so they match `portfolio`'s
+   * five exactly and the fund side joins the book side without translating.
+   * Drop one of these remaps and that header writes to a column that does not
+   * exist, which fails the ENTIRE upsert batch (there is no whitelist).
+   */
+  it('bridges the three bare credit-ladder codes to their _generic columns', () => {
+    expect(COLUMN_REMAP['aa_bond_exposure']).toBe('aa_bond_exposure_generic')
+    expect(COLUMN_REMAP['b_bond_exposure']).toBe('b_bond_exposure_generic')
+    expect(COLUMN_REMAP['below_b_bond_exposure']).toBe('below_b_bond_exposure_generic')
+  })
+
+  it('leaves the three already-_generic credit codes unmapped', () => {
+    // Remapping a header that already matches its column would be a no-op at
+    // best and a typo waiting to happen at worst.
+    for (const code of ['a_bond_exposure_generic', 'bbb_bond_exposure_generic', 'bb_bond_exposure_generic']) {
+      expect(COLUMN_REMAP[code]).toBeUndefined()
+    }
+  })
+
+  it('does not remap aaa_bond_exposure_generic', () => {
+    // The sheet has carried that header since before the reference was checked
+    // and YCharts accepts it, so the suffix is an alias rather than a strict
+    // code. "Correcting" a working column to the documented bare form would
+    // break a populated column for no gain.
+    expect(COLUMN_REMAP['aaa_bond_exposure_generic']).toBeUndefined()
+    expect(COLUMN_REMAP['aaa_bond_exposure']).toBeUndefined()
+  })
+
+  it('imports the whole credit ladder rather than skipping any of it', () => {
+    for (const col of ['aaa_bond_exposure_generic', 'aa_bond_exposure_generic',
+                       'a_bond_exposure_generic', 'bbb_bond_exposure_generic',
+                       'bb_bond_exposure_generic', 'b_bond_exposure_generic',
+                       'below_b_bond_exposure_generic']) {
+      expect(SKIP_COLS.has(col), col).toBe(false)
+      expect(BOOL_COLS.has(col), col).toBe(false)
+    }
+  })
+
   it('never imports open_to_new_investors_generic', () => {
     expect(SKIP_COLS.has('open_to_new_investors_generic')).toBe(true)
   })

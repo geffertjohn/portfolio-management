@@ -2245,6 +2245,11 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "maturity_20_to_30_years_generic" numeric,
     "over_30_years_maturity_bond_exposure" numeric,
     "effective_maturity" numeric,
+    "aa_bond_exposure_generic" numeric,
+    "a_bond_exposure_generic" numeric,
+    "bb_bond_exposure_generic" numeric,
+    "b_bond_exposure_generic" numeric,
+    "below_b_bond_exposure_generic" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2297,6 +2302,26 @@ COMMENT ON COLUMN "public"."securities2"."tracking_error_3y_vs_pg" IS 'YCharts t
 
 
 COMMENT ON COLUMN "public"."securities2"."effective_maturity" IS 'Average maturity in years. Read it BESIDE effective_duration, never instead of it: two funds can carry the same duration from opposite ends of the curve, which is what made PYTRX and VBTLX look interchangeable in Nov 2026.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."aa_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated AA, as a decimal. Workbook header is the YCharts code `aa_bond_exposure` (no _generic suffix); COLUMN_REMAP bridges it.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."a_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated A, as a decimal. Workbook header matches this name.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."bb_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated BB, as a decimal. Workbook header matches this name.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."b_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated B, as a decimal. Workbook header is the YCharts code `b_bond_exposure`; COLUMN_REMAP bridges it.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."below_b_bond_exposure_generic" IS 'Share of the fund''s bond sleeve rated below B, as a decimal. Workbook header is the YCharts code `below_b_bond_exposure`; COLUMN_REMAP bridges it. The ladder does not sum to 100%: not-rated and not-available paper sit outside these seven buckets.';
 
 
 
