@@ -1246,7 +1246,7 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_benchmarks" (
     "maturity_20_to_30_years_generic" double precision,
     "maturity_greater_than_30_years_generic" double precision,
     "effective_duration" double precision,
-    "effective_maturity" double precision,
+    "effective_maturity_generic" double precision,
     "yield_to_maturity" double precision,
     "current_yield" double precision,
     "average_coupon" double precision,
@@ -1273,6 +1273,10 @@ ALTER TABLE "public"."model_portfolio_benchmarks" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."model_portfolio_benchmarks"."maturity_greater_than_30_years_generic" IS 'The benchmark''s share beyond 30 years. Renamed with its siblings on securities2 and portfolio so all three sides of the book-versus-benchmark maturity comparison use the documented code.';
+
+
+
+COMMENT ON COLUMN "public"."model_portfolio_benchmarks"."effective_maturity_generic" IS 'The benchmark''s effective maturity, renamed with its siblings so both sides of the comparison use the documented code.';
 
 
 
@@ -1549,7 +1553,7 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio" (
     "maturity_20_to_30_years_generic" numeric,
     "maturity_greater_than_30_years_generic" numeric,
     "effective_duration" numeric,
-    "effective_maturity" numeric,
+    "effective_maturity_generic" numeric,
     "yield_to_maturity" numeric,
     "current_yield" numeric,
     "average_coupon" numeric,
@@ -1591,6 +1595,10 @@ ALTER TABLE "public"."portfolio" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."portfolio"."maturity_greater_than_30_years_generic" IS 'Look-through share of the book''s bond sleeve maturing beyond 30 years. See securities2.maturity_greater_than_30_years_generic for the rename and why the prior values were discarded.';
+
+
+
+COMMENT ON COLUMN "public"."portfolio"."effective_maturity_generic" IS 'Look-through effective maturity of the book''s bond sleeve, in years. See securities2.effective_maturity_generic for the rename.';
 
 
 
@@ -2254,13 +2262,14 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "maturity_10_to_20_years_generic" numeric,
     "maturity_20_to_30_years_generic" numeric,
     "maturity_greater_than_30_years_generic" numeric,
-    "effective_maturity" numeric,
+    "effective_maturity_generic" numeric,
     "aa_bond_exposure_generic" numeric,
     "a_bond_exposure_generic" numeric,
     "bb_bond_exposure_generic" numeric,
     "b_bond_exposure_generic" numeric,
     "below_b_bond_exposure_generic" numeric,
     "maturity_other_generic" numeric,
+    "duration_generic" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2316,7 +2325,7 @@ COMMENT ON COLUMN "public"."securities2"."maturity_greater_than_30_years_generic
 
 
 
-COMMENT ON COLUMN "public"."securities2"."effective_maturity" IS 'Average maturity in years. Read it BESIDE effective_duration, never instead of it: two funds can carry the same duration from opposite ends of the curve, which is what made PYTRX and VBTLX look interchangeable in Nov 2026.';
+COMMENT ON COLUMN "public"."securities2"."effective_maturity_generic" IS 'Effective maturity in years. RENAMED 17 Nov 2026 from `effective_maturity`, which is the metric''s DISPLAY NAME and not a YCharts code — the sheet header is the argument YCP() reads. The undocumented alias returned a figure for most funds but none for DHRIX, MCDIX or NWQIX. Prior values were KEPT so the next refresh under the correct code is a test of whether the alias was equivalent.';
 
 
 
@@ -2341,6 +2350,10 @@ COMMENT ON COLUMN "public"."securities2"."below_b_bond_exposure_generic" IS 'Sha
 
 
 COMMENT ON COLUMN "public"."securities2"."maturity_other_generic" IS 'Share of the bond sleeve whose maturity YCharts classifies as "Other Length of Maturity". Added 17 Nov 2026: the vendor''s generic maturity family carries an explicit residual bucket and omitting it was half the reason the seven buckets did not sum to 100%.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."duration_generic" IS 'Duration in years — the vendor''s OTHER documented duration measure, added 17 Nov 2026 because `effective_duration` is genuinely absent for FAGIX (24.77% equity, 13.84% cash, 57.43% bonds). A SECOND READING, NOT A SUBSTITUTE: do not mix it with effective_duration in one comparison without saying which fund uses which.';
 
 
 

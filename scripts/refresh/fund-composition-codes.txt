@@ -104,4 +104,13 @@ maturity_greater_than_30_years_generic
 # The vendor's generic maturity family has an explicit residual bucket and we
 # never imported it - the other half of why the ladder would not close.
 maturity_other_generic
-effective_maturity
+# `effective_maturity` IS THE DISPLAY NAME, not the code - the code is
+# effective_maturity_generic, verified 17 Nov 2026 on the Mutual Fund and
+# ETF & CEF Metrics tabs. The alias returned a figure for most funds and none
+# for DHRIX, MCDIX or NWQIX. Same class of defect as the >30y bucket above.
+effective_maturity_generic
+# The vendor's OTHER documented duration measure. `effective_duration` is a
+# real code and is genuinely ABSENT for FAGIX (57.43% bonds, 24.77% equity),
+# so this is a second reading for a fund that carries no effective duration -
+# NOT a substitute. Never mix the two in one comparison unsaid.
+duration_generic

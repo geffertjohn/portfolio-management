@@ -620,6 +620,62 @@ it). `holdings` returns a third column with the name, but the name is not lost
 under `holdings_weight`: the vendor already puts a description in the symbol
 column for anything without a ticker, which is exactly where it is needed.
 
+### The header must be a real YCharts code, and a test checks it
+
+`client/src/lib/__tests__/ychartsCodes.test.ts` asserts every code in the three
+codes files is one the add-in actually documents. It reads
+`scripts/refresh/ycharts-codes.txt` — 2,139 codes with per-tab membership,
+lifted from the reference workbook by
+`scripts/refresh/extract-ycharts-codes.ts` — so it runs offline, with no Excel
+and no credentials, the same way `schemaContract.test.ts` reads `schema.sql`.
+
+```bash
+npx vite-node scripts/refresh/extract-ycharts-codes.ts -- ~/Downloads/YCharts_Excel_Reference-2.xlsx
+```
+
+**WHY IT EXISTS.** The sheet header does TWO jobs — it is the code `YCP()`/`YCI()`
+reads AND the DB column name the importers map to — and only the second was ever
+checked. `tsc` catches a column that does not exist; nothing caught a code that
+does not exist. Three columns shipped on strings the vendor does not document:
+`over_30_years_maturity_bond_exposure` and `effective_maturity` are the metrics'
+**display names**, printed in the cell next to the code in the reference, and
+`maturity_other_generic` was never requested at all. The first two returned a
+figure for most funds and nothing for a few — PYTRX stored 11.94% beyond 30
+years against 4.60% on the vendor's own page, and DHRIX came back null — so the
+maturity buckets summed to between 97.9% and 109.3% for months.
+
+**What it actually checks**, and the second rule is the subtle one:
+
+- A fund code must be on **both** the Mutual Fund and ETF Metrics tabs. One
+  sheet serves both types, so a code present for only one errors on every row of
+  the other. Verified: a real but MF-only code like `load_adjusted_return_10y`
+  fails with `→ mf-m`.
+- **Metrics and Info are not interchangeable** — an `| Info` code returns ERR
+  under `YCP` and vice versa, and the Securities sheet carries both families
+  (C..N are `YCI`, O rightward `YCP`), so they are checked separately.
+- Benchmark composition codes must be ETF or model-portfolio Metrics codes,
+  because those sheets fetch composition against the row's **ETF proxy**.
+- The two display names are pinned by name so neither returns by someone
+  reaching for the obvious string again.
+
+**`KNOWN_ALIASES` holds the 11 undocumented codes that WORK** — every one a
+`_generic` suffix we add or drop relative to the documented spelling, in both
+directions. They are populated, so the vendor honours them; that is not a
+contract, and two members of this class already failed per-fund. Each entry
+names the documented code to repoint to, and **the test rejects an entry that
+has become documented**, so the list cannot rot into a blanket exemption.
+`investment_grade_bond_allocation_generic` is the one to repoint first: its
+documented form is `investment_grade_bond_allocation_morn` and it is the field
+whose per-fund values have no coherent denominator (an implied bond share of
+168% for BIMIX, 53% for a core bond fund).
+
+**It is not a substitute for running the sheet.** A documented code can still
+return `ERR: NO DATA` for a fund — FAGIX genuinely carries no
+`effective_duration` — and the vocabulary is a snapshot that ages with the
+add-in. What it closes is the failure this repo kept repeating: a string nobody
+could have fetched anything meaningful with, shipped because it looked like the
+others.
+
 ### Adding a metric column
 
 ```bash
