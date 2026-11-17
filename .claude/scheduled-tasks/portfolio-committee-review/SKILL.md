@@ -855,6 +855,79 @@ the book: construction, risk, and the regime it is being run into.
    there is genuinely nothing to move to, `exit` or `reduce` is the honest
    form of the view.
 
+   **TRACKING ERROR ALONE CANNOT SUPPORT A CLOSET-INDEXING FINDING, AND IT IS
+   NOT MEASURED AGAINST WHAT YOU THINK.** `tracking_error_3y_vs_category` is
+   measured against the CATEGORY — an average of many funds — not against the
+   index or against any particular alternative. A fund can sit 32 basis points
+   from its category average and still be built nothing like the index fund you
+   are proposing to replace it with.
+
+   **Before writing that a fund is priced as active while moving like an index
+   fund, read its composition against the SPECIFIC fund you would swap it for**
+   — sector, credit quality and, where you can see it, maturity. PYTRX and
+   VBTLX are the case that produced this rule: a 32bp tracking error made PYTRX
+   look like a closet Aggregate tracker, while the composition columns already
+   in `securities2` showed 38.29% government against VBTLX's 51.41%, 18.64%
+   BBB against 12.89%, and 12.73% AAA against 3.34%. They are different funds,
+   and the memo recommended swapping one for the other on a fee argument that
+   assumed they were the same exposure.
+
+   **AN INDEX FUND IS A LEGITIMATE RECOMMENDATION. IT MUST BE A CHOICE, NOT A
+   DEFAULT.** Nothing here discourages recommending one: where passive is the
+   right way to hold a sleeve — because the composition fits, because active
+   management in that asset class has not earned its fee, because the book
+   wants the market exposure and nothing more — say so and recommend it. What
+   the memo owes the advisor is the REASON, stated in composition or cost
+   terms, so they can see it was decided rather than landed on.
+
+   **THE FAULT TO AVOID IS AN INDEX FUND THAT ANSWERS A QUESTION ABOUT
+   ACTIVENESS.** A closet-indexing finding says a fund charges an active fee
+   for index-like behaviour, and it has two coherent remedies. Either the firm
+   wants this exposure and is paying too much for it — then buy the index
+   deliberately, and write the finding as a COST decision rather than as one
+   about activeness. Or the firm wants active management in the sleeve — then
+   the replacement must be a MORE active fund. Naming an index fund while
+   framing the problem as index-like behaviour is incoherent: it confirms the
+   behaviour as the desired outcome and argues only about its price. Say which
+   of the two you mean.
+
+   **CHECK THE REPLACEMENT'S OWN TRACKING ERROR BEFORE YOU PROPOSE IT.** The
+   Nov 2026 Hybrid Balanced memo recommended replacing PYTRX, at a 32 basis
+   point tracking error, with VBTLX — whose tracking error is **25 basis
+   points** and which carries `index_fund_generic = true`. The proposed cure
+   was more index-like than the disease, and nobody noticed because the cost
+   argument and the activeness argument were never separated. Had the finding
+   genuinely been about activeness, the recorded alternatives already held the
+   answer: WATIX at 189bp, or BIMIX — already in the book — at 226bp.
+
+      **READ MATURITY, NOT ONLY DURATION.** `securities2` carries seven maturity
+   buckets and `effective_maturity` alongside `effective_duration` (added 16
+   Nov 2026, first populated on the 17th). **Two funds can carry the same
+   effective duration and reach it from opposite ends of the curve** — PYTRX
+   and VBTLX sit at 5.81 and 5.68 years while PYTRX is 49.90% long-term
+   against VBTLX's 38.47% and 48.21% intermediate against 61.49%. Duration
+   alone does not describe a bond fund's shape, and the maturity buckets are
+   now there to be read before any fixed-income replacement is proposed.
+
+   A null across all seven on a bond fund means the workbook has not reached
+   it yet; say so rather than treating the fund as having no maturity profile.
+
+      **THE SCORECARD IS EVIDENCE, NOT THE DECISION — AND NEVER A TIEBREAK YOU
+   HIDE BEHIND.** The firm's score ranks a fund against its cohort on nine
+   metrics. It does not know what ROLE the fund plays in this book, and it is
+   silent on anything no metric measures: leverage a sleeve label does not
+   disclose, a fee paid for index-like behaviour, a mandate that does not fit
+   the sleeve it funds. Where your own evidence points one way and the score
+   points the other, **say what you think and show both**. A sentence of the
+   form "X is the better fund on cost and structure, but the score favours Y,
+   so this is the CIO's call" is a refusal to do the job: the advisor already
+   has the scores, and what they asked for is a view.
+
+   The committee is RECOMMEND-ONLY, which is a limit on what you may DO, not
+   on what you may CONCLUDE. Implementation is always the advisor's decision;
+   the recommendation is always yours. Deferring the recommendation itself
+   leaves them with two unreconciled numbers and no committee.
+
    **Recommend a change only where you have something to say.** A memo that
    lists every holding with "keep" teaches the reader to skim it.
 

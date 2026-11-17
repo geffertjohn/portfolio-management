@@ -1042,6 +1042,38 @@ one manager genuinely deviating.
   difference between them is NOT a gap to close — an earlier reading of this
   document called it the largest misalignment, and that was wrong.
 
+### Duration is not maturity (`maturity_*`, `effective_maturity`)
+
+`securities2` gained seven maturity buckets plus `effective_maturity` on
+**16 Nov 2026**, alongside the `effective_duration` it already carried. First
+populated on the 17th — see the recalculation note below before reading a
+freshly added column.
+
+- **TWO FUNDS CAN CARRY THE SAME DURATION AND REACH IT FROM OPPOSITE ENDS OF
+  THE CURVE**, and that is why these were added rather than for completeness.
+  PYTRX and VBTLX sit at **5.81 and 5.68 years** while PYTRX is **49.90%
+  long-term against VBTLX's 38.47%** and 48.21% intermediate against 61.49%,
+  with the 20-to-30-year bucket 32.25% against 26.64% (YCharts, 30 Sep 2026).
+- **The gap produced a wrong recommendation, which is the evidence for the
+  rule.** The Hybrid Balanced annual review proposed swapping PYTRX for VBTLX
+  on a fee argument that assumed they were the same exposure. The sector and
+  credit columns that WOULD have caught it — 38.29% government against 51.41%,
+  18.64% BBB against 12.89% — were already present and were under-read; the
+  maturity columns were absent entirely.
+- **`tracking_error_3y_vs_category` is measured against the CATEGORY**, an
+  average of many funds, not against the index and not against the fund being
+  proposed as a replacement. A 32bp reading says a fund sits near its peer
+  average. It is not evidence of closet indexing on its own, and reading it
+  that way is what started the error above.
+- All eight codes were verified on **both** the `ETF & CEF | Metrics` and
+  `Mutual Fund | Metrics` reference tabs before being added — one sheet serves
+  both types, so a code present for only one errors on every row of the other.
+  They are METRICS (`YCP`), not Info (`YCI`).
+- **CREDIT QUALITY IS STILL PARTIAL.** `securities2` carries only
+  `aaa_bond_exposure_generic` and `bbb_bond_exposure_generic`; the AA, A, BB, B
+  and below-B buckets that `portfolio` has are absent, so a fund's credit
+  ladder cannot be read in full here.
+
 ### A benchmark has no composition of its own
 
 **YCharts computes no holdings for an INDEX.** A category or sector benchmark is

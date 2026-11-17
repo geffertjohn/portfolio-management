@@ -2237,6 +2237,14 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "tracking_error_5y_vs_pg" numeric,
     "tracking_error_3y_vs_category" numeric,
     "tracking_error_3y_vs_pg" numeric,
+    "maturity_less_than_1_year_generic" numeric,
+    "1_to_3_years_maturity_bond_exposure" numeric,
+    "3_to_5_years_maturity_bond_exposure" numeric,
+    "maturity_5_to_10_years_generic" numeric,
+    "maturity_10_to_20_years_generic" numeric,
+    "maturity_20_to_30_years_generic" numeric,
+    "over_30_years_maturity_bond_exposure" numeric,
+    "effective_maturity" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2285,6 +2293,10 @@ COMMENT ON COLUMN "public"."securities2"."tracking_error_3y_vs_category" IS 'YCh
 
 
 COMMENT ON COLUMN "public"."securities2"."tracking_error_3y_vs_pg" IS 'YCharts tracking_error_3y_vs_pg. Annualised standard deviation of the fund''s excess return over its PEER GROUP, 3Y. Scored by the peer-group monitoring scorecard in place of R-Squared (Nov 2026), higher-is-better: an active mandate is paid to deviate. The category twin is tracking_error_3y_vs_category; the 5Y peer form is the selection-screen metric and is not scored.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."effective_maturity" IS 'Average maturity in years. Read it BESIDE effective_duration, never instead of it: two funds can carry the same duration from opposite ends of the curve, which is what made PYTRX and VBTLX look interchangeable in Nov 2026.';
 
 
 
