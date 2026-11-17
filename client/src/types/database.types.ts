@@ -1167,7 +1167,9 @@ export type Database = {
           maturity_10_to_20_years_generic: number | null
           maturity_20_to_30_years_generic: number | null
           maturity_5_to_10_years_generic: number | null
+          maturity_greater_than_30_years_generic: number | null
           maturity_less_than_1_year_generic: number | null
+          maturity_other_generic: number | null
           max_drawdown_1y: number | null
           max_drawdown_3y: number | null
           max_drawdown_5y: number | null
@@ -1186,7 +1188,6 @@ export type Database = {
           other_bond_exposure_generic: number | null
           other_fixed_income_exposure_generic: number | null
           other_net: number | null
-          over_30_years_maturity_bond_exposure: number | null
           preferred_net: number | null
           quarterly_standard_deviation_annualized_3y: number | null
           quarterly_standard_deviation_annualized_5y: number | null
@@ -1300,7 +1301,9 @@ export type Database = {
           maturity_10_to_20_years_generic?: number | null
           maturity_20_to_30_years_generic?: number | null
           maturity_5_to_10_years_generic?: number | null
+          maturity_greater_than_30_years_generic?: number | null
           maturity_less_than_1_year_generic?: number | null
+          maturity_other_generic?: number | null
           max_drawdown_1y?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
@@ -1319,7 +1322,6 @@ export type Database = {
           other_bond_exposure_generic?: number | null
           other_fixed_income_exposure_generic?: number | null
           other_net?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           preferred_net?: number | null
           quarterly_standard_deviation_annualized_3y?: number | null
           quarterly_standard_deviation_annualized_5y?: number | null
@@ -1433,7 +1435,9 @@ export type Database = {
           maturity_10_to_20_years_generic?: number | null
           maturity_20_to_30_years_generic?: number | null
           maturity_5_to_10_years_generic?: number | null
+          maturity_greater_than_30_years_generic?: number | null
           maturity_less_than_1_year_generic?: number | null
+          maturity_other_generic?: number | null
           max_drawdown_1y?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
@@ -1452,7 +1456,6 @@ export type Database = {
           other_bond_exposure_generic?: number | null
           other_fixed_income_exposure_generic?: number | null
           other_net?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           preferred_net?: number | null
           quarterly_standard_deviation_annualized_3y?: number | null
           quarterly_standard_deviation_annualized_5y?: number | null
@@ -1882,7 +1885,9 @@ export type Database = {
           maturity_10_to_20_years_generic: number | null
           maturity_20_to_30_years_generic: number | null
           maturity_5_to_10_years_generic: number | null
+          maturity_greater_than_30_years_generic: number | null
           maturity_less_than_1_year_generic: number | null
+          maturity_other_generic: number | null
           max_drawdown_1y: number | null
           max_drawdown_3y: number | null
           max_drawdown_5y: number | null
@@ -1901,7 +1906,6 @@ export type Database = {
           other_bond_exposure_generic: number | null
           other_fixed_income_exposure_generic: number | null
           other_net: number | null
-          over_30_years_maturity_bond_exposure: number | null
           portfolio_strategy: string
           preferred_net: number | null
           quarterly_market_beta_12_month: number | null
@@ -2028,7 +2032,9 @@ export type Database = {
           maturity_10_to_20_years_generic?: number | null
           maturity_20_to_30_years_generic?: number | null
           maturity_5_to_10_years_generic?: number | null
+          maturity_greater_than_30_years_generic?: number | null
           maturity_less_than_1_year_generic?: number | null
+          maturity_other_generic?: number | null
           max_drawdown_1y?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
@@ -2047,7 +2053,6 @@ export type Database = {
           other_bond_exposure_generic?: number | null
           other_fixed_income_exposure_generic?: number | null
           other_net?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           portfolio_strategy: string
           preferred_net?: number | null
           quarterly_market_beta_12_month?: number | null
@@ -2174,7 +2179,9 @@ export type Database = {
           maturity_10_to_20_years_generic?: number | null
           maturity_20_to_30_years_generic?: number | null
           maturity_5_to_10_years_generic?: number | null
+          maturity_greater_than_30_years_generic?: number | null
           maturity_less_than_1_year_generic?: number | null
+          maturity_other_generic?: number | null
           max_drawdown_1y?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
@@ -2193,7 +2200,6 @@ export type Database = {
           other_bond_exposure_generic?: number | null
           other_fixed_income_exposure_generic?: number | null
           other_net?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           portfolio_strategy?: string
           preferred_net?: number | null
           quarterly_market_beta_12_month?: number | null
@@ -3055,7 +3061,9 @@ export type Database = {
           maturity_10_to_20_years_generic: number | null
           maturity_20_to_30_years_generic: number | null
           maturity_5_to_10_years_generic: number | null
+          maturity_greater_than_30_years_generic: number | null
           maturity_less_than_1_year_generic: number | null
+          maturity_other_generic: number | null
           max_drawdown_3y: number | null
           max_drawdown_5y: number | null
           max_manager_tenure: number | null
@@ -3081,7 +3089,6 @@ export type Database = {
           one_year_total_return_rank_nav: number | null
           open_to_new_investors_generic: boolean | null
           other_fixed_income_exposure_generic: number | null
-          over_30_years_maturity_bond_exposure: number | null
           peer_group_name: string | null
           percent_of_assets_in_top_10_holdings: number | null
           percent_of_assets_in_top_25_holdings: number | null
@@ -3213,7 +3220,9 @@ export type Database = {
           maturity_10_to_20_years_generic?: number | null
           maturity_20_to_30_years_generic?: number | null
           maturity_5_to_10_years_generic?: number | null
+          maturity_greater_than_30_years_generic?: number | null
           maturity_less_than_1_year_generic?: number | null
+          maturity_other_generic?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
@@ -3239,7 +3248,6 @@ export type Database = {
           one_year_total_return_rank_nav?: number | null
           open_to_new_investors_generic?: boolean | null
           other_fixed_income_exposure_generic?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           peer_group_name?: string | null
           percent_of_assets_in_top_10_holdings?: number | null
           percent_of_assets_in_top_25_holdings?: number | null
@@ -3371,7 +3379,9 @@ export type Database = {
           maturity_10_to_20_years_generic?: number | null
           maturity_20_to_30_years_generic?: number | null
           maturity_5_to_10_years_generic?: number | null
+          maturity_greater_than_30_years_generic?: number | null
           maturity_less_than_1_year_generic?: number | null
+          maturity_other_generic?: number | null
           max_drawdown_3y?: number | null
           max_drawdown_5y?: number | null
           max_manager_tenure?: number | null
@@ -3397,7 +3407,6 @@ export type Database = {
           one_year_total_return_rank_nav?: number | null
           open_to_new_investors_generic?: boolean | null
           other_fixed_income_exposure_generic?: number | null
-          over_30_years_maturity_bond_exposure?: number | null
           peer_group_name?: string | null
           percent_of_assets_in_top_10_holdings?: number | null
           percent_of_assets_in_top_25_holdings?: number | null

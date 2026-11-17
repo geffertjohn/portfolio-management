@@ -118,6 +118,14 @@ const CATEGORY_DROPPED_COLS = new Set([
   'maturity_5_to_10_years_generic',
   'maturity_10_to_20_years_generic',
   'maturity_20_to_30_years_generic',
+  // Deliberately the OLD spelling. `over_30_years_maturity_bond_exposure` is
+  // the metric's display name rather than a YCharts code, and the Securities,
+  // Model Portfolios and model_portfolio_benchmarks sheets were repointed to
+  // `maturity_greater_than_30_years_generic` on 17 Nov 2026. The
+  // category_benchmarks SHEET was not: its maturity columns are unfillable for
+  // an index and the DB columns are gone, so this entry exists to keep the
+  // import from writing a column that does not exist (gotcha 7). It must match
+  // what that sheet actually says, which is still the old string.
   'over_30_years_maturity_bond_exposure',
 ])
 

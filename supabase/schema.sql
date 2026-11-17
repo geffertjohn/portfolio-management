@@ -1244,7 +1244,7 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_benchmarks" (
     "maturity_5_to_10_years_generic" double precision,
     "maturity_10_to_20_years_generic" double precision,
     "maturity_20_to_30_years_generic" double precision,
-    "over_30_years_maturity_bond_exposure" double precision,
+    "maturity_greater_than_30_years_generic" double precision,
     "effective_duration" double precision,
     "effective_maturity" double precision,
     "yield_to_maturity" double precision,
@@ -1264,11 +1264,16 @@ CREATE TABLE IF NOT EXISTS "public"."model_portfolio_benchmarks" (
     "investment_grade_bond_allocation_generic" double precision,
     "high_yield_bond_allocation_generic" double precision,
     "other_bond_exposure_generic" double precision,
-    "developed_equity_exposure" double precision
+    "developed_equity_exposure" double precision,
+    "maturity_other_generic" double precision
 );
 
 
 ALTER TABLE "public"."model_portfolio_benchmarks" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."model_portfolio_benchmarks"."maturity_greater_than_30_years_generic" IS 'The benchmark''s share beyond 30 years. Renamed with its siblings on securities2 and portfolio so all three sides of the book-versus-benchmark maturity comparison use the documented code.';
+
 
 
 CREATE SEQUENCE IF NOT EXISTS "public"."model_portfolio_benchmarks_id_seq"
@@ -1542,7 +1547,7 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio" (
     "maturity_5_to_10_years_generic" numeric,
     "maturity_10_to_20_years_generic" numeric,
     "maturity_20_to_30_years_generic" numeric,
-    "over_30_years_maturity_bond_exposure" numeric,
+    "maturity_greater_than_30_years_generic" numeric,
     "effective_duration" numeric,
     "effective_maturity" numeric,
     "yield_to_maturity" numeric,
@@ -1577,11 +1582,16 @@ CREATE TABLE IF NOT EXISTS "public"."portfolio" (
     "other_bond_exposure_generic" numeric,
     "developed_equity_exposure" numeric,
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "last_rebalance_date" "date"
+    "last_rebalance_date" "date",
+    "maturity_other_generic" numeric
 );
 
 
 ALTER TABLE "public"."portfolio" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."portfolio"."maturity_greater_than_30_years_generic" IS 'Look-through share of the book''s bond sleeve maturing beyond 30 years. See securities2.maturity_greater_than_30_years_generic for the rename and why the prior values were discarded.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."portfolio_allocations" (
@@ -2243,13 +2253,14 @@ CREATE TABLE IF NOT EXISTS "public"."securities2" (
     "maturity_5_to_10_years_generic" numeric,
     "maturity_10_to_20_years_generic" numeric,
     "maturity_20_to_30_years_generic" numeric,
-    "over_30_years_maturity_bond_exposure" numeric,
+    "maturity_greater_than_30_years_generic" numeric,
     "effective_maturity" numeric,
     "aa_bond_exposure_generic" numeric,
     "a_bond_exposure_generic" numeric,
     "bb_bond_exposure_generic" numeric,
     "b_bond_exposure_generic" numeric,
     "below_b_bond_exposure_generic" numeric,
+    "maturity_other_generic" numeric,
     CONSTRAINT "securities2_scorecard_cohort_check" CHECK (("scorecard_cohort" = ANY (ARRAY['category'::"text", 'peer'::"text"])))
 );
 
@@ -2301,6 +2312,10 @@ COMMENT ON COLUMN "public"."securities2"."tracking_error_3y_vs_pg" IS 'YCharts t
 
 
 
+COMMENT ON COLUMN "public"."securities2"."maturity_greater_than_30_years_generic" IS 'Share of the bond sleeve maturing beyond 30 years. RENAMED 17 Nov 2026 from over_30_years_maturity_bond_exposure, which is the metric''s DISPLAY NAME and not a YCharts code — the sheet header is the argument YCP() reads, so that column was fetched with an undocumented string and returned a figure the vendor page contradicted (PYTRX 11.94% against 4.60%). Prior values were discarded rather than carried across.';
+
+
+
 COMMENT ON COLUMN "public"."securities2"."effective_maturity" IS 'Average maturity in years. Read it BESIDE effective_duration, never instead of it: two funds can carry the same duration from opposite ends of the curve, which is what made PYTRX and VBTLX look interchangeable in Nov 2026.';
 
 
@@ -2322,6 +2337,10 @@ COMMENT ON COLUMN "public"."securities2"."b_bond_exposure_generic" IS 'Share rat
 
 
 COMMENT ON COLUMN "public"."securities2"."below_b_bond_exposure_generic" IS 'Share rated below B. Workbook header is the YCharts code `below_b_bond_exposure`; COLUMN_REMAP bridges it. THE LADDER DOES NOT RECONCILE (measured 17 Nov 2026, 34 funds): the seven buckets sum to between 8.52% and 116.68% and only 12 of 34 land within 2pp of 100%, so it overshoots as well as undershooting. Its IG portion disagrees with investment_grade_bond_allocation_generic on 20 of 34 funds in BOTH directions (BIMIX -39.29pp, DHRIX +37.22pp). The theory that AA is really the securitized sleeve was tested and rejected: true of DHRIX alone (61.01 vs 60.68) and false elsewhere (DFCF AA 79.93 on 0.00 securitized). USE IT FOR SHAPE, NOT LEVEL: comparing two funds in one category is sound (FAGIX BB/B/below-B 30.03/38.34/13.56 against MNHAX 43.99/41.56/5.29, both credit-quality score 15, both summing near 95%). Do not weight it across a book and expect it to match portfolio''s own ladder.';
+
+
+
+COMMENT ON COLUMN "public"."securities2"."maturity_other_generic" IS 'Share of the bond sleeve whose maturity YCharts classifies as "Other Length of Maturity". Added 17 Nov 2026: the vendor''s generic maturity family carries an explicit residual bucket and omitting it was half the reason the seven buckets did not sum to 100%.';
 
 
 
