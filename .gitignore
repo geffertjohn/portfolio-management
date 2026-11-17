@@ -52,3 +52,6 @@ scripts/refresh/import-workbook.cjs
 # an Oct 5 copy was imported by mistake, which rolled every fund's figures back
 # a month under a provenance stamp reading "imported today".
 YCharts/*.xlsm
+
+# The sidecar recording which commit the gitignored bundle was built from.
+scripts/refresh/import-workbook.rev
