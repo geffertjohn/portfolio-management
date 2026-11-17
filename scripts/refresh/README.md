@@ -825,7 +825,7 @@ registered as a Trusted Location for the user, so tightening `VBAWarnings` to 2
    `~/portfolio-management/.env`. The anon key is enough — RLS is open on these
    tables, so this is no more privileged than the browser bundle. **No
    service-role key.**
-4. `sh scripts/refresh/build.sh` to produce `import-workbook.cjs`.
+4. `sh scripts/refresh/build.sh main` to produce `import-workbook.cjs`.
 5. `mkdir -p ~/portfolio-refresh/{inbox,processed,failed,logs}`
    No Parallels config needed: "Shared Profile" already exposes the Mac home to
    the guest. **Address it by UNC, never by drive letter** — the guest reaches
@@ -933,12 +933,42 @@ Excel should appear in **Session 1 (Console)** within ~20s — `tasklist /FI
 "IMAGENAME eq EXCEL.EXE"`. Session 0 means it was launched by SYSTEM, which has
 no add-in, and the run will abort on the error-ratio guard.
 
-Rebuild `import-workbook.cjs` after changing any importer — it is a bundle, not
-a live reference:
+### The importer bundle, and the one way it has bitten
+
+`import-workbook.cjs` is an esbuild bundle that INLINES `client/src/lib/*Upload.ts`
+— it is not a live reference, and it is gitignored. Rebuild it after changing any
+importer:
 
 ```
-sh scripts/refresh/build.sh
+sh scripts/refresh/build.sh main
 ```
+
+**`refresh.sh` BUILDS IT FROM `main`, NEVER FROM THE WORKING TREE** (16 Nov 2026).
+It used to rebuild whenever a bundled source file was newer by mtime, so the
+scheduled run silently adopted whatever branch happened to be checked out. That
+morning's run rebuilt it from a mid-merge tree carrying a defect already fixed on
+main, and the next import **reverted two hand-corrected columns**
+(`open_to_new_investors_generic` on MNHAX and VSMIX). Because the bundle is
+gitignored there was no diff and `git status` was clean while the live importer
+disagreed with merged source, so nothing could report it. It is the same
+discipline the scheduled-job prompts have by reading `git show main:…`: an edit
+reaches the job when it is **merged**, not when it is saved.
+
+- **`import-workbook.rev` records the sha the bundle was built from**, and
+  `refresh.sh` rebuilds when it does not match `$IMPORT_REF` (default `main`).
+  Mtimes are no longer consulted.
+- **A working-tree build — `build.sh` with no ref — DELETES the sidecar**, so a
+  local build cannot pass itself off as main. The next scheduled run rebuilds
+  from main, which is the intended behaviour, not a nuisance.
+- **It uses the LOCAL `main` and never fetches**, for parity with the job prompts:
+  what imports the data is what has landed on this machine. Merge, then pull.
+- **An unresolvable `$IMPORT_REF` is fatal.** Falling back to the working tree is
+  precisely the failure being closed.
+- **Every run logs `importer: main @ <sha>`**, rebuild or not — one line saying
+  which commit's importer wrote that day's data.
+- **`updated_at` moving does NOT mean a given column was written.** The whole row
+  is upserted every run, so the timestamp cannot identify which import changed a
+  value. Compare the value itself.
 
 ## Not automated
 

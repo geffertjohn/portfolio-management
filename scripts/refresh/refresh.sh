@@ -355,20 +355,41 @@ close_excel_and_suspend 60
 STAMPED="$(date +%Y-%m-%d_%H%M%S)"
 # The importer is an esbuild bundle that INLINES client/src/lib/*Upload.ts, and
 # it is gitignored — a fresh clone does not have it, and an edit to any importer
-# does not reach this script until it is rebuilt. Build when it is missing or
-# older than any source it bundles, so the scheduled run can never quietly use
-# importer logic that the app has already moved past.
-NEWEST_SRC="$(find "$REPO/client/src/lib" "$REPO/scripts/refresh/import-workbook.ts" \
-                -name '*.ts' -newer "$REPO/scripts/refresh/import-workbook.cjs" 2>/dev/null | head -1)"
-if [ ! -f "$REPO/scripts/refresh/import-workbook.cjs" ] || [ -n "$NEWEST_SRC" ]; then
-  log "importer bundle missing or stale — rebuilding"
-  if sh "$REPO/scripts/refresh/build.sh" >>"$LOG" 2>&1; then
-    log "bundle rebuilt"
+# does not reach this script until it is rebuilt.
+#
+# IT IS BUILT FROM A NAMED REF, NEVER FROM THE WORKING TREE. This used to
+# rebuild whenever a bundled source file was newer by mtime, which meant the
+# scheduled run silently adopted whatever branch happened to be checked out. On
+# 2026-11-16 that rebuilt it from a mid-merge tree carrying a defect already
+# fixed on main, and the next import REVERTED two hand-corrected columns. The
+# bundle is gitignored, so there was no diff and `git status` was clean while
+# the live importer disagreed with merged source — nothing could report it.
+#
+# Same discipline the scheduled-job prompts already have: they read
+# `git show main:…`, so an edit reaches a job when it is MERGED, not when it is
+# saved. $IMPORT_REF is deliberately the LOCAL main, for the same parity — this
+# script never fetches, so what imports the data is what has landed here.
+IMPORT_REF="${IMPORT_REF:-main}"
+WANT_REV="$(git -C "$REPO" rev-parse --verify --quiet "$IMPORT_REF^{commit}" || true)"
+if [ -z "$WANT_REV" ]; then
+  # Fail rather than fall back to the working tree, which is the thing this
+  # whole block exists to stop.
+  log "FATAL: cannot resolve $IMPORT_REF — refusing to build the importer bundle"
+  exit 1
+fi
+HAVE_REV="$(cat "$REPO/scripts/refresh/import-workbook.rev" 2>/dev/null || true)"
+if [ ! -f "$REPO/scripts/refresh/import-workbook.cjs" ] || [ "$HAVE_REV" != "$WANT_REV" ]; then
+  log "importer bundle not built from $IMPORT_REF ($(printf '%.9s' "${HAVE_REV:-none}") → $(printf '%.9s' "$WANT_REV")) — rebuilding"
+  if sh "$REPO/scripts/refresh/build.sh" "$IMPORT_REF" >>"$LOG" 2>&1; then
+    log "bundle rebuilt from $IMPORT_REF"
   else
     log "FATAL: could not build the importer bundle"
     exit 1
   fi
 fi
+# Logged on EVERY run, rebuild or not: the one line that says which commit's
+# importer wrote today's data. Provenance nobody has to reconstruct afterwards.
+log "importer: $IMPORT_REF @ $(printf '%.9s' "$WANT_REV")"
 
 if node "$REPO/scripts/refresh/import-workbook.cjs" "$OUTPUT" >>"$LOG" 2>&1; then
   mv "$OUTPUT" "$PROCESSED/Ycharts-$STAMPED.xlsx"
