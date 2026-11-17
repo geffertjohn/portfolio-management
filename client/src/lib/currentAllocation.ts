@@ -5,12 +5,18 @@
  * allocation file the advisor uploads to the portfolio's Documents folder
  * (Portfolio Documents bucket, folder = portfolio name). The file is the YCharts
  * current-allocation export (`Security Ticker/CUSIP,Target`, weights in percent
- * points) — the same format `parseActualAllocations` handles for the review
- * position-sizing check. Nothing is persisted; the file store is the source of truth.
+ * points). Nothing is persisted; the file store is the source of truth.
+ *
+ * **That folder also carries the REBALANCE-UPLOAD TEMPLATE, which has the same
+ * two leading columns and means the opposite thing** — a specification of what
+ * the book should hold rather than a record of what it does. `readAllocationFile`
+ * tells them apart by their headers and a target file is skipped here; see its
+ * comment for the three live states this was costing. Three of the seven
+ * portfolio folders held one on 17 Nov 2026.
  */
 import { fetchAllFiles, getSignedUrl, PORTFOLIO_DOCS_BUCKET } from './documents'
 import type { StoredFile } from './documents'
-import { parseActualAllocations } from './positionSizingCompare'
+import { readAllocationFile } from './positionSizingCompare'
 
 export interface CurrentAllocation {
   /** Uploaded-file timestamp (ISO) — the "as of" for the actual weights. */
@@ -190,9 +196,20 @@ async function readLatestFileFor(
     const url = await getSignedUrl(f.fullPath, PORTFOLIO_DOCS_BUCKET)
     const res = await fetch(url)
     if (!res.ok) throw new Error(`Failed to download allocation file (${res.status})`)
-    const weights = parseActualAllocations(await res.arrayBuffer())
+    const { kind, weights } = readAllocationFile(await res.arrayBuffer())
+    // A TARGET FILE IS NOT AN ACTUAL ALLOCATION, and reading one as though it
+    // were produced a measurement of the book against itself. See
+    // `readAllocationFile` for the three live states and why the header rather
+    // than the weights is the test. Keep WALKING: an older holdings export is
+    // still what the book actually held, stale but real, and `asOf` then
+    // reports that older date honestly.
+    if (kind === 'targets') continue
     if (weights.size > 0) return { asOf: f.createdAt, fileName: f.name, weights }
   }
+  // Falling through leaves the caller with no actual allocation, which is the
+  // correct state: every consumer then measures against position targets and
+  // SAYS it is doing so. That is the honest answer for a book whose folder
+  // holds only target files — unlike the silent substitution it replaces.
   return null
 }
 

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { parseActualAllocations, compareSizing, type SizingComparison, type SizingRow } from '@/lib/positionSizingCompare'
+import { readAllocationFile, compareSizing, type SizingComparison, type SizingRow } from '@/lib/positionSizingCompare'
 import type { BandModel } from '@/lib/positionBands'
 import type { PortfolioPosition } from '@/types/position'
 import { fmtDecimalPct, fmtNum } from '@/lib/formatters'
@@ -95,8 +95,25 @@ export function PositionSizingCheck({ positions, modelPortfolio, portfolioName }
     setParsing(true); setError(null); setResult(null); setSaveState('idle')
     try {
       const buf = await file.arrayBuffer()
-      const actuals = parseActualAllocations(buf)
+      const { kind, weights: actuals } = readAllocationFile(buf)
       if (actuals.size === 0) throw new Error('No ticker/allocation rows found in the file.')
+      // REFUSE THE REBALANCE-UPLOAD TEMPLATE. It carries the same leading
+      // `Ticker, Target` columns as a holdings export and means the opposite
+      // thing, so comparing it against the model compares the targets with
+      // themselves and returns a clean bill of health that measures nothing.
+      //
+      // Throwing here matters twice over: this step also ARCHIVES the file into
+      // `Portfolio Documents`, which is where `fetchLatestActualAllocation`
+      // looks, so accepting one poisons the drift and band readings for every
+      // other surface. Three of the seven folders already held one.
+      if (kind === 'targets') {
+        throw new Error(
+          'This looks like the rebalance-upload template (it carries Lower/Higher Tolerance ' +
+            'or Cash Indicator columns), which states the TARGET weights rather than what the ' +
+            'book actually holds — comparing it against the model would measure the targets ' +
+            'against themselves. Upload the current-allocation export instead.',
+        )
+      }
       setResult(compareSizing(positions, modelPortfolio, actuals))
       setFileName(file.name)
     } catch (e) {

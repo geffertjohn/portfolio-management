@@ -28,22 +28,111 @@ import { computePositionBands, isCashTicker, type BandModel } from './positionBa
 /** Tolerance (percent points) so rounding noise doesn't register as a breach. */
 const EPS = 0.005
 
-/** ticker (UPPER) → actual weight in percent points. */
-export function parseActualAllocations(buf: ArrayBuffer): Map<string, number> {
+const TICKER_HEADERS = new Set(['SECURITY TICKER/CUSIP', 'TICKER', 'SYMBOL'])
+
+/**
+ * Headers that exist ONLY on the rebalance-upload template, never on a
+ * holdings export. See `allocationFileKind`.
+ */
+const TARGET_TEMPLATE_HEADERS = [
+  /\blower\s+tolerance\b/i,
+  /\b(?:higher|upper)\s+tolerance\b/i,
+  /\bcash\s+indicator\b/i,
+  /\balternate\s+products?\b/i,
+]
+
+export type AllocationFileKind =
+  /** What the book actually holds. The only kind that may be read as an actual allocation. */
+  | 'holdings'
+  /** The rebalance-upload template: a SPECIFICATION of what the book should hold. */
+  | 'targets'
+  /** Parsed to nothing — not this kind of sheet at all. */
+  | 'unreadable'
+
+export interface AllocationFile {
+  kind: AllocationFileKind
+  /** ticker (UPPER) → weight in percent points. Empty when `unreadable`. */
+  weights: Map<string, number>
+}
+
+/**
+ * Read an allocation workbook AND say which kind of allocation it is.
+ *
+ * **A TARGET FILE AND A HOLDINGS FILE ARE BOTH `Ticker, Weight` AND MEAN
+ * OPPOSITE THINGS.** The advisor's `Portfolio Documents` folder carries both
+ * shapes, and until Nov 2026 nothing distinguished them, so a target file
+ * uploaded there silently became "the actual allocation" and every drift and
+ * band measurement for that book compared the targets against themselves.
+ * Three live states on 17 Nov 2026:
+ *
+ * - **Core Growth / Equity Income** — `Security Ticker/CUSIP,Target`, two
+ *   columns, weights that are genuinely drifted (BSX 1.22% against a 2.50%
+ *   target). Real holdings; the measurement was always valid for these.
+ * - **Hybrid Balanced / Hybrid Conservative** — the six-column template, and
+ *   all 17 weights IDENTICAL to `positions`. Drift came out as exactly zero
+ *   and no breach could ever be raised: a false negative in an audit surface.
+ * - **ETF Conservative Balanced** — the six-column template carrying a NEW
+ *   lineup (CPLB 14.0, SPMO 7.0, UITB 26.0, none of them in `positions`) while
+ *   `positions` still held the old one. The difference was reported as drift.
+ *   That is a false POSITIVE, and it is what the Actions hub was showing.
+ *
+ * **The test is the HEADER, not whether the weights match `positions`.**
+ * Equality with the stored targets identifies Hybrid Balanced and misses ETF
+ * Conservative Balanced completely, because that book's targets are stale — so
+ * weight equality is a coincidence that may or may not hold, while the header
+ * is a fact about where the file came from. The tolerance and cash-indicator
+ * columns are the signature: they describe a BAND, and only a specification
+ * has bands. What you hold has no tolerance.
+ *
+ * One marker is enough. Each of the four is template-only, and demanding two
+ * would let a trimmed export through — the failure this exists to stop.
+ */
+export function readAllocationFile(buf: ArrayBuffer): AllocationFile {
   const wb = XLSX.read(buf, { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null })
-  const out = new Map<string, number>()
+
+  // Look for the markers on the header row — the row naming the ticker column,
+  // or failing that the first row. Scoped rather than scanning the whole sheet
+  // so a holding whose NAME happened to contain "cash indicator" could not
+  // reclassify the file.
+  const headerRow =
+    rows.find((r) => {
+      const a = r?.[0]
+      return typeof a === 'string' && TICKER_HEADERS.has(a.trim().toUpperCase())
+    }) ?? rows[0]
+  const headerText = (headerRow ?? [])
+    .map((c) => (typeof c === 'string' ? c : ''))
+    .join(' | ')
+  const isTemplate = TARGET_TEMPLATE_HEADERS.some((re) => re.test(headerText))
+
+  const weights = new Map<string, number>()
   for (const r of rows) {
     const raw = r?.[0]
     const sym = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
     const wCell = r?.[1]
     const w = typeof wCell === 'number' ? wCell : typeof wCell === 'string' ? parseFloat(wCell) : NaN
     if (!sym || !Number.isFinite(w)) continue
-    if (sym === 'SECURITY TICKER/CUSIP' || sym === 'TICKER' || sym === 'SYMBOL') continue
-    out.set(sym, (out.get(sym) ?? 0) + w)
+    if (TICKER_HEADERS.has(sym)) continue
+    weights.set(sym, (weights.get(sym) ?? 0) + w)
   }
-  return out
+
+  // An empty parse is `unreadable` whatever the header said: a file with the
+  // template's headers and no rows is not a target vector, it is nothing.
+  if (weights.size === 0) return { kind: 'unreadable', weights }
+  return { kind: isTemplate ? 'targets' : 'holdings', weights }
+}
+
+/**
+ * ticker (UPPER) → weight in percent points, whatever KIND of file it is.
+ *
+ * Callers that are measuring the book against its model must use
+ * `readAllocationFile` and refuse a `targets` file — comparing a target vector
+ * with itself is not a measurement. This stays for the paths where the advisor
+ * has just chosen the file by hand and the kind is theirs to assert.
+ */
+export function parseActualAllocations(buf: ArrayBuffer): Map<string, number> {
+  return readAllocationFile(buf).weights
 }
 
 export interface SizingBreach {
