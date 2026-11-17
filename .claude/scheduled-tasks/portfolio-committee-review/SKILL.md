@@ -346,9 +346,25 @@ the book: construction, risk, and the regime it is being run into.
      equity and the look-through reads **67.8%** — because a high-yield fund
      in the bond sleeve holds equity. That gap is the kind of thing the sleeve
      labels can never show, and it is measured here rather than argued.
-   - **Report DIFFERENCES, not levels.** "Technology 29.1% against a benchmark
-     32.2%" is a finding; "technology 29.1%" is a number. A book on benchmark
-     is as much a result as one off it.
+   - **Report DIFFERENCES, not levels, AND THE SIGN IS THE FINDING.**
+     "Technology 29.03% against a benchmark 29.52%, an active −0.49pp" is a
+     finding; "technology 29.03%" is a number; and "a 29.03% technology
+     concentration" is a number dressed as a finding (read 17 Nov 2026 —
+     recompute it rather than quoting this). A book on benchmark is as much a
+     result as one off it.
+
+     **Reserve ACTIVE, BET, TILT, OVERWEIGHT and UNDERWEIGHT for a difference
+     you have measured, and state its sign.** The 11 Nov 2026 macro leg called
+     two UNDERWEIGHTS "the book's two biggest active positions" — not a
+     weaker version of the right answer but the opposite of it. An absolute
+     level has its own uses; it is never an active position.
+   - **STATE THE BASIS when the two sides hold different amounts of equity.**
+     Hybrid Balanced is 67.30% equity against the benchmark's 63.81%, so a
+     sector weight can differ for a reason that has nothing to do with that
+     sector. Technology is −0.49pp of the whole book and −3.12pp as a share
+     of each side's equity — both underweights here, but a finding that FLIPS
+     between the two bases is a finding about the equity weight, and must be
+     written as one.
    - **A difference is not automatically a defect.** The mandate is strategic
      allocation, so a deliberate tilt is allowed; what is not allowed is a
      tilt nobody chose. Say which you think it is, and on what evidence.
@@ -365,6 +381,40 @@ the book: construction, risk, and the regime it is being run into.
    - **Not every row is populated.** 13 of 19 portfolios and 5 of 8 benchmarks
      carry a `yield_to_maturity`; the all-equity books carry none, correctly.
      A null is "not applicable here", not a gap to report.
+
+   **THE BOOK'S OWN RISK-ADJUSTED RETURN IS ON THE SAME TWO ROWS, AND NOTHING
+   HAD EVER READ IT** (17 Nov 2026, at the advisor's request). `portfolio` and
+   `model_portfolio_benchmarks` both carry **Sharpe, Sortino, annualised
+   standard deviation and max drawdown**, and `portfolio` also carries
+   `quarterly_market_beta_12_month`. So "is this book being paid for the risk
+   it takes" is the same one-row join as the allocation comparison, and no
+   committee run has ever asked it. Hybrid Balanced, one year, read 17 Nov
+   2026:
+
+   | | book | benchmark |
+   |---|---|---|
+   | total return | 6.96% | 7.89% |
+   | Sharpe | 0.572 | 0.576 |
+   | Sortino | 0.985 | 0.904 |
+   | standard deviation | 8.17% | 8.20% |
+   | max drawdown | 6.34% | 6.48% |
+
+   That is a book which took slightly LESS risk and drew down slightly LESS,
+   returned 94 basis points less, finished level on Sharpe and ahead on
+   Sortino. Quote it before proposing anything, because it is the baseline any
+   change has to argue against.
+
+   - **USE THE ONE-YEAR WINDOW AND NAME THE WINDOW.** The models are too young
+     for a three-year figure — the oldest of the 19 is 2.5 years old and the
+     first three-year reading arrives in Apr 2027 — so
+     `portfolio.historical_sharpe_3y` is NULL while the BENCHMARK's reads
+     1.337. Setting those two side by side either reports a book as having no
+     risk-adjusted return or invites a comparison with nothing on one side of
+     it. A figure without its window is unreadable here.
+   - **It is the REALISED past, not a forecast.** It describes the book as it
+     was actually held through that year, so it cannot price a change you are
+     proposing — and must not be presented as though it could. Its use is as
+     the standard the proposal is measured against.
 
    Also read the fund scorecard columns on `securities2` for each holding —
    the rank and ratio columns the app's scorecard uses. The advisor has just
@@ -540,6 +590,47 @@ the book: construction, risk, and the regime it is being run into.
      at position 30 in one fund and 5 in another contributes from the second
      alone. "At least 2.1% of the book" is a true sentence; "2.1% of the book"
      is not, and an audit-defence memo cannot carry the second.
+   - **AN INDUSTRY FIGURE OFF THIS LIST IS EQUITY ONLY — SAY "EQUITIES", NOT
+     "EXPOSURE".** `holding_profiles` excludes CUSIP-like identifiers by rule,
+     so a bond cannot be classified by industry here and semiconductor DEBT
+     held in a bond sleeve is invisible to the measure. Every one of the 36
+     semiconductor lines in Hybrid Balanced is a common-stock ticker, FAGIX's
+     three included — NVDA, TSM and MU, which sit in its 24.8% EQUITY sleeve
+     rather than among its bonds. Written as "7.71% semiconductor exposure" a
+     reader may reasonably take it to include credit, or to be a share of the
+     bond sleeve; it is neither. Name the denominator (percent of the whole
+     book) and the instrument (equities) in the same sentence.
+   - **A LEVEL IS NOT AN ACTIVE POSITION, AND THIS LIST CANNOT PRODUCE ONE.**
+     Nothing derived here is benchmark-relative: `fund_holdings` exists for
+     the funds this book owns and **there is no holdings table for a benchmark
+     at all**, so a single-name or industry figure off this list has no
+     counterpart to be measured against. Report it as the absolute exposure it
+     is.
+
+     The 11 Nov 2026 Hybrid Balanced macro leg is the case, and it is the
+     reason this bullet exists. It opened "THE BOOK'S TWO BIGGEST ACTIVE
+     POSITIONS ARE THE SAME BET" over a semiconductor floor of 8.25% and a
+     long-maturity bond leg, and **both halves are underweights**:
+
+     - Semiconductors is an INDUSTRY, and neither `portfolio` nor
+       `model_portfolio_benchmarks` carries an industry column — the
+       benchmark's semiconductor weight **cannot be computed in this system at
+       all**. The nearest measurable proxy is the technology SECTOR, which
+       both rows do carry: **29.03% against 29.52%, an active −0.49pp**.
+     - The maturity claim WAS directly testable, on columns both rows carry,
+       and is further out: the **20-to-30-year bucket is 17.06% of the book's
+       bond sleeve against the benchmark's 27.87%**, with effective duration
+       **4.93 years against 5.35** (read 17 Nov 2026).
+
+     So the memo told the advisor the book was making two large bets it is in
+     fact positioned the other way on. **The behaviour observation underneath
+     it was fair** — long-duration growth equity and long bonds do respond to
+     the same rate move — so make that claim as what it is: how the book would
+     MOVE, with the measured direction stated. It is not a concentration
+     finding and cannot be escalated into one by adding up levels. "Nothing in
+     the compliance hub can raise it" is also not an argument on its own: the
+     hub has no sector or industry rule, so that is true of every industry
+     figure, overweight or under.
    - **`top25_share` decides whether the list describes the fund or a sliver
      of it.** Measured by holding COUNT the spread across this book is
      enormous — FTZIX holds 25 names and VBTLX holds 16,290 — but count is
@@ -784,6 +875,78 @@ the book: construction, risk, and the regime it is being run into.
      of it costs no new research and no second fee. Ask of every multi-fund
      sleeve whether the split between its funds is still the right split,
      not only whether each fund beats its watchlist alternative.
+
+     **THE TEST IS WHAT THE CHANGE DOES TO THE PORTFOLIO, NOT WHICH FUND WINS
+     MORE LINES** (17 Nov 2026, at the advisor's request). Comparing two funds
+     metric by metric and recommending the one that leads on most of them is a
+     SCREEN. The advisor does not own a fund, they own the book, so every
+     proposal owes two further answers: what it does to the book's
+     **risk-adjusted return**, and what it does to the book's **composition
+     once the other fifteen holdings are in view**. A swap that raises a
+     holding's scorecard rank while making the portfolio worse on both has not
+     improved anything.
+
+     - **State the book-level characteristic BEFORE and AFTER, not the fund's
+       figure.** The number that matters is the weight-weighted sleeve reading
+       the holding contributes to — duration, credit, region, sector, market
+       cap — recomputed with the proposed weights. "VBTLX is 5.68 years
+       against PYTRX's 5.81" is a fund comparison; "the bond sleeve goes from
+       4.95 to 5.03 years against a benchmark 5.35" is an allocation decision.
+     - **A WEIGHTED BEFORE-AND-AFTER IS INVALID IF THE COLUMN IS NULL ON
+       EITHER SIDE, AND IT FAILS IN THE DIRECTION THAT FLATTERS THE PROPOSAL.**
+       Summing `weight × column` over a book treats a null as a zero, so a
+       replacement whose column the workbook has not filled reads as removing
+       the exposure. Measured on memo 18's own four changes (17 Nov 2026):
+       look-through equity appears to fall **65.10% → 56.10%**, a nine-point
+       collapse, **and the whole of it is three nulls** — INTF, ARMIX and
+       MNHAX are all WATCHED rather than held, and `stock_net`, `bond_net` and
+       `cash_net` are null on all three while every held fund carries them.
+       The same arithmetic over `emerging_market_exposure_generic`, which IS
+       populated on all eight, is sound: **4.85% → 4.32%**. Before quoting any
+       before/after, count how many of the funds on each side carry the
+       column, and report a figure only where the coverage is complete —
+       otherwise say which funds are missing it and that the comparison cannot
+       yet be made. A newly watched fund is the normal case for this: the
+       workbook reaches it in stages, so the composition columns arrive after
+       the ticker does.
+     - **A FUND THAT IS THE ONLY SOURCE OF AN EXPOSURE IS WORTH MORE THAN ITS
+       RANK.** BIMIX is the standing case: at 11.00% of Hybrid Balanced and
+       3.66 years it produces the ENTIRE short-duration tilt of a 29.00% bond
+       sleeve. The sleeve blends to **4.948 years against the benchmark's
+       5.351**; take BIMIX out and the remaining three funds blend to **5.735
+       — LONGER than the benchmark** (verified 17 Nov 2026). Reducing it does
+       not change one line of a table, it moves the sleeve to the other side
+       of the curve from where it sits now. Ask of every reduce or exit what
+       the book loses that nothing else in it supplies.
+     - **A FUND THAT DUPLICATES WHAT THE BOOK ALREADY OWNS ADDS NOTHING,
+       however well it scores.** The single-name look-through is the evidence,
+       and it is the one reading a sleeve table cannot give you. Two funds
+       holding the same twenty names are one position wearing two expense
+       ratios.
+     - **CHECK WHETHER THE CHANGE COMPOUNDS A BET NOBODY CHOSE.** Semiconductors
+       reach **at least 7.71% of Hybrid Balanced through 11 of its holdings
+       across 36 lines** — FLCSX 1.85pp, VOO 1.72pp and PWB 1.64pp leading,
+       eight more funds carrying the rest (`fund_holdings` joined to
+       `holding_profiles`, top-25 only, so a FLOOR; read 17 Nov 2026,
+       recompute it rather than quoting this). No single-asset check can see a
+       number assembled that way, so an equity swap into a fund holding the
+       same names raises a concentration the compliance hub will keep passing.
+       Recompute it for the book you are PROPOSING, not only the one you were
+       handed.
+     - **THERE IS NO CORRELATION DATA IN THIS SYSTEM, AND YOU MUST NOT WRITE AS
+       IF THERE WERE.** No table carries a correlation, a covariance or an
+       up/down capture ratio for anything, and FMP prices only 16 of the 27
+       mutual funds these books hold, so one cannot be computed for the sleeves
+       that matter either. Composition overlap, the look-through columns and
+       the weighted sleeve readings above are what the book actually offers,
+       and they are enough to argue complementarity. A sentence implying a
+       portfolio variance or marginal-risk calculation was run is a fabricated
+       measurement — report the limit instead, the same way an unmeasurable
+       compliance rule is reported rather than guessed.
+     - **BETA, R-SQUARED AND TRACKING ERROR DESCRIBE A RELATIONSHIP TO A
+       CATEGORY OR AN INDEX, NEVER TO THIS BOOK.** Reading one as a holding's
+       contribution to portfolio risk is the same error as reading tracking
+       error as closet indexing: the comparator is not what you think it is.
    - **`risk-manager`** — concentration, factor exposure, and **verification
      against every active rule in the Compliance Rules hub**
      (`firm_compliance_rules` plus `compliance_rules` matching the portfolio OR
@@ -792,7 +955,11 @@ the book: construction, risk, and the regime it is being run into.
      and say so when you fall back to targets.
    - **`macro-strategist`** — the regime this book is being run into, and what
      it means for duration, credit and equity-style tilts at these weights.
-     Context, not a stock call.
+     Context, not a stock call. **Any exposure it calls a tilt must be a
+     measured difference from the benchmark**, and the book's maturity buckets
+     and sector weights sit on `portfolio` beside the benchmark's own on
+     `model_portfolio_benchmarks` — one join away. A regime view about long
+     rates is legitimate; calling an underweight a bet is not.
 
    **Hand each role the alternatives table** — every holding, its weight, its
    category, and the ideas recorded against it, with the held-here /
@@ -802,6 +969,11 @@ the book: construction, risk, and the regime it is being run into.
    `holdings_as_of`, and the advisor's note if they left one. A role that cannot
    see the comparison answers a different question from the one the handoff
    asked, and the memo then talks past the page the advisor is reading.
+
+   **Hand the portfolio manager the book-versus-benchmark risk-adjusted table
+   as well** — return, Sharpe, Sortino, standard deviation and max drawdown on
+   both rows, with the window named. It is the baseline their proposals are
+   measured against, and a role that has not seen it can only compare funds.
 
 6. **SYNTHESISE ONE MEMO.** Not three. The advisor reads one document and
    decides; three unreconciled opinions make that their job rather than yours.

@@ -18,7 +18,7 @@ You run in two modes:
 ## What to check
 
 - **Concentration** — does any single position or sector exceed the portfolio's limits? Report the resulting top holdings, cluster/sector weights, and top-5/top-10.
-- **Factor exposure** — what factor tilts are present (growth/value, size, quality, rate sensitivity, beta)? Is there a crowded tilt?
+- **Factor exposure** — what factor tilts are present (growth/value, size, quality, rate sensitivity, beta)? Is there a crowded tilt? **A tilt is a measured difference from the benchmark, with its sign** — for a fund portfolio, `portfolio` beside `model_portfolio_benchmarks`, one join. A level is an exposure, not a tilt, and where no benchmark counterpart exists say so rather than implying one.
 - **Mandate / compliance limits** — check against **every active rule** and produce an explicit pass/fail per check (see Compliance verification below).
 - **Stress** — how does the portfolio behave in a reasonable downside (drawdown, rate shock, sector selloff)?
 
